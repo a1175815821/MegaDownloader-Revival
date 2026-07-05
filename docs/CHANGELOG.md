@@ -37,6 +37,7 @@
 - 修复从剪贴板复制新版 MEGA 链接时无法被识别的问题
 - 修复从浏览器拖拽新版 MEGA 链接到主窗口无效的问题
 - 修复新版文件夹链接无法被解析为子文件列表的问题
+- **修复文件夹下载时 Base64 解码错误**:`mega.nz/folder/` 链接包含被多个用户分享的文件时,MEGA API 返回的 `fileN.k` 字段格式为 `handle1:key1/handle2:key2[/handle3:key3]`(用 `/` 分隔多个 `handle:key` 对)。原代码 `fileN.k.Substring(fileN.k.IndexOf(":") + 1)` 会把第一个 `:` 之后的所有内容(包括 `/handle2:key2`)当作 key,导致 `Convert.FromBase64String` 抛出 FormatException。修复方案:新增 `ExtractKeyFromK` 辅助函数,先找到文件夹本身的内部 handle (root),然后从 k 字段中提取与 root 匹配的 key;同时为解密步骤添加 try-catch,跳过无法解密的文件而不是抛出异常。参见 [`Clases/MegaFolderHelper.vb`](../Clases/MegaFolderHelper.vb)
 
 ### 🔄 变更
 

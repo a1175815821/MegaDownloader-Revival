@@ -1,4 +1,4 @@
-﻿Public Class MegaFolderHelper
+Public Class MegaFolderHelper
 
 
     Public Class FileListResponse
@@ -47,16 +47,40 @@
 
         Dim Results As New Generic.List(Of URLProcessor.FileURL)
 
+        ' 找到文件夹本身的内部 handle (root)
+        ' root 节点的特征: t=1, 且 fileN.h 出现在自己的 k 字段的 handle 部分
+        ' MEGA API 中 k 字段格式可能为 "handle1:key1/handle2:key2/..." (多 share key)
+        Dim root As String = ""
+        For Each fileN As FileNode In FileList.f
+            If fileN.t = 1 AndAlso Not String.IsNullOrEmpty(fileN.k) AndAlso fileN.k.Contains(":"c) Then
+                ' 检查 k 字段中是否有 handle 等于 fileN.h 的对 (即文件自己的 handle)
+                Dim keyForSelf As String = ExtractKeyFromK(fileN.k, fileN.h)
+                If Not String.IsNullOrEmpty(keyForSelf) Then
+                    root = fileN.h
+                    Exit For
+                End If
+            End If
+        Next
+
 
         ' Get folder structure
         Dim htFolderEstructure As New Generic.Dictionary(Of String, KeyValuePair(Of String, String))
-        Dim root As String = ""
         For Each fileN As FileNode In FileList.f
             If fileN.t = 1 Then
                 Dim FileID As String = fileN.h
-                Dim FileKey As String = fileN.k.Substring(fileN.k.IndexOf(":"c) + 1)
 
-                FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
+                ' 从 k 字段提取与 root handle 匹配的 key (用于用 FolderKey 解密)
+                ' 如果没有 root,则回退到第一个 key
+                Dim FileKey As String = ExtractKeyFromK(fileN.k, root)
+                If String.IsNullOrEmpty(FileKey) Then Continue For
+
+                Try
+                    FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
+                Catch ex As Exception
+                    ' 解密失败,跳过此节点 (可能是 k 字段格式不兼容)
+                    Continue For
+                End Try
+
                 Dim FolderName As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
 
                 Dim ex As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
@@ -67,9 +91,10 @@
                     Continue For
                 End If
 
-                htFolderEstructure.Add(FileID, New KeyValuePair(Of String, String)(FolderName, If(FileID = fileN.k.Substring(0, fileN.k.IndexOf(":"c)), "", fileN.p)))
+                ' 父级 handle: 如果 fileN.h == root,说明这是根文件夹本身,没有父级
+                Dim parent As String = If(fileN.h = root, "", fileN.p)
+                htFolderEstructure.Add(FileID, New KeyValuePair(Of String, String)(FolderName, parent))
 
-                If FileID = fileN.k.Substring(0, fileN.k.IndexOf(":"c)) Then root = FileID
             End If
         Next
         Dim htFolders As New Generic.Dictionary(Of String, String)
@@ -80,14 +105,22 @@
         For Each fileN As FileNode In FileList.f
 
             If fileN.t = 0 Then
-                Dim FileKey As String = fileN.k.Substring(fileN.k.IndexOf(":"c) + 1)
+                ' 从 k 字段提取与 root handle 匹配的 key
+                Dim FileKey As String = ExtractKeyFromK(fileN.k, root)
+                If String.IsNullOrEmpty(FileKey) Then Continue For
 
                 Dim path As String = String.Empty
                 If htFolders.ContainsKey(fileN.p) Then
                     path = htFolders(fileN.p)
                 End If
 
-                FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
+                Try
+                    FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
+                Catch ex As Exception
+                    ' 解密失败,跳过此文件 (可能无法用 FolderKey 解密)
+                    Continue For
+                End Try
+
                 Dim FileInfoDec As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
                 Try
                     Dim ex As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
@@ -124,6 +157,44 @@
         Next
 
         Return Results
+    End Function
+
+    ' 从 MEGA API 的 k 字段中提取指定 handle 对应的 key
+    ' k 字段格式: "handle1:key1" 或 "handle1:key1/handle2:key2/handle3:key3"
+    ' 当文件被多个用户分享时,会出现多个 handle:key 对
+    Private Shared Function ExtractKeyFromK(kField As String, handle As String) As String
+        If String.IsNullOrEmpty(kField) OrElse Not kField.Contains(":"c) Then Return ""
+
+        ' 如果 k 字段包含 / (多个 handle:key 对)
+        If kField.Contains("/"c) Then
+            Dim parts() As String = kField.Split("/"c)
+
+            ' 优先匹配指定的 handle
+            If Not String.IsNullOrEmpty(handle) Then
+                For Each part As String In parts
+                    Dim colonIdx As Integer = part.IndexOf(":"c)
+                    If colonIdx > 0 Then
+                        Dim h As String = part.Substring(0, colonIdx)
+                        If h = handle Then
+                            Return part.Substring(colonIdx + 1)
+                        End If
+                    End If
+                Next
+            End If
+
+            ' 回退:返回第一个有效 key
+            For Each part As String In parts
+                Dim colonIdx As Integer = part.IndexOf(":"c)
+                If colonIdx > 0 Then
+                    Dim key As String = part.Substring(colonIdx + 1)
+                    If Not String.IsNullOrEmpty(key) Then Return key
+                End If
+            Next
+            Return ""
+        Else
+            ' 单个 handle:key 对
+            Return kField.Substring(kField.IndexOf(":"c) + 1)
+        End If
     End Function
 
     Private Shared Sub FillFolderStructure(id As String, final As Generic.Dictionary(Of String, String), unprocessed As Generic.Dictionary(Of String, KeyValuePair(Of String, String)))
