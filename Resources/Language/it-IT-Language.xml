@@ -1,0 +1,317 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Language id="it-IT" name="Italiano" app="MegaDownloader">
+  <Text key="Loading please wait"><![CDATA[Caricamento in corso, attendere prego ...]]></Text>
+  <Text key="Closing please wait"><![CDATA[Di chiusura, si prega di attendere ...]]></Text>
+  <Text key="Name"><![CDATA[Nome]]></Text>
+  <Text key="Downloaded"><![CDATA[Scaricato]]></Text>
+  <Text key="Size"><![CDATA[Dimensione]]></Text>
+  <Text key="Status"><![CDATA[Stato]]></Text>
+  <Text key="Progress"><![CDATA[Progressione]]></Text>
+  <Text key="Progress %"><![CDATA[Corsi in %]]></Text>
+  <Text key="Speed"><![CDATA[Velocità]]></Text>
+  <Text key="Estimated"><![CDATA[Stima]]></Text>
+  <Text key="Remaining"><![CDATA[Rimanente]]></Text>
+  <Text key="Open directory"><![CDATA[Aprire la cartella]]></Text>
+  <Text key="Increase priority"><![CDATA[Aumentare la priorità]]></Text>
+  <Text key="Decrease priority"><![CDATA[Diminuire la priorità]]></Text>
+  <Text key="Close"><![CDATA[Chiudere]]></Text>
+  <Text key="Pause"><![CDATA[Rottura]]></Text>
+  <Text key="Delete from list"><![CDATA[Rimuovi dalla lista]]></Text>
+  <Text key="Delete from list and disk"><![CDATA[Rimuovere dalla lista e disco]]></Text>
+  <Text key="Add link"><![CDATA[Aggiungi un link]]></Text>
+  <Text key="Add links"><![CDATA[Aggiunta di collegamenti]]></Text>
+  <Text key="Open"><![CDATA[Aperto]]></Text>
+  <Text key="Close"><![CDATA[Chiudere]]></Text>
+  <Text key="Configuration"><![CDATA[Configurazione]]></Text>
+  <Text key="See error"><![CDATA[Vedere l'errore]]></Text>
+  <Text key="See links"><![CDATA[Vedi link]]></Text>
+  <Text key="See links + desc"><![CDATA[Vedi + nome del collegamento del file]]></Text>
+  <Text key="Reset"><![CDATA[Ritorno]]></Text>
+  <Text key="Properties"><![CDATA[Proprietà]]></Text>
+  <Text key="Clean completed"><![CDATA[Clean intero file]]></Text>
+  <Text key="Start downloads"><![CDATA[Avvia il download]]></Text>
+  <Text key="Start download"><![CDATA[Avvia il download]]></Text>
+  <Text key="Pause downloads"><![CDATA[Pausa scaricare]]></Text>
+  <Text key="Stop downloads"><![CDATA[Arresto scaricare]]></Text>
+  <Text key="Status: -"><![CDATA[Stato: -]]></Text>
+  <Text key="RAM Proc Empty"><![CDATA[RAM: - / proc: -]]></Text>
+  <Text key="RAM"><![CDATA[RAM]]></Text>
+  <Text key="Proc"><![CDATA[Proc]]></Text>
+  <Text key="Links"><![CDATA[Connessioni]]></Text>
+  <Text key="Hour"><![CDATA[Tempo]]></Text>
+  <Text key="Queued, error, completed"><![CDATA[Coda, erronea e completato]]></Text>
+  <Text key="active downloads"><![CDATA[download in corso]]></Text>
+  <Text key="Active downloads"><![CDATA[Download attuali]]></Text>
+  <Text key="Error information"><![CDATA[Informazione di errore]]></Text>
+  <Text key="New version available"><![CDATA[Nuova versione disponibile]]></Text>
+  <Text key="New version do you want to download it? Recommended!"><![CDATA[C'è una nuova versione di MegaDownloader. Si consiglia di aggiornare it.Do volete scaricare gratis?]]></Text>
+  <Text key="New version do you want to download it?"><![CDATA[C'è una nuova versione di MegaDownloader. Clicca qui per scaricare.]]></Text>
+  <Text key="Do you want to exit?"><![CDATA[Sei sicuro di voler uscire?]]></Text>
+  <Text key="Files extracting, corruption danger"><![CDATA[Ci sono file che sono extracted.If si esce ora, i file estratti potrebbero essere danneggiati e si dovrà estrarre manualmente.]]></Text>
+  <Text key="Package"><![CDATA[Pacchetto]]></Text>
+  <Text key="Turning off in 60 seconds"><![CDATA[Spegnimento automatico in 60 secondi]]></Text>
+  <Text key="Confirmation"><![CDATA[Conferma]]></Text>
+  <Text key="Do you want to delete the element(s)?"><![CDATA[Vuoi eliminare la voce (s)?]]></Text>
+  <Text key="Note: files will NOT be deleted"><![CDATA[Nota: i file non vengono eliminati.]]></Text>
+  <Text key="Note: files will BE deleted"><![CDATA[Nota: i file verranno eliminati.]]></Text>
+  <Text key="No valid URLs have been inserted"><![CDATA[Nessun URL valido è stata inserita]]></Text>
+  <Text key="Can not add remote links without a default path"><![CDATA[I collegamenti non possono essere aggiunti a distanza senza percorso predefinito]]></Text>
+  <Text key="New package"><![CDATA[Nuovo pacchetto]]></Text>
+  <Text key="Connection conf"><![CDATA[Conf connessione.]]></Text>
+  <Text key="&amp;File"><![CDATA[&File]]></Text>
+  <Text key="E&amp;xit"><![CDATA[E&sci]]></Text>
+  <Text key="&amp;Options"><![CDATA[&Opzioni]]></Text>
+  <Text key="&amp;Configuration"><![CDATA[&Configurazione]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[Guarda l'estrazione e la &coda]]></Text>
+  <Text key="&amp;Help"><![CDATA[&Aiuto]]></Text>
+  <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
+  <Text key="&amp;About"><![CDATA[&Informazioni su MegaDownloader]]></Text>
+  <Text key="Creating files"><![CDATA[Creazione del file]]></Text>
+  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="Verifying"><![CDATA[Verifica]]></Text>
+  <Text key="Paused"><![CDATA[Rottura]]></Text>
+  <Text key="Stopped"><![CDATA[Arrestato]]></Text>
+  <Text key="Error capital leters"><![CDATA[ERRORE]]></Text>
+  <Text key="Error"><![CDATA[Errore]]></Text>
+  <Text key="Extracting"><![CDATA[Estrazione]]></Text>
+  <Text key="Downloading"><![CDATA[Download]]></Text>
+  <Text key="Completed"><![CDATA[Completato]]></Text>
+  <Text key="Hashing MD5"><![CDATA[Hash MD5]]></Text>
+  <Text key="Current"><![CDATA[Corrente]]></Text>
+  <Text key="File"><![CDATA[Indietro]]></Text>
+  <Text key="Extraction queue"><![CDATA[Coda di estrazione]]></Text>
+  <Text key="This screen lets you see the status of the files pending of extraction"><![CDATA[Questa schermata consente di visualizzare lo stato delle cause pendenti estrazione]]></Text>
+  <Text key="if automatic extraction option is enabled"><![CDATA[se l'opzione è abilitata per l'estrazione automatica]]></Text>
+  <Text key="Options"><![CDATA[Opzioni]]></Text>
+  <Text key="Path"><![CDATA[Sentiero]]></Text>
+  <Text key="Browse"><![CDATA[Viaggiare]]></Text>
+  <Text key="Create directory"><![CDATA[Creare una cartella]]></Text>
+  <Text key="Select directory"><![CDATA[Selezionare la cartella]]></Text>
+  <Text key="Automatic extraction"><![CDATA[Estrazione automatica]]></Text>
+  <Text key="Links not valid"><![CDATA[Nessun link validi sono stati inseriti]]></Text>
+  <Text key="Invalid directory"><![CDATA[Cartella non valido]]></Text>
+  <Text key="Invalid package name"><![CDATA[Nome del pacchetto non valido, se si sceglie "Crea cartella" cartella con quel nome è stato creato, è necessario specificarlo.]]></Text>
+  <Text key="File properties"><![CDATA[Proprietà del file]]></Text>
+  <Text key="Package properties"><![CDATA[Proprietà di un pacchetto]]></Text>
+  <Text key="Download properties"><![CDATA[Proprietà di download]]></Text>
+  <Text key="Not available"><![CDATA[Non disponibile]]></Text>
+  <Text key="Not applied"><![CDATA[Non si applica]]></Text>
+  <Text key="Total"><![CDATA[Totale]]></Text>
+  <Text key="URL"><![CDATA[URL]]></Text>
+  <Text key="MD5"><![CDATA[MD5]]></Text>
+  <Text key="Note"><![CDATA[Nota]]></Text>
+  <Text key="Save"><![CDATA[Salvare]]></Text>
+  <Text key="Cancel"><![CDATA[Annullare]]></Text>
+  <Text key="Limit speed to"><![CDATA[Limitare la velocità di]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Limite di velocità non valido.]]></Text>
+  <Text key="Note about the options"><![CDATA[Notare le opzioni]]></Text>
+  <Text key="Can change file path if not downloaded"><![CDATA[Percorso file può essere modificato se il download non è stato avviato. Se questo è il caso, il cambiamento non è possibile.]]></Text>
+  <Text key="Message change package path"><![CDATA[Se si modifica il percorso di tutto il modo per scaricare tutti i file willbe changed.Path attesa già i file scaricati non ti changed.If modificare l'opzione di estrazione automatica ', che si applicherà a tutti i file del pacchetto.]]></Text>
+  <Text key="User"><![CDATA[Utente]]></Text>
+  <Text key="Password"><![CDATA[Password]]></Text>
+  <Text key="Show password"><![CDATA[Mostra password]]></Text>
+  <Text key="User data"><![CDATA[I dati dell'utente (opzionale)]]></Text>
+  <Text key="See logs"><![CDATA[Visualizza registri]]></Text>
+  <Text key="Decompressor"><![CDATA[Estrazione]]></Text>
+  <Text key="minutes"><![CDATA[verbale]]></Text>
+  <Text key="Capture links from clipboard"><![CDATA[Catturare link dagli appunti]]></Text>
+  <Text key="Turn off computer when finished"><![CDATA[Arresto PC automaticamente]]></Text>
+  <Text key="Start downloading when application starts"><![CDATA[Avviare scaricare all'avvio dell'applicazione]]></Text>
+  <Text key="In case of error, retry the download each"><![CDATA[In caso di errore, avviare il download di ogni]]></Text>
+  <Text key="Important note about connections"><![CDATA[Nota importante sulle connessioni]]></Text>
+  <Text key="Number of parallel downloads"><![CDATA[Molti download simultanei]]></Text>
+  <Text key="Number of connections per file"><![CDATA[Molte connessioni per file]]></Text>
+  <Text key="Priority"><![CDATA[Priorità]]></Text>
+  <Text key="Create folder per package"><![CDATA[Creare un pacchetto di cartella]]></Text>
+  <Text key="Download path"><![CDATA[Percorso file]]></Text>
+  <Text key="Advanced options"><![CDATA[Opzioni avanzate]]></Text>
+  <Text key="General options"><![CDATA[Opzioni generali]]></Text>
+  <Text key="General"><![CDATA[Generale]]></Text>
+  <Text key="Advanced"><![CDATA[Avanzato]]></Text>
+  <Text key="Log level"><![CDATA[Livello di log]]></Text>
+  <Text key="Language"><![CDATA[Lingua]]></Text>
+  <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Nota: per gli utenti esperti. Non toccare nulla se non si è sicuri.]]></Text>
+  <Text key="Disk buffer size"><![CDATA[La dimensione del buffer del disco]]></Text>
+  <Text key="Package size"><![CDATA[Formato del pacchetto]]></Text>
+  <Text key="Port"><![CDATA[Porta]]></Text>
+  <Text key="Connection"><![CDATA[Collegamento]]></Text>
+  <Text key="Use proxy"><![CDATA[Usare un proxy]]></Text>
+  <Text key="Proxy"><![CDATA[Delega]]></Text>
+  <Text key="Proxy address/IP"><![CDATA[Indirizzo proxy / IP]]></Text>
+  <Text key="Save / use last used configuration"><![CDATA[Salvare la configurazione utilizzata]]></Text>
+  <Text key="Start with Windows"><![CDATA[Inizia con Windows]]></Text>
+  <Text key="Web server"><![CDATA[Il server web]]></Text>
+  <Text key="Use web server"><![CDATA[Utilizzare il server Web]]></Text>
+  <Text key="Interrupt session"><![CDATA[Scadenza della sessione]]></Text>
+  <Text key="Name (optional)"><![CDATA[Nome (opzionale)]]></Text>
+  <Text key="User (optional)"><![CDATA[Utente (opzionale)]]></Text>
+  <Text key="Password (optional)"><![CDATA[Password (opzionale)]]></Text>
+  <Text key="Template path"><![CDATA[Percorso modello]]></Text>
+  <Text key="Templates"><![CDATA[Modelli]]></Text>
+  <Text key="Data saved successfully"><![CDATA[Dati salvati correttamente]]></Text>
+  <Text key="You must configure user and password"><![CDATA[È necessario configurare un utente e una password]]></Text>
+  <Text key="File decompressor"><![CDATA[File decompressore]]></Text>
+  <Text key="Log_Minimum"><![CDATA[Minimo]]></Text>
+  <Text key="Log_Normal"><![CDATA[Normale]]></Text>
+  <Text key="Log_Informative"><![CDATA[Informazioni]]></Text>
+  <Text key="Log_Debug"><![CDATA[Mettere a punto]]></Text>
+  <Text key="Priority_Low"><![CDATA[Basso]]></Text>
+  <Text key="Priority_Normal"><![CDATA[Normale]]></Text>
+  <Text key="Do you want to leave the default path empty?"><![CDATA[Vuoi lasciare vuota di default?]]></Text>
+  <Text key="Disk buffer or package size values are not correct"><![CDATA[I valori di dimensione del buffer sul disco o l'imballaggio non è corretto.]]></Text>
+  <Text key="Disk buffer size must be greater than package size"><![CDATA[La dimensione del buffer del disco deve essere maggiore della dimensione del pacchetto.]]></Text>
+  <Text key="Connection number values are incorrect or too high"><![CDATA[Valori di allacciamento non sono corretti o troppo alta.]]></Text>
+  <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Il tentativo periodo da stabilirsi, e il suo valore deve essere compreso tra %A e %B.]]></Text>
+  <Text key="Invalid proxy configuration"><![CDATA[Configurazione proxy non valida.]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Il limite di velocità non è valido.]]></Text>
+  <Text key="Invalid server port"><![CDATA[Porta del server non valido. Si deve avere un valore compreso tra 1024 e 65535 (49152-65535 consigliato).]]></Text>
+  <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[I tempi di inattività sessione di valore deve essere compreso tra 0 e %A.Un valore pari a 0 indica che la sessione non viene interrotta.]]></Text>
+  <Text key="The template path is not valid"><![CDATA[Il percorso del modello non è valido.]]></Text>
+  <Text key="Error starting web server"><![CDATA[Errore del server Web iniziale]]></Text>
+  <Text key="The web server password must have at least %A characters"><![CDATA[La password per il server Web deve essere di almeno %A caratteri.]]></Text>
+  <Text key="Error deleting local files - Path: %PATH% - Error: %ERROR%"><![CDATA[Messaggio di errore per eliminare "%PATH%" file locale. %ERROR%]]></Text>
+  <Text key="Invalid password"><![CDATA[Password non valida]]></Text>
+  <Text key="Download started"><![CDATA[Scarica avviato con successo]]></Text>
+  <Text key="Download stopped"><![CDATA[Scarica arrestato correttamente]]></Text>
+  <Text key="Invalid links"><![CDATA[Collegamenti non validi]]></Text>
+  <Text key="Invalid package name"><![CDATA[Pacchetto nome errato]]></Text>
+  <Text key="Links added successfully"><![CDATA[Link aggiunto con successo]]></Text>
+  <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Se nessun utente e la password sono specificati, il download sarà effettuato come utente anonimo.]]></Text>
+  <Text key="User and password is not used yet"><![CDATA[A questo punto, l'utente e la password non viene utilizzato (lasciare in bianco se volete). Tutti i download sono fatto come un utente anonimo. In futuro, questi campi possono essere utilizzati.]]></Text>
+  <Text key="Number of connection explanation"><![CDATA[I valori indicati sono il massimo esempio values.For accettabile se si seleziona 3-5 connessioni per file di download paralleli, ci sarà un massimo di 15 valori connections.These verranno visualizzati nella schermata principale, nella forma A / B, dove A è il numero di connessioni per file. B è il numero di download paralleli.]]></Text>
+  <Text key="Turn off PC explanation"><![CDATA[Con questa opzione, il computer si spegne quando i download sono finiti se correctly.In errori di download, il computer si spegne a seconda della opzione 'In caso di errore, ripetere tutti ". Se è selezionata, il computer ha vinto 't fermare perché si tenta reconnect.
+  
+  NOTE: Questa opzione non viene salvato, è necessario attivare ogni volta che si avvia l'applicazione. In questo modo, il computer non si spegne per caso quando un download finisce.]]></Text>
+  <Text key="Save and use last conf explanation"><![CDATA[Se si attiva questa opzione, la schermata di inserire un link ricorderà l'ultima configurazione usata dall'inizio della domanda, invece di mostrare la configurazione predefinita Esempio:. Tuo percorso predefinito è il desktop. 8 confezioni che si desidera scaricare e lasciarlo in un path.Instead diversa aggiunta di 8 pacchetti e modificando il modo in cui ogni volta che si cambia uno e gli altri 7 si ricorderà l'ultima nota utilizzata configuration.Please che il nome del pacchetto non viene ricordato. Quando l'applicazione si chiude, questa configurazione si perde anche.]]></Text>
+  <Text key="You have to restart the application for the language change to take effect"><![CDATA[È necessario riavviare l'applicazione per la modifica della lingua abbia effetto.]]></Text>
+  <Text key="Please take into consideration the following"><![CDATA[Si prega di tenere presente quanto segue]]></Text>
+  <Text key="Error, session expired"><![CDATA[Di errore, è necessario eseguire nuovamente il login: sessione è scaduta.]]></Text>
+  <Text key="About"><![CDATA[Chi MegaDownloader]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[Grazie per aver utilizzato questo software non ufficiale domanda di MEGA.CO.NZ]]></Text>
+  <Text key="Thanks to"><![CDATA[Grazie a voi]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader non è legata Mega.co.nz - Tutti i marchi sono di proprietà dei rispettivi proprietari.]]></Text>
+  <Text key="Created and designed by %NAME"><![CDATA[Creato e disegnato da %NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME per aiutare con il criptographic sistema MEGA.]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[Tutti gli utenti che colaborated provare l'applicazione.]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[]]></Text>
+  <!-- TRANSLATION MISSING -->
+  <Text key="See decompression progress"><![CDATA[See decompression progress]]></Text>
+  <Text key="See lo&amp;gs"><![CDATA[See lo&gs]]></Text>
+  <Text key="Get MegaUploa&amp;der"><![CDATA[Get MegaUploa&der]]></Text>
+  <Text key="Pre-Shared Keys Manager"><![CDATA[Pre-Shared Keys Manager]]></Text>
+  <Text key="Pre-Shared Key list"><![CDATA[Pre-Shared Key list]]></Text>
+  <Text key="Pre-Shared Keys"><![CDATA[Pre-Shared Keys]]></Text>
+  <Text key="Pre-Shared Key Manager Description"><![CDATA[Insert the Pre-Shared Keys to download files uploaded with this option.
+If the key is valid, you will be able to download files even without the private key..
+Insert one key per line, and be careful not to insert extra white spaces!]]></Text>
+  <Text key="Directory %D% does not exist"><![CDATA[Directory %D% does not exist.]]></Text>
+  <Text key="Information"><![CDATA[Information]]></Text>
+  <Text key="Terms of use"><![CDATA[Terms of use]]></Text>
+  <Text key="Accept terms of use"><![CDATA[Welcome to MegaDownloader. 
+  
+This non-official application is designed to help you downloading files from MEGA.
+             
+Do you accept MEGA terms of use?
+Please click on 'Help' to read them.]]></Text>
+
+
+  <Text key="Accounts"><![CDATA[Accounts]]></Text>
+  <Text key="Account"><![CDATA[Account]]></Text>
+  <Text key="Main account"><![CDATA[Default account]]></Text>
+  <Text key="Must configure at least one account"><![CDATA[You must configure at least one account.]]></Text>
+  <Text key="Add new"><![CDATA[Add new]]></Text>
+  <Text key="Account list empty"><![CDATA[Account list empty]]></Text>
+  <Text key="Account already exists"><![CDATA[Alias or e-mail already exists]]></Text>
+  <Text key="Account modified correctly">
+    <![CDATA[Account modified successfully. 
+Remember to save the configuration or the changes will be discarded.]]>
+  </Text>
+  <Text key="Account created correctly">
+    <![CDATA[Account added successfully. 
+Remember to save the configuration or the changes will be discarded.]]>
+  </Text>
+  <Text key="Account deleted correctly">
+    <![CDATA[Account deleted successfully. 
+Remember to save the configuration or the changes will be discarded.]]>
+  </Text>
+  <Text key="Do you want to delete this account?"><![CDATA[Are you sure you want to delete this account?]]></Text>
+  <Text key="Account could not be deleted"><![CDATA[Account could not be deleted.]]></Text>
+  <Text key="Account not found"><![CDATA[Account not found]]></Text>
+  <Text key="Delete"><![CDATA[Delete]]></Text>
+  <Text key="Modify"><![CDATA[Modify]]></Text>
+  <Text key="Alias"><![CDATA[Alias]]></Text>
+  <Text key="Go to Accounts tab"><![CDATA[Account data is managed in the tab 'Accounts'.]]></Text>
+  <Text key="Show password explanation">
+    <![CDATA[If you check this option, you will see the password when typing it, in order to avoid errors. However once it is saved, it won't be displayed for security even if you check this option.]]>
+  </Text>
+
+  <Text key="DLC"><![CDATA[DLC]]></Text>
+  <Text key="Open &amp;DLC"><![CDATA[Open &DLC/ELC]]></Text>
+  <Text key="There is a DLC being processed, please wait"><![CDATA[There is a DLC/ELC being processed, please wait]]></Text>
+  <Text key="The DLC could not be loaded. Reason: %REASON"><![CDATA[The DLC/ELC could not be loaded: %REASON]]></Text>
+  <Text key="The DLC has no valid Mega links"><![CDATA[The DLC/ELC doesn't have any valid MEGA link.]]></Text>
+  <Text key="Force download"><![CDATA[Force download]]></Text>
+
+  <Text key="About"><![CDATA[About MegaDownloader]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[Thanks for using this non-official download application for MEGA.CO.NZ]]></Text>
+  <Text key="Thanks to"><![CDATA[Thanks to]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader is not related with Mega.co.nz - All trademarks are property of their respective owners.]]></Text>
+
+  <Text key="Created and designed by %NAME"><![CDATA[Created and designed by %NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME for helping with MEGA criptographic system.]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[All users who have collaborated testing the application.]]></Text>
+  <Text key="Translator credits"
+        comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"
+        ><![CDATA[]]></Text>
+
+
+
+  <Text key="ELC"><![CDATA[ELC]]></Text>
+  <Text key="ELC Accounts"><![CDATA[ELC Accounts]]></Text>
+  <Text key="ELC Account Info"><![CDATA[ELC Account Info]]></Text>
+  <Text key="ELC Desc Info">
+    <![CDATA[An 'ELC' container (Encoded Link Container) offers protection against the link copy or report, allowing to share MEGA link in a community validating it with an user and key.
+In this way, it is necessary to have a valid account in the community in order to download the links in the ELC.
+
+Note: The community has to give the 'ELC' account data (URL, user, API-Key).]]>
+  </Text>
+  <Text key="API-Key"><![CDATA[API-Key]]></Text>
+  <Text key="Generate ELC"><![CDATA[Generate ELC]]></Text>
+  <Text key="Generat&amp;e ELC"><![CDATA[Generate &ELC]]></Text>
+  <Text key="ELC generator"><![CDATA[ELC generator]]></Text>
+  <Text key="Paste your MEGA Url(s), select your ELC account, and click on Generate ELC"><![CDATA[Paste your MEGA Url(s), select your ELC account, and click on 'Generate ELC'.]]></Text>
+  <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[This is your ELC link. You can also create an ELC file clicking on 'Save file'.]]></Text>
+  <Text key="Please select a valid ELC account"><![CDATA[Please select a valid ELC account.]]></Text>
+  <Text key="There is an ELC being processed, please wait"><![CDATA[There is an ELC being processed, please wait.]]></Text>
+  <Text key="Loading..."><![CDATA[Loading...]]></Text>
+  <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[No ELC accounts configured. Go to Configuration in order to add an ELC account.]]></Text>
+  <Text key="Save file"><![CDATA[Save file]]></Text>
+  <Text key="ELC file"><![CDATA[ELC file]]></Text>
+  <Text key="The ELC path is not valid"><![CDATA[The ELC path is not valid.]]></Text>
+  <Text key="The path is not valid"><![CDATA[The path is not valid.]]></Text>
+  <Text key="Error generating ELC"><![CDATA[Error generating ELC]]></Text>
+  <Text key="URL ELC account explanation"><![CDATA[This data is provided by the community, indicates the validation URL.]]></Text>
+  <Text key="Alias ELC account explanation"><![CDATA[The alias is an identificative name that will be displayed in the list on the left, and in the 'ELC generator' screen. You can put anything you want (or leave it blank), and can change it at any moment. Just remember that it can not be repeated.]]></Text>
+  <Text key="Default ELC account explanation">
+    <![CDATA[You can have one account marked as 'default', marked with a '[*]' in the list of the left. 
+It will appear selected by default in the 'ELC generator' screen. 
+If you mark another account as default, the previous default account will be unmarked.]]>
+  </Text>
+  <Text key="ELC Account not found. You need a valid ELC Account configured for this ELC.">
+    <![CDATA[ELC Account not found. You need a valid ELC Account configured for this ELC.]]>
+  </Text>
+  <Text key="The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library.">
+    <![CDATA[The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library.]]>
+  </Text>
+  <Text key="The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library.">
+    <![CDATA[The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library.]]>
+  </Text>
+  <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[Do you want to import the configuration for the following ELC accounts?]]></Text>
+  <Text key="optional"><![CDATA[opzionale]]></Text>
+  <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
+Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
+  <Text key="Searc&amp;h"><![CDATA[Cercar&e]]></Text>
+  <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
+  <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+</Language>

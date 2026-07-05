@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Language id="zh-TW" name="Traditional Chinese" app="MegaDownloader">
+  <Text key="Loading..."><![CDATA[載入中...]]></Text>
+  <Text key="Loading please wait"><![CDATA[載入中請稍候...]]></Text>
+  <Text key="Closing please wait"><![CDATA[關閉中請稍候...]]></Text>
+  <Text key="Name"><![CDATA[名稱]]></Text>
+  <Text key="Downloaded"><![CDATA[已下載]]></Text>
+  <Text key="Size"><![CDATA[大小]]></Text>
+  <Text key="Status"><![CDATA[狀態]]></Text>
+  <Text key="Progress"><![CDATA[進度]]></Text>
+  <Text key="Progress %"><![CDATA[進度 %]]></Text>
+  <Text key="Speed"><![CDATA[速度]]></Text>
+  <Text key="Estimated"><![CDATA[估計時間]]></Text>
+  <Text key="Remaining"><![CDATA[剩餘容量]]></Text>
+  <Text key="Open directory"><![CDATA[開啟目錄]]></Text>
+  <Text key="Increase priority"><![CDATA[提昇優先權]]></Text>
+  <Text key="Decrease priority"><![CDATA[降低優先權]]></Text>
+  <Text key="Close"><![CDATA[關閉]]></Text>
+  <Text key="Pause"><![CDATA[暫停]]></Text>
+  <Text key="Delete from list"><![CDATA[從清單刪除]]></Text>
+  <Text key="Delete from list and disk"><![CDATA[從清單和磁碟刪除]]></Text>
+  <Text key="Add link"><![CDATA[加入連結]]></Text>
+  <Text key="Add links"><![CDATA[加入連結]]></Text>
+  <Text key="Open"><![CDATA[開啟]]></Text>
+  <Text key="Close"><![CDATA[關閉]]></Text>
+  <Text key="Configuration"><![CDATA[設定]]></Text>
+  <Text key="See error"><![CDATA[檢視錯誤]]></Text>
+  <Text key="See links"><![CDATA[檢視連結]]></Text>
+  <Text key="See links + desc"><![CDATA[檢視連結與描述]]></Text>
+  <Text key="Reset"><![CDATA[重設]]></Text>
+  <Text key="Properties"><![CDATA[內容]]></Text>
+  <Text key="Clean completed"><![CDATA[已完成清除]]></Text>
+  <Text key="Start downloads"><![CDATA[開始下載]]></Text>
+  <Text key="Start download"><![CDATA[開始下載]]></Text>
+  <Text key="Pause downloads"><![CDATA[暫停下載]]></Text>
+  <Text key="Stop downloads"><![CDATA[停止下載]]></Text>
+  <Text key="Status: -"><![CDATA[狀態: -]]></Text>
+  <Text key="RAM Proc Empty"><![CDATA[記憶體: - / 程序: -]]></Text>
+  <Text key="RAM"><![CDATA[記憶體]]></Text>
+  <Text key="Proc"><![CDATA[程序]]></Text>
+  <Text key="Links"><![CDATA[連結]]></Text>
+  <Text key="Hour"><![CDATA[時]]></Text>
+  <Text key="Queued, error, completed"><![CDATA[佇列, 錯誤與完成]]></Text>
+  <Text key="active downloads"><![CDATA[啟用下載]]></Text>
+  <Text key="Active downloads"><![CDATA[啟用下載]]></Text>
+  <Text key="Error information"><![CDATA[錯誤資訊]]></Text>
+  <Text key="New version available"><![CDATA[新版本可用]]></Text>
+  <Text key="New version do you want to download it? Recommended!"><![CDATA[有 MegaDownloader 的新版本。建議你更新它。
+你是否要下載它？]]></Text>
+  <Text key="New version do you want to download it?"><![CDATA[有 MegaDownloader 的新版本。按一下此處下載它。]]></Text>
+  <Text key="Do you want to exit?"><![CDATA[你確定要離開嗎?]]></Text>
+  <Text key="Files extracting, corruption danger"><![CDATA[檔案已開始解壓縮。 
+如果你現在離開程式，解壓縮的檔案將會損壞，並且你得自己手動去解壓縮它。]]></Text>
+  <Text key="Package"><![CDATA[封裝]]></Text>
+  <Text key="Turning off in 60 seconds"><![CDATA[60秒後關閉]]></Text>
+  <Text key="Confirmation"><![CDATA[確認]]></Text>
+  <Text key="Do you want to delete the element(s)?"><![CDATA[你想要刪除這些元素嗎？]]></Text>
+  <Text key="Note: files will NOT be deleted"><![CDATA[註解： 檔案將「不被刪除」。]]></Text>
+  <Text key="Note: files will BE deleted"><![CDATA[註解： 檔案將被「刪除」。]]></Text>
+  <Text key="No valid URLs have been inserted"><![CDATA[插入無效的網址]]></Text>
+  <Text key="Can not add remote links without a default path"><![CDATA[連結不能沒有預設路徑而使用遠端的方式加入]]></Text>
+  <Text key="New package"><![CDATA[新增封裝]]></Text>
+  <Text key="Connection conf"><![CDATA[連線設定]]></Text>
+  <Text key="See decompression progress"><![CDATA[檢視解壓縮過程]]></Text>
+  <Text key="&amp;File"><![CDATA[檔案(&F)]]></Text>
+  <Text key="E&amp;xit"><![CDATA[離開(&X)]]></Text>
+  <Text key="&amp;Options"><![CDATA[選項(&O)]]></Text>
+  <Text key="&amp;Configuration"><![CDATA[設定(&C)]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[檢視解壓與佇列(&Q)]]></Text>
+  <Text key="&amp;Help"><![CDATA[說明(&H)]]></Text>
+  <Text key="FA&amp;Q"><![CDATA[問與答(&Q)]]></Text>
+  <Text key="&amp;Collaborate"><![CDATA[貢獻(&C)]]></Text>
+  <Text key="See lo&amp;gs"><![CDATA[檢視記錄(&G)]]></Text>
+  <Text key="Get MegaUploa&amp;der"><![CDATA[取得 MegaUploader(&D)]]></Text>
+  <Text key="&amp;About"><![CDATA[關於 MegaDownloader(&A)]]></Text>
+  <Text key="Manage Streaming &amp;Library"><![CDATA[管理媒體庫(&L)]]></Text>
+  <Text key="See Streaming &amp;Library"><![CDATA[檢視媒體庫(&B)]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[串流(&S)]]></Text>
+  <Text key="Watch &amp;Online"><![CDATA[線上觀看(&O)]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[編碼網址(&L)]]></Text>
+  <Text key="Collaborate"><![CDATA[貢獻]]></Text>
+  <Text key="Creating files"><![CDATA[建立檔案中]]></Text>
+  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="Verifying"><![CDATA[檢驗中]]></Text>
+  <Text key="Paused"><![CDATA[已暫停]]></Text>
+  <Text key="Stopped"><![CDATA[已停止]]></Text>
+  <Text key="Error capital leters"><![CDATA[錯誤]]></Text>
+  <Text key="Error"><![CDATA[錯誤]]></Text>
+  <Text key="Extracting"><![CDATA[解壓中]]></Text>
+  <Text key="Downloading"><![CDATA[下載中]]></Text>
+  <Text key="Completed"><![CDATA[已完成]]></Text>
+  <Text key="Hashing MD5"><![CDATA[檢驗 MD5]]></Text>
+  <Text key="Current"><![CDATA[目前]]></Text>
+  <Text key="File"><![CDATA[檔案]]></Text>
+  <Text key="Extraction queue"><![CDATA[解壓佇列]]></Text>
+  <Text key="This screen lets you see the status of the files pending of extraction"><![CDATA[此螢幕允許您檢視待解壓縮的檔案狀態]]></Text>
+  <Text key="if automatic extraction option is enabled"><![CDATA[如果啟用了自動解壓選項]]></Text>
+  <Text key="Pre-Shared Keys Manager"><![CDATA[預分享金鑰管理器]]></Text>
+  <Text key="Pre-Shared Key list"><![CDATA[預分享金鑰清單]]></Text>
+  <Text key="Pre-Shared Keys"><![CDATA[預分享金鑰]]></Text>
+  <Text key="Pre-Shared Key Manager Description"><![CDATA[使用此選項插入預分享金鑰以下載和上載檔案。
+如果金鑰是有效的您將不需要私密金鑰檔也可以下載..
+插入金鑰並以每行分隔，小心不要插入額外的空格！]]></Text>
+  <Text key="Options"><![CDATA[選項]]></Text>
+  <Text key="Path"><![CDATA[路徑]]></Text>
+  <Text key="Browse"><![CDATA[瀏覽]]></Text>
+  <Text key="Create directory"><![CDATA[建立目錄]]></Text>
+  <Text key="Select directory"><![CDATA[選取目錄]]></Text>
+  <Text key="Automatic extraction"><![CDATA[自動解壓縮]]></Text>
+  <Text key="Links not valid"><![CDATA[沒有插入有效連結]]></Text>
+  <Text key="Invalid directory"><![CDATA[無效目錄]]></Text>
+  <Text key="Directory %D% does not exist"><![CDATA[%D%目錄不存在。]]></Text>
+  <Text key="Invalid package name"><![CDATA[無效封裝名稱，如果你選取「建立目錄」，那麼將會建立相同名稱的目錄，所以必須要指定它。]]></Text>
+  <Text key="File properties"><![CDATA[檔案內容]]></Text>
+  <Text key="Package properties"><![CDATA[封裝內容]]></Text>
+  <Text key="Download properties"><![CDATA[下載內容]]></Text>
+  <Text key="Not available"><![CDATA[無可用]]></Text>
+  <Text key="Not applied"><![CDATA[未應用]]></Text>
+  <Text key="Total"><![CDATA[總共]]></Text>
+  <Text key="URL"><![CDATA[網址]]></Text>
+  <Text key="MD5"><![CDATA[MD5]]></Text>
+  <Text key="Note"><![CDATA[註解]]></Text>
+  <Text key="Save"><![CDATA[儲存]]></Text>
+  <Text key="Cancel"><![CDATA[取消]]></Text>
+  <Text key="Limit speed to"><![CDATA[限制速度]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[無效速度限制。]]></Text>
+  <Text key="Note about the options"><![CDATA[關於選項註解]]></Text>
+  <Text key="Can change file path if not downloaded"><![CDATA[如果還沒有開始下載，可以更改檔案路徑。如果開始下載了...就無法更改。]]></Text>
+  <Text key="Message change package path"><![CDATA[如果您更改封裝路徑，所有等待的檔案將被修改下載路徑。
+不會更改已下載的檔案路徑。    
+如果您更改「自動解壓」的選項，它將應用於封裝中所有檔案。]]></Text>
+  <Text key="User"><![CDATA[帳號]]></Text>
+  <Text key="E-mail"><![CDATA[E-mail]]></Text>
+  <Text key="Password"><![CDATA[密碼]]></Text>
+  <Text key="Show password"><![CDATA[顯示密碼]]></Text>
+  <Text key="User data"><![CDATA[使用者資料 （可選）]]></Text>
+  <Text key="See logs"><![CDATA[檢視記錄]]></Text>
+  <Text key="Decompressor"><![CDATA[解壓縮]]></Text>
+  <Text key="minutes"><![CDATA[分]]></Text>
+  <Text key="Capture links from clipboard"><![CDATA[擷取剪貼簿連結]]></Text>
+  <Text key="Turn off computer when finished"><![CDATA[任務完成後關閉電腦]]></Text>
+  <Text key="Start downloading when application starts"><![CDATA[執行本程式時開始下載]]></Text>
+  <Text key="In case of error, retry the download each"><![CDATA[如有錯誤，重新嘗試下載每隔]]></Text>
+  <Text key="Important note about connections"><![CDATA[連接的重要注意事項]]></Text>
+  <Text key="Number of parallel downloads"><![CDATA[同時下載的數量]]></Text>
+  <Text key="Number of connections per file"><![CDATA[每個檔案的連線數]]></Text>
+  <Text key="Priority"><![CDATA[優先權]]></Text>
+  <Text key="Create folder per package"><![CDATA[每個封裝各自建立資料夾]]></Text>
+  <Text key="Download path"><![CDATA[下載路徑]]></Text>
+  <Text key="Advanced options"><![CDATA[進階選項]]></Text>
+  <Text key="General options"><![CDATA[一般選項]]></Text>
+  <Text key="General"><![CDATA[一般]]></Text>
+  <Text key="Advanced"><![CDATA[進階]]></Text>
+  <Text key="Log level"><![CDATA[記錄層級]]></Text>
+  <Text key="Language"><![CDATA[語言]]></Text>
+  <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[註解：僅供進階使用者。如果你不懂請不要變更任何東西。]]></Text>
+  <Text key="Disk buffer size"><![CDATA[緩衝磁區大小]]></Text>
+  <Text key="Package size"><![CDATA[Buffer大小]]></Text>
+  <Text key="Port"><![CDATA[連接埠]]></Text>
+  <Text key="Connection"><![CDATA[連線]]></Text>
+  <Text key="Use proxy"><![CDATA[使用代理]]></Text>
+  <Text key="Proxy"><![CDATA[代理]]></Text>
+  <Text key="Proxy address/IP"><![CDATA[代理位址 / IP]]></Text>
+  <Text key="Save / use last used configuration"><![CDATA[儲存 / 使用最近使用的設定]]></Text>
+  <Text key="Start with Windows"><![CDATA[Windows 啟動時執行]]></Text>
+  <Text key="Web server"><![CDATA[伺服器]]></Text>
+  <Text key="Use web server"><![CDATA[使用伺服器]]></Text>
+  <Text key="Interrupt session"><![CDATA[工作階段逾時]]></Text>
+  <Text key="Name (optional)"><![CDATA[名稱（選擇性）]]></Text>
+  <Text key="User (optional)"><![CDATA[帳號（選擇性）]]></Text>
+  <Text key="Password (optional)"><![CDATA[密碼（選擇性）]]></Text>
+  <Text key="Template path"><![CDATA[範本路徑]]></Text>
+  <Text key="Templates"><![CDATA[範本]]></Text>
+  <Text key="Data saved successfully"><![CDATA[資料已成功地儲存]]></Text>
+  <Text key="You must configure user and password"><![CDATA[你必須先設定一組帳號密碼]]></Text>
+  <Text key="File decompressor"><![CDATA[檔案解壓器]]></Text>
+  <Text key="Information"><![CDATA[資訊]]></Text>
+  <Text key="Log_Minimum"><![CDATA[最小]]></Text>
+  <Text key="Log_Normal"><![CDATA[一般]]></Text>
+  <Text key="Log_Informative"><![CDATA[資訊]]></Text>
+  <Text key="Log_Debug"><![CDATA[除錯]]></Text>
+  <Text key="Priority_Low"><![CDATA[低]]></Text>
+  <Text key="Priority_Normal"><![CDATA[一般]]></Text>
+  <Text key="Streaming"><![CDATA[串流]]></Text>
+  <Text key="Watch Online"><![CDATA[線上觀看]]></Text>
+  <Text key="Watch Online help link"><![CDATA[註解關於線上觀看]]></Text>
+  <Text key="Watch Online Note"><![CDATA[此選項可讓你監視線上觀看視訊檔。
+    
+如果連結是一個有效的視訊檔 （avi、 mkv、 flv、 mp4 等），您可以選擇它並使用 VLC 播放器觀看。 
+
+您必須啟動串流伺服器和設定的 VLC 播放器路徑。
+您可以在「設定」畫面中的選項「串流」啟動此功能。
+
+一旦設定完成，按下「線上觀看」按鈕開始監視你電腦的串流。]]></Text>
+  <Text key="Streaming server not activated"><![CDATA[未啟動串流伺服器。您可以在「設定」畫面中的選項「串流」啟動此功能。]]></Text>
+  <Text key="Missing VLC Path"><![CDATA[未設定 VLC 的路徑。您可以在「設定」畫面中的「串流」選項設定它。]]></Text>
+  <Text key="MEGA Url"><![CDATA[MEGA 網址連結]]></Text>
+  <Text key="Streaming Url"><![CDATA[串流的 URL 連結]]></Text>
+  <Text key="Start VLC"><![CDATA[執行 VLC]]></Text>
+  <Text key="Streaming Info"><![CDATA[在 「MEGA 網址連結」文字方塊中輸入視訊的網址。
+
+接著將產生一組位址於「串流網址連結」你可以使用這個網址於任何支援串流播放的播放器來播放檔案。
+
+如果您有 VLC 播放器，並已在 MegaDownloader 的設定中設定其路徑，請按一下「執行 VLC」 開始觀看視訊。
+
+請注意您可能需要在串流執行前等待幾秒。]]></Text>
+  <Text key="Web server and streaming server ports must be different"><![CDATA[串流伺服器連接埠和網路伺服器連接埠不能相同。]]></Text>
+  <Text key="Streaming configuration"><![CDATA[串流設定]]></Text>
+  <Text key="Use streaming server"><![CDATA[使用串流伺服器]]></Text>
+  <Text key="VLC Configuration"><![CDATA[VLC 設定]]></Text>
+  <Text key="VLC Path"><![CDATA[VLC 路徑]]></Text>
+  <Text key="Download VLC"><![CDATA[下載 VLC]]></Text>
+  <Text key="Streaming configuration text"><![CDATA[串流伺服器允許您線上觀看 MEGA.CO.NZ 的視訊檔案。
+
+若要使用的串流伺服器，請勾選中「使用串流伺服器」的選項並選擇連接埠。
+它必須是 1024 y 65535 之間的一個值 （建議使用介於 49152 y 65535 之間的值）。
+您可以選擇任何數值，但要考慮到設定後將不能被任何其他程式使用。預設連接埠是 54321。
+
+一旦串流伺服器被啟動，您可以前往選單並選擇選項 「串流 / 線上觀看」。
+輸入 MEGA 連結並產生一個新的串流連結。輸入此連結到多媒體播放機器才能觀看視訊。
+
+請留意到 MegaDownloader 不是多媒體播放器。此選項允許您從 MEGA 串流資料，但你還是需要一個播放器才有辦法觀賞視訊及音訊，例如 VLC 播放器。
+為了方便地啟動 VLC，在此畫面中的 「VLC 路徑」選項中輸入 VLC 安裝路徑。]]></Text>
+  <Text key="Do you want to leave the default path empty?"><![CDATA[你是否要保留預設路徑為空？]]></Text>
+  <Text key="Disk buffer or package size values are not correct"><![CDATA[磁碟緩衝或封裝大小數值不正確。]]></Text>
+  <Text key="Disk buffer size must be greater than package size"><![CDATA[磁碟緩衝大小必須大於封裝大小。]]></Text>
+  <Text key="Connection number values are incorrect or too high"><![CDATA[連接值不正確或太高。]]></Text>
+  <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[重試次數必須設定，且它的數值必須介於 %A 與 %B。]]></Text>
+  <Text key="Invalid proxy configuration"><![CDATA[無效代理設定。]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[無效速度限制。]]></Text>
+  <Text key="Invalid server port"><![CDATA[伺服器連接埠無效。它的數值必須介於 1024 y 65535 (建議為 49152 y 65535)。]]></Text>
+  <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[工作逾時數值必須介於 0 與 %A。如果數值為 0 則表示不中斷。]]></Text>
+  <Text key="The template path is not valid"><![CDATA[範本路徑無效。]]></Text>
+  <Text key="Error starting web server"><![CDATA[啟動伺服器錯誤]]></Text>
+  <Text key="The web server password must have at least %A characters"><![CDATA[伺服器密碼必須至少為 %A 字元。]]></Text>
+  <Text key="Error deleting local files - Path: %PATH% - Error: %ERROR%"><![CDATA[刪除本地檔案錯誤 '%PATH%'.。
+訊息： %ERROR%]]></Text>
+  <Text key="Invalid password"><![CDATA[密碼無效]]></Text>
+  <Text key="Download started"><![CDATA[下載已成功啟動]]></Text>
+  <Text key="Download stopped"><![CDATA[下載已成功停止]]></Text>
+  <Text key="Invalid links"><![CDATA[無效連結]]></Text>
+  <Text key="Invalid package name"><![CDATA[無效封裝名稱]]></Text>
+  <Text key="Links added successfully"><![CDATA[連結已成功加入]]></Text>
+  <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[如果無指定任何使用者和密碼，下載將會以匿名使用者身份。]]></Text>
+  <Text key="User and password is not used yet"><![CDATA[此時不使用帳號與密碼（如果你維持空白）。所有下載將以匿名使用者來下載。此功能未來將會啟用。]]></Text>
+  <Text key="Number of connection explanation"><![CDATA[顯示的值將會是最大的接受值。
+例如，如果您選擇每個檔案 3 連接和同時下載 5 個檔案那麼將會有最多 15 連接值。
+這些值將顯示在主畫面中表單 A / B，其中:
+A 是的每個檔的連接數。
+B 是同行下載數。]]></Text>
+  <Text key="Turn off PC explanation"><![CDATA[使用此選項時，電腦將於下載正確地完成時關閉。
+如果有下載錯誤，電腦將關閉根據選項「發生錯誤時，重新嘗試每隔...」設定值決定關閉時間。
+如果勾選它，則電腦不會關閉因為將嘗試重新連接。
+
+註解：此選項不會記憶，你必須在啟動本程式時勾選啟用。在此方法下電腦將不會在下載完成後關閉。]]></Text>
+  <Text key="Save and use last conf explanation"><![CDATA[當啟用此選項時，加入連結畫面會記得上次應用程式執行時使用的設定，而不是顯示的預設設定。
+範例： 您的預設路徑是桌面。您想要下載 8 個封裝並將其保留在不同的路徑。
+你只需更改一次設定，一旦變更後，其餘7個會自動記住最後使用的設定，而不是分別增加修改 8 個封裝路徑。
+請注意封裝檔案名稱將不會被記憶。當應用程式關閉後，此設定將遺失。]]></Text>
+  <Text key="You have to restart the application for the language change to take effect"><![CDATA[你必須重新啟動本程式以套用語言檔變更。]]></Text>
+  <Text key="Please take into consideration the following"><![CDATA[請慎思以下]]></Text>
+  <Text key="Error, session expired"><![CDATA[錯誤，你必須再次連接：工作階段過期。]]></Text>
+  <Text key="Encode Url"><![CDATA[加密網址]]></Text>
+  <Text key="Encoded Url"><![CDATA[已加密網址]]></Text>
+  <Text key="Paste your MEGA Url(s) and the encoded Url(s) will appear under the Encoded Url box."><![CDATA[輸入 MEGA 的網址，以及已加密的網址將會顯示於「已加密網址」欄位。]]></Text>
+  <Text key="Terms of use"><![CDATA[使用條款]]></Text>
+  <Text key="Accept terms of use"><![CDATA[歡迎使用 MegaDownloader。 
+  
+此程式非官方應用程式，目的是幫助您從 MEGA 下載檔案。
+             
+您是否接受 MEGA 使用條款？
+請按一下「説明」來閱讀它們。]]></Text>
+  <Text key="Accounts"><![CDATA[帳號]]></Text>
+  <Text key="Account"><![CDATA[帳號]]></Text>
+  <Text key="Main account"><![CDATA[預設帳號]]></Text>
+  <Text key="Must configure at least one account"><![CDATA[你至少得設定一組帳號。]]></Text>
+  <Text key="Add new"><![CDATA[新增]]></Text>
+  <Text key="Account list empty"><![CDATA[帳號清單為空。]]></Text>
+  <Text key="Account already exists"><![CDATA[暱稱或 e-mail 已存在]]></Text>
+  <Text key="Account modified correctly"><![CDATA[帳號已成功地修改。 
+請記得儲存設定檔，否則變更將不會記錄。]]></Text>
+  <Text key="Account created correctly"><![CDATA[帳號已成功地增加。 
+請記得儲存設定檔，否則變更將不會記錄。]]></Text>
+  <Text key="Account deleted correctly"><![CDATA[帳號已成功地刪除。 
+請記得儲存設定檔，否則變更將不會記錄。]]></Text>
+  <Text key="Do you want to delete this account?"><![CDATA[你是否確定要刪除這個帳號？]]></Text>
+  <Text key="Account could not be deleted"><![CDATA[帳號無法被刪除。]]></Text>
+  <Text key="Account not found"><![CDATA[找不到帳號]]></Text>
+  <Text key="Delete"><![CDATA[刪除]]></Text>
+  <Text key="Modify"><![CDATA[修改]]></Text>
+  <Text key="Alias"><![CDATA[暱稱]]></Text>
+  <Text key="Go to Accounts tab"><![CDATA[帳號資料可在「帳號」分頁管理。]]></Text>
+  <Text key="Show password explanation"><![CDATA[如果你勾選這個選項，你就可以看見你輸入的密碼並且避免輸入錯誤。但是一旦密碼儲存後，由於安全性的緣故，你將不會看見密碼顯示，即使你勾選此選項。]]></Text>
+  <Text key="DLC"><![CDATA[DLC]]></Text>
+  <Text key="Open &amp;DLC"><![CDATA[開啟 DLC/ELC(&D)]]></Text>
+  <Text key="There is a DLC being processed, please wait"><![CDATA[正在處理 DLC/ELC，請稍候]]></Text>
+  <Text key="The DLC could not be loaded. Reason: %REASON"><![CDATA[無法載入 DLC/ELC： %REASON]]></Text>
+  <Text key="The DLC has no valid Mega links"><![CDATA[DLC/ELC 沒有任何有效的 MEGA 連結。]]></Text>
+  <Text key="Force download"><![CDATA[強制下載]]></Text>
+  <Text key="About"><![CDATA[關於 MegaDownloader]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[感謝您使用非 MEGA.CO.NZ 官方下載應用程式。]]></Text>
+  <Text key="Thanks to"><![CDATA[致謝]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader 與 Mega.co.nz 無關 - 商標所有權皆為本作者的財產。]]></Text>
+  <Text key="Created and designed by %NAME"><![CDATA[組建與設計者：%NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME 幫助完成 MEGA 加密系統。]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[所有幫忙測試本程式的使用者。]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[中文化作者：Zkm
+  暴露格：http://ilowkey.net/]]></Text>
+  <!-- NEW -->
+  <Text key="ELC"><![CDATA[ELC 檔]]></Text>
+  <Text key="ELC Accounts"><![CDATA[ELC 帳號]]></Text>
+  <Text key="ELC Account Info"><![CDATA[ELC 帳號資訊]]></Text>
+  <Text key="ELC Desc Info"><![CDATA[ELC （加密連結容器）提供保護連結避免被複製或舉報，讓你可以驗證討論區並分享 MEGA 連結。
+要使用此分享方式，必須擁有一個有效討論區的帳號，藉此來下載 ELC 檔內的連結。
+
+註解：此討論區必須提供 ELC 帳號資料（網址、使用者帳號、API-金鑰）。]]></Text>
+  <Text key="API-Key"><![CDATA[API-金鑰]]></Text>
+  <Text key="Generate ELC"><![CDATA[建立 ELC 檔]]></Text>
+  <Text key="Generat&amp;e ELC"><![CDATA[建立 ELC 檔(&E)]]></Text>
+  <Text key="ELC generator"><![CDATA[ELC 產生器]]></Text>
+  <Text key="Paste your MEGA Url(s), select your ELC account, and click on Generate ELC"><![CDATA[貼上你的 MEGA 載點網址，並且選取你的 ELC 帳號後，按下「建立 ELC 檔」。]]></Text>
+  <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[這是你的 ELC 連結。你也可以按下「儲存檔案」建立一個 ELC 檔。]]></Text>
+  <Text key="Please select a valid ELC account"><![CDATA[請選取一個有效的 ELC 帳號。]]></Text>
+  <Text key="There is an ELC being processed, please wait"><![CDATA[ELC 檔處理中，請稍候。]]></Text>
+  <Text key="Loading..."><![CDATA[載入中...]]></Text>
+  <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[未設定 ELC 帳號。請前往「設定」→「ELC 帳號」新增一個 ELC 帳號。]]></Text>
+  <Text key="Save file"><![CDATA[儲存檔案]]></Text>
+  <Text key="ELC file"><![CDATA[ELC 檔]]></Text>
+  <Text key="The ELC path is not valid"><![CDATA[此 ELC 檔路徑無效。]]></Text>
+  <Text key="The path is not valid"><![CDATA[此路徑無效。]]></Text>
+  <Text key="Error generating ELC"><![CDATA[建立 ELC 檔錯誤]]></Text>
+  <Text key="URL ELC account explanation"><![CDATA[此資料由討論區提供，指向驗證的網址。]]></Text>
+  <Text key="Alias ELC account explanation"><![CDATA[此匿稱會顯示於「ELC 產生器」畫面清單左側供鑒別。你可以輸入任何東西（或保留空白），這可以於任何時間點修改。只要記住它不可重複。]]></Text>
+  <Text key="Default ELC account explanation"><![CDATA[你可以擁有一組「預設」的帳號，它的左側會以「*」標記。
+它將會顯示「由預設所選」於 ELC 檔產生器 視窗。 
+假如你標記其他帳號為預設帳號，原本的預設帳號標記會被取消。]]></Text>
+  <Text key="ELC Account not found. You need a valid ELC Account configured for this ELC."><![CDATA[找不到 ELC 帳號。為了使用此 ELC 功能，您需要設定一個有效的 ELC 帳號。]]></Text>
+  <Text key="The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library."><![CDATA[此為資料夾連結，包含 %NUM 個檔案。現在僅使用第一個連結，如果你想使用全部連結，你得匯入連結到串流媒體庫。]]></Text>
+  <Text key="The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library."><![CDATA[此 ELC 檔包含 %NUM 個檔案。現在僅使用第一個連結，如果你想使用全部連結，你得匯入連結到串流媒體庫。]]></Text>
+  <Text key="optional"><![CDATA[選擇性]]></Text>
+  <Text key="Multiple ELC"><![CDATA[多个 ELC]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
+Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
+  <Text key="Searc&amp;h"><![CDATA[寻找(&S)]]></Text>
+  <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
+  <Text key="Check for updates"><![CDATA[检查更新]]></Text>
+</Language>

@@ -1,0 +1,722 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Data>
+  <Template>
+    <HtmlTemplate comment="Template for the page body. Valid keys: %HEAD%, %ERROR% y %CONTENT%">
+      <![CDATA[
+<!DOCTYPE html>
+<html>
+ <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" /> 
+    
+    <title>%TITLE%</title> 
+    
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="//ajax.aspnetcdn.com/ajax/jquery.mobile/1.1.1/jquery.mobile-1.1.1.min.css" />
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="//ajax.aspnetcdn.com/ajax/jquery.mobile/1.1.1/jquery.mobile-1.1.1.min.js">
+        
+    %HEAD%
+ <head>
+ <body>
+        %CONTENT%
+        
+        %JAVASCRIPT%
+ </body>
+</html>
+        ]]>
+    </HtmlTemplate>
+    <FavIcon comment="Favicon in base64">
+      <![CDATA[AAABAAEAEBAAAAEACABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAAAAAAAAAAAAAAAEAAAABAAAAAAAAzv9aAL29vQD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8AAgICAgIAAAAAAAAAAgICAgICAgAAAAMDAwABAQACAgICAgABAQADAwMAAAEBAAICAgABAAAAAwMDAAMAAQACAgIAAAMDAAMDAwADAwABAAIAAQADAwADAwMAAwMAAQEAAAEAAwMAAwMDAAAAAAABAAABAAAAAAAAAAMDAwMDAAAAAAAAAAMDAwADAwMDAwMAAAAAAAADAwMAAwMAAAMDAAADAAAAAwMDAAMDAAADAwAAAwMDAwMDAwMAAwMDAwAAAgADAwMDAwMAAQAAAAAAAgICAAMDAwMDAAEBAQEAAgICAgIAAAMDAAEBAQEAAgICAgICAgIAAAAAAAAAAgICAvgPAADgBwAAwAMAAIADAACAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIABAADAAwAA4AcAAPgPAAA=]]>
+    </FavIcon>
+    <FavIconMimeType comment="Mime type for favicon">
+      <![CDATA[image/x-icon]]>
+    </FavIconMimeType>
+  </Template>
+  <Content>
+    <CSS comment="CSS to apply in template">
+      <![CDATA[
+body{
+    font: 85%/1.4 arial,sans-serif;
+}
+.error {
+    color:red;
+}
+
+/** Hay demasiado espacio entre los botones **/
+.ui-content {
+  padding-top:0px !important;
+  padding-bottom:0px !important;
+}
+
+/** Sobreescribimos colores del header **/
+.ui-bar-b {
+ 	
+  /* IE10 Consumer Preview */ 
+  background-image: -ms-linear-gradient(top, #29C284 0%, #0A9D63 100%) !important;
+  /* Mozilla Firefox */ 
+  background-image: -moz-linear-gradient(top, #29C284 0%, #0A9D63 100%) !important;
+  /* Opera */ 
+  background-image: -o-linear-gradient(top, #29C284 0%, #0A9D63 100%) !important;
+  /* Webkit (Safari/Chrome 10) */ 
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0, #29C284), color-stop(1, #0A9D63)) !important;
+  /* Webkit (Chrome 11+) */ 
+  background-image: -webkit-linear-gradient(top, #29C284 0%, #0A9D63 100%) !important;
+  /* W3C Markup, IE10 Release Preview */ 
+  background-image: linear-gradient(to bottom, #29C284 0%, #0A9D63 100%) !important;
+
+  margin-bottom: 25px;
+}
+
+.StatusMuyImportante{
+  font-size: x-large;
+}
+.StatusImportante{
+  font-size: larger;
+}
+
+#divIniciar{
+    display:none;
+}
+#divDetener{
+    display:none;
+}
+#divAgregarLinkResult{
+    display:none;
+}
+.classAgregarLinks{
+    display:none;
+}
+#txtAgregarLinks{
+    font-family: Arial,sans-serif;
+    font-size: .7em;
+    width:100%;
+    min-height:50px;
+}
+#txtNomPaquete{
+    font-family: Arial,sans-serif;
+    font-size: .7em;
+    width:100%;    
+}
+blockquote{
+    margin:10px;
+    margin-left:15px;
+    /*max-width:400px;*/
+    padding:15px;
+    border-radius: 0.5em;
+    background-color:#DDD;
+}
+.botoneraAgregarLinks{
+    width:100%;
+    text-align:right;
+}
+
+#iconExit {
+    float: right;
+    position: absolute;
+    right: 15px;
+    top: 14px;
+    cursor: pointer;
+}
+
+#iconUpdate {
+    float: right;
+    position: absolute;
+    right: 50px;
+    top: 11px;
+    cursor: pointer;
+}
+
+.iconPause{
+      padding-right: 35px;
+      background: transparent url(data:image/png;base64,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) no-repeat center right;
+}      
+.iconPlay{    
+      padding-right: 35px;
+      background: transparent url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBNYWNpbnRvc2giIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MzI5N0I0NkM3Rjk5MTFFMTgyQURGRDYwRTUyRkE1ODgiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MzI5N0I0NkQ3Rjk5MTFFMTgyQURGRDYwRTUyRkE1ODgiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpGRTg4Njg2QjdGOTYxMUUxODJBREZENjBFNTJGQTU4OCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDpGRTg4Njg2QzdGOTYxMUUxODJBREZENjBFNTJGQTU4OCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PsMUf14AAADxSURBVHjaYmQgAIyNjQWA1HogdsCh5AAQB549e/YDPnOYGAgDfJYwQOXWEzKEGIsciFED9LkCpRYRBYBB94AuFlEj6EYtGiEWMWIpCUD5ATlP7CfSLEck9gP05M6IZkkDkKqnkicmAC0rxBV0E4D4AhUsAZnRSCjoBKDBZUCBJY7ohSwjnhKbHMuwWoLTIjItw2kJXotItAyvJQQtItIygpYQZREBy4iyBGwR0JD/0PqE1GAkyhKY+UQXQVADQbl/AxQT5RMYYCGxFgUZHDg0Sm9oOUc1AIpTZDNBiWE/kS0dSsABJmiYH6ClJSA7AAIMAMAEXWDhJE1XAAAAAElFTkSuQmCC) no-repeat center right;
+}   
+
+
+.text-align-center {
+  text-align: center;
+}
+.text-align-right {
+  text-align: right;
+}
+
+/** CSS for non-standard jQuery Mobile styles or Codiqa components **/
+.split-wrapper {
+  width: 100%;
+  min-height: 200px;
+  clear: both;
+}
+@media all and (min-width: 650px) {
+  .content-secondary {
+    text-align: left;
+    float: left;
+    width: 45%;
+    background: none;
+    padding: 1.5em 6% 3em 0;
+    margin: 0;
+  }
+  .content-secondary {
+    background: none;
+    border-top: none;
+  }
+  .content-primary {
+    width: 45%;
+    float: right;
+    margin-right: 1%;
+    padding-right: 1%;
+  }
+  .content-primary ul:first-child {
+    margin-top: 0;
+  }
+  .content-secondary ul.ui-listview, .content-secondary ul.ui-listview-inset {
+    margin: 0;
+  }
+  .content-secondary ul.ui-listview .ui-li-divider, .content-secondary ul.ui-listview .ui-li {
+    border-radius: 0px;
+  }
+  .content-secondary ul.ui-listview .ui-li {
+    border-left: 0;
+    border-right: 0;
+  }
+  .content-secondary h2 {
+    position: absolute;
+    left: -9999px;
+  }
+  .content-secondary .ui-li-divider {
+    padding-top: 1em;
+    padding-bottom: 1em;
+  }
+  .content-secondary {
+    margin: 0;
+    padding: 0;
+  }
+  
+}
+@media all and (min-width: 750px){
+  .content-secondary {
+    width: 34%;
+  }
+  .content-primary {
+    width: 60%;
+    padding-right: 1%;
+  }	
+}
+
+@media all and (min-width: 1200px){
+  .content-secondary {
+    width: 30%;
+    padding-right:6%;
+    margin: 0px 0 20px 5%;
+  }
+  .content-secondary ul {
+    margin: 0;
+  }
+  .content-secondary {
+    margin: 0;
+    padding: 0;
+  }
+  .content-primary {
+    width: 50%;
+    margin-right: 5%;
+    padding-right: 3%;
+  }
+  .content-primary {
+    width: 60%;
+  }
+}
+
+        ]]>
+    </CSS>
+    <HeadMain comment="Header (key %HEAD%) to be used in the main page">
+      <![CDATA[
+<script>
+(function($) {
+  $.widget('mobile.tabbar', $.mobile.navbar, {
+    _create: function() {
+      // Set the theme before we call the prototype, which will 
+      // ensure buttonMarkup() correctly grabs the inheritied theme.
+      // We default to the "a" swatch if none is found
+      var theme = this.element.jqmData('theme') || "a";
+      this.element.addClass('ui-footer ui-footer-fixed ui-bar-' + theme);
+
+      // Make sure the page has padding added to it to account for the fixed bar
+      this.element.closest('[data-role="page"]').addClass('ui-page-footer-fixed');
+
+
+      // Call the NavBar _create prototype
+      $.mobile.navbar.prototype._create.call(this);
+    },
+
+    // Set the active URL for the Tab Bar, and highlight that button on the bar
+    setActive: function(url) {
+      // Sometimes the active state isn't properly cleared, so we reset it ourselves
+      this.element.find('a').removeClass('ui-btn-active ui-state-persist');
+      this.element.find('a[href="' + url + '"]').addClass('ui-btn-active ui-state-persist');
+    }
+  });
+
+  $(document).bind('pagecreate create', function(e) {
+    return $(e.target).find(":jqmData(role='tabbar')").tabbar();
+  });
+  
+  $(":jqmData(role='page')").live('pageshow', function(e) {
+    // Grab the id of the page that's showing, and select it on the Tab Bar on the page
+    var tabBar, id = $(e.target).attr('id');
+
+    tabBar = $.mobile.activePage.find(':jqmData(role="tabbar")');
+    if(tabBar.length) {
+      tabBar.tabbar('setActive', '#' + id);
+    }
+  });
+
+var attachEvents = function() {
+	var hoverDelay = $.mobile.buttonMarkup.hoverDelay, hov, foc;
+
+	$( document ).bind( {
+		"vmousedown vmousecancel vmouseup vmouseover vmouseout focus blur scrollstart": function( event ) {
+			var theme,
+				$btn = $( closestEnabledButton( event.target ) ),
+				evt = event.type;
+		
+			if ( $btn.length ) {
+				theme = $btn.attr( "data-" + $.mobile.ns + "theme" );
+		
+				if ( evt === "vmousedown" ) {
+					if ( $.support.touch ) {
+						hov = setTimeout(function() {
+							$btn.removeClass( "ui-btn-up-" + theme ).addClass( "ui-btn-down-" + theme );
+						}, hoverDelay );
+					} else {
+						$btn.removeClass( "ui-btn-up-" + theme ).addClass( "ui-btn-down-" + theme );
+					}
+				} else if ( evt === "vmousecancel" || evt === "vmouseup" ) {
+					$btn.removeClass( "ui-btn-down-" + theme ).addClass( "ui-btn-up-" + theme );
+				} else if ( evt === "vmouseover" || evt === "focus" ) {
+					if ( $.support.touch ) {
+						foc = setTimeout(function() {
+							$btn.removeClass( "ui-btn-up-" + theme ).addClass( "ui-btn-hover-" + theme );
+						}, hoverDelay );
+					} else {
+						$btn.removeClass( "ui-btn-up-" + theme ).addClass( "ui-btn-hover-" + theme );
+					}
+				} else if ( evt === "vmouseout" || evt === "blur" || evt === "scrollstart" ) {
+					$btn.removeClass( "ui-btn-hover-" + theme  + " ui-btn-down-" + theme ).addClass( "ui-btn-up-" + theme );
+					if ( hov ) {
+						clearTimeout( hov );
+					}
+					if ( foc ) {
+						clearTimeout( foc );
+					}
+				}
+			}
+		},
+		"focusin focus": function( event ){
+			$( closestEnabledButton( event.target ) ).addClass( $.mobile.focusClass );
+		},
+		"focusout blur": function( event ){
+			$( closestEnabledButton( event.target ) ).removeClass( $.mobile.focusClass );
+		}
+	});
+
+	attachEvents = null;
+};
+
+$.fn.buttonMarkup = function( options ) {
+	var $workingSet = this;
+
+	// Enforce options to be of type string
+	options = ( options && ( $.type( options ) == "object" ) )? options : {};
+	for ( var i = 0; i < $workingSet.length; i++ ) {
+		var el = $workingSet.eq( i ),
+			e = el[ 0 ],
+			o = $.extend( {}, $.fn.buttonMarkup.defaults, {
+				icon:       options.icon       !== undefined ? options.icon       : el.jqmData( "icon" ),
+				iconpos:    options.iconpos    !== undefined ? options.iconpos    : el.jqmData( "iconpos" ),
+				theme:      options.theme      !== undefined ? options.theme      : el.jqmData( "theme" ) || $.mobile.getInheritedTheme( el, "c" ),
+				inline:     options.inline     !== undefined ? options.inline     : el.jqmData( "inline" ),
+				shadow:     options.shadow     !== undefined ? options.shadow     : el.jqmData( "shadow" ),
+				corners:    options.corners    !== undefined ? options.corners    : el.jqmData( "corners" ),
+				iconshadow: options.iconshadow !== undefined ? options.iconshadow : el.jqmData( "iconshadow" ),
+				iconsize:   options.iconsize   !== undefined ? options.iconsize   : el.jqmData( "iconsize" ),
+				mini:       options.mini       !== undefined ? options.mini       : el.jqmData( "mini" )
+			}, options ),
+
+			// Classes Defined
+			innerClass = "ui-btn-inner",
+			textClass = "ui-btn-text",
+			buttonClass, iconClass,
+			// Button inner markup
+			buttonInner,
+			buttonText,
+			buttonIcon,
+			buttonElements;
+
+		$.each(o, function(key, value) {
+			e.setAttribute( "data-" + $.mobile.ns + key, value );
+			el.jqmData(key, value);
+		});
+
+		// Check if this element is already enhanced
+		buttonElements = $.data(((e.tagName === "INPUT" || e.tagName === "BUTTON") ? e.parentNode : e), "buttonElements");
+
+		if (buttonElements) {
+			e = buttonElements.outer;
+			el = $(e);
+			buttonInner = buttonElements.inner;
+			buttonText = buttonElements.text;
+			// We will recreate this icon below
+			$(buttonElements.icon).remove();
+			buttonElements.icon = null;
+		}
+		else {
+			buttonInner = document.createElement( o.wrapperEls );
+			buttonText = document.createElement( o.wrapperEls );
+		}
+		buttonIcon = o.icon ? document.createElement( "span" ) : null;
+
+		if ( attachEvents && !buttonElements) {
+			attachEvents();
+		}
+		
+		// if not, try to find closest theme container	
+		if ( !o.theme ) {
+			o.theme = $.mobile.getInheritedTheme( el, "c" );	
+		}		
+
+		buttonClass = "ui-btn ui-btn-up-" + o.theme;
+		buttonClass += o.inline ? " ui-btn-inline" : "";
+		buttonClass += o.shadow ? " ui-shadow" : "";
+		buttonClass += o.corners ? " ui-btn-corner-all" : "";
+
+		if ( o.mini !== undefined ) {
+			// Used to control styling in headers/footers, where buttons default to `mini` style.
+			buttonClass += o.mini ? " ui-mini" : " ui-fullsize";
+		}
+		
+		if ( o.inline !== undefined ) {			
+			// Used to control styling in headers/footers, where buttons default to `mini` style.
+			buttonClass += o.inline === false ? " ui-btn-block" : " ui-btn-inline";
+		}
+		
+		
+		if ( o.icon ) {
+			o.icon = "ui-icon-" + o.icon;
+			o.iconpos = o.iconpos || "left";
+
+			iconClass = "ui-icon " + o.icon;
+
+			if ( o.iconshadow ) {
+				iconClass += " ui-icon-shadow";
+			}
+
+			if ( o.iconsize ) {
+				iconClass += " ui-iconsize-" + o.iconsize;
+			}
+		}
+
+		if ( o.iconpos ) {
+			buttonClass += " ui-btn-icon-" + o.iconpos;
+
+			if ( o.iconpos == "notext" && !el.attr( "title" ) ) {
+				el.attr( "title", el.getEncodedText() );
+			}
+		}
+    
+		innerClass += o.corners ? " ui-btn-corner-all" : "";
+
+		if ( o.iconpos && o.iconpos === "notext" && !el.attr( "title" ) ) {
+			el.attr( "title", el.getEncodedText() );
+		}
+
+		if ( buttonElements ) {
+			el.removeClass( buttonElements.bcls || "" );
+		}
+		el.removeClass( "ui-link" ).addClass( buttonClass );
+
+		buttonInner.className = innerClass;
+
+		buttonText.className = textClass;
+		if ( !buttonElements ) {
+			buttonInner.appendChild( buttonText );
+		}
+		if ( buttonIcon ) {
+			buttonIcon.className = iconClass;
+			if ( !(buttonElements && buttonElements.icon) ) {
+				buttonIcon.appendChild( document.createTextNode("\u00a0") );
+				buttonInner.appendChild( buttonIcon );
+			}
+		}
+
+		while ( e.firstChild && !buttonElements) {
+			buttonText.appendChild( e.firstChild );
+		}
+
+		if ( !buttonElements ) {
+			e.appendChild( buttonInner );
+		}
+
+		// Assign a structure containing the elements of this button to the elements of this button. This
+		// will allow us to recognize this as an already-enhanced button in future calls to buttonMarkup().
+		buttonElements = {
+			bcls  : buttonClass,
+			outer : e,
+			inner : buttonInner,
+			text  : buttonText,
+			icon  : buttonIcon
+		};
+
+		$.data(e,           'buttonElements', buttonElements);
+		$.data(buttonInner, 'buttonElements', buttonElements);
+		$.data(buttonText,  'buttonElements', buttonElements);
+		if (buttonIcon) {
+			$.data(buttonIcon, 'buttonElements', buttonElements);
+		}
+	}
+
+	return this;
+};
+
+$.fn.buttonMarkup.defaults = {
+	corners: true,
+	shadow: true,
+	iconshadow: true,
+	iconsize: 18,
+	wrapperEls: "span"
+};
+
+function closestEnabledButton( element ) {
+    var cname;
+
+    while ( element ) {
+		// Note that we check for typeof className below because the element we
+		// handed could be in an SVG DOM where className on SVG elements is defined to
+		// be of a different type (SVGAnimatedString). We only operate on HTML DOM
+		// elements, so we look for plain "string".
+        cname = ( typeof element.className === 'string' ) && (element.className + ' ');
+        if ( cname && cname.indexOf("ui-btn ") > -1 && cname.indexOf("ui-disabled ") < 0 ) {
+            break;
+        }
+
+        element = element.parentNode;
+    }
+
+    return element;
+}
+
+	
+})(jQuery);
+
+</script>
+        ]]>
+    </HeadMain >
+    <BodyJavaScript comment="Javascript code (key %JAVASCRIPT%) to be used in the main page.">
+      <![CDATA[
+<script>
+
+    $(window).load(function () {
+      ActualizarEstado();
+    });
+
+    function ActualizarEstadoTimer(){
+        setTimeout(function(){ 
+            ActualizarEstado();
+        }, 3000);
+    }
+    function ActualizarEstado(){
+        $.ajax({
+            url: "ajax_status",
+            success: function(data) {
+            $('#divEstado').html(data);
+            ActualizarEstadoTimer();
+            }
+        });
+    }            
+
+    function clickEstado(){
+        $('#divEstado').toggle('slow');
+        $('#divIniciar').hide('slow');
+        $('#divDetener').hide('slow');
+        $('.classAgregarLinks').hide('slow');
+        $('#divAgregarLinkResult').hide('slow');  
+    }
+
+    function clickIniciar(){
+        $('#divIniciar').show('slow');
+        $('#divEstado').hide('slow');
+        $('#divDetener').hide('slow');
+        $('.classAgregarLinks').hide('slow');
+        $('#divAgregarLinkResult').hide('slow');  
+
+        $('#divIniciar').html('Starting...');
+        $.ajax({
+            url: "ajax_resumedownload",
+            success: function(data) {
+                $('#divIniciar').html(data);
+            },
+            error: function(){
+                $('#divIniciar').html('<span class="error">Order could not be sent</span>');
+            }
+        });
+    }
+
+    function clickDetener(){
+        $('#divDetener').show('slow');
+        $('#divIniciar').hide('slow');
+        $('#divEstado').hide('slow');
+        $('.classAgregarLinks').hide('slow');
+        $('#divAgregarLinkResult').hide('slow');  
+
+        $('#divDetener').html('Stopping...');
+        $.ajax({
+            url: "ajax_stopdownload",
+            success: function(data) {
+                $('#divDetener').html(data);
+            }, 
+            error: function(){
+                $('#divDetener').html('<span class="error">Order could not be sent</span>');
+            }
+        });
+    }
+
+    function clickAgregarLinks(){
+        $('#divAgregarLinks1').show('slow')    
+        $('#divDetener').hide('slow');
+        $('#divIniciar').hide('slow');
+        $('#divEstado').hide('slow');
+        $('#divAgregarLinkResult').hide('slow');  
+        $('#divAgregarLinks2').hide('slow'); 
+ 
+        $('#txtAgregarLinks').val('');
+        $('#txtNomPaquete').val('');
+        $('#chkCrearDirectorioPaquete').attr('checked', false);
+
+    }
+
+    function clickAgregarLink1(){
+        $('#divAgregarLinks1').show('slow');
+        $('#divAgregarLinks2').hide('slow');    
+        $('#divAgregarLinkResult').hide('slow');  
+    }
+    function clickAgregarLink2(){
+        $('#divAgregarLinks1').hide('slow');
+        $('#divAgregarLinks2').show('slow');   
+        $('#divAgregarLinkResult').hide('slow');          
+    }
+    function clickAgregarLinkFinish(){
+        $('#divAgregarLinks1').hide('slow');
+        $('#divAgregarLinks2').hide('slow');   
+        $('#divAgregarLinkResult').show('slow');   
+        $('#divAgregarLinkResult').html('Adding links...');
+        
+        $.ajax({
+            type: "POST",
+            url: "ajax_addlink",
+            data: { 
+                links: $('#txtAgregarLinks').val(), 
+                pckname: $('#txtNomPaquete').val(), 
+                createdirpck: $('#chkCrearDirectorioPaquete').is(':checked')
+                }, 
+            success: function(data) {
+                $('#divAgregarLinkResult').html(data);
+            }, 
+            error: function(){
+                $('#divAgregarLinkResult').html('<span class="error">Order could not be sent</span>');
+            }
+        });        
+    }
+    function clickLogout(){
+      window.location = 'logout';
+    }
+    function clickUpdate(){
+      window.location = 'main';
+    }    
+
+</script>
+        ]]>
+    </BodyJavaScript>
+    <BodyMain comment="Content (key %CONTENT%) to be used in the main page.">
+      <![CDATA[
+<div data-role="page" id="page1">
+  <div data-theme="b" data-role="header">
+      <h3>
+          %TITLE%
+      </h3>
+      <img
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAQCAYAAAAS7Y8mAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAADOSURBVHjatJThDYIwFIQ/jQN0BNgAN6ib4AZuoJvoJrBBV3AD2eD8U+JLaUpj4JJLSl97vNzlFUkk7CUNWmKINWpoPxpJQesI8WxR+CAJoAEC4PjhHTnXG1ObgLOpLxH/YDv9SPKZLnys2c6LVvSJqCtccNHrmbYxlwrboHxtOAnnpjrrsYynLet4ZPbuZn0FXlZ4BC4Vwqo48zomSW+Gk1l3lXfGzJ5Prdg1vB54Gjvagi0OuGWCDDGfafcBqRnpKfr/10hv/gix17P5HQBgn7tY8ONzigAAAABJRU5ErkJggg=="
+        alt="Logout" title="Logout and exit" id="iconExit" onclick="clickLogout(); return false;"/>
+    <img 
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAATCAYAAACZZ43PAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAADESURBVHjapJPRDcIwDEQPxADdgLJB2KCjdDNGYISMkBHIBu0X/PH4SYUVSoPFSZbycbk4d7YAbVQCui2OGgIAExD+EVgw/iowApF1XGr+QW/0kq6SgjwoSn35q8XN84VkiBMweEwcq8udN0Zr2NBI5aN2AMWOLOkkJ/bmnB33oiQkYQVmh8C81oEn/2DnwGviYPixFWNdR+Bhh6s1SPXLT8O7LzEue5AkdVUquRgWCseaeJaU7Qt91ck3pMJ1r3NcW6jXANQXykhCDRPfAAAAAElFTkSuQmCC"
+        alt="Refresh" title="Refresh" id="iconUpdate"  onclick="clickUpdate(); return false;" />
+
+  </div>
+            
+   %ERROR%
+
+  <div data-role="content">
+      <a data-role="button" data-theme="b" link="#" onclick="clickEstado(); return false;">Status</a>
+      <blockquote id="divEstado">Loading...</blockquote>
+  </div>
+
+  <div data-role="content">
+      <a data-role="button" data-theme="b link="#" onclick="clickIniciar(); return false;">Start</a>
+      <blockquote id="divIniciar">Starting...</blockquote>
+  </div>
+
+  <div data-role="content">
+      <a data-role="button" data-theme="b link="#" onclick="clickDetener(); return false;">Stop</a>
+      <blockquote id="divDetener">Stopping...</blockquote>
+  </div>
+
+  <div data-role="content">
+      <a data-role="button" data-theme="b link="#" onclick="clickAgregarLinks(); return false;">Add links</a>
+      <blockquote id="divAgregarLinks1" class="classAgregarLinks">
+          <div>1) Links</div>
+          <textarea id="txtAgregarLinks"></textarea>
+          <div class="botoneraAgregarLinks">
+              <a link="#" onclick="clickAgregarLink2(); return false;">
+              Next</a>
+          </div>
+      </blockquote>
+      <blockquote id="divAgregarLinks2" class="classAgregarLinks">
+          <div>2) Package name</div>
+          <input type="text" id="txtNomPaquete"></input>
+          <div>
+              <input type="checkbox" id="chkCrearDirectorioPaquete" /> 
+              <label for="chkCrearDirectorioPaquete">Create directory</label>
+          </div>
+          <div class="botoneraAgregarLinks">
+              <a link="#" onclick="clickAgregarLink1(); return false;">
+              Previous</a>&nbsp;&nbsp;
+              <a link="#" onclick="clickAgregarLinkFinish(); return false;">
+              Finish</a>
+          </div>
+      </blockquote>
+      <blockquote id="divAgregarLinkResult"></blockquote>
+  </div>
+</div>
+        ]]>
+    </BodyMain>
+    <BodyLogin comment="Content (key %CONTENT%) to be used in the login page">
+      <![CDATA[
+    <div data-role="page" id="page1">
+       <div data-role="content">
+        %ERROR%
+        <form name="input" action="login" method="post" data-ajax="false">
+        
+          <label for="Password" class="ui-hidden-accessible">Password:</label>
+          <input type="password" name="Password" id="Password" value="" placeholder="Password"/>
+             
+          <input type="submit" value="Login" data-theme="b">
+        </form>  
+       </div>
+      </div>
+        ]]>
+    </BodyLogin>
+  </Content>
+    
+</Data>

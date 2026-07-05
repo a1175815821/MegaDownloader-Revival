@@ -1,0 +1,341 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Language id="hu-HU" name="Hungarian" app="MegaDownloader">
+  <Text key="Loading..."><![CDATA[Betöltés...]]></Text>
+  <Text key="Loading please wait"><![CDATA[Betöltés, kérlek várj...]]></Text>
+  <Text key="Closing please wait"><![CDATA[Bezárás, kérlek várj...]]></Text>
+  <Text key="Name"><![CDATA[Név]]></Text>
+  <Text key="Downloaded"><![CDATA[Letöltve]]></Text>
+  <Text key="Size"><![CDATA[Méret]]></Text>
+  <Text key="Status"><![CDATA[Állapot]]></Text>
+  <Text key="Progress"><![CDATA[Folyamat]]></Text>
+  <Text key="Progress %"><![CDATA[Folyamatban %]]></Text>
+  <Text key="Speed"><![CDATA[Sebesség]]></Text>
+  <Text key="Estimated"><![CDATA[Becsült idő]]></Text>
+  <Text key="Remaining"><![CDATA[Hátralévő idő]]></Text>
+  <Text key="Open directory"><![CDATA[Mappa megnyitása]]></Text>
+  <Text key="Increase priority"><![CDATA[Elsőbbség növelése]]></Text>
+  <Text key="Decrease priority"><![CDATA[Elsőbbség csökkentése]]></Text>
+  <Text key="Close"><![CDATA[Bezárás]]></Text>
+  <Text key="Pause"><![CDATA[Szünet]]></Text>
+  <Text key="Delete from list"><![CDATA[Törlés a listából]]></Text>
+  <Text key="Delete from list and disk"><![CDATA[Törlés a listából és a lemezről]]></Text>
+  <Text key="Add link"><![CDATA[Link hozzáadása]]></Text>
+  <Text key="Add links"><![CDATA[Linkek hozzáadása]]></Text>
+  <Text key="Open"><![CDATA[Megnyitás]]></Text>
+  <Text key="Close"><![CDATA[Bezárás]]></Text>
+  <Text key="Configuration"><![CDATA[Beállítások]]></Text>
+  <Text key="See error"><![CDATA[Hiba]]></Text>
+  <Text key="See links"><![CDATA[Linkek]]></Text>
+  <Text key="See links + desc"><![CDATA[Linkek leírása]]></Text>
+  <Text key="Reset"><![CDATA[Alapra]]></Text>
+  <Text key="Properties"><![CDATA[Tulajdonságok]]></Text>
+  <Text key="Clean completed"><![CDATA[Befejezett törlése]]></Text>
+  <Text key="Start downloads"><![CDATA[Letöltés indítása]]></Text>
+  <Text key="Start download"><![CDATA[Letöltés indítása]]></Text>
+  <Text key="Pause downloads"><![CDATA[Letöltés szüneteltetése]]></Text>
+  <Text key="Stop downloads"><![CDATA[Letöltés leállítása]]></Text>
+  <Text key="Status: -"><![CDATA[Állapot: -]]></Text>
+  <Text key="RAM Proc Empty"><![CDATA[RAM: - / Proc: -]]></Text>
+  <Text key="RAM"><![CDATA[RAM]]></Text>
+  <Text key="Proc"><![CDATA[Proc]]></Text>
+  <Text key="Links"><![CDATA[Linkek]]></Text>
+  <Text key="Hour"><![CDATA[Óra]]></Text>
+  <Text key="Queued, error, completed"><![CDATA[Ütemezve, téves, és a befejezett]]></Text>
+  <Text key="active downloads"><![CDATA[Aktív letöltések]]></Text>
+  <Text key="Active downloads"><![CDATA[Aktív letöltések]]></Text>
+  <Text key="Error information"><![CDATA[Hibaüzenet]]></Text>
+  <Text key="New version available"><![CDATA[Új verzió elérhető]]></Text>
+  <Text key="New version do you want to download it? Recommended!"><![CDATA[Új változat érhető el a  MegaDownloader-ből Javasolom, hogy frissítsed.
+Szeretnéd letölteni?]]></Text>
+  <Text key="New version do you want to download it?"><![CDATA[Van egy új változata a  MegaDownloadernek. Kattints ide a letöltéshez.]]></Text>
+  <Text key="Do you want to exit?"><![CDATA[Biztos, hogy ki akarsz lépni?]]></Text>
+  <Text key="Files extracting, corruption danger"><![CDATA[Kibontható fájlok. 
+Ha kilépsz, félbemarad a művelet és később neked kell manuálisan kibontanod.]]></Text>
+  <Text key="Package"><![CDATA[Csomag]]></Text>
+  <Text key="Turning off in 60 seconds"><![CDATA[Automatikus kikapcsolás 60 másodperc múlva]]></Text>
+  <Text key="Confirmation"><![CDATA[Confirmation]]></Text>
+  <Text key="Do you want to delete the element(s)?"><![CDATA[Biztos, hogy törlöd az elemet??]]></Text>
+  <Text key="Note: files will NOT be deleted"><![CDATA[Megjegyzés: A fájl nem törlődött.]]></Text>
+  <Text key="Note: files will BE deleted"><![CDATA[Megjegyzés: A fájl törölve.]]></Text>
+  <Text key="No valid URLs have been inserted"><![CDATA[Hibás URL]]></Text>
+  <Text key="Can not add remote links without a default path"><![CDATA[Nem lehet hozzáadni távolról alapértelmezett elérési utat]]></Text>
+  <Text key="New package"><![CDATA[Új csomag]]></Text>
+  <Text key="Connection conf"><![CDATA[Kapcsolat konfigurálása.]]></Text>
+  <Text key="See decompression progress"><![CDATA[Nem tömörített folyamatok]]></Text>
+  <Text key="&amp;File"><![CDATA[&Fájl]]></Text>
+  <Text key="E&amp;xit"><![CDATA[K&ilépés]]></Text>
+  <Text key="&amp;Options"><![CDATA[&Beállítások]]></Text>
+  <Text key="&amp;Configuration"><![CDATA[&Konfigurálás]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[Kitömörítésre várakozás]]></Text>
+  <Text key="&amp;Help"><![CDATA[&Segítség]]></Text>
+  <Text key="FA&amp;Q"><![CDATA[Le&írás]]></Text>
+  <Text key="&amp;Collaborate"><![CDATA[&Támogatás]]></Text>
+  <Text key="See lo&amp;gs"><![CDATA[Na&pló]]></Text>
+  <Text key="Get MegaUploa&amp;der"><![CDATA[Get MegaUploa&der]]></Text>
+  <Text key="&amp;About"><![CDATA[&MegaDownloader névjegye]]></Text>
+  <Text key="Manage Streaming &amp;Library"><![CDATA[&Könyvtár rendezés]]></Text>
+  <Text key="See Streaming &amp;Library"><![CDATA[Kö&nyvtár]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>
+  <Text key="Watch &amp;Online"><![CDATA[Watch &online]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[UR&L-ek]]></Text>
+  <Text key="Collaborate"><![CDATA[Hozzájárulás]]></Text>
+  <Text key="Creating files"><![CDATA[Fájlok készítése]]></Text>
+  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="Verifying"><![CDATA[Ellenőrzés]]></Text>
+  <Text key="Paused"><![CDATA[Szüneteltetve]]></Text>
+  <Text key="Stopped"><![CDATA[Leállítva]]></Text>
+  <Text key="Error capital leters"><![CDATA[HIBA]]></Text>
+  <Text key="Error"><![CDATA[Hiba]]></Text>
+  <Text key="Extracting"><![CDATA[Kicsomagolva]]></Text>
+  <Text key="Downloading"><![CDATA[Letöltve]]></Text>
+  <Text key="Completed"><![CDATA[Kész]]></Text>
+  <Text key="Hashing MD5"><![CDATA[Hashing MD5]]></Text>
+  <Text key="Current"><![CDATA[Jelenleg:]]></Text>
+  <Text key="File"><![CDATA[Fájl]]></Text>
+  <Text key="Extraction queue"><![CDATA[Várakozás kicsomagolásra]]></Text>
+  <Text key="This screen lets you see the status of the files pending of extraction"><![CDATA[Ez a képernyő lehetővé teszi, hogy lásd a függőben lévő fájlokat]]></Text>
+  <Text key="if automatic extraction option is enabled"><![CDATA[ ha az automatikus kibontás opció engedélyezve van]]></Text>
+  <Text key="Pre-Shared Keys Manager"><![CDATA[Pre-Shared Kulcsmenedzser]]></Text>
+  <Text key="Pre-Shared Key list"><![CDATA[Pre-Shared Kulcs lista]]></Text>
+  <Text key="Pre-Shared Keys"><![CDATA[Pre-Shared Kulcs]]></Text>
+  <Text key="Pre-Shared Key Manager Description"><![CDATA[Illeszd be a Pre-Shared Kulcsot a fájl letöltéshez.]]></Text>
+  <Text key="Options"><![CDATA[Beállítások]]></Text>
+  <Text key="Path"><![CDATA[Elérési út]]></Text>
+  <Text key="Browse"><![CDATA[Tallózás]]></Text>
+  <Text key="Create directory"><![CDATA[Mappa készítése]]></Text>
+  <Text key="Select directory"><![CDATA[Mappa kiválasztása]]></Text>
+  <Text key="Automatic extraction"><![CDATA[Automatikus kibontás]]></Text>
+  <Text key="Links not valid"><![CDATA[Nincs érvényes beilleszthető link]]></Text>
+  <Text key="Invalid directory"><![CDATA[Érvénytelen mappa]]></Text>
+  <Text key="Directory %D% does not exist"><![CDATA[A %D% mappa nem nyitható meg.]]></Text>
+  <Text key="Invalid package name"><![CDATA[Érvénytelen csomag név, ha úgy döntesz, "Könyvtár létrehozása", a könyvtár ezzel a névvel jön létre, ezért meg kell határozni azt.]]></Text>
+  <Text key="File properties"><![CDATA[Fájltulajdonságok]]></Text>
+  <Text key="Package properties"><![CDATA[Csomag tulajdonságai]]></Text>
+  <Text key="Download properties"><![CDATA[Letöltés tulajdonságai]]></Text>
+  <Text key="Not available"><![CDATA[Nem elérhető]]></Text>
+  <Text key="Not applied"><![CDATA[Nem alkalmazandó]]></Text>
+  <Text key="Total"><![CDATA[Teljes]]></Text>
+  <Text key="URL"><![CDATA[URL]]></Text>
+  <Text key="MD5"><![CDATA[MD5]]></Text>
+  <Text key="Note"><![CDATA[Jegyzet]]></Text>
+  <Text key="Save"><![CDATA[Mentés]]></Text>
+  <Text key="Cancel"><![CDATA[Mégse]]></Text>
+  <Text key="Limit speed to"><![CDATA[Sebességkorlátozás]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Rossz sebességkorlátozás.]]></Text>
+  <Text key="Note about the options"><![CDATA[Beállítások megjegyzése]]></Text>
+  <Text key="Can change file path if not downloaded"><![CDATA[A fájl útvonalát csak akkor lehet megváltoztatni, ha letöltés nem indult el. Ha igen, a változás nem lehetséges.]]></Text>
+  <Text key="Message change package path"><![CDATA[Ha megváltoztatod a csomag útvonalát, a letöltés elérési útját az összes függőben lévő fájloknál meg kell változtatni.
+A már letöltöttek nem fognak megváltozni.
+Ha megváltoztatod a beállítást "Automatikus kimásolás", akkor alkalmazni kell az összes fájlra a csomagban.]]></Text>
+  <Text key="User"><![CDATA[Felhasználó]]></Text>
+  <Text key="E-mail"><![CDATA[E-mail]]></Text>
+  <Text key="Password"><![CDATA[Jelszó]]></Text>
+  <Text key="Show password"><![CDATA[Jelszó mutatása]]></Text>
+  <Text key="User data"><![CDATA[Felhasználói adatok (optional)]]></Text>
+  <Text key="See logs"><![CDATA[Napló]]></Text>
+  <Text key="Decompressor"><![CDATA[Kitömörítés]]></Text>
+  <Text key="minutes"><![CDATA[perc]]></Text>
+  <Text key="Capture links from clipboard"><![CDATA[Link másolása a Vágólapról]]></Text>
+  <Text key="Turn off computer when finished"><![CDATA[PC kikapcsolása a befejezéskor]]></Text>
+  <Text key="Start downloading when application starts"><![CDATA[Letöltés indítása a program indításakor]]></Text>
+  <Text key="In case of error, retry the download each"><![CDATA[Hiba esetén mindent töltsön le újra]]></Text>
+  <Text key="Important note about connections"><![CDATA[Kapcsolatok megjegyzése]]></Text>
+  <Text key="Number of parallel downloads"><![CDATA[Egyidejű letöltések száma]]></Text>
+  <Text key="Number of connections per file"><![CDATA[Egyidejű fájlkapcsolatok száma]]></Text>
+  <Text key="Priority"><![CDATA[Elsőbbség]]></Text>
+  <Text key="Create folder per package"><![CDATA[Mappa készítése csomagonként]]></Text>
+  <Text key="Download path"><![CDATA[Letöltési útvonal]]></Text>
+  <Text key="Advanced options"><![CDATA[Speciális beállítások]]></Text>
+  <Text key="General options"><![CDATA[Fő beállítások]]></Text>
+  <Text key="General"><![CDATA[Beállítások]]></Text>
+  <Text key="Advanced"><![CDATA[Lehetőségek]]></Text>
+  <Text key="Log level"><![CDATA[Naplózás]]></Text>
+  <Text key="Language"><![CDATA[Nyelvek]]></Text>
+  <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Megjegyzés: csak haladó felhasználóknak. Ne nyúlj semmihez, ha nem vagy biztos benne,.]]></Text>
+  <Text key="Disk buffer size"><![CDATA[Lemez buffer méret]]></Text>
+  <Text key="Package size"><![CDATA[Csomag méret]]></Text>
+  <Text key="Port"><![CDATA[Port]]></Text>
+  <Text key="Connection"><![CDATA[Kapcsolat]]></Text>
+  <Text key="Use proxy"><![CDATA[Proxy]]></Text>
+  <Text key="Proxy"><![CDATA[Proxy]]></Text>
+  <Text key="Proxy address/IP"><![CDATA[Proxy cím / IP]]></Text>
+  <Text key="Save / use last used configuration"><![CDATA[Az utolsó beállítások mentése]]></Text>
+  <Text key="Start with Windows"><![CDATA[Indítás a  Windows-al]]></Text>
+  <Text key="Web server"><![CDATA[Webszerver]]></Text>
+  <Text key="Use web server"><![CDATA[Webszerver]]></Text>
+  <Text key="Interrupt session"><![CDATA[Időtúllépés]]></Text>
+  <Text key="Name (optional)"><![CDATA[Név]]></Text>
+  <Text key="User (optional)"><![CDATA[Felhasználó]]></Text>
+  <Text key="Password (optional)"><![CDATA[Jelszó]]></Text>
+  <Text key="Template path"><![CDATA[Sablon elérési út]]></Text>
+  <Text key="Templates"><![CDATA[Sablonok]]></Text>
+  <Text key="Data saved successfully"><![CDATA[Adatok mentése kész]]></Text>
+  <Text key="You must configure user and password"><![CDATA[Állítsd be a felhasználó nevet és jelszót]]></Text>
+  <Text key="File decompressor"><![CDATA[Fájl kitömörítés]]></Text>
+  <Text key="Information"><![CDATA[Információ]]></Text>
+  <Text key="Log_Minimum"><![CDATA[Minimum]]></Text>
+  <Text key="Log_Normal"><![CDATA[Normál]]></Text>
+  <Text key="Log_Informative"><![CDATA[Információ]]></Text>
+  <Text key="Log_Debug"><![CDATA[Debug]]></Text>
+  <Text key="Priority_Low"><![CDATA[Lassú]]></Text>
+  <Text key="Priority_Normal"><![CDATA[Normál]]></Text>
+  <Text key="Streaming"><![CDATA[Streaming]]></Text>
+  <Text key="Watch Online"><![CDATA[Watch online]]></Text>
+  <Text key="Watch Online help link"><![CDATA['Watch online']]></Text>
+  <Text key="Watch Online Note"><![CDATA[Ez az opció lehetővé teszi, hogy nézz online videókat.
+    
+Érvényes kapcsolat esetén (avi, mkv, flv, mp4, stb), a VLC Player hasznáható. 
+
+Aktiváljad ezt a szolgáltatást a "Beálltások" képernyőn,a"Streaming" menüpontban.
+
+Egyszer kell konfigurálni, kattints a "Watch online" gombra..]]></Text>
+  <Text key="Streaming server not activated"><![CDATA[Streaming szerver nincs bekapcsolva. Aktiváld ezt a szolgáltatást a "Beállítások" képernyőn, a "Streaming" menüpontban.]]></Text>
+  <Text key="Missing VLC Path"><![CDATA[VLC útvonal nem meghatározott. Megadhatod a "Beállítások" képernyőn, a "Streaming" menüpontban.]]></Text>
+  <Text key="MEGA Url"><![CDATA[MEGA URL link]]></Text>
+  <Text key="Streaming Url"><![CDATA[Streaming URL link]]></Text>
+  <Text key="Start VLC"><![CDATA[Start VLC]]></Text>
+  <Text key="Streaming Info"><![CDATA[Írd be a videó URL-t a szövegdobozba "MEGA URL linkre."
+
+Egy cím jön létre a szövegdobozba "Streaming URL linkre." Használhatod ezt a címet minden olyan lejátszóhoz, amely támogatja a streaming lejátszást.
+
+Ha megadtad a VLC Player elérési útját, kattints a "Start VLC" -re a videó lejátszásához.
+
+Felhívjuk figyelmedet, hogy várnod kell néhány másodpercet, mielőtt a streaming megkezdődik.]]></Text>
+  <Text key="Web server and streaming server ports must be different"><![CDATA[A streaming szerver port és a webszerver port nem lehet ugyanaz.]]></Text>
+  <Text key="Streaming configuration"><![CDATA[Streaming beállítások]]></Text>
+  <Text key="Use streaming server"><![CDATA[Streaming szerver]]></Text>
+  <Text key="VLC Configuration"><![CDATA[VLC Beállítások]]></Text>
+  <Text key="VLC Path"><![CDATA[VLC elérési út]]></Text>
+  <Text key="Download VLC"><![CDATA[VLC letöltése]]></Text>
+  <Text key="Streaming configuration text"><![CDATA[A streaming szerver lehetővé teszi, hogy néz MEGA.CO.NZ online videókat .
+
+Ahhoz, hogy a streaming szervert használhasd, jelöld be a "Felhasználás" opciót, és válassz  portot.
+A port értéke 1024 és 65535 (ajánlott 49152 és 65535 között).
+Kiválaszthatod bármelyiket, figyelembe véve, hogy azt nem használja más program. Alapértelmezés szerint a port 54321.
+
+Miután a streaming szerver aktív, a menüben válaszd a "streaming" / "Nézd meg online" beállítást.
+Add meg a MEGA linket és egy új streaming kapcsolat jön létre. Ezt a kapcsolatot kell megadni a lejátszó részére, hogy a videót megnézhesd.
+
+Kérjük, vedd figyelembe, hogy a MegaDownloader nem egy multimédia-lejátszó. Ez az opció lehetővé teszi, MEGA online adások megtekintését, de szükséges hozzá egy videó vagy audió lejátszó, például a VLC Player.
+A használathoz add meg a VLC telepítési útvonalát a "VLC elérési út 'pontban ezen a képernyőn.]]></Text>
+  <Text key="Do you want to leave the default path empty?"><![CDATA[Szeretnéd, hogy az alapértelmezett elérési út üres maradjon?]]></Text>
+  <Text key="Disk buffer or package size values are not correct"><![CDATA[Lemezbuffer vagy csomag értéke nem megfelelő.]]></Text>
+  <Text key="Disk buffer size must be greater than package size"><![CDATA[Lemezpuffer méretenek nagyobbnak kell lennie, mint a csomag mérete.]]></Text>
+  <Text key="Connection number values are incorrect or too high"><![CDATA[Csatlakozási értékek helytelenek vagy túl magasak.]]></Text>
+  <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Ismétlési időszakot meg kell határozni, és annak értéke és a%A és %B  között kell lennie.]]></Text>
+  <Text key="Invalid proxy configuration"><![CDATA[Hibás proxy beállítások.]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Hibás sebességkorlátozás.]]></Text>
+  <Text key="Invalid server port"><![CDATA[Szerver port nem érvényes. 1024 és 65535 között kelll lennie (ajánlott  49152 és 65535 között).]]></Text>
+  <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[Az időkorlát értékét  0 és %A között kell megadni. A 0 érték azt jelenti, hogy amunkamenet nem szakad meg.]]></Text>
+  <Text key="The template path is not valid"><![CDATA[A sablon elérési útja érvénytelen.]]></Text>
+  <Text key="Error starting web server"><![CDATA[A webszerver nem indult el]]></Text>
+  <Text key="The web server password must have at least %A characters"><![CDATA[A webszerver jelszó legalább %A karakter.]]></Text>
+  <Text key="Error deleting local files - Path: %PATH% - Error: %ERROR%"><![CDATA[Helyi fájl hibás törlése '%PATH%'. 
+Üzenet: %ERROR%]]></Text>
+  <Text key="Invalid password"><![CDATA[Hibás jelszó]]></Text>
+  <Text key="Download started"><![CDATA[A letöltés elindítve]]></Text>
+  <Text key="Download stopped"><![CDATA[A letöltés leállítva]]></Text>
+  <Text key="Invalid links"><![CDATA[Hibás linkek]]></Text>
+  <Text key="Invalid package name"><![CDATA[Hibás csomagnév]]></Text>
+  <Text key="Links added successfully"><![CDATA[Linkek hozzáadva]]></Text>
+  <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Ha nincs felhasználói név és jelszó megadva,  a letöltésekre névtelenül kerül sor.]]></Text>
+  <Text key="User and password is not used yet"><![CDATA[Ebben a pillanatban a felhasználói név és jelszót nem használják (hagyd üresen, ha akarod). Minden letöltés névtelenül történik. A jövőben ezen mezők használhatók.]]></Text>
+  <Text key="Number of connection explanation"><![CDATA[A maximális lesz elfogadott érték.
+Például, ha kiválasztasz 3 kivezetést fájlonként és 5 párhuzamos letöltést, lesz maximum 15 kapcsolatod.
+Ez az érték jelenik meg a főképernyőn, az A / B formanyomtatványon, ahol:
+ A jelentése a kapcsolatok száma fájlonként.
+ B párhuzamos letöltési szám.]]></Text>
+  <Text key="Turn off PC explanation"><![CDATA[Ha ezt az opciót választod, a számítógép kikapcsol, ha a letöltés befejeződött.
+Abban az esetben ha hibás a letöltés, a számítógép kikapcsol, de csak akkor ha a letöltés sikeres
+Ha ez be van jelölve, a számítógép nem kapcsol ki, mert megpróbálja újra a letöltést.
+
+Megjegyzés: Ez az opció nem menthető, aktiválni kell minden indításkor az alkalmazást. Ily módon a számítógép nem kapcsol ki, amikor véletlenül a letöltés befejeződik.]]></Text>
+  <Text key="Save and use last conf explanation"><![CDATA[Ha aktiválja ezt az opciót, a hivatkozás hozzáadása képernyő emlékezni fog az utolsó használt konfigurációra az alkalmazás elindítása óta, ahelyett, hogy megmutassa az alapértelmezett beállításokat.
+Példa: Az alapértelmezett útvonal az Asztal. Azt akarod, hogy letöltsöni 8 csomagot és kihagyja az alapértelmezett letöltési utat.csak az első letöltésnél kell megváltoztatnod, és a többi 7 emlékezni fog a legutóbb használt beállításokra.
+Felhívjuk figyelmed, hogy amikor az alkalmazás bezárul, ez a konfiguráció is elvész.]]></Text>
+  <Text key="You have to restart the application for the language change to take effect"><![CDATA[A nyelvi változás életbe léptetéséhez újra kell indítani a programot.]]></Text>
+  <Text key="Please take into consideration the following"><![CDATA[Kérjük vedd figyelembe az alábbiakat:]]></Text>
+  <Text key="Error, session expired"><![CDATA[Hiba történt, újra kell csatlakozni: a próbaidő lejárt.]]></Text>
+  <Text key="Encode Url"><![CDATA[URL kódolás]]></Text>
+  <Text key="Encoded Url"><![CDATA[Kódolatlan URL]]></Text>
+  <Text key="Paste your MEGA Url(s) and the encoded Url(s) will appear under the Encoded Url box."><![CDATA[Add meg a MEGA linket  és a kódolt URL alatt jelennek meg a "Kódolt URL" mezőben.]]></Text>
+  <Text key="Terms of use"><![CDATA[Szabályzat]]></Text>
+  <Text key="Accept terms of use"><![CDATA[MegaDownloader. 
+  
+Ennek a nem hivatalos alkalmazásnak a célja, hogy segítsen a fájlok letöltésében a  MEGA.-tárhelyről
+             
+Jóváhagyod a MEGA szabályait?
+Kattints ide segítségért.]]></Text>
+  <Text key="Accounts"><![CDATA[Fiókok]]></Text>
+  <Text key="Account"><![CDATA[Fiók]]></Text>
+  <Text key="Main account"><![CDATA[Alapértelmezett fiók]]></Text>
+  <Text key="Must configure at least one account"><![CDATA[Be kell állítani legalább egy fiókot.]]></Text>
+  <Text key="Add new"><![CDATA[Hozzáadás]]></Text>
+  <Text key="Account list empty"><![CDATA[A fiók lista üres]]></Text>
+  <Text key="Account already exists"><![CDATA[A nicknév vagy e-mail már létezik]]></Text>
+  <Text key="Account modified correctly"><![CDATA[A fiók módosítása kész. 
+Ne felejtsd el menteni a konfigurációt, vagy a módosítások elvesznek.]]></Text>
+  <Text key="Account created correctly"><![CDATA[A fiók hozzáadása kész. 
+Ne felejtsd el menteni a konfigurációt, vagy a módosítások elvesznek.]]></Text>
+  <Text key="Account deleted correctly"><![CDATA[A fiók törlése kész. 
+Ne felejtsd el menteni a konfigurációt, vagy a módosítások elvesznek.]]></Text>
+  <Text key="Do you want to delete this account?"><![CDATA[Biztos, hogy törölni akarod ezt a fiókot?]]></Text>
+  <Text key="Account could not be deleted"><![CDATA[A fiókot nem lehet törölni.]]></Text>
+  <Text key="Account not found"><![CDATA[A fiók nem található]]></Text>
+  <Text key="Delete"><![CDATA[Törlés]]></Text>
+  <Text key="Modify"><![CDATA[Módosítás]]></Text>
+  <Text key="Alias"><![CDATA[Nicknév]]></Text>
+  <Text key="Go to Accounts tab"><![CDATA[Fiókadatok kezelése a  "Fiókok" lapon.]]></Text>
+  <Text key="Show password explanation"><![CDATA[Ha bejelölöd ezt az opciót, akkor látni fogod a jelszót, annak érdekében, hogy elkerüld a hibákat. Azonban, ha azt korábban elmentetted, akkor nem jelenik meg  biztonsági okokból.]]></Text>
+  <Text key="DLC"><![CDATA[DLC]]></Text>
+  <Text key="Open &amp;DLC"><![CDATA[&DLC megnyitása]]></Text>
+  <Text key="There is a DLC being processed, please wait"><![CDATA[DLC feldolgozás, kérlek, várj]]></Text>
+  <Text key="The DLC could not be loaded. Reason: %REASON"><![CDATA[A DLC-t nem sikerült betölteni: %REASON]]></Text>
+  <Text key="The DLC has no valid Mega links"><![CDATA[A DLC nem rendelkezik érvényes MEGA kapcsolatal.]]></Text>
+  <Text key="Force download"><![CDATA[Erőltetett letöltés]]></Text>
+  <Text key="About"><![CDATA[MegaDownloader névjegye]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[Köszönjük, hogy használod a nem hivatalos MEGA.CO.NZ letöltő programot ]]></Text>
+  <Text key="Thanks to"><![CDATA[Köszönet:]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader nem összefügg Mega.co.nz - Minden védjegy jogos tulajdonosának a tulajdonát képezi.]]></Text>
+  <Text key="Created and designed by %NAME"><![CDATA[Készítette: %NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME hogy segítette a MEGA criptographic rendszerrel.]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[Az összes együttműködő tesztelőnek.]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[Hungarian translated: BlueEyes-HELPDESK 2013]]></Text>
+
+  <Text key="ELC"><![CDATA[ELC]]></Text>
+  <Text key="ELC Accounts"><![CDATA[ELC Fiók]]></Text>
+  <Text key="ELC Account Info"><![CDATA[ELC Belépési adatok]]></Text>
+  <Text key="ELC Desc Info"><![CDATA[A "ELC" konténer (konténer kódolt link) védelmet  nyújt a linkek másolása vagy jelentés ellen,  lehetővé teszi, hogy megosszák a MEGA linket egy közösség részére, felhasználói  kulcs használatával.
+
+Megjegyzés:  "ELC" fiók adatai: (URL, felhasználó, API-kulcs).]]></Text>
+  <Text key="API-Key"><![CDATA[API-Kulcs]]></Text>
+  <Text key="Generate ELC"><![CDATA[ELC készítése]]></Text>
+  <Text key="Generat&amp;e ELC"><![CDATA[&ELC készítése]]></Text>
+  <Text key="ELC generator"><![CDATA[ELC generátor]]></Text>
+  <Text key="Paste your MEGA Url(s), select your ELC account, and click on Generate ELC"><![CDATA[Illeszd be a MEGA URL-t , válassz ki egy ELC fiókot, majd kattints az "ELC készítés" -re.]]></Text>
+  <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[Ez az ELC kapcsolat. Te is létrehozhatsz egy ELC fájlt, kattints a "Fájl mentése" -re.]]></Text>
+  <Text key="Please select a valid ELC account"><![CDATA[Válassz ki egy érvényes ELC fiókot!]]></Text>
+  <Text key="There is an ELC being processed, please wait"><![CDATA[ELC feldolgozása folyamatban, kérlek várj!.]]></Text>
+  <Text key="Loading..."><![CDATA[Betöltés...]]></Text>
+  <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[Nincs ELC fiók beállítva. A beállítás érdekében hozz létre egy ELC fiókot.]]></Text>
+  <Text key="Save file"><![CDATA[Fájl mentése]]></Text>
+  <Text key="ELC file"><![CDATA[ELC fájl]]></Text>
+  <Text key="The ELC path is not valid"><![CDATA[Az ELC elérési útja hibás.]]></Text>
+  <Text key="The path is not valid"><![CDATA[Az elérési út nem valós.]]></Text>
+  <Text key="Error generating ELC"><![CDATA[Hiba az ELC készítésekor]]></Text>
+  <Text key="URL ELC account explanation"><![CDATA[URL ELC adatainak érvényesítése.]]></Text>
+  <Text key="Alias ELC account explanation"><![CDATA[A nicknév egy azonosító fog megjelenni a listában a bal oldalon, és a "ELC készítése" képernyőn. Hagyhatod üresen, vagy megváltoztathatod bármelyik pillanatban,de ne feledd, hogy nem lehet megismételni.]]></Text>
+  <Text key="Default ELC account explanation"><![CDATA[Egyszerre egy számla jelölhető "alapértelmezett" -nek "[*]" a lista baloldalán.
+Ez jelenik meg alapértelmezett beállításként az "ELC készítés" képernyőn.
+Ha bejelölsz másik számlára  alapértelmezett beállítást, a korábbi alapértelmezett fiók lesz jelöletlen.]]></Text>
+  <Text key="ELC Account not found. You need a valid ELC Account configured for this ELC."><![CDATA[ELC fiók nem található. Szükséges egy érvényes ELC fiók..]]></Text>
+  <Text key="The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library."><![CDATA[Csak az első fájl lesz használva, ha azt szeretnéd, hogy mind, importáld a linkeket a stream könyvtárban.]]></Text>
+  <Text key="The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library."><![CDATA[Az ELC konténerből ső fájl lesz használva, ha azt szeretnéd, hogy mind, importáld a linkeket az  ELC streaming könyvtárban.]]></Text>
+  <Text key="optional"><![CDATA[optional]]></Text>
+  <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
+Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
+  <Text key="Searc&amp;h"><![CDATA[Keresn&i]]></Text>
+  <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
+  <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+</Language>

@@ -1,0 +1,345 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Language id="ro-RO" name="Romanian" app="MegaDownloader">
+  <Text key="Loading..."><![CDATA[Loading...]]></Text>
+  <Text key="Loading please wait"><![CDATA[Încarc asteaptă un moment...]]></Text>
+  <Text key="Closing please wait"><![CDATA[Închid, asteaptă un moment...]]></Text>
+  <Text key="Name"><![CDATA[Nume]]></Text>
+  <Text key="Downloaded"><![CDATA[Descărcat]]></Text>
+  <Text key="Size"><![CDATA[Mărime]]></Text>
+  <Text key="Status"><![CDATA[Stare]]></Text>
+  <Text key="Progress"><![CDATA[Progres]]></Text>
+  <Text key="Progress %"><![CDATA[Progres %]]></Text>
+  <Text key="Speed"><![CDATA[Viteză]]></Text>
+  <Text key="Estimated"><![CDATA[Estimare]]></Text>
+  <Text key="Remaining"><![CDATA[Rămas]]></Text>
+  <Text key="Open directory"><![CDATA[Deschide directorul]]></Text>
+  <Text key="Increase priority"><![CDATA[Prioritate Crescută]]></Text>
+  <Text key="Decrease priority"><![CDATA[Prioritate scăzută]]></Text>
+  <Text key="Close"><![CDATA[Închide]]></Text>
+  <Text key="Pause"><![CDATA[Pauză]]></Text>
+  <Text key="Delete from list"><![CDATA[Șterge din listă]]></Text>
+  <Text key="Delete from list and disk"><![CDATA[Șterge din listă și de pe disc]]></Text>
+  <Text key="Add link"><![CDATA[Adaugă un link]]></Text>
+  <Text key="Add links"><![CDATA[Adaugă linkuri]]></Text>
+  <Text key="Open"><![CDATA[Deschide]]></Text>
+  <Text key="Close"><![CDATA[Închide]]></Text>
+  <Text key="Configuration"><![CDATA[Configurare]]></Text>
+  <Text key="See error"><![CDATA[Vezi eroarea]]></Text>
+  <Text key="See links"><![CDATA[Vezi lincurile]]></Text>
+  <Text key="See links + desc"><![CDATA[Vezi lincurile + descărcările]]></Text>
+  <Text key="Reset"><![CDATA[Resetează]]></Text>
+  <Text key="Properties"><![CDATA[Proprietăți]]></Text>
+  <Text key="Clean completed"><![CDATA[Curăță complet]]></Text>
+  <Text key="Start downloads"><![CDATA[Porneste descărcarea]]></Text>
+  <Text key="Start download"><![CDATA[Porneste descărcarea]]></Text>
+  <Text key="Pause downloads"><![CDATA[Pauzează descărcarea]]></Text>
+  <Text key="Stop downloads"><![CDATA[Oreste descărcarea]]></Text>
+  <Text key="Status: -"><![CDATA[Stare: -]]></Text>
+  <Text key="RAM Proc Empty"><![CDATA[RAM: - / Proces: -]]></Text>
+  <Text key="RAM"><![CDATA[RAM]]></Text>
+  <Text key="Proc"><![CDATA[Proces]]></Text>
+  <Text key="Links"><![CDATA[Linkuri]]></Text>
+  <Text key="Hour"><![CDATA[Ore]]></Text>
+  <Text key="Queued, error, completed"><![CDATA[Coada de așteptare, eronată și completată]]></Text>
+  <Text key="active downloads"><![CDATA[Descărcări active]]></Text>
+  <Text key="Active downloads"><![CDATA[Descărcări active]]></Text>
+  <Text key="Error information"><![CDATA[Informații eroare]]></Text>
+  <Text key="New version available"><![CDATA[Noua versiune disponibilă]]></Text>
+  <Text key="New version do you want to download it? Recommended!"><![CDATA[Există o nouă versiune a MegaDownloader. Este recomandat pentru actualizare.
+Vrei să-o descarci?]]></Text>
+  <Text key="New version do you want to download it?"><![CDATA[Există o nouă versiune a MegaDownloader. Clichează aici pentru a descărca.]]></Text>
+  <Text key="Do you want to exit?"><![CDATA[Sigur dorești să închizi?]]></Text>
+  <Text key="Files extracting, corruption danger"><![CDATA[Există fișiere în curs de extragere. 
+Dacă ieșiți acum, fișierele pot fi corupte la extragere și va trebui să le extragi manual.]]></Text>
+  <Text key="Package"><![CDATA[Pachet]]></Text>
+  <Text key="Turning off in 60 seconds"><![CDATA[Închid automat în 60 de secunde]]></Text>
+  <Text key="Confirmation"><![CDATA[Confirmare]]></Text>
+  <Text key="Do you want to delete the element(s)?"><![CDATA[Vrei să ștergi acest(e) element(e)?]]></Text>
+  <Text key="Note: files will NOT be deleted"><![CDATA[Notă: Fișierele nu vor fi șterse.]]></Text>
+  <Text key="Note: files will BE deleted"><![CDATA[Notă: fișierele vor fi șterse.]]></Text>
+  <Text key="No valid URLs have been inserted"><![CDATA[URL-ul introdus nu este valid]]></Text>
+  <Text key="Can not add remote links without a default path"><![CDATA[Link-urile nu pot fi adăugate de la distanță fără o cale prestabilită]]></Text>
+  <Text key="New package"><![CDATA[Pachet Nou]]></Text>
+  <Text key="Connection conf"><![CDATA[Configurează Conexiunea.]]></Text>
+  <Text key="See decompression progress"><![CDATA[Vezi progresul de decompresie]]></Text>
+  <Text key="&amp;File"><![CDATA[&Fișiere]]></Text>
+  <Text key="E&amp;xit"><![CDATA[&Ieșire]]></Text>
+  <Text key="&amp;Options"><![CDATA[&Opțiuni]]></Text>
+  <Text key="&amp;Configuration"><![CDATA[&Configurare]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[Vezi coada de extracție]]></Text>
+  <Text key="&amp;Help"><![CDATA[&Ajutor]]></Text>
+  <Text key="FA&amp;Q"><![CDATA[Întrebări frecvente&]]></Text>
+  <Text key="&amp;Collaborate"><![CDATA[&Contribuții]]></Text>
+  <Text key="See lo&amp;gs"><![CDATA[Vezi &jurnalele]]></Text>
+  <Text key="Get MegaUploa&amp;der"><![CDATA[Ia MegaUploa&der]]></Text>
+  <Text key="&amp;About"><![CDATA[&Despre MegaDownloader]]></Text>
+  <Text key="Manage Streaming &amp;Library"><![CDATA[Gestionează & Biblioteca]]></Text>
+  <Text key="See Streaming &amp;Library"><![CDATA[Vezi &Biblioteca]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[&Flux]]></Text>
+  <Text key="Watch &amp;Online"><![CDATA[Uita-te &on-line]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[Codare &URL-uri]]></Text>
+  <Text key="Collaborate"><![CDATA[Contribuții]]></Text>
+  <Text key="Creating files"><![CDATA[Creare fișier]]></Text>
+  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="Verifying"><![CDATA[Verific]]></Text>
+  <Text key="Paused"><![CDATA[Pauzat]]></Text>
+  <Text key="Stopped"><![CDATA[Oprit]]></Text>
+  <Text key="Error capital leters"><![CDATA[EROARE]]></Text>
+  <Text key="Error"><![CDATA[Eroare]]></Text>
+  <Text key="Extracting"><![CDATA[Extrag]]></Text>
+  <Text key="Downloading"><![CDATA[Descarc]]></Text>
+  <Text key="Completed"><![CDATA[Complet]]></Text>
+  <Text key="Hashing MD5"><![CDATA[Dispersie MD5]]></Text>
+  <Text key="Current"><![CDATA[Curent]]></Text>
+  <Text key="File"><![CDATA[Fișiere]]></Text>
+  <Text key="Extraction queue"><![CDATA[Extragere coadă]]></Text>
+  <Text key="This screen lets you see the status of the files pending of extraction"><![CDATA[Acest ecran vă permite să vedeți starea dosarelor în curs de extragere]]></Text>
+  <Text key="if automatic extraction option is enabled"><![CDATA[dacă opțiunea extragerea automată este activată]]></Text>
+  <Text key="Pre-Shared Keys Manager"><![CDATA[Pre-partajare manager Taste]]></Text>
+  <Text key="Pre-Shared Key list"><![CDATA[Pre-partajare listă taste]]></Text>
+  <Text key="Pre-Shared Keys"><![CDATA[Pre-partajare taste]]></Text>
+  <Text key="Pre-Shared Key Manager Description"><![CDATA[Introdu pre-partajaee Cheile de descărcare a fișierelor încărcate cu această opțiune.
+Dacă cheia este valabilă, va fi capabil de a descărca fișiere chiar și fără cheia privată ..
+Introdu o cheie pe linie, și aveți grijă să nu introduceți spații suplimentare albe!]]></Text>
+  <Text key="Options"><![CDATA[Opțiuni]]></Text>
+  <Text key="Path"><![CDATA[Cale]]></Text>
+  <Text key="Browse"><![CDATA[Caută]]></Text>
+  <Text key="Create directory"><![CDATA[Crează un director]]></Text>
+  <Text key="Select directory"><![CDATA[Selectează un director]]></Text>
+  <Text key="Automatic extraction"><![CDATA[Extragere Automată]]></Text>
+  <Text key="Links not valid"><![CDATA[Nu ai introdus un link valabil]]></Text>
+  <Text key="Invalid directory"><![CDATA[Director nevalid]]></Text>
+  <Text key="Directory %D% does not exist"><![CDATA[Directorul %D% nu există.]]></Text>
+  <Text key="Invalid package name"><![CDATA[Numele pachetului este nevalid, dacă alegei "Crează un director", un director cu acest nume va fi creat.]]></Text>
+  <Text key="File properties"><![CDATA[Proprietăți Fișiere]]></Text>
+  <Text key="Package properties"><![CDATA[Proprietăți Pachete]]></Text>
+  <Text key="Download properties"><![CDATA[Proprietăți Descărcare]]></Text>
+  <Text key="Not available"><![CDATA[Nu este disponibil]]></Text>
+  <Text key="Not applied"><![CDATA[Nu se aplică]]></Text>
+  <Text key="Total"><![CDATA[Total]]></Text>
+  <Text key="URL"><![CDATA[URL]]></Text>
+  <Text key="MD5"><![CDATA[MD5]]></Text>
+  <Text key="Note"><![CDATA[Notă]]></Text>
+  <Text key="Save"><![CDATA[Salvează]]></Text>
+  <Text key="Cancel"><![CDATA[Anulare]]></Text>
+  <Text key="Limit speed to"><![CDATA[Limitează Viteza la]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Limita de viteză nevalidă.]]></Text>
+  <Text key="Note about the options"><![CDATA[Notă despre opțiuni]]></Text>
+  <Text key="Can change file path if not downloaded"><![CDATA[Calea fișierului poate fi schimbată dacă descărcarea nu a început. schimbarea nu este posibilă.]]></Text>
+  <Text key="Message change package path"><![CDATA[Dacă schimbi calea pachetelor la descărcarea fișierelor în curs calea lor va fi schimbată.
+Cale fișierelor deja descărcate nu poate fi modificată.   
+Dacă schimbi opțiunea de "extragere automată", se va aplica la toate fișierele din pachet.]]></Text>
+  <Text key="User"><![CDATA[Utilizator]]></Text>
+  <Text key="E-mail"><![CDATA[E-mail]]></Text>
+  <Text key="Password"><![CDATA[Parolă]]></Text>
+  <Text key="Show password"><![CDATA[Arată parola]]></Text>
+  <Text key="User data"><![CDATA[Date Utilizator (optional)]]></Text>
+  <Text key="See logs"><![CDATA[Arată jurnalele]]></Text>
+  <Text key="Decompressor"><![CDATA[Decompresie]]></Text>
+  <Text key="minutes"><![CDATA[minute]]></Text>
+  <Text key="Capture links from clipboard"><![CDATA[Capturează Link-urile din clipboard]]></Text>
+  <Text key="Turn off computer when finished"><![CDATA[Oprește computerul când termini]]></Text>
+  <Text key="Start downloading when application starts"><![CDATA[Descărcă la pornirea aplicației]]></Text>
+  <Text key="In case of error, retry the download each"><![CDATA[În caz de eroare, încercă din nou să descarci]]></Text>
+  <Text key="Important note about connections"><![CDATA[Notă importantă despre conexiuni]]></Text>
+  <Text key="Number of parallel downloads"><![CDATA[Numărul de descărcări paralele]]></Text>
+  <Text key="Number of connections per file"><![CDATA[Numărul de conexiuni pe fișier]]></Text>
+  <Text key="Priority"><![CDATA[Prioritate]]></Text>
+  <Text key="Create folder per package"><![CDATA[Crează un dosar la fiecare pachet descărcat]]></Text>
+  <Text key="Download path"><![CDATA[Cale Descărcare]]></Text>
+  <Text key="Advanced options"><![CDATA[Opțiuni avansate]]></Text>
+  <Text key="General options"><![CDATA[Opțiuni generale]]></Text>
+  <Text key="General"><![CDATA[Setări Generale]]></Text>
+  <Text key="Advanced"><![CDATA[Avansat]]></Text>
+  <Text key="Log level"><![CDATA[Jurnal]]></Text>
+  <Text key="Language"><![CDATA[Limbă]]></Text>
+  <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Notă: numai pentru utilizatorii avansați. Nu atinge nimic dacă nu ești sigur.]]></Text>
+  <Text key="Disk buffer size"><![CDATA[Dimensiune disc]]></Text>
+  <Text key="Package size"><![CDATA[Dimensiune Pachet]]></Text>
+  <Text key="Port"><![CDATA[Port]]></Text>
+  <Text key="Connection"><![CDATA[Connexiune]]></Text>
+  <Text key="Use proxy"><![CDATA[Utilizează serverul proxy]]></Text>
+  <Text key="Proxy"><![CDATA[Serverul Proxy]]></Text>
+  <Text key="Proxy address/IP"><![CDATA[Adresa serverului Proxy / IP]]></Text>
+  <Text key="Save / use last used configuration"><![CDATA[Salvează / utilizează ultima configuratie]]></Text>
+  <Text key="Start with Windows"><![CDATA[Pornește o dată cu Windows]]></Text>
+  <Text key="Web server"><![CDATA[Server Web]]></Text>
+  <Text key="Use web server"><![CDATA[Utilizează serverul Web]]></Text>
+  <Text key="Interrupt session"><![CDATA[sesiune expirată]]></Text>
+  <Text key="Name (optional)"><![CDATA[Nume (optional)]]></Text>
+  <Text key="User (optional)"><![CDATA[Utilizator (optional)]]></Text>
+  <Text key="Password (optional)"><![CDATA[Parolă (optional)]]></Text>
+  <Text key="Template path"><![CDATA[Cale șablon]]></Text>
+  <Text key="Templates"><![CDATA[Șabloane]]></Text>
+  <Text key="Data saved successfully"><![CDATA[Datele au fost salvate cu succes]]></Text>
+  <Text key="You must configure user and password"><![CDATA[Trebuie să configurezi un utilizator și o parolă]]></Text>
+  <Text key="File decompressor"><![CDATA[Decompresie Fișier]]></Text>
+  <Text key="Information"><![CDATA[Informații]]></Text>
+  <Text key="Log_Minimum"><![CDATA[Minim]]></Text>
+  <Text key="Log_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Log_Informative"><![CDATA[Informații]]></Text>
+  <Text key="Log_Debug"><![CDATA[Depanare]]></Text>
+  <Text key="Priority_Low"><![CDATA[Scăzut]]></Text>
+  <Text key="Priority_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Streaming"><![CDATA[Flux]]></Text>
+  <Text key="Watch Online"><![CDATA[Vezi online]]></Text>
+  <Text key="Watch Online help link"><![CDATA[Notă despre vezi on-line]]></Text>
+  <Text key="Watch Online Note"><![CDATA[Această opțiune "Vezi on-line" vă permite să urmăriți clipuri video online.
+    
+Dacă link-ul este un fișier video valid (avi, mkv, flv, mp4, etc), aveți opțiunea de a viziona folosind VLC Player. 
+
+Trebuie să aveți serverul de flux activat și VLC player instalat.
+Puteți activa această funcție din ecranul "Configurare", sub fila "Flux".
+
+Odată ce configurat, clic pe butonul "Vezi on-line" pentru a viziona fluxul de pe PC.]]></Text>
+  <Text key="Streaming server not activated"><![CDATA[Serverul de flux nu este activat. Poți activa această funcție din ecranul "Configurare", sub fila "Flux".]]></Text>
+  <Text key="Missing VLC Path"><![CDATA[VLC cale nu este instalat. Poți instala din ecranul "Configurare", sub fila "Flux".]]></Text>
+  <Text key="MEGA Url"><![CDATA[Link Url MEGA]]></Text>
+  <Text key="Streaming Url"><![CDATA[Flux URL link]]></Text>
+  <Text key="Start VLC"><![CDATA[Pornește VLC]]></Text>
+  <Text key="Streaming Info"><![CDATA[Introdu URL-ul video în caseta de text "link URL MEGA".
+
+O adresă va fi generată în caseta de text "Flux link URL. Poți utiliza această adresă pe orice player care suporta fluxul acestuia.
+
+Dacă ai VLC Player și ai definit calea în configurația MegaDownloader, clichează pe "Pornește VLC" pentru a începe vizionarea videoclipurilor.
+
+Vă rugăm să rețineți că poate fi necesar să așteptați câteva secunde înainte de a începe de redarea.]]></Text>
+  <Text key="Web server and streaming server ports must be different"><![CDATA[Portul serverului de flux și portul serverului web nu poate fi la fel.]]></Text>
+  <Text key="Streaming configuration"><![CDATA[Configurare Flux]]></Text>
+  <Text key="Use streaming server"><![CDATA[Utilizează serverul fluxului]]></Text>
+  <Text key="VLC Configuration"><![CDATA[Configurare VLC]]></Text>
+  <Text key="VLC Path"><![CDATA[Cale VLC]]></Text>
+  <Text key="Download VLC"><![CDATA[Descarcă VLC]]></Text>
+  <Text key="Streaming configuration text"><![CDATA[Serverul de flux vă permite să urmăriți clipuri video online de pe adresa web MEGA.CO.NZ.
+
+Pentru a utiliza serverul de flux, verifică dacă ai selectat opțiunea "Utilizează serverul de flux" sau un port.
+Aceasta trebuie să aibă o valoare între 1024 și 65535 (recomandată între 49152 și 65535).
+Poți selecta orice, având în vedere că nu poate fi folosit de orice alt program. Implicit portul este 54321.
+
+Odată ce serverul de flux a fost activat, puteti merge la meniul și selectați opțiunea "Flux" / "Vezi on-line".
+Introdu linkul MEGA și o nouă legătură de flux va fi generată. Această legătură trebuie să fie introdusă într-un player multimedia pentru a viziona videoclipul.
+
+Ia în considerare faptul că MegaDownloader nu este un player multimedia. Această opțiune vă permite să redați flux de date din MEGA, dar ai nevoie de un player pentru a vedea videoclipuri și fișiere audio.
+Pentru a lansa VLC ușor, introdu calea de instalare VLC în opțiunea "Cale VLC", în acest ecran.]]></Text>
+  <Text key="Do you want to leave the default path empty?"><![CDATA[Vrei să ieși din această cale implicită?]]></Text>
+  <Text key="Disk buffer or package size values are not correct"><![CDATA[Tamponul de pe disc sau valoarea pachetelor nu sunt corecte.]]></Text>
+  <Text key="Disk buffer size must be greater than package size"><![CDATA[Dimensiune tamponului de pe disc trebuie să fie mai mare decât dimensiunea pachetului.]]></Text>
+  <Text key="Connection number values are incorrect or too high"><![CDATA[Valorile la conectare sunt incorecte sau prea mari.]]></Text>
+  <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Trebuie să fie specificate la reîncercare, iar valoarea acesteia trebuie să fie între %A și %B.]]></Text>
+  <Text key="Invalid proxy configuration"><![CDATA[Configurarea serverului proxy nevalidă.]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Limita de viteză nevalidă.]]></Text>
+  <Text key="Invalid server port"><![CDATA[Portul serverului nu este valid. Acesta trebuie să aibă o valoare între 1024 si 65535 (recomandat intre 49152 si 65535).]]></Text>
+  <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[Timpul a expirat în această,valoare trebuie să fie între 0 și% A. O valoare de 0 înseamnă că sesiunea nu este întreruptă.]]></Text>
+  <Text key="The template path is not valid"><![CDATA[Calea șablonului nu este validă.]]></Text>
+  <Text key="Error starting web server"><![CDATA[Eroare la pornirea serverului web]]></Text>
+  <Text key="The web server password must have at least %A characters"><![CDATA[Parola serverului web trebuie să aibă cel puțin %A.]]></Text>
+  <Text key="Error deleting local files - Path: %PATH% - Error: %ERROR%"><![CDATA[Eroare la ștergerea fișierului local '%PATH%'. 
+Mesaj: %ERROR%]]></Text>
+  <Text key="Invalid password"><![CDATA[Parola invalidă]]></Text>
+  <Text key="Download started"><![CDATA[Descarcarea a început cu succes]]></Text>
+  <Text key="Download stopped"><![CDATA[Descarcarea sa oprit cu succes]]></Text>
+  <Text key="Invalid links"><![CDATA[Link-ul este nevalid]]></Text>
+  <Text key="Invalid package name"><![CDATA[Numele pachetului este nevalid]]></Text>
+  <Text key="Links added successfully"><![CDATA[Linkurile sau adăugat cu succes]]></Text>
+  <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Dacă nu este specificat nici un utilizator și o parolă, descărcările se vor face ca un utilizator anonim.]]></Text>
+  <Text key="User and password is not used yet"><![CDATA[Utilizatorul și parola nu este utilizată (lăsal gol, dacă dorești). Toate descărcări sunt realizate ca un utilizator anonim. În viitor aceste domenii pot fi utilizate.]]></Text>
+  <Text key="Number of connection explanation"><![CDATA[Valorile indicate vor fi valorile maxime acceptate.
+De exemplu, dacă selectezi 3 conexiuni pe fișier și 5 descărcărcări paralele, va exista un număr maxim de 15 conexiuni.
+Aceste valori vor fi afișate în ecranul principal, în forma A / B, în cazul în care:
+ A este numărul de conexiuni pe fișier.
+ B este numărul de descărcări paralelele.]]></Text>
+  <Text key="Turn off PC explanation"><![CDATA[Folosind această opțiune, calculatorul se va opri atunci când descărcările sau terminat corect.
+În cazul în care există erori de descărcare, computerul se va opri din funcție.În caz de eroare, încercă din nou.
+În cazul în care este verificat, calculatorul nu se va opri pentru că va încerca să se reconecteze.
+
+NOTĂ: Această opțiune nu este salvată, activează de fiecare dată când pornești aplicația. În acest fel, calculatorul nu se va opri accidental când o descărcare este terminată.]]></Text>
+  <Text key="Save and use last conf explanation"><![CDATA[La activarea acestei opțiuni, ecranul adaugă link va aminti ultima configurație utilizată, deoarece aplicația a pornit, fără să arăte configurația implicită.
+Exemplu: calea implicită este pe ecran. Dorești să descarci într-o cale diferită.
+În loc de a adăuga 8 pachete și schimba calea de fiecare dată, el va aminti ultima configurație bună
+Reține că numele pachetului nu este amintit. Când aplicația se închide, această configurație se pierde.]]></Text>
+  <Text key="You have to restart the application for the language change to take effect"><![CDATA[Reporneștei aplicația pentru a schimba limba.]]></Text>
+  <Text key="Please take into consideration the following"><![CDATA[Ia in considerare urmatoarele]]></Text>
+  <Text key="Error, session expired"><![CDATA[Eroare, trebuie să te conectezi din nou: sesiunea a expirat.]]></Text>
+  <Text key="Encode Url"><![CDATA[Codare URL]]></Text>
+  <Text key="Encoded Url"><![CDATA[Codificare URL]]></Text>
+  <Text key="Paste your MEGA Url(s) and the encoded Url(s) will appear under the Encoded Url box."><![CDATA[Introdu URL-ul MEGA, URL-ul codificat va apărea sub caseta "Codifică URL-ul".]]></Text>
+  <Text key="Terms of use"><![CDATA[Termenii de utilizare]]></Text>
+  <Text key="Accept terms of use"><![CDATA[Bine ai venit la MegaDownloader. 
+  
+Această aplicație non-oficială este concepută pentru a vă ajuta să descărcați fișiere din MEGA.
+             
+Ești de acord cu termenii de utilizare MEGA?
+Clichează pe "Ajutor" pentru a citi termenii de utilizare.]]></Text>
+  <Text key="Accounts"><![CDATA[Cont]]></Text>
+  <Text key="Account"><![CDATA[Cont]]></Text>
+  <Text key="Main account"><![CDATA[Contul implicit]]></Text>
+  <Text key="Must configure at least one account"><![CDATA[Trebuie să configurezi cel puțin un cont.]]></Text>
+  <Text key="Add new"><![CDATA[Adauga unul nou]]></Text>
+  <Text key="Account list empty"><![CDATA[Contul este goală]]></Text>
+  <Text key="Account already exists"><![CDATA[Pseudonimul sau e-mail există deja]]></Text>
+  <Text key="Account modified correctly"><![CDATA[Contul a fost modificat cu succes. 
+Amintește-mi configurația sau modificările eliminate.]]></Text>
+  <Text key="Account created correctly"><![CDATA[Contul a fost modificat cu succes. 
+Amintește-mi configurația sau modificările eliminate.]]></Text>
+  <Text key="Account deleted correctly"><![CDATA[Contul a fost modificat cu succes. 
+Amintește-mi configurația sau modificările eliminate]]></Text>
+  <Text key="Do you want to delete this account?"><![CDATA[Sigur dorești să ștergei contul?]]></Text>
+  <Text key="Account could not be deleted"><![CDATA[Contul nu a putut fi șters.]]></Text>
+  <Text key="Account not found"><![CDATA[Contul nu a fost găsit]]></Text>
+  <Text key="Delete"><![CDATA[Sterge]]></Text>
+  <Text key="Modify"><![CDATA[Modifică]]></Text>
+  <Text key="Alias"><![CDATA[Pseudonim]]></Text>
+  <Text key="Go to Accounts tab"><![CDATA[Datele contului sunt gestionate dinn fila "Conturi".]]></Text>
+  <Text key="Show password explanation"><![CDATA[Bifează această opțiune și vei vedea parola, pentru a evita erori. După ce este salvat, nu va fi afișat pentru securitate, chiar dacă bifezi această opțiune.]]></Text>
+  <Text key="DLC"><![CDATA[DLC]]></Text>
+  <Text key="Open &amp;DLC"><![CDATA[Deschide &DLC/ELC]]></Text>
+  <Text key="There is a DLC being processed, please wait"><![CDATA[Prelucrez fișierul DLC / ELC, Așteptă un pic]]></Text>
+  <Text key="The DLC could not be loaded. Reason: %REASON"><![CDATA[DLC / ELC nu a putut fi încărcat: %REASON]]></Text>
+  <Text key="The DLC has no valid Mega links"><![CDATA[DLC / ELC nu are nici o legătură MEGA valabilă.]]></Text>
+  <Text key="Force download"><![CDATA[Descarcă forțat]]></Text>
+  <Text key="About"><![CDATA[Despre MegaDownloader]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[Vă mulțumim pentru utilizarea aplicației non-oficiale MEGA.CO.NZ]]></Text>
+  <Text key="Thanks to"><![CDATA[Vă mulțumim]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader nu este legat cu Mega.co.nz - Toate mărcile înregistrate sunt proprietatea lor.]]></Text>
+  <Text key="Created and designed by %NAME"><![CDATA[Creat și proiectat de către %NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME ajută-ne cu sistemul criptographic MEGA.]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[Utilizatorii care au testat aplicația.]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[]]></Text>
+  <Text key="ELC"><![CDATA[ELC]]></Text>
+  <Text key="ELC Accounts"><![CDATA[Cont ELC]]></Text>
+  <Text key="ELC Account Info"><![CDATA[Informații despre Contul ELC]]></Text>
+  <Text key="ELC Desc Info"><![CDATA[Un container "ELC" (codifică Linkul din container) oferă o protecție împotriva copierii linkului sau un raport, pentru a împărtăși linkul MEGA în comunitate.
+În acest fel, este necesar de a avea un cont valid în comunitate, pentru a descărca link-urile din ELC.
+
+Notă: Comunitatea trebuie să dea datele de cont "ELC" (URL, utilizator,chei-API).]]></Text>
+  <Text key="API-Key"><![CDATA[Cheie API]]></Text>
+  <Text key="Generate ELC"><![CDATA[Generează ELC]]></Text>
+  <Text key="Generat&amp;e ELC"><![CDATA[Generează &ELC]]></Text>
+  <Text key="ELC generator"><![CDATA[Generator ELC]]></Text>
+  <Text key="Paste your MEGA Url(s), select your ELC account, and click on Generate ELC"><![CDATA[Lipește URL-ul MEGA, selectează contul dvs. ELC, și clichează pe "Generează ELC".]]></Text>
+  <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[Acest link este un fișier ELC. Poți crea, de asemenea, un fișier ELC clicînd pe "Salvează fișierul".]]></Text>
+  <Text key="Please select a valid ELC account"><![CDATA[Selectează un cont ELC valid.]]></Text>
+  <Text key="There is an ELC being processed, please wait"><![CDATA[Procesez ELC, vă rog, așteptați.]]></Text>
+  <Text key="Loading..."><![CDATA[Încarc...]]></Text>
+  <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[Nu sunt conturi ELC configurate. Du-te la configurare pentru a putea adauga un cont ELC.]]></Text>
+  <Text key="Save file"><![CDATA[Salveaza fisierul]]></Text>
+  <Text key="ELC file"><![CDATA[Fișierul ELC]]></Text>
+  <Text key="The ELC path is not valid"><![CDATA[Calea ELC nu este validă.]]></Text>
+  <Text key="The path is not valid"><![CDATA[Calea nu este validă.]]></Text>
+  <Text key="Error generating ELC"><![CDATA[Eroare la generarea ELC]]></Text>
+  <Text key="URL ELC account explanation"><![CDATA[Aceste date sunt furnizate de comunitate, indică un URL valid.]]></Text>
+  <Text key="Alias ELC account explanation"><![CDATA[Pseudonimul este un nume de identificare care va fi afișat în lista din stânga, și în ecranul "Generatorului ELC". Poți pune orice dorești (sau lăsăl gol), sau schimbă-l în orice moment. Aceasta nu poate fi repetată.]]></Text>
+  <Text key="Default ELC account explanation"><![CDATA[Puteți avea un cont marcate ca "default", marcat cu un '[*] "în lista de stânga.
+Acesta va apărea selectată în mod implicit în ecranul "generatorului ELC". 
+Dacă marcați un alt cont ca implicit, contul implicit anterior va fi nemarcat.]]></Text>
+  <Text key="ELC Account not found. You need a valid ELC Account configured for this ELC."><![CDATA[Contul ELC nu a fost găsit. Ai nevoie de un cont valid ELC configurează acest cont ELC.]]></Text>
+  <Text key="The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library."><![CDATA[Link-ul este un folder cu fișiere %NUM. Primul va fi folosit numai în cazul în care dorești să le utilizezi pe toate, importa link-ul din biblioteca cu fluxuri.]]></Text>
+  <Text key="The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library."><![CDATA[ELC conține fișiere %NUM. Primul va fi folosit numai în cazul în care dorești să le utilizezi toate, importă ELC din biblioteca cu fluxuri.]]></Text>
+  <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[Importă configurația pentru următoarele conturi ELC?]]></Text>
+  <Text key="optional"><![CDATA[opțional]]></Text>
+  <Text key="Multiple ELC"><![CDATA[Multiplu ELC]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[Dacă fișierul este protejat prin parolă, poți introduce parola de aici și va fi folosită la extragerea fișierului. Dacă nu, doar lăsă-l gol. Vă rugăm să reții că doar suportul de bază pentru ZIP și fișierele RAR sunt prevăzute în prezent. Fișierele RAR nu sunt acceptate încă.]]></Text>
+  <Text key="Searc&amp;h"><![CDATA[Cău&ta]]></Text>
+  <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
+  <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+</Language>

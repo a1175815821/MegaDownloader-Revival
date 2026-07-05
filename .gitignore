@@ -33,8 +33,10 @@ x86/
 *.xml
 *.cache
 
-# 例外:InternalConfig.xml 是嵌入资源,必须提交
+# 例外:以下 xml 是嵌入资源或构建必需文件,必须提交
 !Resources/InternalConfig.xml
+!Resources/Language/*.xml
+!HttpModule/Template/XmlTemplateData.xml
 
 # 项目特定编译产物
 MegaDownloader.xml
