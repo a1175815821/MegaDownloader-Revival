@@ -1,0 +1,126 @@
+name: Build and Release
+
+# =============================================================
+# MegaDownloader Revival - GitHub Actions 自动构建工作流
+# =============================================================
+# 触发条件:
+#   1. 推送到 main / master 分支:构建 Release 产物,保存为 artifact
+#   2. 推送 v* 标签:构建 Release 产物,创建 GitHub Release 并上传 exe
+# =============================================================
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:   # 支持手动触发
+
+jobs:
+  build:
+    name: Build MegaDownloader
+    runs-on: windows-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # 完整历史,便于生成 changelog
+
+      # 2. 安装 MSBuild (Visual Studio Build Tools)
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # 3. 安装 NuGet
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+        with:
+          nuget-version: 'latest'
+
+      # 4. 还原 .NET Framework 4.8 引用包
+      - name: Restore .NET Framework 4.8 Developer Pack
+        shell: pwsh
+        run: |
+          # .NET Framework 4.8 SDK 已预装于 windows-latest runner
+          # 此处仅打印版本以便排错
+          Write-Host "MSBuild version:"
+          msbuild -version
+          Write-Host "Installed .NET Frameworks:"
+          Get-ChildItem 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework' -ErrorAction SilentlyContinue | Select-Object Name
+
+      # 5. 构建项目 (Release 配置)
+      - name: Build solution (Release)
+        run: msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86 /m /v:minimal /nr:false
+
+      # 6. 收集构建产物
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          $out = 'bin\Release'
+          if (-not (Test-Path $out)) { throw "Build output not found: $out" }
+          $staging = 'artifacts'
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          # 主程序
+          Copy-Item "$out\MegaDownloader.exe" $staging -Force
+          # 依赖 DLL (与 exe 同目录运行所需)
+          $deps = @(
+            'BouncyCastle.Crypto.dll',
+            'F5Lib.dll',
+            'Fadd.dll',
+            'HttpServer.dll',
+            'Newtonsoft.Json.dll',
+            'ObjectListView.dll',
+            'SharpCompress.dll',
+            'xunit.dll'
+          )
+          foreach ($d in $deps) {
+            $src = Join-Path $out $d
+            if (Test-Path $src) { Copy-Item $src $staging -Force }
+          }
+          # 打包为 zip
+          Compress-Archive -Path "$staging\*" -DestinationPath "$staging\MegaDownloader-Revival-win-x86.zip" -Force
+          Write-Host "--- Artifacts ---"
+          Get-ChildItem $staging | Select-Object Name, Length
+
+      # 7. 上传构建产物 (任一触发都执行)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaDownloader-Revival-build
+          path: artifacts/*
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')   # 仅 tag 触发
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # 创建 Release 所需权限
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 下载上一步构建的产物
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: MegaDownloader-Revival-build
+          path: artifacts
+
+      # 显示产物信息
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      # 创建 Release 并上传 zip
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true    # 自动从 commits 生成 changelog
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/MegaDownloader-Revival-win-x86.zip
+            artifacts/MegaDownloader.exe

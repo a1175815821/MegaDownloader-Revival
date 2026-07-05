@@ -1,0 +1,114 @@
+# =============================================================
+# MegaDownloader .gitignore (Visual Studio / VB.NET)
+# =============================================================
+
+# -------------------------------
+# Visual Studio 用户文件与临时文件
+# -------------------------------
+*.user
+*.userprefs
+*.suo
+*.userosscache
+*.sln.docstates
+*.vssscc
+*.vspscc
+
+# Visual Studio 工作区与索引文件
+.vs/
+*.vsidx
+*.lockbin
+
+# -------------------------------
+# 编译输出
+# -------------------------------
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.dll.config
+*.exe.config
+*.pdb
+*.xml
+*.cache
+
+# 项目特定编译产物
+MegaDownloader.xml
+
+# -------------------------------
+# ReSharper / Rider / 其他 IDE
+# -------------------------------
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.dotCover
+.idea/
+*.swp
+*~
+
+# -------------------------------
+# 测试与覆盖率
+# -------------------------------
+*.coverage
+*.coveragexml
+TestResults/
+[Bb]uild[Ll]og.*
+
+# -------------------------------
+# NuGet
+# -------------------------------
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages/repositories.config
+
+# -------------------------------
+# 安装包与发布产物
+# -------------------------------
+*.msi
+*.wixpdb
+*.wixobj
+[Pp]ublish/
+Setup/Release/
+Installer Output/
+
+# mpress 压缩后的中间产物
+MegaSearchDesktop.exe
+
+# -------------------------------
+# 日志与运行时数据
+# -------------------------------
+*.log
+Logs/
+*.tmp
+*.bak
+*.old
+
+# -------------------------------
+# 操作系统生成文件
+# -------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# -------------------------------
+# 项目内不便提交的资源
+# -------------------------------
+# PSD 源文件 (体积较大)
+Resources/plantilla botones.psd
+Resources/plantilla.psd
+
+# 安装器 WiX 编译中间文件
+Resources/Installer MSD/*.wixobj
+Resources/Installer MSD/*.wixpdb
+
+# -------------------------------
+# 本地配置文件 (含个人账号/路径)
+# -------------------------------
+# 运行时生成的用户配置
+MegaDownloader.config
+InternalConfig.local.xml

@@ -1,0 +1,261 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <title>Multimedia Library</title>
+
+
+        <!-- jQuery -->
+        <script type="text/javascript" charset="utf8" src="//ajax.aspnetcdn.com/ajax/jQuery/jquery-1.8.2.min.js"></script>
+
+        <style type="text/css">    
+            body {
+                background: #72C2E7;
+                text-align: center;
+                font: 12px/1.5em Verdana, Arial, Helvetica, sans-serif; 
+                color:White;
+            }
+            
+            a{color:White;}
+            a:hover{text-decoration:underline;}
+            h1 {
+                color: #FBF6FD;
+                font-size: 60px;
+                text-shadow: #272229 2px 2px 4px;
+            }
+            
+
+            #gallery {
+                border: 10px solid #1D0C16;
+                /*height: 300px;*/
+                width: 90%;
+                margin-left: auto;
+                margin-right: auto;
+                overflow: visible;
+                background: #272229;
+                /* box shadow effect in Safari and Chrome*/
+                -webkit-box-shadow: #272229 10px 10px 20px;
+                /* box shadow effect in Firefox*/
+                -moz-box-shadow: #272229 10px 10px 20px;
+                /* box shadow effect in IE*/
+                filter: progid:DXImageTransform.Microsoft.Shadow(color='#272229', Direction=135, Strength=10);     
+                /* box shadow effect in Browsers that support it, Opera 10.5 pre-alpha release*/
+                 box-shadow: #272229 10px 10px 20px;
+                 color:White;
+                 padding:15px;
+            
+            }
+          
+		  
+            #gallery ul{
+               /* This position the ul content in the middle of the gallery*/
+               margin-left:-30px; 
+            }
+       
+       
+            #gallery ul li {
+                /* In order to create the proper effect with hover we should use display inline-table
+                    This will display the big picture right next to its thumbnail
+                */
+                list-style:none; display:inline-table; padding:10px;width:175px;
+            }
+                 
+                 
+            /* This is the pic to display when the hover action occur over the li that contains the thumbnail  */
+            #gallery ul li .pic{
+                /* Animation with transition in Safari and Chrome */
+               -webkit-transition: all 0.6s ease-in-out;
+               /* Animation with transition in Firefox (No supported Yet) */
+               -moz-transition: all 0.6s ease-in-out;
+               /* Animation with transition in Opera (No supported Yet)*/
+               -o-transition: all 0.6s ease-in-out;
+                /* The the opacity to 0 to create the fadeOut effect*/
+               opacity:0;
+               visibility:hidden; 
+               position:absolute; 
+               margin-top:-50px; 
+               margin-left:-125px; 
+               border:1px solid black;
+               /* box shadow effect in Safari and Chrome*/
+               -webkit-box-shadow:#272229 2px 2px 10px;
+                /* box shadow effect in Firefox*/
+               -moz-box-shadow:#272229 2px 2px 10px;
+               /* box shadow effect in IE*/
+               filter:progid:DXImageTransform.Microsoft.Shadow(color='#272229', Direction=135, Strength=5);
+                 /* box shadow effect in Browsers that support it, Opera 10.5 pre-alpha release*/
+               box-shadow:#272229 2px 2px 10px;
+            }
+            
+
+            #gallery ul li .mini:hover{
+                cursor:pointer;
+            }
+            
+            
+            /* This create the desired effect of showing the imagen when we mouseover the thumbnail*/
+           #gallery ul li:hover .pic {
+                /* width and height is how much the picture is going to growth with the effect */
+               /*width:200px; */
+                height:250px;
+                opacity:1; 
+                visibility:visible; 
+                float:right;
+            }
+            .divName
+            {
+                width:175px;
+                max-width:175px;
+                word-wrap: break-word;
+            }
+            
+            .mask_background{position:fixed;top:0;left:0;bottom:0;right:0;display:none;z-index:10;background-color:#666}
+	        .modal_window{color:#333;background:none repeat scroll 0 0 #EEE;line-height:15px;position:fixed;z-index:1002;border:1px solid #8AD1F3;-webkit-border-radius:20px;-moz-border-radius:20px;border-radius:20px;padding:16px}
+	        .modal_window a{color:#33C}
+	        .modal_window a:hover{color:#129}
+	        #videoPlayer_a{padding-right:100px}
+	        
+	        input{border:1px solid #36A; color: #36A; -webkit-border-radius:5px;-moz-border-radius:5px;border-radius:5px;}
+	        textarea{border:1px solid #36A; color: #36A; -webkit-border-radius:5px;-moz-border-radius:5px;border-radius:5px;}
+	        input:hover{border:1px solid #69F; color: #69F; }
+	        textarea:hover{border:1px solid #69F; color: #69F; }
+	        input[type="button"]:hover{cursor:pointer;background-color:#69F; color:white}
+	        input[type="button"]{margin:5px; background-color:#FFF}
+	
+                
+        </style>
+        <script type="text/javascript">
+            $(document).ready(function () {
+                $.getJSON("/ajax",
+		       {
+		           Action: "LoadAll"
+		       },
+		       function (data) {
+		           if (data.error != '') {
+		               alert("Error loading library: \n" + data.error);
+		           } else {
+		               var l = data.Data;
+		               DisplayLibrary(l);
+
+		           }
+		       });
+
+		       // Hide player
+		       $('#mask_Player').click(function (e) {
+		           if ($(e.target).attr('id') == 'mask_Player') $(this).hide();
+		       });
+            });
+
+
+		   function DisplayLibrary(l) {
+
+		       if (l.length == 0) {
+		           $('#gallery').html('No elements on the library. <a href="/manage">Do you want to add some?</a>');
+		           return;
+               }
+
+		       var HTML = '<ul>';
+		       for (i = 0; i < l.length; i++) {
+		           var Poster = l[i].Poster;
+		           if (Poster == '') Poster = 'http://i.imgur.com/adc1iWF.png';
+		           HTML += '<li>';
+		           HTML += '<img src="' + Poster + '" class="mini" height="150" onclick="OpenDetails(\'' + l[i].ID + '\')" />';
+		           HTML += '<img src="' + Poster + '" class="pic" height="250" onclick="OpenDetails(\'' + l[i].ID + '\')" />';
+		           HTML += '<div class="divName">' + l[i].Name + '</div>';
+		           HTML += '</li>';
+		       }
+		       HTML += '</ul>';
+		       $('#gallery').html(HTML);
+		   }
+
+		   function OpenDetails(ID) {
+		       $.getJSON("/ajax",
+		       {
+		           Element: ID,
+		           Action: "Load"
+		       },
+		       function (data) {
+		           if (data.error != '') {
+		               alert("Error loading results: \n" + data.error);
+		           } else {
+		               var o = data.Data[0];
+		               OpenModalWindow(o);
+		           }
+		       });
+		   }
+
+		   function OpenModalWindow(o) {
+		       var url = o.VlcLink;
+
+		       $('#videoPlayer').attr('data', url)
+		       $('#videoPlayer_p').attr('value', url)
+		       $('#videoPlayer_e').attr('target', url)
+		       $('#videoPlayer_a').attr('href', url)
+		       $('#videoPlayer_a2').attr('href', url)
+		       $('#videoPlayer_i').val(url)
+
+		       $('#modalPlayer_movieName').html(o.Name);
+
+
+		       var id = $('#modalPlayer');
+		       var mask = $('#mask_Player');
+
+		       //transition effect       
+		       mask.show(0);
+		       mask.animate({ opacity: '0.90', height: '100%', bottom: '0px' }, { duration: 0 });
+
+		       //Get the window height and width 
+		       var winH = $(window).height();
+		       var winW = $(window).width();
+
+		       //Set the popup window to center 
+		       $(id).css('top', winH / 2 - $(id).height() / 2);
+		       $(id).css('left', winW / 2 - $(id).width() / 2);
+		   }
+
+		   function OpenVLC_remote() {
+		       var link = $('#videoPlayer_a2').attr('href');
+		       $.getJSON("/ajax",
+		       {
+		           Action: "OpenVLC",
+		           URL: encodeURI(link)
+		       },
+		       function (data) {
+		           if (data.error != '') {
+		               alert("Error trying to open VLC: \n" + data.error);
+		           }
+		       });
+		       return false;
+		     }
+
+        </script>
+    </head>
+    <body>
+        <h1>Multimedia library</h1>
+        <div id="gallery">
+    
+                Loading, please wait...
+
+        </div>
+        <div><a href="/manage">Manage Library</a></div>
+
+
+        <div id="mask_Player" class="mask_background">
+		<div id="modalPlayer" class="modal_window">
+            <div id="modalPlayer_movieName"></div>
+			<!--
+            <object type="application/x-vlc-plugin" data="http://" width="400" height="300" id="videoPlayer">
+                <param name="movie" value="http://" id="videoPlayer_p"/>
+                <embed type="application/x-vlc-plugin" name="videoPlayer"
+                autoplay="no" loop="no" width="400" height="300"
+                target="http://" id="videoPlayer_e" />            
+            </object>
+            -->
+            <br />
+                Link: <input type="text" id="videoPlayer_i" value="http://" style="width:250px"/>
+                    <br /><br />
+                <a href="http://" id="videoPlayer_a">Download Video</a> 
+                <a href="http://" id="videoPlayer_a2" onclick="return OpenVLC_remote()">Open VLC</a>
+		</div>
+	</div>
+    </body>
+</html>

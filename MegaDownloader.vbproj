@@ -1,0 +1,532 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>
+    </ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{A90F87EA-BF31-4E9E-9ABB-EBF3D2964540}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>MegaDownloader.My.MyApplication</StartupObject>
+    <RootNamespace>MegaDownloader</RootNamespace>
+    <AssemblyName>MegaDownloader</AssemblyName>
+    <FileAlignment>512</FileAlignment>
+    <MyType>WindowsForms</MyType>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
+    <SccProjectName>SAK</SccProjectName>
+    <SccLocalPath>SAK</SccLocalPath>
+    <SccAuxPath>SAK</SccAuxPath>
+    <SccProvider>SAK</SccProvider>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DocumentationFile>MegaDownloader.xml</DocumentationFile>
+    <NoWarn>
+    </NoWarn>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <Optimize>false</Optimize>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>None</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DocumentationFile>MegaDownloader.xml</DocumentationFile>
+    <NoWarn>
+    </NoWarn>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionExplicit>Off</OptionExplicit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionCompare>Binary</OptionCompare>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionStrict>On</OptionStrict>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionInfer>On</OptionInfer>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>My Project\app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>Resources\icono.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug_MSD|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug_MSD\</OutputPath>
+    <DocumentationFile>MegaDownloader.xml</DocumentationFile>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <CodeAnalysisIgnoreBuiltInRuleSets>true</CodeAnalysisIgnoreBuiltInRuleSets>
+    <CodeAnalysisIgnoreBuiltInRules>false</CodeAnalysisIgnoreBuiltInRules>
+    <DefineConstants>MSD=true</DefineConstants>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release_MSD|x86'">
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Release_MSD\</OutputPath>
+    <DocumentationFile>MegaDownloader.xml</DocumentationFile>
+    <Optimize>true</Optimize>
+    <DebugType>None</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <CodeAnalysisIgnoreBuiltInRuleSets>true</CodeAnalysisIgnoreBuiltInRuleSets>
+    <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
+    <CodeAnalysisFailOnMissingRules>true</CodeAnalysisFailOnMissingRules>
+    <DefineConstants>MSD=true</DefineConstants>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>Resources\DLLs\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="F5Lib">
+      <HintPath>Resources\DLLs\F5Lib.dll</HintPath>
+    </Reference>
+    <Reference Include="Fadd">
+      <HintPath>Resources\DLLs\Fadd.dll</HintPath>
+    </Reference>
+    <Reference Include="HttpServer">
+      <HintPath>Resources\DLLs\HttpServer.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>Resources\DLLs\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="ObjectListView">
+      <HintPath>Resources\DLLs\ObjectListView.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpCompress">
+      <HintPath>Resources\DLLs\SharpCompress.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Runtime.Remoting" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="xunit">
+      <HintPath>Resources\DLLs\xunit.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Data" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Windows.Forms" />
+    <Import Include="System.Linq" />
+    <Import Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Forms\AddLinks.Designer.vb">
+      <DependentUpon>AddLinks.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\AddLinks.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ApplicationEvents.vb" />
+    <Compile Include="Forms\Cerrando.Designer.vb">
+      <DependentUpon>Cerrando.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Cerrando.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Clases\ApplicationInstanceManager.vb" />
+    <Compile Include="Clases\ClipboardChangeNotifier.vb" />
+    <Compile Include="Clases\ClipBoardViewer.vb" />
+    <Compile Include="Clases\Conexion.vb" />
+    <Compile Include="Clases\Configuracion.vb" />
+    <Compile Include="Clases\ConfiguracionUI.vb" />
+    <Compile Include="Clases\Cryptography\AES.vb" />
+    <Compile Include="Clases\DLCHelper.vb" />
+    <Compile Include="Clases\ELCAccountHelper.vb" />
+    <Compile Include="Clases\Crypters\EncrypterMega.vb" />
+    <Compile Include="Clases\Linkdecrypter.vb" />
+    <Compile Include="Clases\Crypters\LinkCrypter.vb" />
+    <Compile Include="Clases\Crypters\MegaCrypter.vb" />
+    <Compile Include="Clases\MegaFolderHelper.vb" />
+    <Compile Include="Clases\MegaURIProtocol.vb" />
+    <Compile Include="Clases\MEGA_ErrorHandler.vb" />
+    <Compile Include="Clases\MovieInfo\Allocine.vb" />
+    <Compile Include="Clases\MovieInfo\Filmaffinity.vb" />
+    <Compile Include="Clases\MovieInfo\IMDB.vb" />
+    <Compile Include="Clases\ServerEncoderLinkHelper.vb" />
+    <Compile Include="Clases\StreamingLibrary\LibraryElement.vb" />
+    <Compile Include="Clases\StreamingLibrary\StreamingLibrary.vb" />
+    <Compile Include="Clases\StreamingLibrary\StreamingLibraryManager.vb" />
+    <Compile Include="Clases\Criptografia.vb" />
+    <Compile Include="Clases\DescompresorController.vb" />
+    <Compile Include="Clases\Fichero.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Clases\FileDownloader.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Clases\IDescarga.vb" />
+    <Compile Include="Clases\InternalConfiguration.vb" />
+    <Compile Include="Clases\Language.vb" />
+    <Compile Include="Clases\Log.vb" />
+    <Compile Include="Clases\MD5Utils.vb" />
+    <Compile Include="Clases\Mutex.vb" />
+    <Compile Include="Clases\Paquete.vb" />
+    <Compile Include="Clases\PreSharedKeyManager.vb" />
+    <Compile Include="Clases\ResourceHelper.vb" />
+    <Compile Include="Clases\Serializer.vb" />
+    <Compile Include="Clases\ServidorWebController.vb" />
+    <Compile Include="Clases\ThrottledStream.vb" />
+    <Compile Include="Clases\ThrottledStreamController.vb" />
+    <Compile Include="Clases\UltimaConfiguracionUsada.vb" />
+    <Compile Include="Clases\Updater.vb" />
+    <Compile Include="Clases\URLExtractor.vb" />
+    <Compile Include="Clases\StreamingHelper.vb" />
+    <Compile Include="Clases\URLProcessor.vb" />
+    <Compile Include="Clases\Utils.vb" />
+    <Compile Include="Clases\LinkProtectors.vb" />
+    <Compile Include="Clases\Crypters\Youpaste.vb" />
+    <Compile Include="Forms\Configuration.Designer.vb">
+      <DependentUpon>Configuration.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Configuration.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\ELCAccountControl.Designer.vb">
+      <DependentUpon>ELCAccountControl.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ELCAccountControl.vb">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Forms\ELCForm.Designer.vb">
+      <DependentUpon>ELCForm.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\ELCForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\EncodeLinksForm.Designer.vb">
+      <DependentUpon>EncodeLinksForm.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\EncodeLinksForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Credits.Designer.vb">
+      <DependentUpon>Credits.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Credits.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Descompresor.Designer.vb">
+      <DependentUpon>Descompresor.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Descompresor.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="HttpModule\StreamingModule.vb" />
+    <Compile Include="HttpModule\StreamingLibraryModule.vb" />
+    <Compile Include="HttpModule\WebInterfaceModule.vb" />
+    <Compile Include="Forms\Main.Designer.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Main.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="My Project\AssemblyInfo.vb" />
+    <Compile Include="My Project\Application.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Application.myapp</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="My Project\Resources.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="My Project\Settings.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <Compile Include="Forms\PantallaMsg.Designer.vb">
+      <DependentUpon>PantallaMsg.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\PantallaMsg.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\PropiedadesDescarga.Designer.vb">
+      <DependentUpon>PropiedadesDescarga.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\PropiedadesDescarga.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\SplashScreen.Designer.vb">
+      <DependentUpon>SplashScreen.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\SplashScreen.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Stegano\SteganoManager.vb" />
+    <Compile Include="Stegano\SteganoWizardLoad.Designer.vb">
+      <DependentUpon>SteganoWizardLoad.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Stegano\SteganoWizardLoad.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Stegano\SteganoWizardSave.Designer.vb">
+      <DependentUpon>SteganoWizardSave.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Stegano\SteganoWizardSave.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\StreamingForm.Designer.vb">
+      <DependentUpon>StreamingForm.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\StreamingForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Forms\AddLinks.resx">
+      <DependentUpon>AddLinks.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Cerrando.resx">
+      <DependentUpon>Cerrando.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Configuration.resx">
+      <DependentUpon>Configuration.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\ELCAccountControl.resx">
+      <DependentUpon>ELCAccountControl.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\ELCForm.resx">
+      <DependentUpon>ELCForm.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\EncodeLinksForm.resx">
+      <DependentUpon>EncodeLinksForm.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Credits.resx">
+      <DependentUpon>Credits.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Descompresor.resx">
+      <DependentUpon>Descompresor.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\Main.resx">
+      <DependentUpon>Main.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="My Project\Resources.resx">
+      <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.vb</LastGenOutput>
+      <CustomToolNamespace>My.Resources</CustomToolNamespace>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\PantallaMsg.resx">
+      <DependentUpon>PantallaMsg.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\PropiedadesDescarga.resx">
+      <DependentUpon>PropiedadesDescarga.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\SplashScreen.resx">
+      <DependentUpon>SplashScreen.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Stegano\SteganoWizardLoad.resx">
+      <DependentUpon>SteganoWizardLoad.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Stegano\SteganoWizardSave.resx">
+      <DependentUpon>SteganoWizardSave.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\StreamingForm.resx">
+      <DependentUpon>StreamingForm.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+    <None Include="My Project\app.manifest" />
+    <None Include="My Project\Application.myapp">
+      <Generator>MyApplicationCodeGenerator</Generator>
+      <LastGenOutput>Application.Designer.vb</LastGenOutput>
+    </None>
+    <None Include="My Project\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <CustomToolNamespace>My</CustomToolNamespace>
+      <LastGenOutput>Settings.Designer.vb</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\addlink.png" />
+    <EmbeddedResource Include="Resources\config.png" />
+    <None Include="Resources\icono.ico" />
+    <None Include="Resources\icono.png" />
+    <EmbeddedResource Include="Resources\InternalConfig.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\pause.png" />
+    <EmbeddedResource Include="Resources\play.png" />
+    <None Include="Resources\Installer MSD\make_installer.bat" />
+    <EmbeddedResource Include="Resources\Language\hu-HU-Language.xml" />
+    <None Include="Resources\plantilla botones.psd" />
+    <EmbeddedResource Include="Resources\stop.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\download.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="HttpModule\Template\XmlTemplateData.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\DLLs\BouncyCastle.Crypto.dll" />
+    <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
+    <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
+    <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
+    <EmbeddedResource Include="Resources\DLLs\xunit.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Language\en-US-Language.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Language\es-ES-Language.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Tools\mpress.exe" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Tools\postbuildevent.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\mega.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\DLLs\Newtonsoft.Json.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Language\fr-FR-Language.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="HttpModule\Template\StreamingLibraryManagerTemplateData.htm">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="HttpModule\Template\StreamingLibraryTemplateData.htm">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\collaborate.png" />
+    <None Include="Resources\plantilla.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="HttpModule\Template\StreamingLibraryTemplateLogin.htm">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\DLLs\SharpCompress.dll" />
+    <EmbeddedResource Include="Resources\DLLs\F5Lib.dll" />
+    <Content Include="Resources\Installer MSD\ico.ico" />
+    <Content Include="Resources\Installer MSD\MegaSearchDesktop.wxs">
+      <SubType>Designer</SubType>
+    </Content>
+    <EmbeddedResource Include="Resources\Language\zh-TW-Language.xml" />
+    <EmbeddedResource Include="Resources\Language\it-IT-Language.xml" />
+    <EmbeddedResource Include="Resources\Language\de-DE-Language.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Language\pt-BR-Language.xml">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Language\ro-RO-Language.xml" />
+    <EmbeddedResource Include="Resources\Language\zh-CN-Language.xml" />
+    <Content Include="TODO\TODO.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.0">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.4.5">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 4.5</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>if $(ConfigurationName) == Release $(ProjectDir)\resources\tools\mpress.exe -s -m -u  $(ProjectDir)$(OutDir)$(TargetFileName)
+
+if $(ConfigurationName) == Release_MSD $(ProjectDir)\resources\tools\mpress.exe -s -m -u  $(ProjectDir)$(OutDir)$(TargetFileName)
+if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"
+if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\MegaSearchDesktop.exe"
+if $(ConfigurationName) == Release_MSD copy "$(ProjectDir)$(OutDir)$(TargetFileName)" "$(ProjectDir)Resources\Installer MSD"
+if $(ConfigurationName) == Release_MSD rename "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)" "MegaSearchDesktop.exe"</PostBuildEvent>
+  </PropertyGroup>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

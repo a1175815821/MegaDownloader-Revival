@@ -1,0 +1,685 @@
+﻿<!DOCTYPE HTML>
+<html>
+<head>
+<title>Multimedia Library Manager</title>
+
+
+<!-- DataTables CSS -->
+<link rel="stylesheet" type="text/css" href="//ajax.aspnetcdn.com/ajax/jquery.dataTables/1.9.4/css/jquery.dataTables.css">
+ 
+<!-- jQuery -->
+<script type="text/javascript" charset="utf8" src="//ajax.aspnetcdn.com/ajax/jQuery/jquery-1.8.2.min.js"></script>
+ 
+<!-- DataTables -->
+<script type="text/javascript" charset="utf8" src="//ajax.aspnetcdn.com/ajax/jquery.dataTables/1.9.4/jquery.dataTables.min.js"></script>
+
+<script type="text/javascript" charset="utf8" src="//cdn.jsdelivr.net/jquery.cookie/1.3.1/jquery.cookie.js"></script>
+
+
+
+
+<style type="text/css">
+            @import "//editor.datatables.net/release/DataTables/media/css/jquery.dataTables.css";
+
+        
+	body{font: 12px/1.5em Verdana, Arial, Helvetica, sans-serif; background-color:#EEE}
+	div h1{text-align:center; width:100%; color:#69F}
+	h1{line-height:3em}
+    div.dataTables_wrapper, table {
+        font: 13px/1.45em Verdana, Arial, Helvetica, sans-serif;
+    }
+	#LibraryResults_wrapper {background-color:white;border:1px solid #8AD1F3;-webkit-border-radius:5px;-moz-border-radius:5px;border-radius:5px;padding:10px; padding-bottom:30px; margin:5px;}
+	#LibraryResults .RowOver{background-color:#A2A4FF !important; cursor:pointer}
+	#LibraryResults .RowOver td{background-color:#A2A4FF !important; cursor:pointer}   
+	
+	/* Pantalla espera */
+	#waiting{
+		position: absolute;top: 0;left: 0; bottom:0; right:0;display:none;z-index: 10;  
+	}	
+	#wait_message{
+		background: none repeat scroll 0 0 #EEE;width: 200px;height: 40px;line-height:40px;
+		position: absolute;padding: 16px;left: 45%;top: 30%;position:fixed;z-index: 1002;
+		border:1px solid #8AD1F3; -webkit-border-radius: 20px; -moz-border-radius: 20px; border-radius: 20px;		    
+	}
+	.center{text-align:center}
+	.icon{text-align:center; width:10px !important;}
+	
+	/* Selector visibilidad columnas */
+	#btnMostrarOcultarColumnas{cursor:pointer;margin-top:5px;margin-left:10px;text-decoration:underline}
+	.mask_background{position:fixed;top:0;left:0;bottom:0;right:0;display:none;z-index:10;background-color:#666}
+	.modal_window{background:none repeat scroll 0 0 #EEE;line-height:15px;position:fixed;z-index:1002;border:1px solid #8AD1F3;-webkit-border-radius:20px;-moz-border-radius:20px;border-radius:20px;padding:16px}
+	#modalColumns{width:300px;}
+	.divColumnListSelector label{display:inline}
+	#columnList{padding-top:10px;display:block}
+	
+	/* Editor */
+	#modalEditor{width:500px;}
+	#modalEditor ul{list-style-type: none;padding:5px; margin-top:0px;}	
+	#modalEditor ul li{margin-bottom:5px}	
+	#modalPlayer{text-align:center}
+	#btnSave{ padding:5px; float:left;margin-top:15px}
+	#btnDelete{ padding:5px; float:left;margin-top:15px}
+	#btnCancel{ padding:5px; float:right;margin-top:15px}
+	#btnNew{margin-left: 10px;}
+	#videoPlayer_a{padding-right:100px}
+	#msjImportingWait{font: 11px/1.45em Verdana, Arial, Helvetica, sans-serif;}
+	#modalExport {width:90%}
+	#modalImport {width:50%; min-width:300px;}
+	#listExportElements {display:inline-block; margin-bottom:5px; max-height: 150px; overflow:scroll}
+	#listExportElements ul {list-style-type: none;padding:5px; margin-top:0px;}
+	#listExportElements ul li{width:250px; float:left}
+	
+	
+	input{border:1px solid #36A; color: #36A; -webkit-border-radius:5px;-moz-border-radius:5px;border-radius:5px;padding: 2px 2px 2px 4px;}
+	textarea{border:1px solid #36A; color: #36A; -webkit-border-radius:5px;-moz-border-radius:5px;border-radius:5px;padding: 2px 2px 2px 4px;}
+	input:hover{border:1px solid #69F; color: #69F; }
+	textarea:hover{border:1px solid #69F; color: #69F; }
+	input[type="button"]:hover{cursor:pointer;background-color:#69F; color:white}
+	input[type="button"]{margin:5px; background-color:#FFF}
+	
+</style>
+
+
+
+<script type="text/javascript">
+	var oTable;
+
+	$(document).ready(function () {
+
+	    $.ajaxSetup({ cache: false })
+
+	    oTable = $('#LibraryResults');
+	    oTable.dataTable({
+	        "bProcessing": true,
+	        "bAutoWidth": false,
+	        "oLanguage": {
+	            "sZeroRecords": "No results", // Sin resultados
+	            "sSearch": "Filter:", // Filtrar
+	            "sProcessing": "Processing", // Procesando
+	            "sLengthMenu": "Show _MENU_ results", // Mostrar _MENU_ resultados
+	            "sInfo": "_START_ to _END_ of _TOTAL_", // _START_ a _END_ de _TOTAL_
+	            "sInfoEmpty": "No results", // Sin resultados
+	            "sInfoFiltered": " (filtered from _MAX_ total entries)", //  (filtrados de un total de _MAX_ resultados)
+	            "oPaginate": {
+	                "sFirst": "First", // Primera
+	                "sPrevious": "Previous", // Anterior
+	                "sNext": "Next", // Siguiente
+	                "sLast": "Last" // Última
+	            }
+	        },
+	        "sPaginationType": "full_numbers",
+	        "aoColumns": [
+									{ "mData": "VlcLink", "sName": "Play", "sClass": "icon", "mRender": RenderPlayer },
+									{ "mData": "ID", "sName": "ID", "sClass": "center", "mRender": RenderID },
+									{ "mData": "Name", "sName": "Name", "mRender": RenderText },
+									{ "mData": "Desc", "sName": "Description", "mRender": RenderText },
+									{ "mData": "Com", "sName": "Comments", "mRender": RenderText },
+									{ "mData": "Date", "sName": "Date", "sType": "date", "sClass": "center" }
+								],
+	        "aaSorting": [[2, "asc"]]
+	    });
+	    CargarTabla();
+
+
+	    // Fila destacada
+	    $('#LibraryResults').on('mouseover', 'td', function (e) {
+	        $(this.parentNode).addClass('RowOver');
+	    }).on('mouseout', 'td', function (e) {
+	        $(this.parentNode).removeClass('RowOver');
+	    });
+
+	    // Cuadro de mostrar / ocultar columnas
+	    $('#btnMostrarOcultarColumnas').click(function (e) {
+
+	        var id = $('#modalColumns');
+	        var mask = $('#mask_modalColumns');
+
+	        //transition effect       
+	        mask.show(0);
+	        mask.animate({ opacity: '0.90', height: '100%', bottom: '0px' }, { duration: 0 });
+
+	        //Get the window height and width 
+	        var winH = $(window).height();
+	        var winW = $(window).width();
+
+	        //Set the popup window to center 
+	        $(id).css('top', winH / 2 - $(id).height() / 2);
+	        $(id).css('left', winW / 2 - $(id).width() / 2);
+
+	    });
+	    $('#mask_modalColumns').click(function (e) {
+	        if ($(e.target).attr('id') == 'mask_modalColumns') $(this).hide();
+	    });
+	    $('#mask_modalColumns').on('change', '.columnListSelector', function (e) {
+	        var colindex = $(this).attr("colindex");
+	        var vis = ($(this).attr('checked') == 'checked');
+	        oTable.fnSetColumnVis(colindex, vis);
+	        $.cookie("LibraryMan-ColVis-" + colindex, (vis ? '1' : '0'), { path: '/', expires: 14 });
+	    });
+
+	    // ModalEditor
+	    $('#mask_modalEditor').click(function (e) {
+	        if ($(e.target).attr('id') == 'mask_modalEditor') $(this).hide();
+	    });
+
+	    // Video player
+	    $('#mask_Player').click(function (e) {
+	        if ($(e.target).attr('id') == 'mask_Player') $(this).hide();
+	    });
+
+	    // Import / export screen
+	    $('#mask_modalImport').click(function (e) {
+	        if ($(e.target).attr('id') == 'mask_modalImport') $(this).hide();
+	    });
+	    $('#mask_modalExport').click(function (e) {
+	        if ($(e.target).attr('id') == 'mask_modalExport') $(this).hide();
+	    });
+
+
+
+	    // Row click
+	    $("#LibraryResults tbody").click(function (event) {
+	        if ($(event.target).attr('prevent-row-click') == 'true') return;
+
+	        var eleAux = $(event.target.parentNode).find(".selectorID");
+	        if (eleAux.length==0) { eleAux = $(event.target.parentNode.parentNode).find(".selectorID"); } // Puede haber dos elementos anidados...
+	        var IDelement = eleAux.html();
+	        $.getJSON("/ajax",
+		   {
+		       Element: IDelement,
+		       Action: "Load"
+		   },
+		   function (data) {
+		       if (data.error != '') {
+		           alert("Error loading results: \n" + data.error);
+		       } else {
+		           var o = data.Data[0];
+		           OpenEditor();
+		           LoadIntoEditor(o);
+		       }
+		   });
+	    });
+	    $(window).resize(function () {
+	        AdjustWidth();
+	    });
+
+	});
+	// End window load
+
+	// Modal editor
+	function OpenEditor(){
+		var id = $('#modalEditor');
+		var mask = $('#mask_modalEditor');
+
+		//transition effect       
+		mask.show(0);
+		mask.animate({ opacity: '0.90', height: '100%', bottom: '0px' }, { duration: 0 });
+
+		//Get the window height and width 
+		var winH = $(window).height();
+		var winW = $(window).width();
+
+		//Set the popup window to center 
+		$(id).css('top', winH / 2 - $(id).height() / 2);
+		$(id).css('left', winW / 2 - $(id).width() / 2);	
+	}
+
+
+	// Import
+	function OpenImportLinks() {
+	    var id = $('#modalImport');
+	    var mask = $('#mask_modalImport');
+
+	    //transition effect       
+	    mask.show(0);
+	    mask.animate({ opacity: '0.90', height: '100%', bottom: '0px'}, { duration: 0 });
+
+	    //Get the window height and width 
+	    var winH = $(window).height();
+	    var winW = $(window).width();
+
+	    //Set the popup window to center 
+	    $(id).css('top', winH / 2 - $(id).height() / 2);
+	    $(id).css('left', winW / 2 - $(id).width() / 2);
+
+	    $('#txtImportLinks').val('');
+	}
+
+	function ImportLinks() {
+	    var Links = $('#txtImportLinks').val();
+	    $('#msjImportingWait').show();
+
+	    $.ajax({
+	        type: "POST",
+	        url: "/ajax",
+	        data: {
+	            Action: "ImportLinks",
+	            Links: Links
+	        },
+	        success: function (data) {
+	            $('#msjImportingWait').hide();
+	            var d = eval('[' + data + ']')[0];
+	            if (d.error != '') {
+	                alert("Error importing links: \n" + d.error);
+	            } else {
+	                if (d.numR > -1) {
+	                    alert(d.numR + " links sent, " + d.numI + " links imported successfully");
+	                }
+	                else {
+	                    alert(d.numI + " links imported successfully");
+	                }
+	                
+	                CargarTabla();
+	                $('#mask_modalImport').hide();
+	            }
+
+	        }
+	    });
+
+	}
+
+
+	// Export
+	function OpenExportLinks() {
+
+	    var HTML = '<ul>'
+	    var aTrs = oTable.fnGetNodes();
+	    for (var i = 0; i < aTrs.length; i++) {
+	        var row = oTable.fnGetData(aTrs[i]);
+	        HTML += '<li>'
+	        HTML += '<input type="checkbox" class="chkExport" name="chkExport" id="chkExport' + row.ID + '" ele-id="' + row.ID + '" />'
+	        HTML += '<label for="chkExport' + row.ID + '">' + row.Name + '</label>'
+	        HTML += '</li>'
+	    }
+	    HTML += '</ul>';
+	    $('#listExportElements').html(HTML);
+
+
+	    var id = $('#modalExport');
+	    var mask = $('#mask_modalExport');
+
+	    //transition effect       
+	    mask.show(0);
+	    mask.animate({ opacity: '0.90', height: '100%', bottom: '0px' }, { duration: 0 });
+
+	    //Get the window height and width 
+	    var winH = $(window).height();
+	    var winW = $(window).width();
+
+	    //Set the popup window to center 
+	    $(id).css('top', winH / 2 - $(id).height() / 2);
+	    $(id).css('left', winW / 2 - $(id).width() / 2);
+
+
+	}
+
+	function ExportLinks() {
+        var ExportList = '';
+        $.each($('.chkExport'), function () {
+            if ($(this).is(':checked')) { ExportList += ";" + $(this).attr('ele-id') }
+        });
+        if (ExportList.length > 0) { ExportList = ExportList.substring(1); }
+        var hid = $('#chkHideLinks').is(':checked');
+        var plain = $('#chkPlainText').is(':checked');
+        $('#msjExportingWait').show();
+
+        $.ajax({
+            type: "POST",
+            url: "/ajax",
+            data: {
+                Action: "ExportLinks",
+                IDs: ExportList,
+                HideLinks: hid, 
+                PlainText: plain
+            },
+            success: function (data) {
+                $('#msjExportingWait').hide();
+                var d = eval('[' + data + ']')[0];
+                if (d.error != '') {
+                    alert("Error exporting links: \n" + d.error);
+                } else {
+                    $('#txtExportedCode').val(d.code);
+                    alert("Export completed; the result is available in the 'Exported code' textbox.");
+                }
+
+            }
+        });
+
+        return false;
+	}
+
+	function ExportCheckUncheckAll(check) {
+	    $.each($('.chkExport'), function () {
+	        $(this).attr('checked', check);
+	    });
+	    return false;
+	}
+
+	// Table load
+	function CargarTabla() {
+
+       oTable.fnClearTable();
+       // Cargamos tabla
+       $.getJSON("/ajax",
+       {
+           Action: "LoadAll"
+       },
+       function (data) {
+           if (data.error != '') {
+               alert("Error loading results: \n" + data.error);
+           } else {
+               oTable.dataTable().fnAddData(data.Data);
+               establecerVisibilidadColumnas();
+               pintarCuadroMostrarOcultarColumnas();
+               oTable.show();
+               AdjustWidth();
+           }
+       });
+   }
+   
+   // Render
+	function RenderID(data, type, full) {
+	   return '<span class="selectorID">' + data + '</span>'; // Ponemos un span para que sea más fácil obtener el ID al clickar en una fila
+	};
+	function RenderText(data, type, full) {
+		if (data.length > 50){
+			return '<span title="'+ data.replace(/"/g,"&quot;") +'">'+data.substring(0,50) + "..." + '</span>';
+		} else {
+			return data;
+		}
+	};
+	function RenderPlayer(data, type, full) {
+	    return "<img prevent-row-click='true' title='Watch with VLC' src='http://ubuntuparanovatos.files.wordpress.com/2007/06/vlc_icon.png' width='12' onclick='OpenVLC(\"" + data + "\", \"" + full.Name.replace(/\"/gi, "") + "\")'/>";
+	};
+   
+   function AdjustWidth(){
+		oTable.fnAdjustColumnSizing();
+   }
+   
+   // Establecemos la visibilidad de las columnas según la configuración de cookies
+   function establecerVisibilidadColumnas() {
+       var numCol = oTable.fnSettings().aoColumns.length;
+       for (i = 0; i < numCol; i++) {
+           var vis = $.cookie("LibraryMan-ColVis-" + i);
+           oTable.fnSetColumnVis(i, vis == undefined || vis == '1');
+       }
+   }
+
+   // Mostramos dinámicamente el cuadro de ocultar o mostrar columnas
+   function pintarCuadroMostrarOcultarColumnas() {
+       var numCol = oTable.fnSettings().aoColumns.length;
+       var colList = $('#columnList');
+       colList.html('');
+       for (i = 0; i < numCol; i++) {
+           var col = oTable.fnSettings().aoColumns[i];
+           colList.append('<div class="divColumnListSelector"><input class="columnListSelector" ' + (oTable.fnSettings().aoColumns[i].bVisible ? 'checked=checked' : '') + ' type="checkbox" id="toggle_' + col.mData + '" colindex="' + i + '"> <label for="toggle_' + col.mData + '">' + col.sName + '</label></div>')
+       }
+    
+   };   
+   
+   function LoadIntoEditor(o){
+		$('#txtID').val((!o?'':o.ID));
+		$('#txtName').val((!o?'':o.Name));
+		$('#txtIMDB').val((!o ? '' : o.IMDB)); // http://www.omdbapi.com/
+		$('#txtAllocine').val((!o ? '' : o.Allocine)); // http://wiki.gromez.fr/dev/api/allocine_v3
+		$('#txtFilmaffinity').val((!o ? '' : o.Filmaffinity)); 
+		$('#txtDesc').val((!o?'':o.Desc));
+		$('#txtLink').val((!o?'':o.Link));
+		$('#txtPoster').val((!o?'':o.Poster));
+		$('#txtComments').val((!o?'':o.Com));
+    };
+
+    function DeleteData() {
+
+        if (!confirm("Do you want to delete the element?")) {return;}
+        $.getJSON("/ajax",
+		   {
+		       Action: "Delete",
+		       ID: $('#txtID').val()
+		   },
+		   function (data) {
+		       if (data.error != '') {
+		           alert("Error loading results: \n" + data.error);
+		       } else {
+		           alert("Element removed correctly");
+		           $('#mask_modalEditor').hide();
+		           CargarTabla();
+		       }
+		   });
+    };
+
+   
+   function SaveData(){
+       $.getJSON("/ajax",
+		   {
+		       Action: "Save",
+		       ID: $('#txtID').val(),
+		       IMDB: $('#txtIMDB').val(),
+		       Allocine: $('#txtAllocine').val(),
+		       Filmaffinity: $('#txtFilmaffinity').val(),
+		       Name: $('#txtName').val(),
+		       Link: $('#txtLink').val(),
+		       Desc: $('#txtDesc').val(),
+		       Poster: $('#txtPoster').val(),
+		       Comments: $('#txtComments').val()
+		   },
+		   function (data) {
+		       if (data.error != '') {
+		           alert("Error loading results: \n" + data.error);
+		       } else {
+		           alert("Data saved correctly");
+		           $('#mask_modalEditor').hide();
+		           CargarTabla();
+		       }
+		   });   
+   };
+
+
+   function OpenVLC(url, name) {
+   
+       $('#videoPlayer').attr('data', url)
+       $('#videoPlayer_p').attr('value', url)
+       $('#videoPlayer_e').attr('target', url)
+       $('#videoPlayer_a').attr('href', url)
+       $('#videoPlayer_a2').attr('href', url)
+       $('#videoPlayer_i').val(url)
+
+       $('#modalPlayer_movieName').html(name);
+
+        var id = $('#modalPlayer');
+		var mask = $('#mask_Player');
+
+		//transition effect       
+		mask.show(0);
+		mask.animate({ opacity: '0.90', height: '100%', bottom: '0px' }, { duration: 0 });
+
+		//Get the window height and width 
+		var winH = $(window).height();
+		var winW = $(window).width();
+
+		//Set the popup window to center 
+		//$(id).css('top', winH / 2 - ($(id).height() + 300) / 2); // +300 - video player height
+		$(id).css('top', winH / 2 - ($(id).height()) / 2);
+		$(id).css('left', winW / 2 - $(id).width() / 2);
+
+
+
+    }
+
+    function OpenVLC_remote() {
+        var link = $('#videoPlayer_i').val();
+        $.getJSON("/ajax",
+		   {
+		       Action: "OpenVLC",
+		       URL: encodeURI(link)
+		   },
+		   function (data) {
+		       if (data.error != '') {
+		           alert("Error trying to open VLC: \n" + data.error);
+		       }
+		   });
+	   return false;
+    }
+
+</script>
+
+
+</head>
+<body>
+
+
+    <div>
+        <h1>Multimedia Library Manager</h1>
+    </div>
+
+    
+	
+	<div style="margin-bottom:10px">
+        <input type="button" value="New" id="btnNew" onclick="OpenEditor();LoadIntoEditor(null);" />
+        <input type="button" value="Import" id="btnOpenImport" onclick="OpenImportLinks();" /> 
+        <input type="button" value="Export" id="btnOpenExport" onclick="OpenExportLinks();" /> 
+    </div>
+	
+	<table cellpadding="0" cellspacing="0" border="0" class="display" id="LibraryResults" style="display:none; width:100%">
+		<thead>
+			<tr>
+				<th style="width: 1%">&nbsp;</th>
+				<th style="width: 5%">
+					ID
+				</th>
+				<th style="width: 25%">
+					Name
+				</th>
+				<th style="width: 27%">
+					Description
+				</th>
+				<th style="width: 27%">
+					Comments
+				</th>						
+				<th style="width: 15%">
+					Date
+				</th>
+			</tr>
+		</thead>
+		<tfoot>
+			<tr>
+				<th>&nbsp;</th>
+				<th>
+					ID
+				</th>
+				<th>
+					Name
+				</th>
+				<th>
+					Description
+				</th>
+				<th>
+					Comments
+				</th>						
+				<th>
+					Date
+				</th>
+			</tr>
+		</tfoot>
+	</table>
+	
+	<div id="btnMostrarOcultarColumnas">Show/Hide columns</div>
+
+
+    <div id="mask_modalColumns" class="mask_background">
+        <div id="modalColumns" class="modal_window">Select the columns you want to show or hide. Click on the grey area to exit.
+            <span id="columnList"></span>
+        </div>
+     </div>
+
+
+	<div id="mask_modalEditor" class="mask_background">
+		<div id="modalEditor" class="modal_window">
+			<ul>
+				<li>ID: <br />			<input type="text" id="txtID"  style="width:75px" disabled="disabled" title="Internal ID, can not be modified."/></li>      
+				<li><span title="Mandatory">Link: * </span><br />		
+                                        <input type="text" id="txtLink" style="width:100%" title="MEGA link. The only mandatory field."/></li>
+				<li>Name: <br />		<input type="text" id="txtName" style="width:100%" title="Name of the video. If the movie ID (IMDB, Allocine, etc) is specified and the name is left blank, it will be retrieved automatically."/></li>
+				<li>Description: <br />	<textarea id="txtDesc" style="width:100%" title="Description of the video. If the movie ID (IMDB, Allocine, etc) is specified and the description is left blank, it will be retrieved automatically."></textarea></li>
+				<li>Comments: <br />	<textarea id="txtComments" style="width:100%" title="Any comments you want to add about the video."></textarea></li>
+				<li>Poster: <br />	<input type="text" id="txtPoster" style="width:100%" title="Image link. If the movie ID (IMDB, Allocine, etc) is specified and the poster is left blank, it will be retrieved automatically."/></li>
+				<li>
+                    <table>
+                        <tr>
+                            <td width="100">IMDB.com:</td>
+                            <td width="100">Filmaffinity.es:</td>
+                            <td width="100">Allocine.fr:</td>
+                        </tr>
+                        <tr>
+                            <td><input type="text" id="txtIMDB" style="width:75px" title="Add the IMDB code (f.e. 'tt1024648') and the poster, title and description will be automatically retrieved."/></td>
+                            <td><input type="text" id="txtFilmaffinity" style="width:75px" title="Add the Filmaffinity code (f.e. '917469') and the poster, title and description will be automatically retrieved."/></td>
+                            <td><input type="text" id="txtAllocine" style="width:75px" title="Add the Allocine code (f.e. '61282') and the poster, title and description will be automatically retrieved."/></td>
+                        </tr>
+                    </table>
+                
+              	
+				</li>		
+				
+				<li>
+					<input type="button" value="Save" id="btnSave" onclick="SaveData();" />
+                    <input type="button" value="Remove" id="btnDelete" onclick="DeleteData();" />
+				    <input type="button" value="Cancel" id="btnCancel" onclick="$('#mask_modalEditor').hide()"/>
+				</li>
+			</ul>
+		
+		</div>
+	</div>
+
+     <div id="mask_modalImport" class="mask_background">
+		<div id="modalImport" class="modal_window">
+            Links / exported code: 
+            <textarea id="txtImportLinks" style="width:100%"></textarea>
+            <br />
+            <input type="button" value="Import" id="btnImport" onclick="return ImportLinks();" />
+            <span id="msjImportingWait" style="display:none">Importing, please wait...</span>
+        </div>
+    </div>
+
+    <div id="mask_modalExport" class="mask_background">
+		<div id="modalExport" class="modal_window">
+            <div id="listExportElements"></div>
+            <br />
+            <a href="" onclick="return ExportCheckUncheckAll(true)">Check all</a>
+            <a href="" onclick="return ExportCheckUncheckAll(false)">Uncheck all</a>
+
+            <div style="float:right; text-align:right">
+                <label for="chkHideLinks" title="By using this option, the links will remain hidden when importing the library. The user will see a 'Link not visible' message.">Hide links</label><input type="checkbox" id="chkHideLinks"/><br />
+                <label for="chkPlainText" title="By using this option, the generated code will be a plain XML. Uncheck it to get a compressed code.">Plain text</label><input type="checkbox" id="chkPlainText"/><br />
+            </div>
+
+            <br /><br /><br />
+            Exported code: 
+            <textarea id="txtExportedCode" style="width:100%"></textarea>
+            <br />
+            <input type="button" value="Export" id="btnExport" onclick="return ExportLinks();" />
+            <span id="msjExportingWait" style="display:none">Exporting, please wait...</span>
+        </div>
+    </div>
+
+
+    <div id="mask_Player" class="mask_background">
+		<div id="modalPlayer" class="modal_window">
+            <div id="modalPlayer_movieName"></div>
+			<!--
+            <object type="application/x-vlc-plugin" data="http://" width="400" height="300" id="videoPlayer">
+                <param name="movie" value="http://" id="videoPlayer_p"/>
+                <embed type="application/x-vlc-plugin" name="videoPlayer"
+                autoplay="no" loop="no" width="400" height="300"
+                target="http://" id="videoPlayer_e" />            
+            </object>
+            -->
+            <br />
+                Link: <input type="text" id="videoPlayer_i" value="http://" style="width:250px"/>
+                    <br /><br />
+                <a href="http://" id="videoPlayer_a">Download Video</a> 
+                <a href="http://" id="videoPlayer_a2" onclick="return OpenVLC_remote()">Open VLC</a>
+		</div>
+	</div>
+	
+</body>
+</html>
