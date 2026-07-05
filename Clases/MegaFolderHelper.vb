@@ -76,7 +76,7 @@ Public Class MegaFolderHelper
 
                 Try
                     FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
-                Catch ex As Exception
+                Catch exCrypt As Exception
                     ' 解密失败,跳过此节点 (可能是 k 字段格式不兼容)
                     Continue For
                 End Try
@@ -116,7 +116,7 @@ Public Class MegaFolderHelper
 
                 Try
                     FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
-                Catch ex As Exception
+                Catch exCrypt As Exception
                     ' 解密失败,跳过此文件 (可能无法用 FolderKey 解密)
                     Continue For
                 End Try
