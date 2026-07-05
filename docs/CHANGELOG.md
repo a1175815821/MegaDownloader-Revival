@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 🐛 修复
+
+- **下载器崩溃**:修复 [`Clases/FileDownloader.vb`](../Clases/FileDownloader.vb) 第 681-683 行变量名错配导致的 `NullReferenceException`。当 MEGA 服务器返回 502 网关错误等异常时,catch 块误引用已被清空的 `exc` 局部变量(应为 `ex`),导致掩盖真实异常并中断整个下载流程。修复后,后台下载线程能正确传递真实异常,后续文件可继续下载。
+
 ### 计划中
 
 - 修复 EncrypterMe.ga 链接因 API 端点下线而无法解析的问题

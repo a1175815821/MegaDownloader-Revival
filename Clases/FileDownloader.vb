@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Net
 Imports System.ComponentModel
 Imports System.Reflection
@@ -679,8 +679,8 @@ Public Class FileDownloader
                 fireEventFromBgw([Event].FileDownloadSucceeded)
             End If
         Catch ex As Exception
-            Log.WriteError("Error checking if the download has stopped " & file.Name & " - " & exc.ToString)
-            bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
+            Log.WriteError("Error checking if the download has stopped " & file.Name & " - " & ex.ToString)
+            bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, ex)
         End Try
     End Sub
 
