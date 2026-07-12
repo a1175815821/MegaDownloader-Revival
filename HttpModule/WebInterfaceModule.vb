@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports HttpServer
 Imports System.IO
 Imports HttpServer.Sessions
@@ -48,10 +48,12 @@ Public Class WebInterfaceModule
 
             For Each resname As String In Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames
                 If resname.EndsWith("XmlTemplateData.xml") Then
-                    Dim stream As Stream = Reflection.Assembly.GetExecutingAssembly.GetManifestResourceStream(resname)
-                    Dim reader As New StreamReader(stream)
-                    XmlTemplateData = New Xml.XmlDocument
-                    XmlTemplateData.LoadXml(reader.ReadToEnd)
+                    Using stream As Stream = Reflection.Assembly.GetExecutingAssembly.GetManifestResourceStream(resname)
+                        Using reader As New StreamReader(stream)
+                            XmlTemplateData = New Xml.XmlDocument
+                            XmlTemplateData.LoadXml(reader.ReadToEnd)
+                        End Using
+                    End Using
                     Exit For
                 End If
             Next
@@ -176,9 +178,10 @@ Public Class WebInterfaceModule
 
         If Not UsuarioLogueado(session) And PaginaRequiereLogueo Then
             If PaginaAjax Then
-                Dim writer As New StreamWriter(response.Body)
-                writer.Write(ErrorAjax(Language.GetText("Error, session expired")))
-                writer.Flush()
+                Using writer As New StreamWriter(response.Body, System.Text.Encoding.UTF8, 1024, leaveOpen:=True)
+                    writer.Write(ErrorAjax(Language.GetText("Error, session expired")))
+                    writer.Flush()
+                End Using
                 Return False
             Else
                 response.Redirect(PaginaLogin)
@@ -275,10 +278,10 @@ Public Class WebInterfaceModule
                 response.Body.Write(bytes, 0, bytes.Length)
             End Using
         Else
-            Dim writer As New StreamWriter(response.Body)
-            writer.Write(ResponseBody)
-            writer.Flush()
-            ' No tenemos que cerrar el stream sino da error al ejecutar
+            Using writer As New StreamWriter(response.Body, System.Text.Encoding.UTF8, 1024, leaveOpen:=True)
+                writer.Write(ResponseBody)
+                writer.Flush()
+            End Using
         End If
     End Sub
 

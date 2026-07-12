@@ -257,21 +257,24 @@ Public Class StreamingLibraryManager
     End Function
 
     Private Shared Function CompressString(str As String) As Byte()
-        Dim mem As New IO.MemoryStream
-        Dim gz As New System.IO.Compression.GZipStream(mem, IO.Compression.CompressionMode.Compress)
-        Dim sw As New IO.StreamWriter(gz)
-        sw.Write(str)
-        sw.Close()
-        Return mem.ToArray
+        Using mem As New IO.MemoryStream
+            Using gz As New System.IO.Compression.GZipStream(mem, IO.Compression.CompressionMode.Compress, leaveOpen:=True)
+                Using sw As New IO.StreamWriter(gz, System.Text.Encoding.UTF8)
+                    sw.Write(str)
+                End Using
+            End Using
+            Return mem.ToArray
+        End Using
     End Function
 
     Private Shared Function UnCompressString(bytes() As Byte) As String
-        Dim mem2 As New IO.MemoryStream(bytes.ToArray)
-        Dim gz As New System.IO.Compression.GZipStream(mem2, IO.Compression.CompressionMode.Decompress)
-        Dim sr As New IO.StreamReader(gz)
-        Dim rs As String = sr.ReadToEnd
-        sr.Close()
-        Return rs
+        Using mem2 As New IO.MemoryStream(bytes.ToArray)
+            Using gz As New System.IO.Compression.GZipStream(mem2, IO.Compression.CompressionMode.Decompress)
+                Using sr As New IO.StreamReader(gz, System.Text.Encoding.UTF8)
+                    Return sr.ReadToEnd
+                End Using
+            End Using
+        End Using
     End Function
 
 End Class

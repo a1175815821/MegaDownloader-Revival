@@ -1,4 +1,4 @@
-﻿Public Partial Class ELCAccountControl
+Public Partial Class ELCAccountControl
 	Inherits System.Windows.Forms.UserControl
 	
 	Public Const PASSWORDDEFECTO As String = "*****"
@@ -129,7 +129,8 @@
 		End If
 	End Sub
 	
-	Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgELCUsers.CellClick	
+	Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgELCUsers.CellClick
+		If e.RowIndex < 0 Then Return
 		Dim aliasName As String = CStr(dgELCUsers.Rows(e.RowIndex).Cells(0).Value)
 		'Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.EventArgs) Handles dgELCUsers.SelectionChanged
 		'	
@@ -306,7 +307,7 @@
 	
 	
 	Private Sub lklELCUrl_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCUrl.MouseHover
-		t = New ToolTip
+		If t Is Nothing Then t = New ToolTip
 		t.SetToolTip(lklELCUrl, MsgUrlELCAccount)
 	End Sub
 	
@@ -324,7 +325,7 @@
 	
 	
 	Private Sub lklELCAliasAccount_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCAliasAccount.MouseHover
-		t = New ToolTip
+		If t Is Nothing Then t = New ToolTip
 		t.SetToolTip(lklELCAliasAccount, MsgAliasELCAccount)
 	End Sub
 	
@@ -342,7 +343,7 @@
 	
 	
 	Private Sub lklELCMainAccount_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCMainAccount.MouseHover
-		t = New ToolTip
+		If t Is Nothing Then t = New ToolTip
 		t.SetToolTip(lklELCMainAccount, MsgDefaultELCAccount)
 	End Sub
 	
@@ -360,7 +361,7 @@
 	
 	
 	Private Sub lklELCShowPassword_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCShowPassword.MouseHover
-		t = New ToolTip
+		If t Is Nothing Then t = New ToolTip
 		t.SetToolTip(lklELCShowPassword, MsgELCShowPassword)
 	End Sub
 	

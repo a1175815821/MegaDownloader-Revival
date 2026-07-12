@@ -209,28 +209,17 @@ Public Class Main
 
         Dim thisExe As System.Reflection.Assembly
         thisExe = System.Reflection.Assembly.GetExecutingAssembly()
-        Dim file As System.IO.Stream
 
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".config.png")
-        btnConfig.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".pause.png")
-        btnPause.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".play.png")
-        btnPlay.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".stop.png")
-        btnStop.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".addlink.png")
-        btnAddLink.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".download.png")
-        btnUpdate.Image = Image.FromStream(file)
-
-        file = thisExe.GetManifestResourceStream(thisExe.GetName.Name & ".collaborate.png")
-        btnCollaborate.Image = Image.FromStream(file)
+        ' Load embedded icon resources into independent MemoryStreams so the
+        ' underlying manifest streams can be closed immediately. Image.FromStream
+        ' requires the stream to remain open for the lifetime of the Image.
+        btnConfig.Image = LoadEmbeddedImage(thisExe, "config.png")
+        btnPause.Image = LoadEmbeddedImage(thisExe, "pause.png")
+        btnPlay.Image = LoadEmbeddedImage(thisExe, "play.png")
+        btnStop.Image = LoadEmbeddedImage(thisExe, "stop.png")
+        btnAddLink.Image = LoadEmbeddedImage(thisExe, "addlink.png")
+        btnUpdate.Image = LoadEmbeddedImage(thisExe, "download.png")
+        btnCollaborate.Image = LoadEmbeddedImage(thisExe, "collaborate.png")
 
         CrearMenus()
 
@@ -403,6 +392,22 @@ Public Class Main
         Me.StatusToolStripStatusLabel.Text = Language.GetText("Status: -")
         Me.RAMProcToolStripStatusLabel.Text = Language.GetText("RAM Proc Empty")
     End Sub
+
+    ''' <summary>
+    ''' 从嵌入式资源加载图像,复制到独立 MemoryStream 后立即释放清单流。
+    ''' Image.FromStream 要求 stream 在 Image 生命周期内保持打开,
+    ''' 此方法返回的 MemoryStream 由 Image 持有,窗体关闭时由 Button.Dispose 间接释放。
+    ''' </summary>
+    Private Shared Function LoadEmbeddedImage(asm As System.Reflection.Assembly, resourceName As String) As Image
+        Dim resName As String = asm.GetName.Name & "." & resourceName
+        Using stream As System.IO.Stream = asm.GetManifestResourceStream(resName)
+            If stream Is Nothing Then Return Nothing
+            Dim buffer(CInt(stream.Length - 1)) As Byte
+            stream.Read(buffer, 0, buffer.Length)
+            Dim ms As New System.IO.MemoryStream(buffer)
+            Return Image.FromStream(ms)
+        End Using
+    End Function
 
     Private Sub CrearMenus()
 
@@ -633,8 +638,10 @@ Public Class Main
 
         ' Liberamos resto de recursos
         IconoMinimizado.Dispose()
-        clipChange.DestroyHandle()
+        ' 先 Uninstall 取消剪贴板监听,再 DestroyHandle 释放窗口句柄。
+        ' 原顺序反了会导致监听器在句柄已销毁后仍触发一次回调引发异常。
         clipChange.Uninstall()
+        clipChange.DestroyHandle()
 
         System.Windows.Forms.Application.Exit()
 
@@ -1540,6 +1547,7 @@ Public Class Main
             If Not bgwActualizadorDatosDiscoCompleted Then TodosFinalizados = False
             If Not bgwComprobarMaxConexionesCompleted Then TodosFinalizados = False
             If Not bgwActualizadorListaDescargasCompleted Then TodosFinalizados = False
+            If Not bgwDescompresorCompleted Then TodosFinalizados = False
             System.Threading.Thread.Sleep(100)
 
             If Ini.AddSeconds(TimeoutSeg) < Now Then TodosFinalizados = True

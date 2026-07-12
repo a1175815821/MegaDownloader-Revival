@@ -1,4 +1,4 @@
-﻿Public Class StreamingHelper
+Public Class StreamingHelper
 	
 	
 	
@@ -82,7 +82,7 @@
 		If TempStreamingCache.ContainsKey(key) Then
 			TempID = TempStreamingCache(key)
 		Else
-			TempID = ((TempStreamingCache.Keys.Count / 2) + 1).ToString
+			TempID = ((TempStreamingCache.Keys.Count \ 2) + 1).ToString
 			TempStreamingCache(key) = TempID
 			TempStreamingCache(TempID) = key
 		End If

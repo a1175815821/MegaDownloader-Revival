@@ -1,4 +1,4 @@
-﻿Imports System.Text.RegularExpressions
+Imports System.Text.RegularExpressions
 
 Public Class AddLinks
 	
@@ -297,7 +297,7 @@ Public Class AddLinks
     End Function
 
     Private Sub LinkLabel1_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel1.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip
         t.SetToolTip(LinkLabel1, MsgVerOnline)
     End Sub
 
@@ -316,7 +316,7 @@ Public Class AddLinks
     End Sub
 
     Private Sub LinkLabel2_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel2.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip
         t.SetToolTip(LinkLabel2, MsgPasswordZip)
     End Sub
 

@@ -119,7 +119,12 @@ Public Class StreamingLibraryModule
     Private Function UsuarioLogueado(ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         Dim resultado As Boolean = (session("Logueado") IsNot Nothing AndAlso CStr(session("Logueado")) = "1")
         If resultado And Me._TimeoutSesion > 0 And session("LoginDate") IsNot Nothing AndAlso TypeOf (session("LoginDate")) Is Date Then
-            resultado = CDate(session("LoginDate")).AddSeconds(Me._TimeoutSesion) > Now
+            ' 超时则清除登录状态,避免 session 永远停留在已过期的时间戳上
+            If CDate(session("LoginDate")).AddSeconds(Me._TimeoutSesion) <= Now Then
+                session("Logueado") = Nothing
+                session("LoginDate") = Nothing
+                resultado = False
+            End If
         End If
         Return resultado
     End Function
@@ -238,10 +243,12 @@ Public Class StreamingLibraryModule
 
                     If request.Param.Item("ID") Is Nothing OrElse Not IsNumeric(request.Param.Item("ID").Value) Then
                         PrepareAjaxResponse("ID not specified")
+                        Return True
                     End If
 
                     StreamingLibraryManager.RemoveElement(request.Param.Item("ID").Value)
                     PrepareAjaxResponse("")
+                    Return True
 
                 Case "Save"
 

@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 
 Namespace Stegano
     Public Class SteganoManager
@@ -22,36 +22,44 @@ Namespace Stegano
             Dim img As Image
 
             If System.IO.File.Exists(Input) Then
-                ' From file
-                img = Image.FromFile(Input)
+                ' From file - use FileStream so the file is not locked after loading
+                Dim fs As New IO.FileStream(Input, IO.FileMode.Open, IO.FileAccess.Read, IO.FileShare.Read)
+                Try
+                    img = Image.FromStream(fs)
+                Finally
+                    fs.Close()
+                End Try
             Else
                 ' From URL
                 Using webClient As New Net.WebClient()
                     Dim imgBytes = webClient.DownloadData(Input)
-                    Using mem As New MemoryStream(imgBytes)
-                        img = Image.FromStream(mem)
-                    End Using
-
+                    Dim mem As New MemoryStream(imgBytes)
+                    img = Image.FromStream(mem) ' mem 必须在 img 使用期间保持打开
                 End Using
             End If
 
 
             ' Save it into an image
             Using img
-                Using jpg As New F5.James.JpegEncoder(img, System.IO.File.OpenWrite(Output), Nothing, Quality)
+                Dim outStream As IO.FileStream = IO.File.OpenWrite(Output)
+                Try
+                    Using jpg As New F5.James.JpegEncoder(img, outStream, Nothing, Quality)
 
-                    jpg.Compress(New IO.MemoryStream(data), System.Text.Encoding.Unicode.GetBytes(Password))
+                        jpg.Compress(New IO.MemoryStream(data), System.Text.Encoding.Unicode.GetBytes(Password))
 
-                    Dim MaxSize = jpg.MaxSizeToEmbed * 0.8 ' For security we consider 80% of capacity
+                        Dim MaxSize = jpg.MaxSizeToEmbed * 0.8 ' For security we consider 80% of capacity
 
-                    Dim fileSize As Long = data.Length
-                    Dim K_Used As Integer = jpg.K_Used
+                        Dim fileSize As Long = data.Length
+                        Dim K_Used As Integer = jpg.K_Used
 
-                    If MaxSize < fileSize Then
-                        Throw New ApplicationException(Language.GetText("Warning: image too small, maybe the data is corrupted"))
-                    End If
+                        If MaxSize < fileSize Then
+                            Throw New ApplicationException(Language.GetText("Warning: image too small, maybe the data is corrupted"))
+                        End If
 
-                End Using
+                    End Using
+                Finally
+                    outStream.Close()
+                End Try
             End Using
 
 

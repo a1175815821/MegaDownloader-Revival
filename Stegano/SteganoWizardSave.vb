@@ -1,4 +1,4 @@
-﻿Namespace Stegano
+Namespace Stegano
     Public Class SteganoWizardSave
 
 
@@ -137,7 +137,7 @@
       
 
         Private Sub helpVisibleLinks_MouseHover(sender As Object, e As System.EventArgs) Handles helpVisibleLinks.MouseHover
-            t = New ToolTip
+            If t Is Nothing Then t = New ToolTip
             t.SetToolTip(helpVisibleLinks, MsgVisibleLinksHelp)
         End Sub
 

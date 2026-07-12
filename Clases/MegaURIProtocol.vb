@@ -1,4 +1,4 @@
-﻿Imports Microsoft.Win32
+Imports Microsoft.Win32
 Imports System.Security.Principal
 Imports System.IO
 
@@ -9,8 +9,9 @@ Public Class MegaURIProtocol
 
     Public Const UrlProtocol As String = "mega"
     Public Shared Function RegisterUrlProtocol() As Exception
+        Dim rKey As RegistryKey = Nothing
         Try
-            Dim rKey As RegistryKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol, False)
+            rKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol, False)
 
             If rKey Is Nothing Then
                 rKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol)
@@ -19,24 +20,24 @@ Public Class MegaURIProtocol
 
                 'Dim rKeyIcon As RegistryKey = rKey.CreateSubKey("DefaultIcon")
                 'rKeyIcon.SetValue("", """" & iconFilePath & """")
+                If rKey IsNot Nothing Then rKey.Close()
 
-                rKey = rKey.CreateSubKey("shell\open\command")
+                rKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol & "\shell\open\command")
                 rKey.SetValue("", """" & Application.ExecutablePath & """ %1")
                 Log.WriteError("MEGA URI protocol added to registry.")
             Else
-                rKey = rKey.OpenSubKey("shell\open\command", False) ' Check if path has to be updated
                 Dim val As String = """" & Application.ExecutablePath & """ %1"
-                If rKey Is Nothing Then
-                    rKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol & "\shell\open\command")
-                End If
-                If rKey Is Nothing OrElse rKey.GetValue("") Is Nothing OrElse CStr(rKey.GetValue("")) <> val Then
-                    rKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol & "\shell\open\command", True)
-                    rKey.SetValue("", val)
-                End If
 
-            End If
-            If rKey IsNot Nothing Then
-                rKey.Close()
+                Dim subKey As RegistryKey = rKey.OpenSubKey("shell\open\command", False)
+                If subKey Is Nothing Then
+                    subKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol & "\shell\open\command")
+                End If
+                If subKey Is Nothing OrElse subKey.GetValue("") Is Nothing OrElse CStr(subKey.GetValue("")) <> val Then
+                    If subKey IsNot Nothing Then subKey.Close()
+                    subKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol & "\shell\open\command", True)
+                    If subKey IsNot Nothing Then subKey.SetValue("", val)
+                End If
+                If subKey IsNot Nothing Then subKey.Close()
             End If
             Return Nothing
         Catch ex As UnauthorizedAccessException
@@ -51,6 +52,8 @@ Public Class MegaURIProtocol
             Log.WriteError("Error accessing the registry for registering MEGA URI protocol. Error: " & ex.ToString)
             Return ex
 
+        Finally
+            If rKey IsNot Nothing Then rKey.Close()
         End Try
     End Function
 
