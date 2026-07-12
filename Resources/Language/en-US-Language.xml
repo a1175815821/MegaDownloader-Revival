@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Language id="en-US" name="English" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Loading...]]></Text>
   <Text key="Loading please wait"><![CDATA[Loading, please wait...]]></Text>
@@ -80,7 +80,6 @@ If you exit now, the extracted files can be corrupted and you will have to extra
   <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
   <Text key="&amp;Collaborate"><![CDATA[&Contribute]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[See lo&gs]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Get MegaUploa&der]]></Text>
   <Text key="&amp;About"><![CDATA[&About MegaDownloader]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[Manage &Library]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[See Li&brary]]></Text>

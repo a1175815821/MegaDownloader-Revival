@@ -1,4 +1,4 @@
-﻿Imports BrightIdeasSoftware
+Imports BrightIdeasSoftware
 Imports System.ComponentModel
 Imports System.Runtime.InteropServices
 
@@ -494,12 +494,8 @@ Public Class Main
         Dim FAQ As New MenuItem(Language.GetText("FA&Q"))
         AddHandler (FAQ.Click), AddressOf FAQ_Click
 
-        Dim GetMegaUploader As New MenuItem(Language.GetText("Get MegaUploa&der"))
-        AddHandler (GetMegaUploader.Click), AddressOf GetMegaUploader_Click
         Dim About As New MenuItem(Language.GetText("&About"))
         AddHandler (About.Click), AddressOf About_Click
-        'Dim Colabora As New MenuItem(Language.GetText("&Collaborate"))
-        'AddHandler (Colabora.Click), AddressOf Collaborate_Click
 
         Dim CheckUpdates As New MenuItem(Language.GetText("Chec&k for updates"))
         AddHandler (CheckUpdates.Click), AddressOf CheckUpdates_Click
@@ -508,7 +504,6 @@ Public Class Main
         Ayuda.MenuItems.Add(CheckUpdates)
         Ayuda.MenuItems.Add("-")
         Ayuda.MenuItems.Add(FAQ)
-        Ayuda.MenuItems.Add(GetMegaUploader)
         Ayuda.MenuItems.Add("-")
         Ayuda.MenuItems.Add(About)
 
@@ -2515,32 +2510,6 @@ Public Class Main
         End If
     End Sub
 
-    Private Sub GetMegaUploader_Click(sender As System.Object, e As System.EventArgs)
-        Dim codIdi As String = Language.GetCurrentLanguageCode.ToUpperInvariant
-        Dim MegaUploaderLink As String
-        If codIdi.StartsWith("ES") Then
-            MegaUploaderLink = InternalConfiguration.ObtenerValueFromInternalConfig("MEGAUPLOADER_LINK_ES")
-        Else
-            MegaUploaderLink = InternalConfiguration.ObtenerValueFromInternalConfig("MEGAUPLOADER_LINK_EN")
-        End If
-
-
-        Dim Key As String = Fichero.ExtraerFileKey(MegaUploaderLink)
-        'If String.IsNullOrEmpty(Key) AndAlso Fichero.EsUrlAcortador(MegaUploaderLink) Then
-        '    Dim url As String = Conexion.ObtenerUrlDesdeAcortador(MegaUploaderLink)
-        '    Key = Fichero.ExtraerFileKey(MegaUploaderLink)
-        'End If
-
-        If String.IsNullOrEmpty(Key) Then
-            ' Parece que no es un link de mega, será un link directo al ejecutable...
-            System.Diagnostics.Process.Start(MegaUploaderLink)
-        Else
-            AgregarLink(MegaUploaderLink, "MegaUploader", True, False)
-        End If
-
-    End Sub
-
-
     Private Sub Buscador_Click(sender As System.Object, e As System.EventArgs)
         Dim tag = CType(sender, System.Windows.Forms.MenuItem).Text
 
@@ -3086,12 +3055,23 @@ Public Class Main
                 Throw New ApplicationException(Language.GetText("The path is not valid"))
             End If
 
+            If Not System.IO.File.Exists(Path) Then
+                Throw New ApplicationException(Language.GetText("The path is not valid"))
+            End If
+
             If Path.ToLower.EndsWith(".elc") Then
-                Dim ELC As String = DLCHelper.ReadELC_File(Path)
+                Dim ELC As New System.Text.StringBuilder
+                Using t As New System.IO.StreamReader(Path)
+                    ELC.Append(t.ReadToEnd())
+                End Using
+                If ELC.Length = 0 Then
+                    Throw New ApplicationException("ELC file is empty")
+                End If
                 DLCResults = New Generic.List(Of String)
-                DLCResults.Add("mega://" & URLExtractor.SERVERENCODEDPREFIX & ELC)
+                DLCResults.Add("mega://" & URLExtractor.SERVERENCODEDPREFIX & ELC.ToString())
             Else
-                DLCResults = DLCHelper.DecryptDLC_File(Path)
+                ' DLC decryption service (dcrypt.it) has been discontinued.
+                Throw New ApplicationException("DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead.")
             End If
 
         Catch ex As Exception

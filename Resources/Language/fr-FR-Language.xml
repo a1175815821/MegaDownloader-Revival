@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Language id="fr-FR" name="Francais" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Chargement...]]></Text>
   <Text key="Loading please wait"><![CDATA[Chargement, patientez s'il vous plaît ...]]></Text>
@@ -241,7 +241,6 @@ NOTE: Cette option n'est pas enregistré, vous devez activer chaque fois que vou
   
   <Text key="See decompression progress"><![CDATA[Voir l'etat de la decompression]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[Voir lo&gs]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Obtenez MegaUploa&der]]></Text>
   <Text key="Pre-Shared Keys Manager"><![CDATA[Gestion des Pre-Shared Keys]]></Text>
   <Text key="Pre-Shared Key list"><![CDATA[Pre-Shared Key list]]></Text>
   <Text key="Pre-Shared Keys"><![CDATA[Pre-Shared Keys]]></Text>

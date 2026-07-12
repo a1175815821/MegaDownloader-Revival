@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="zh-TW" name="Traditional Chinese" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[載入中...]]></Text>
   <Text key="Loading please wait"><![CDATA[載入中請稍候...]]></Text>
@@ -71,7 +71,6 @@
   <Text key="FA&amp;Q"><![CDATA[問與答(&Q)]]></Text>
   <Text key="&amp;Collaborate"><![CDATA[貢獻(&C)]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[檢視記錄(&G)]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[取得 MegaUploader(&D)]]></Text>
   <Text key="&amp;About"><![CDATA[關於 MegaDownloader(&A)]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[管理媒體庫(&L)]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[檢視媒體庫(&B)]]></Text>

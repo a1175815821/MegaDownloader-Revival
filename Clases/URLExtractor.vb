@@ -1,4 +1,4 @@
-﻿Imports System.Text.RegularExpressions
+Imports System.Text.RegularExpressions
 
 Public Class URLExtractor
 
@@ -18,16 +18,9 @@ Public Class URLExtractor
 
     Public Const SERVERENCODEDPREFIX As String = "elc?"
 
-    Public Const MEGACRYPTERTOKEN As String = "megacrypter.com"
-    Public Const YOUPASTETOKEN As String = "youpaste.co"
-    Public Const ENCRYPTERMEGATOKEN As String = "encrypterme.ga"
-    Public Const LINKCRYPTERTOKEN As String = "linkcrypter.net"
-
     Private Shared ReadOnly patternHTTPURI() As String = _
         {"(http://|https://|)mega.co.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
          "(http://|https://|)mega.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-        "(http://|https://|)megashur.se/out.php\?m=(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-        "chrome://mega/content/secure.html(?<MODE2>#|#F|#N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
         "(http://|https://|)mega.nz/file/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
         "(http://|https://|)mega.nz/folder/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
         "(http://|https://|)mega.co.nz/file/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
@@ -44,18 +37,8 @@ Public Class URLExtractor
     Private Shared ReadOnly patternELCUri() As String = _
         {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>elc(\?|/\?))(?<ENCODED_FILEID>[\w-]+)"}
 
-    Private Shared ReadOnly patternOthers() As String = _
-        {"(http://|https://|)megacrypter.com/!(?<MEGACRYPTER1>[^\!]+)(!(?<MEGACRYPTER2>[\w-]+))?", _
-         "(http://|https://|)youpaste.co/!(?<YOUPASTE1>[^\!]+)(!(?<YOUPASTE2>[\w-]+))?", _
-         "(http://|https://|)linkcrypter.net/!(?<CRYPTER1>[^\!]+)(!(?<CRYPTER2>[\w-]+))?", _
-         "(http://|https://|)encrypterme.ga/!(?<ENCRYPTERMEGA1>[^\!]+)(!(?<ENCRYPTERMEGA2>[\w-]+))?", _
-         "(http://|https://|)lix.in/(?<LINKPROTECTOR>[-,0-9a-zA-Z]+)", _
-         "(http://|https://|)j.gs/(?<LINKPROTECTOR>[-,0-9a-zA-Z/]+)", _
-         "(http://|https://|)q.gs/(?<LINKPROTECTOR>[-,0-9a-zA-Z/]+)", _
-         "(http://|https://|)adf.ly/(?<LINKPROTECTOR>[-,0-9a-zA-Z/]+)"}
-
     Private Shared Function patternGetInfoURL() As String()
-        Return patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).Concat(patternOthers).ToArray
+        Return patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray
     End Function
 
 
@@ -72,7 +55,7 @@ Public Class URLExtractor
     Friend Shared Function IsMegaFolder(ByVal URI As String) As Boolean
         Dim Result As Boolean = False
         If String.IsNullOrEmpty(URI) Then Return False
-        Result = URI.Contains("mega.co.nz/#F!") Or URI.Contains("mega.nz/#F!") Or URI.Contains("chrome://mega/content/secure.html#F!") Or URI.Contains("mega.nz/folder/") Or URI.Contains("mega.co.nz/folder/") ' Enlaces de mega
+        Result = URI.Contains("mega.co.nz/#F!") Or URI.Contains("mega.nz/#F!") Or URI.Contains("mega.nz/folder/") Or URI.Contains("mega.co.nz/folder/") ' Enlaces de mega
 
         If Not Result Then ' Enlaces mega sin codificar
             For Each pattern As String In patternGetInfoURL()
@@ -257,68 +240,13 @@ Public Class URLExtractor
             End If
         Next
 
-        ' 3) Other
-        ' Examples:
-        ' http://megacrypter.com/!SBUrRSgxIFWj6wJAjeHODZLk!fbc44ffa
-        For Each pattern As String In patternOthers
-            regx = New Regex(pattern, RegexOptions.IgnoreCase)
-
-            matches = regx.Matches(Texto)
-
-            For Each match As Match In matches
-                Dim url As String = match.Value.Trim
-
-                If url.ToLower.Contains(MEGACRYPTERTOKEN.ToLower) Then
-                    Dim Dato1 As String = match.Groups("MEGACRYPTER1").Value
-                    Dim Dato2 As String = match.Groups("MEGACRYPTER2").Value
-                    If Not String.IsNullOrEmpty(Dato1) And Not String.IsNullOrEmpty(Dato2) Then
-                        links.Add(url)
-                    End If
-                End If
-
-                ' YouPaste
-                If url.ToLower.Contains(YOUPASTETOKEN.ToLower) Then
-                    Dim Dato1 As String = match.Groups("YOUPASTE1").Value
-                    Dim Dato2 As String = match.Groups("YOUPASTE2").Value
-                    If Not String.IsNullOrEmpty(Dato1) And Not String.IsNullOrEmpty(Dato2) Then
-                        links.Add(url)
-                    End If
-                End If
-
-                ' Encrypterme.ga
-                If url.ToLower.Contains(ENCRYPTERMEGATOKEN.ToLower) Then
-                    Dim Dato1 As String = match.Groups("ENCRYPTERMEGA1").Value
-                    Dim Dato2 As String = match.Groups("ENCRYPTERMEGA2").Value
-                    If Not String.IsNullOrEmpty(Dato1) And Not String.IsNullOrEmpty(Dato2) Then
-                        links.Add(url)
-                    End If
-                End If
-
-                ' Linkcrypter.net
-                If url.ToLower.Contains(LINKCRYPTERTOKEN.ToLower) Then
-                    Dim Dato1 As String = match.Groups("CRYPTER1").Value
-                    Dim Dato2 As String = match.Groups("CRYPTER2").Value
-                    If Not String.IsNullOrEmpty(Dato1) And Not String.IsNullOrEmpty(Dato2) Then
-                        links.Add(url)
-                    End If
-                End If
-
-                ' Link protector
-                If Not String.IsNullOrEmpty(match.Groups("LINKPROTECTOR").Value) Then
-                    links.Add(url)
-                End If
-            Next
-
-        Next
-
         Return links.ToList
     End Function
 
 
 
     Public Shared Function EsUrlAcortador(ByVal URL As String) As Boolean
-        If String.IsNullOrEmpty(URL) Then Return False
-        If URL.ToLower.Contains("goo.gl") Then Return True ' De momento solo soportamos google shortener
+        ' goo.gl 短链服务已于 2019 年 3 月停止解析,已无支持的短链服务
         Return False
     End Function
 
@@ -458,14 +386,6 @@ Public Class URLExtractor
                     Return match.Groups("MEGASEARCH").Value & match.Groups("MEGASEARCH_FILEID").Value.Trim("/"c)
                 ElseIf Not String.IsNullOrEmpty(match.Groups("ENCODED_FILEID").Value) Then
                     Return match.Groups("BASIC_ENCODE").Value & match.Groups("ENCODED_FILEID").Value.Trim("/"c)
-                ElseIf Not String.IsNullOrEmpty(match.Groups("MEGACRYPTER1").Value) And Not String.IsNullOrEmpty(match.Groups("MEGACRYPTER2").Value) Then
-                    Return MEGACRYPTERTOKEN & "$" & match.Groups("MEGACRYPTER1").Value & "$" & match.Groups("MEGACRYPTER2").Value
-                ElseIf Not String.IsNullOrEmpty(match.Groups("YOUPASTE1").Value) And Not String.IsNullOrEmpty(match.Groups("YOUPASTE2").Value) Then
-                    Return YOUPASTETOKEN & "$" & match.Groups("YOUPASTE1").Value & "$" & match.Groups("YOUPASTE2").Value
-                ElseIf Not String.IsNullOrEmpty(match.Groups("CRYPTER1").Value) And Not String.IsNullOrEmpty(match.Groups("CRYPTER2").Value) Then
-                    Return LINKCRYPTERTOKEN & "$" & match.Groups("CRYPTER1").Value & "$" & match.Groups("CRYPTER2").Value
-                ElseIf Not String.IsNullOrEmpty(match.Groups("ENCRYPTERMEGA1").Value) And Not String.IsNullOrEmpty(match.Groups("ENCRYPTERMEGA2").Value) Then
-                    Return ENCRYPTERMEGATOKEN & "$" & match.Groups("ENCRYPTERMEGA1").Value & "$" & match.Groups("ENCRYPTERMEGA2").Value
                 Else
                     Dim fileID = match.Groups("FileID").Value & ""
 

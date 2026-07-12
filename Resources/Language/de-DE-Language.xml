@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="de-DE" name="German" app="MegaDownloader">
   <Text key="Loading please wait"><![CDATA[Laden, bitte warten ...]]></Text>
   <Text key="Closing please wait"><![CDATA[Closing, bitte warten ...]]></Text>
@@ -203,7 +203,6 @@ WARNUNG: Diese Option wird nicht gespeichert, müssen Sie es aktivieren jedes Ma
   <!-- TRANSLATION MISSING -->
   <Text key="See decompression progress"><![CDATA[See decompression progress]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[See lo&gs]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Get MegaUploa&der]]></Text>
   <Text key="Pre-Shared Keys Manager"><![CDATA[Pre-Shared Keys Manager]]></Text>
   <Text key="Pre-Shared Key list"><![CDATA[Pre-Shared Key list]]></Text>
   <Text key="Pre-Shared Keys"><![CDATA[Pre-Shared Keys]]></Text>

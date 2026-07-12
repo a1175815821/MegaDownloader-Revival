@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Security
 Imports System.Xml
 Imports System.Text.RegularExpressions
@@ -22,39 +22,8 @@ Public Class StreamingLibraryManager
     End Sub
 
     Public Shared Function ProcessByNameAndAddElement(Name As String, Description As String, Comments As String, Poster As String, Link As String, LinkVisible As Boolean, IMDB As String, Allocine As String, Filmaffinity As String) As LibraryElement
-        ' Fill automatically from imdb/filmaffinity/allocine by file name
-
-        Dim regexList() As String = _
-                {"\[film(?<FILMAFFINITY>[\d]*)\]", _
-                 "\[tt(?<IMDB>[\d]*)\]", _
-                 "\[allocine(?<ALLOCINE>[\d]*)\]"}
-
-        If Not String.IsNullOrEmpty(Name) Then
-            For Each pattern As String In regexList
-                Dim regex = New System.Text.RegularExpressions.Regex(pattern)
-                If regex.IsMatch(Name) Then
-                    Dim match = regex.Match(Name)
-
-                    If Not String.IsNullOrEmpty(match.Groups("FILMAFFINITY").Value) Then
-
-                        Filmaffinity = match.Groups("FILMAFFINITY").Value
-
-                    ElseIf Not String.IsNullOrEmpty(match.Groups("IMDB").Value) Then
-
-                        IMDB = match.Groups("IMDB").Value
-
-                    ElseIf Not String.IsNullOrEmpty(match.Groups("ALLOCINE").Value) Then
-
-                        Allocine = match.Groups("ALLOCINE").Value
-                    End If
-                End If
-            Next
-        End If
-
-
-        MegaDownloader.IMDB.FillMissingFields(IMDB, Name, Poster, Description)
-        MegaDownloader.Allocine.FillMissingFields(Allocine, Name, Poster, Description)
-        MegaDownloader.Filmaffinity.FillMissingFields(Filmaffinity, Name, Poster, Description)
+        ' Movie info services (IMDB/Allocine/Filmaffinity) have been removed because of API changes.
+        ' Only the ID values are kept for manual cataloging.
 
         Return AddElement(Name, Description, Comments, Poster, Link, LinkVisible, IMDB, Allocine, Filmaffinity)
     End Function

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
   <Language id="pt-BR" name="Português (Brasil)" app="MegaDownloader">
     <Text key="Loading..."><![CDATA[Carregando...]]></Text>
     <Text key="Loading please wait"><![CDATA[Carregando, por favor aguarde...]]></Text>
@@ -69,7 +69,6 @@
     <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
     <Text key="&amp;Collaborate"><![CDATA[&Contribua]]></Text>
     <Text key="See lo&amp;gs"><![CDATA[Ver lo&gs]]></Text>
-    <Text key="Get MegaUploa&amp;der"><![CDATA[Baixar MegaUploa&der]]></Text>
     <Text key="&amp;About"><![CDATA[&Sobre o MegaDownloader]]></Text>
     <Text key="Manage Streaming &amp;Library"><![CDATA[Editar &Biblioteca]]></Text>
     <Text key="See Streaming &amp;Library"><![CDATA[Ver &Biblioteca]]></Text>

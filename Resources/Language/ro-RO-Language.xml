@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="ro-RO" name="Romanian" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Loading...]]></Text>
   <Text key="Loading please wait"><![CDATA[Încarc asteaptă un moment...]]></Text>
@@ -71,7 +71,6 @@ Dacă ieșiți acum, fișierele pot fi corupte la extragere și va trebui să le
   <Text key="FA&amp;Q"><![CDATA[Întrebări frecvente&]]></Text>
   <Text key="&amp;Collaborate"><![CDATA[&Contribuții]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[Vezi &jurnalele]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Ia MegaUploa&der]]></Text>
   <Text key="&amp;About"><![CDATA[&Despre MegaDownloader]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[Gestionează & Biblioteca]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[Vezi &Biblioteca]]></Text>

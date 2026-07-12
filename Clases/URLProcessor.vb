@@ -1,4 +1,4 @@
-﻿Public Class URLProcessor
+Public Class URLProcessor
 
     Public Class FileURL
 
@@ -14,20 +14,9 @@
 
     Public Shared Function ProcessURLs(ByVal URLs As Generic.List(Of String), ByRef Config As Configuracion) As Generic.List(Of FileURL)
 
-        ' Contenedores de links
-        Dim URLs2 As New Generic.List(Of String)
-        For Each URL As String In URLs
-            If LinkProtectors.IsLinkProtector(URL) Then
-                URLs2.AddRange(LinkProtectors.ExtraerURLs(URL))
-            Else
-                URLs2.Add(URL)
-            End If
-        Next
-
-
         ' Convertimos los links de MegaFolder a links individuales
         Dim URLs3 As New Generic.List(Of FileURL)
-        For Each URL As String In URLs2
+        For Each URL As String In URLs
             If URLExtractor.IsMegaFolder(URL) Then
                 Dim FolderID As String = URLExtractor.ExtraerFileID(URL)
                 Dim FolderKey As String = URLExtractor.ExtraerFileKey(URL)

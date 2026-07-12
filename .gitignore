@@ -117,3 +117,13 @@ Resources/Installer MSD/*.wixpdb
 # 运行时生成的用户配置
 MegaDownloader.config
 InternalConfig.local.xml
+
+# -------------------------------
+# 发布/构建临时文件
+# -------------------------------
+release-staging/
+release-stage/
+
+# TRAE IDE 临时文件
+.trae/
+TODO/

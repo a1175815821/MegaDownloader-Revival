@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="hu-HU" name="Hungarian" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Betöltés...]]></Text>
   <Text key="Loading please wait"><![CDATA[Betöltés, kérlek várj...]]></Text>
@@ -71,7 +71,6 @@ Ha kilépsz, félbemarad a művelet és később neked kell manuálisan kibontan
   <Text key="FA&amp;Q"><![CDATA[Le&írás]]></Text>
   <Text key="&amp;Collaborate"><![CDATA[&Támogatás]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[Na&pló]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Get MegaUploa&der]]></Text>
   <Text key="&amp;About"><![CDATA[&MegaDownloader névjegye]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[&Könyvtár rendezés]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[Kö&nyvtár]]></Text>

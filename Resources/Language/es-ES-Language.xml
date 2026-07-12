@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Language id="es-ES" name="Español" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Cargando...]]></Text>
   <Text key="Loading please wait"><![CDATA[Cargando, por favor espere...]]></Text>
@@ -76,7 +76,6 @@ Si sale ahora, los ficheros extraídos pueden quedar inservibles y tendrá que d
   <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
   <Text key="&amp;Collaborate"><![CDATA[&Colaborar]]></Text>
   <Text key="See lo&amp;gs"><![CDATA[Ver lo&gs]]></Text>
-  <Text key="Get MegaUploa&amp;der"><![CDATA[Descargar MegaUpl&oader]]></Text>
   <Text key="&amp;About"><![CDATA[Acerca &de MegaDownloader]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[Editar bib&lioteca]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[Ver &biblioteca]]></Text>
