@@ -1,4 +1,4 @@
-﻿Imports System.Xml
+Imports System.Xml
 Imports System.IO
 Imports System.Security
 
@@ -157,7 +157,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("CrearDirectorioPaquete")).InnerText = CrearDirectorioPaquete.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("AnalizarPortapapeles")).InnerText = AnalizarPortapapeles.ToString
 		'Xml.DocumentElement.AppendChild(Xml.CreateElement("PermitirSkins")).InnerText = PermitirSkins.ToString
-        'Xml.DocumentElement.AppendChild(Xml.CreateElement("MaxConexionesGuardadas")).InnerText = MaxConexionesGuardadas.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("MaxConexionesGuardadas")).InnerText = MaxConexionesGuardadas.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("TamanoPaqueteKB")).InnerText = TamanoPaqueteKB.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("TamanoBufferKB")).InnerText = TamanoBufferKB.ToString
@@ -166,8 +166,8 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ConexionesPorFichero")).InnerText = ConexionesPorFichero.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
-		
-		' Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
+
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
 		
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ComenzarDescargando")).InnerText = ComenzarDescargando.ToString
 
@@ -341,7 +341,7 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "IniciarConWindows", "false"), IniciarConWindows)
 		Boolean.TryParse(LeerNodo(Xml, "MantenerUltimaConfiguracion", "true"), MantenerUltimaConfiguracion)
         Boolean.TryParse(LeerNodo(Xml, "ComenzarDescargando", "true"), ComenzarDescargando)
-		'Boolean.TryParse(LeerNodo(Xml, "ApagarPC", "false"), ApagarPC)
+		Boolean.TryParse(LeerNodo(Xml, "ApagarPC", "false"), ApagarPC)
 		TamanoPaqueteKB = 50
 		TamanoBufferKB = 750
         MaxConexionesGuardadas = 100
@@ -352,7 +352,7 @@ Public Class Configuracion
 		Integer.TryParse(LeerNodo(Xml, "TamanoBufferKB", "750"), TamanoBufferKB)
 		Integer.TryParse(LeerNodo(Xml, "ProxyPort", "0"), ProxyPort)
 		Integer.TryParse(LeerNodo(Xml, "LimiteVelocidadKBs", "0"), LimiteVelocidadKBs)
-        'Integer.TryParse(LeerNodo(Xml, "MaxConexionesGuardadas", "100"), MaxConexionesGuardadas)
+        Integer.TryParse(LeerNodo(Xml, "MaxConexionesGuardadas", "100"), MaxConexionesGuardadas)
 		Integer.TryParse(LeerNodo(Xml, "ResetearErroresPeriodoMinutos", "15"), ResetearErroresPeriodoMinutos)
         If ResetearErroresPeriodoMinutos < 1 Or ResetearErroresPeriodoMinutos > 999 Then
             ResetearErroresPeriodoMinutos = 15
@@ -418,7 +418,7 @@ Public Class Configuracion
 			Me.ListaPreSharedKeys.Add(Criptografia.DecryptString_DPAPI(keynode.InnerText))
 		Next
 		
-		If _Usuario.Length = 0 Or _Password.Length = 0 Then
+		If _Usuario Is Nothing OrElse _Password Is Nothing OrElse _Usuario.Length = 0 Or _Password.Length = 0 Then
 			'ErrorConfig = ErrorConfigClass.Usuario_Password_Incorrecto
 		End If
 		If ConexionesPorFichero = 0 Then
@@ -479,18 +479,22 @@ Public Class Configuracion
 	End Sub
 	
 	Public Shared Sub RegisterInStartup(isChecked As Boolean)
-		Try 
+		Try
 
 			Dim registryKey As Microsoft.Win32.RegistryKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\Microsoft\Windows\CurrentVersion\Run", True)
-			If registryKey Is Nothing and isChecked Then
+			If registryKey Is Nothing And isChecked Then
 	    		registryKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE\Microsoft\Windows\CurrentVersion\Run")
 	    	End If
+			If registryKey Is Nothing Then
+				' Could not open/create the registry key; nothing else to do.
+				Return
+			End If
 			If isChecked Then
 				registryKey.SetValue("MegaDownloader", """" & Application.ExecutablePath & """ -silent")
 			Else
 				registryKey.DeleteValue("MegaDownloader", False)
 			End If
-			
+
 		Catch ex As UnauthorizedAccessException
             Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry (CU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run). Execute the application with administrator privileges (at least one time) in order to access the registry. Please note that if you move the application, you will have to execute it again with administrator privileges.")
           

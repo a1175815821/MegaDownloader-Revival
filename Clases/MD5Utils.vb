@@ -1,4 +1,4 @@
-﻿Public Class MD5Utils
+Public Class MD5Utils
     ' specify the path to a file and this routine will calculate your hash
     Public Shared Function MD5CalcFile(ByVal filepath As String) As String
 
@@ -26,7 +26,7 @@
         Dim md5Hasher As Security.Cryptography.MD5 = Security.Cryptography.MD5.Create()
 
         ' Convert the input string to a byte array and compute the hash.
-        Dim data As Byte() = md5Hasher.ComputeHash(System.Text.Encoding.[Default].GetBytes(str))
+        Dim data As Byte() = md5Hasher.ComputeHash(System.Text.Encoding.UTF8.GetBytes(str))
 
         ' Create a new Stringbuilder to collect the bytes
         ' and create a string.

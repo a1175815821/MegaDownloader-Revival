@@ -1,4 +1,4 @@
-﻿Public Class ServidorWebController
+Public Class ServidorWebController
 
     Private Shared _WebServer As HttpServer.HttpServer = Nothing
     Private Shared _WebServerStreaming As HttpServer.HttpServer = Nothing
@@ -34,7 +34,7 @@
                                                 Config.ServidorWebNombre, _
                                                 Config.ServidorWebTimeout * 60, _
                                                 Language.GetCurrentLanguageCode))
-                _WebServer.Start(System.Net.IPAddress.Any, Config.ServidorWebPuerto)
+                _WebServer.Start(System.Net.IPAddress.Loopback, Config.ServidorWebPuerto)
 
                 'Console.WriteLine("Server is loaded. Go to http://localhost:" & port & "/")
             Catch ex As Exception
@@ -59,7 +59,7 @@
                 _WebServerStreaming.SessionCookieName = "Sd_session"
                 _WebServerStreaming.Add(New MegaDownloader.StreamingModule(Config))
                 _WebServerStreaming.Add(New MegaDownloader.StreamingLibraryModule(Downloader, Config))
-                _WebServerStreaming.Start(System.Net.IPAddress.Any, Config.ServidorStreamingPuerto)
+                _WebServerStreaming.Start(System.Net.IPAddress.Loopback, Config.ServidorStreamingPuerto)
 
                 'Console.WriteLine("Server is loaded. Go to http://localhost:" & port & "/")
             Catch ex As Exception

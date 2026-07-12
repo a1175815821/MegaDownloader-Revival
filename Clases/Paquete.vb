@@ -1,4 +1,4 @@
-﻿Imports System.Xml
+Imports System.Xml
 Imports System.IO
 
 Public Class Paquete
@@ -35,18 +35,23 @@ Public Class Paquete
 
     Private Function HayFicheros() As Boolean
         Mutex.ListaDescargas.WaitOne()
-        Dim hay As Boolean = ListaFicheros IsNot Nothing AndAlso ListaFicheros.Count > 0
-        Mutex.ListaDescargas.ReleaseMutex()
-        Return hay
+        Try
+            Return ListaFicheros IsNot Nothing AndAlso ListaFicheros.Count > 0
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
     End Function
 
     Public Sub AgregarFichero(ByVal Fichero As Fichero)
         Mutex.ListaDescargas.WaitOne()
-        If ListaFicheros Is Nothing Then
-            ListaFicheros = New Generic.List(Of Fichero)
-        End If
-        ListaFicheros.Add(Fichero)
-        Mutex.ListaDescargas.ReleaseMutex()
+        Try
+            If ListaFicheros Is Nothing Then
+                ListaFicheros = New Generic.List(Of Fichero)
+            End If
+            ListaFicheros.Add(Fichero)
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
     End Sub
 
     Public Sub ActualizarDatosDescarga()
@@ -72,32 +77,35 @@ Public Class Paquete
             Dim TotalDesc As Long = 0
 
             Mutex.ListaDescargas.WaitOne()
-            For Each fichero As Fichero In ListaFicheros
-                Total += fichero.DescargaTamanoBytes
-                TotalDesc += CLng(fichero.DescargaTamanoBytes * (fichero.DescargaPorcentaje / 100))
-                Select Case fichero.DescargaEstado
-                    Case Estado.Descargando
-                        TotalVelocidad += fichero.DescargaVelocidadKBs
-                        HayDescargando = True
-                    Case Estado.Completado
-                        HayCompletado = True
-                    Case Estado.EnCola
-                        HayEncola = True
-                    Case Estado.Pausado
-                        HayPausados = True
-                    Case Estado.ComprobandoMD5
-                        HayComprobandoMD5 = True
-                    Case Estado.Descomprimiendo
-                        HayDescomprimiendo = True
-                    Case Estado.Verificando
-                        HayVerificando = True
-                    Case Estado.CreandoLocal
-                        HayGenerandoLocal = True
-                    Case Else
-                        HayErroneos = True
-                End Select
-            Next
-            Mutex.ListaDescargas.ReleaseMutex()
+            Try
+                For Each fichero As Fichero In ListaFicheros
+                    Total += fichero.DescargaTamanoBytes
+                    TotalDesc += CLng(fichero.DescargaTamanoBytes * (fichero.DescargaPorcentaje / 100))
+                    Select Case fichero.DescargaEstado
+                        Case Estado.Descargando
+                            TotalVelocidad += fichero.DescargaVelocidadKBs
+                            HayDescargando = True
+                        Case Estado.Completado
+                            HayCompletado = True
+                        Case Estado.EnCola
+                            HayEncola = True
+                        Case Estado.Pausado
+                            HayPausados = True
+                        Case Estado.ComprobandoMD5
+                            HayComprobandoMD5 = True
+                        Case Estado.Descomprimiendo
+                            HayDescomprimiendo = True
+                        Case Estado.Verificando
+                            HayVerificando = True
+                        Case Estado.CreandoLocal
+                            HayGenerandoLocal = True
+                        Case Else
+                            HayErroneos = True
+                    End Select
+                Next
+            Finally
+                Mutex.ListaDescargas.ReleaseMutex()
+            End Try
             If HayDescargando Then
                 EstadoDescarga = Estado.Descargando
             ElseIf HayPausados Then
@@ -249,19 +257,22 @@ Public Class Paquete
 
     Private Shared Sub MarcarFicherosComoParados(ByRef ListaPaquetes As Generic.List(Of Paquete))
         Mutex.ListaDescargas.WaitOne()
-        For Each Paquete As Paquete In ListaPaquetes
-            For Each Fichero As Fichero In Paquete.ListaFicheros
-                If Fichero.DescargaEstado = Estado.Descargando Or _
-                   Fichero.DescargaEstado = Estado.Pausado Then
-                    Fichero.SetDescargaEstado = Estado.EnCola
-                ElseIf Fichero.DescargaEstado = Estado.Descomprimiendo Or _
-                       Fichero.DescargaEstado = Estado.Verificando Then
-                    Fichero.SetDescargaEstado = Estado.Completado
-                End If
-                ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, Fichero.LimiteVelocidad)
+        Try
+            For Each Paquete As Paquete In ListaPaquetes
+                For Each Fichero As Fichero In Paquete.ListaFicheros
+                    If Fichero.DescargaEstado = Estado.Descargando Or _
+                       Fichero.DescargaEstado = Estado.Pausado Then
+                        Fichero.SetDescargaEstado = Estado.EnCola
+                    ElseIf Fichero.DescargaEstado = Estado.Descomprimiendo Or _
+                           Fichero.DescargaEstado = Estado.Verificando Then
+                        Fichero.SetDescargaEstado = Estado.Completado
+                    End If
+                    ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, Fichero.LimiteVelocidad)
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
     End Sub
 
     Private Shared _LastSavedXML As String = Nothing

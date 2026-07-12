@@ -1,4 +1,4 @@
-﻿Imports System.Net
+Imports System.Net
 Imports System.IO
 Imports System.Xml
 Imports System.Net.Security
@@ -44,12 +44,12 @@ Public Class Conexion
         _UsarProxy = Config.UsarProxy
         _ProxyIP = Config.ProxyIP
         _ProxyPort = Config.ProxyPort
-        _ProxyUser = _ProxyUser
-        _ProxyPassword = _ProxyPassword
+        _ProxyUser = Config.ProxyUser
+        _ProxyPassword = Config.ProxyPassword
     End Sub
 
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest
-        System.Net.ServicePointManager.SecurityProtocol = Net.SecurityProtocolType.Tls12 Or Net.SecurityProtocolType.Tls11 Or Net.SecurityProtocolType.Tls
+        System.Net.ServicePointManager.SecurityProtocol = Net.SecurityProtocolType.Tls12
         System.Net.ServicePointManager.DefaultConnectionLimit = 10000
 
         Dim webrq As HttpWebRequest = CType(Net.WebRequest.Create(Url), HttpWebRequest)
@@ -64,20 +64,11 @@ Public Class Conexion
 
         'webrq.UserAgent = GetUserAgent()
 
-        ServicePointManager.ServerCertificateValidationCallback = AddressOf CertificationAccept
-
         Return webrq
     End Function
 
     Public Shared Function CertificationAccept(ByVal sender As Object, ByVal certification As System.Security.Cryptography.X509Certificates.X509Certificate, ByVal chain As System.Security.Cryptography.X509Certificates.X509Chain, ByVal sslPolicyErrors As System.Net.Security.SslPolicyErrors) As Boolean
-
-        ' Skip errors with linkcrypter :/
-        If CType(sender, System.Net.HttpWebRequest).RequestUri.ToString.Contains("linkcrypter.net") Then
-            Return True
-        Else
-            Return Security.SslPolicyErrors.None = sslPolicyErrors
-        End If
-
+        Return Security.SslPolicyErrors.None = sslPolicyErrors
     End Function
 
     Public Shared Function Get_MEGA_API_Url(ByVal Session As String) As String
@@ -293,11 +284,6 @@ Public Class Conexion
 
 
     Public Shared Function ObtenerInformacionFichero(ByVal Config As Configuracion, ByVal FileID As String, ByVal FileKey As String, ByVal ComprobacionAntesDescarga As Boolean) As InformacionFichero
-
-        If Crypters.MegaCrypter.IsMegaCrypter(FileID) Then Return Crypters.MegaCrypter.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga)
-        If Crypters.YouPaste.IsYouPaste(FileID) Then Return Crypters.YouPaste.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga)
-        If Crypters.EncrypterMega.IsEncrypterMega(FileID) Then Return Crypters.EncrypterMega.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga)
-        If Crypters.LinkCrypter.IsLinkCrypter(FileID) Then Return Crypters.LinkCrypter.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga)
 
         Dim Info As New InformacionFichero
         Try

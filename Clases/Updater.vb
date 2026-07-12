@@ -1,4 +1,4 @@
-﻿Imports System.Xml
+Imports System.Xml
 Imports Microsoft.Win32
 
 Public Class Updater
@@ -21,14 +21,14 @@ Public Class Updater
                 Log.WriteError("Error loading the version check XML: " & ex.ToString)
                 Exit Sub
             End Try
-            Dim UltimaVersion As Double = 0
-            Dim VersionActual As Double = 0
+            Dim UltimaVersion As System.Version = Nothing
+            Dim VersionActual As System.Version = Nothing
 
             Dim ultimaVersionStr As String = LeerNodo(XML, "Version", "")
 
 
-            If Double.TryParse(ultimaVersionStr, Globalization.NumberStyles.Number, New Globalization.CultureInfo("en-GB"), UltimaVersion) And _
-               Double.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE"), Globalization.NumberStyles.Number, New Globalization.CultureInfo("en-GB"), VersionActual) Then
+            If System.Version.TryParse(ultimaVersionStr, UltimaVersion) AndAlso _
+               System.Version.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE"), VersionActual) Then
                 If UltimaVersion > VersionActual Then
 
 

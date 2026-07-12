@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Xml
 
 Public Class Language
@@ -45,8 +45,17 @@ Public Class Language
 
                 Dim file As System.IO.Stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname)
 
+                If file Is Nothing Then
+                    Log.WriteError("Language resource stream could not be opened: " & resname)
+                    Continue For
+                End If
+
                 Dim xmlIdioma As New XmlDocument
-                xmlIdioma.Load(file)
+                Try
+                    xmlIdioma.Load(file)
+                Finally
+                    file.Close()
+                End Try
 
                 Dim CodigoIdioma As String = xmlIdioma.DocumentElement.Attributes("id").Value
                 Dim XMLFile As String = Path.Combine(LangPath, CodigoIdioma & ".xml")
@@ -163,8 +172,14 @@ Public Class Language
             If resname.ToUpper.EndsWith("-Language.xml".ToUpper) Then
                 Dim file As System.IO.Stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname)
 
+                If file Is Nothing Then Continue For
+
                 Dim xmlIdioma As New XmlDocument
-                xmlIdioma.Load(file)
+                Try
+                    xmlIdioma.Load(file)
+                Finally
+                    file.Close()
+                End Try
 
                 Dim CodigoIdioma As String = xmlIdioma.DocumentElement.Attributes("id").Value
                 If CodigoIdioma = BaseLanguage Then
@@ -182,11 +197,16 @@ Public Class Language
             If resname.ToUpper.EndsWith("-Language.xml".ToUpper) Then
                 Dim file As System.IO.Stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname)
 
+                If file Is Nothing Then Continue For
 
                 Dim strIdi As New System.Text.StringBuilder
 
                 Dim xmlIdioma As New XmlDocument
-                xmlIdioma.Load(file)
+                Try
+                    xmlIdioma.Load(file)
+                Finally
+                    file.Close()
+                End Try
 
                 Dim htIdioma As New Generic.Dictionary(Of String, String)
 

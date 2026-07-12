@@ -1,4 +1,4 @@
-﻿Imports System.Security
+Imports System.Security
 Imports System.Security.Cryptography
 Imports System.IO
 Imports Org.BouncyCastle.Crypto.Modes
@@ -118,8 +118,10 @@ Public Class Criptografia
             bytEncoded = objMemoryStream.ToArray
             objMemoryStream.Close()
             objCryptoStream.Close()
-        Catch
-
+        Catch ex As CryptographicException
+            Log.WriteError("AES_EncryptString failed: " & ex.ToString)
+        Catch ex As Exception
+            Log.WriteError("AES_EncryptString unexpected error: " & ex.ToString)
         End Try
 
         Return Convert.ToBase64String(bytEncoded)
@@ -194,14 +196,19 @@ Public Class Criptografia
             objCryptoStream.Read(bytTemp, 0, bytTemp.Length)
             Try
                 objCryptoStream.FlushFinalBlock()
+            Catch ex As CryptographicException
+                Log.WriteError("AES_DecryptString FlushFinalBlock failed: " & ex.ToString)
             Catch ex As Exception
+                Log.WriteError("AES_DecryptString FlushFinalBlock unexpected error: " & ex.ToString)
             End Try
 
             objMemoryStream.Close()
             objCryptoStream.Close()
 
-        Catch
-
+        Catch ex As CryptographicException
+            Log.WriteError("AES_DecryptString failed: " & ex.ToString)
+        Catch ex As Exception
+            Log.WriteError("AES_DecryptString unexpected error: " & ex.ToString)
         End Try
 
         Return StripNullCharacters(Encoding.GetString(bytTemp))

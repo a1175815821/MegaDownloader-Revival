@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 
 Public Class Configuration
 
@@ -334,7 +334,7 @@ Public Class Configuration
         ElseIf Not String.IsNullOrEmpty(txtServidorWebTemplate.Text) AndAlso Not IO.File.Exists(txtServidorWebTemplate.Text) Then
             MessageBox.Show(Language.GetText("The template path is not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
-        ElseIf String.IsNullOrEmpty(txtServidorWebPassword.Text) AndAlso txtServidorWebPassword.Text.Length < 8 Then
+        ElseIf Not String.IsNullOrEmpty(txtServidorWebPassword.Text) AndAlso txtServidorWebPassword.Text.Length < 8 Then
             MessageBox.Show(Language.GetText("The web server password must have at least %A characters").Replace("%A", "8"), _
                             Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub

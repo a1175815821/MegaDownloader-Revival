@@ -1,4 +1,4 @@
-﻿Imports System.Reflection
+Imports System.Reflection
 
 Namespace My
 
@@ -34,16 +34,21 @@ Namespace My
         End Sub
 
         Private Shared Sub SingleInstanceCallback(sender As Object, args As InstanceCallbackEventArgs)
-            ' Not used anymore
-            'If args Is Nothing OrElse _mainFrm Is Nothing Then
-            '    Return
-            'End If
+            If args Is Nothing OrElse _mainFrm Is Nothing OrElse _mainFrm.IsDisposed Then
+                Return
+            End If
 
-            'Dim d As Action(Of Boolean) = Sub(x As Boolean)
-            '                                  _mainFrm.ProcessArgs(args.CommandLineArgs)
-            '                                  _mainFrm.Activate()
-            '                              End Sub
-            '_mainFrm.Invoke(d, True)
+            Try
+                Dim d As Action(Of Boolean) = Sub(x As Boolean)
+                                                  _mainFrm.ProcessArgs(args.CommandLineArgs)
+                                                  _mainFrm.Activate()
+                                              End Sub
+                _mainFrm.Invoke(d, True)
+            Catch ex As InvalidOperationException
+                ' Form may have been closed between the IsDisposed check and Invoke; ignore.
+            Catch ex As Exception
+                Global.MegaDownloader.Log.WriteError("Error invoking ProcessArgs in SingleInstanceCallback: " & ex.ToString)
+            End Try
         End Sub
 
         Private Function LoadDLLFromStream( _
@@ -57,6 +62,10 @@ Namespace My
 
             If Not String.IsNullOrEmpty(resourceName) Then
                 Using stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
+
+                    If stream Is Nothing Then
+                        Throw New ApplicationException("DLL resource stream could not be opened: " & resourceName)
+                    End If
 
                     Dim assemblyData(CInt(stream.Length - 1)) As Byte
                     stream.Read(assemblyData, 0, assemblyData.Length)
