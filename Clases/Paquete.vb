@@ -282,9 +282,9 @@ Public Class Paquete
 
         Dim XML As XmlDocument = GuardarXML(ListaPaquetes, False)
 
-        If _LastSavedXML Is Nothing OrElse _LastSavedXML <> XML.DocumentElement.OuterXml.GetHashCode.ToString Then
+        If _LastSavedXML Is Nothing OrElse _LastSavedXML <> XML.DocumentElement.OuterXml Then
 
-            _LastSavedXML = XML.DocumentElement.OuterXml.GetHashCode.ToString
+            _LastSavedXML = XML.DocumentElement.OuterXml
 
             ' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
             XML = GuardarXML(ListaPaquetes, True)

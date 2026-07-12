@@ -180,6 +180,7 @@
     <Compile Include="Clases\Conexion.vb" />
     <Compile Include="Clases\Configuracion.vb" />
     <Compile Include="Clases\ConfiguracionUI.vb" />
+    <Compile Include="Clases\ThemeManager.vb" />
     <Compile Include="Clases\Cryptography\AES.vb" />
     <Compile Include="Clases\ELCAccountHelper.vb" />
     <Compile Include="Clases\MegaFolderHelper.vb" />

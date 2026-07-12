@@ -167,6 +167,10 @@ If you change the option 'Automatic extraction', it will apply to all files in t
   <Text key="Advanced"><![CDATA[Advanced]]></Text>
   <Text key="Log level"><![CDATA[Log level]]></Text>
   <Text key="Language"><![CDATA[Language]]></Text>
+  <Text key="Theme"><![CDATA[Theme]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Auto (follow system)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Light]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Dark]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Note: for advanced users only. Don't touch anything if you aren't sure.]]></Text>
   <Text key="Disk buffer size"><![CDATA[Disk buffer size]]></Text>
   <Text key="Package size"><![CDATA[Package size]]></Text>

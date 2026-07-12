@@ -137,6 +137,10 @@ Do vous voulez le télécharger?]]></Text>
   <Text key="Advanced"><![CDATA[Avancé]]></Text>
   <Text key="Log level"><![CDATA[Détails du log]]></Text>
   <Text key="Language"><![CDATA[Langue]]></Text>
+  <Text key="Theme"><![CDATA[Thème]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Automatique (suivre le système)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Clair]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Sombre]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Remarque: pour les utilisateurs avancés seulement. Ne touchez à rien si vous n'êtes pas sûr.]]></Text>
   <Text key="Disk buffer size"><![CDATA[La taille du tampon du disque]]></Text>
   <Text key="Package size"><![CDATA[Taille du paquet]]></Text>

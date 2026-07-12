@@ -80,6 +80,18 @@ Public Class Configuration
             comboIdiomas.SelectedIndex = 0
         End If
 
+        Dim ListaTemas As New Generic.Dictionary(Of String, String)
+        ListaTemas(ConfiguracionUI.ThemeModeType.Auto.ToString) = Language.GetText("Theme_Auto")
+        ListaTemas(ConfiguracionUI.ThemeModeType.Light.ToString) = Language.GetText("Theme_Light")
+        ListaTemas(ConfiguracionUI.ThemeModeType.Dark.ToString) = Language.GetText("Theme_Dark")
+        comboTheme.DataSource = New BindingSource(ListaTemas, Nothing)
+        comboTheme.DisplayMember = "Value"
+        comboTheme.ValueMember = "Key"
+        comboTheme.SelectedValue = Config.ConfigUI.Tema.ToString
+        If String.IsNullOrEmpty(CStr(comboTheme.SelectedValue)) AndAlso comboTheme.Items.Count > 0 Then
+            comboTheme.SelectedIndex = 0
+        End If
+
         chkReintentarError.Checked = Config.ResetearErrores
         If Config.ResetearErrores Then
             txtPeriodoReintento.Text = Config.ResetearErroresPeriodoMinutos.ToString
@@ -143,6 +155,13 @@ Public Class Configuration
         chkServidorStreaming_CheckedChanged(Nothing, Nothing)
         chkReintentarError_CheckedChanged(Nothing, Nothing)
 
+        ' 应用主题到设置窗体本身
+        Try
+            ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
+        Catch ex As Exception
+            Log.WriteError("Failed to apply theme to Configuration form: " & ex.ToString)
+        End Try
+
     End Sub
 
     Private Sub Configuration_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
@@ -157,6 +176,7 @@ Public Class Configuration
         Me.chkShowPassword.Text = Language.GetText("Show password")
         Me.Label3.Text = Language.GetText("Password") & ":"
         Me.Label24.Text = Language.GetText("Language") & ":"
+        Me.Label25.Text = Language.GetText("Theme") & ":"
         Me.Label2.Text = Language.GetText("E-mail") & ":"
         Me.chkComenzarPlay.Text = Language.GetText("Start downloading when application starts")
         Me.chkApagarPC.Text = Language.GetText("Turn off computer when finished")
@@ -416,6 +436,10 @@ Public Class Configuration
         If [Enum].IsDefined(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), comboPrioridad.SelectedValue) Then
             Config.PrioridadDescompresion = CType([Enum].Parse(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), CType(comboPrioridad.SelectedItem, KeyValuePair(Of String, String)).Key), SharpCompress.PriorityExtension.Priority.PriorityType)
             SharpCompress.PriorityExtension.Priority.DecompressionPriority = Config.PrioridadDescompresion
+        End If
+
+        If [Enum].IsDefined(GetType(ConfiguracionUI.ThemeModeType), comboTheme.SelectedValue) Then
+            Config.ConfigUI.Tema = CType([Enum].Parse(GetType(ConfiguracionUI.ThemeModeType), CStr(comboTheme.SelectedValue)), ConfiguracionUI.ThemeModeType)
         End If
 
         Dim ListaSharedKeys As New List(Of Security.SecureString)

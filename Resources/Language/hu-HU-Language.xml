@@ -150,6 +150,10 @@ Ha megváltoztatod a beállítást "Automatikus kimásolás", akkor alkalmazni k
   <Text key="Advanced"><![CDATA[Lehetőségek]]></Text>
   <Text key="Log level"><![CDATA[Naplózás]]></Text>
   <Text key="Language"><![CDATA[Nyelvek]]></Text>
+  <Text key="Theme"><![CDATA[Téma]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Automatikus (rendszer követése)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Világos]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Sötét]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Megjegyzés: csak haladó felhasználóknak. Ne nyúlj semmihez, ha nem vagy biztos benne,.]]></Text>
   <Text key="Disk buffer size"><![CDATA[Lemez buffer méret]]></Text>
   <Text key="Package size"><![CDATA[Csomag méret]]></Text>

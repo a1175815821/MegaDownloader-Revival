@@ -152,6 +152,10 @@ Dacă schimbi opțiunea de "extragere automată", se va aplica la toate fișiere
   <Text key="Advanced"><![CDATA[Avansat]]></Text>
   <Text key="Log level"><![CDATA[Jurnal]]></Text>
   <Text key="Language"><![CDATA[Limbă]]></Text>
+  <Text key="Theme"><![CDATA[Temă]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Automat (urmează sistemul)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Luminos]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Întunecat]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Notă: numai pentru utilizatorii avansați. Nu atinge nimic dacă nu ești sigur.]]></Text>
   <Text key="Disk buffer size"><![CDATA[Dimensiune disc]]></Text>
   <Text key="Package size"><![CDATA[Dimensiune Pachet]]></Text>

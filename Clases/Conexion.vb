@@ -6,7 +6,20 @@ Imports System.ComponentModel
 
 Public Class Conexion
 
+    ' 是否使用 Global CDN (G 后缀的 URL) 还是 EU 区域 (E 后缀)。
+    ' 保留硬编码 True 的原因:Global CDN 通常更快、对全球用户更友好;
+    ' 改为可配置会让用户面对不熟悉的术语,误选 EU 反而拖慢速度。
     Private Shared useGlobalCDN As Boolean = True
+
+    ' 进程内自增序列号,保证每次请求得到不同的 %SEQ% / %ID%
+    ' (原实现用 DateTime.Now.Millisecond 的 ticks,毫秒部分只有 0-999,
+    '  短时间内并发请求会得到完全相同的值,不是真正的序列号)
+    Private Shared _seqCounter As Integer = 0
+
+    Private Shared Function GetSequenceId() As String
+        Dim seq As Integer = System.Threading.Interlocked.Increment(_seqCounter)
+        Return (seq And Integer.MaxValue).ToString
+    End Function
 
 
     Public Enum TipoError
@@ -83,7 +96,7 @@ Public Class Conexion
             Url = Url.Replace("%SESSION%", Session)
         End If
 
-        Url = Url.Replace("%SEQ%", TimeSpan.FromMilliseconds(DateTime.Now.Millisecond).Ticks.ToString)
+        Url = Url.Replace("%SEQ%", GetSequenceId())
         Return Url
     End Function
 
@@ -306,7 +319,7 @@ Public Class Conexion
         If Not URL.ToUpper.StartsWith("HTTP") Then URL = Criptografia.AES_DecryptString(URL, keyUrl)
 
 
-        URL = URL.Replace("%ID%", TimeSpan.FromMilliseconds(DateTime.Now.Millisecond).Ticks.ToString)
+        URL = URL.Replace("%ID%", GetSequenceId())
 
         Dim useSSL As String = "0"
 

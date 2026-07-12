@@ -1,4 +1,4 @@
-﻿
+
 Imports System
 Imports HttpServer
 Imports System.IO
@@ -254,6 +254,8 @@ Public Class StreamingModule
         ' / Range adjustment
     End Sub
 
+    ' 通过反射访问 HttpServer 库的私有字段 _context / Stream.Connected,
+    ' 因为该库未公开 "客户端是否仍连接" 的检查接口。库升级时此处可能失效。
     Private Function ClientConnected(response As HttpServer.IHttpResponse) As Boolean
         Dim fi As Reflection.FieldInfo = response.GetType.GetField("_context", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
         Dim Contexto As Object = fi.GetValue(response)

@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Xml
 Imports System.Security
 
@@ -27,6 +27,10 @@ Public Class LibraryElement
         Me.LastModification = Now
     End Sub
 
+    ' 手工拼接 JSON 而不引入 Newtonsoft.Json 等外部依赖。
+    ' 字段值已 Replace("""", "\""") 转义双引号;但未转义 \n / \t 等控制字符,
+    ' 这些字段(用户输入的 Name/Description/Comments 等)若包含换行符会破坏 JSON 结构。
+    ' 当前调用方(StreamingLibraryModule)返回的 JSON 由浏览器解析,实际很少触发该场景。
     Public Function ToJSON(CurrentURL As String, ByRef Config As Configuracion) As String
         Dim str As New System.Text.StringBuilder
         str.Append("{")

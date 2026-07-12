@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
 Partial Class Configuration
     Inherits System.Windows.Forms.Form
 
@@ -71,6 +71,8 @@ Partial Class Configuration
         Me.chkCheckUpdates = New System.Windows.Forms.CheckBox()
         Me.comboIdiomas = New System.Windows.Forms.ComboBox()
         Me.Label24 = New System.Windows.Forms.Label()
+        Me.comboTheme = New System.Windows.Forms.ComboBox()
+        Me.Label25 = New System.Windows.Forms.Label()
         Me.linkUltConfig = New System.Windows.Forms.LinkLabel()
         Me.chkUltimaConfig = New System.Windows.Forms.CheckBox()
         Me.comboPrioridad = New System.Windows.Forms.ComboBox()
@@ -611,6 +613,8 @@ Partial Class Configuration
         'GroupBox4
         '
         Me.GroupBox4.Controls.Add(Me.chkCheckUpdates)
+        Me.GroupBox4.Controls.Add(Me.comboTheme)
+        Me.GroupBox4.Controls.Add(Me.Label25)
         Me.GroupBox4.Controls.Add(Me.comboIdiomas)
         Me.GroupBox4.Controls.Add(Me.Label24)
         Me.GroupBox4.Controls.Add(Me.linkUltConfig)
@@ -662,6 +666,25 @@ Partial Class Configuration
         Me.Label24.Size = New System.Drawing.Size(41, 13)
         Me.Label24.TabIndex = 13
         Me.Label24.Text = "Idioma:"
+        '
+        'comboTheme
+        '
+        Me.comboTheme.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.comboTheme.FormattingEnabled = True
+        Me.comboTheme.Location = New System.Drawing.Point(429, 152)
+        Me.comboTheme.Name = "comboTheme"
+        Me.comboTheme.Size = New System.Drawing.Size(152, 21)
+        Me.comboTheme.TabIndex = 17
+        '
+        'Label25
+        '
+        Me.Label25.AutoSize = True
+        Me.Label25.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.Label25.Location = New System.Drawing.Point(371, 155)
+        Me.Label25.Name = "Label25"
+        Me.Label25.Size = New System.Drawing.Size(31, 13)
+        Me.Label25.TabIndex = 16
+        Me.Label25.Text = "Tema:"
         '
         'linkUltConfig
         '
@@ -1288,6 +1311,8 @@ Partial Class Configuration
     Friend WithEvents Label22 As System.Windows.Forms.Label
     Friend WithEvents comboIdiomas As System.Windows.Forms.ComboBox
     Friend WithEvents Label24 As System.Windows.Forms.Label
+    Friend WithEvents comboTheme As System.Windows.Forms.ComboBox
+    Friend WithEvents Label25 As System.Windows.Forms.Label
     Friend WithEvents TabPage3 As System.Windows.Forms.TabPage
     Friend WithEvents lblDesc As System.Windows.Forms.Label
     Friend WithEvents GroupBox As System.Windows.Forms.GroupBox

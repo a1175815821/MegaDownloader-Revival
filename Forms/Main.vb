@@ -300,6 +300,13 @@ Public Class Main
 
         Me.Text = InternalConfiguration.ObtenerNombreApp & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER")
 
+        ' 应用主题(在所有控件创建后、用户可见时应用)
+        Try
+            ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
+        Catch ex As Exception
+            Log.WriteError("Failed to apply theme: " & ex.ToString)
+        End Try
+
         If Config.ConfigUI.AltoVentanaPrincipal > 0 And Config.ConfigUI.AnchoVentanaPrincipal > 0 Then
             Log.WriteDebug("Window size - X: " & Config.ConfigUI.AnchoVentanaPrincipal & " Y:" & Config.ConfigUI.AltoVentanaPrincipal)
             Me.Size = New System.Drawing.Size(Config.ConfigUI.AnchoVentanaPrincipal, _

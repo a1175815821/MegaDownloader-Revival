@@ -83,9 +83,9 @@ Public Class MegaFolderHelper
 
                 Dim FolderName As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
 
-                Dim ex As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
-                If Not String.IsNullOrEmpty(FolderName) AndAlso ex.IsMatch(FolderName) Then
-                    Dim m As System.Text.RegularExpressions.Match = ex.Match(FolderName)
+                Dim rx As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
+                If Not String.IsNullOrEmpty(FolderName) AndAlso rx.IsMatch(FolderName) Then
+                    Dim m As System.Text.RegularExpressions.Match = rx.Match(FolderName)
                     FolderName = m.Groups("FileName").Value
                 Else
                     Continue For
@@ -123,9 +123,9 @@ Public Class MegaFolderHelper
 
                 Dim FileInfoDec As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
                 Try
-                    Dim ex As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
-                    If Not String.IsNullOrEmpty(FileInfoDec) AndAlso ex.IsMatch(FileInfoDec) Then
-                        Dim m As System.Text.RegularExpressions.Match = ex.Match(FileInfoDec)
+                    Dim rx As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
+                    If Not String.IsNullOrEmpty(FileInfoDec) AndAlso rx.IsMatch(FileInfoDec) Then
+                        Dim m As System.Text.RegularExpressions.Match = rx.Match(FileInfoDec)
                         FileInfoDec = m.Groups("FileName").Value
 
 
@@ -140,7 +140,7 @@ Public Class MegaFolderHelper
                             Results.Add(New URLProcessor.FileURL(NuevoLink, path))
                         Else
 
-                            Dim NuevoLink As String = String.Format("http://mega.co.nz/#N!{0}!{1}=###n={2}", fileN.h, FileKey, FolderID)
+                            Dim NuevoLink As String = String.Format("https://mega.nz/#N!{0}!{1}=###n={2}", fileN.h, FileKey, FolderID)
                             Results.Add(New URLProcessor.FileURL(NuevoLink, path))
                         End If
 

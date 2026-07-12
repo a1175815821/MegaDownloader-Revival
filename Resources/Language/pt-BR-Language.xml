@@ -154,6 +154,10 @@ Se você mudar a opção 'Extração automática', ela será aplicada para todos
     <Text key="Advanced"><![CDATA[Avançado]]></Text>
     <Text key="Log level"><![CDATA[Nível dos Logs]]></Text>
     <Text key="Language"><![CDATA[Idioma]]></Text>
+    <Text key="Theme"><![CDATA[Tema]]></Text>
+    <Text key="Theme_Auto"><![CDATA[Automático (seguir sistema)]]></Text>
+    <Text key="Theme_Light"><![CDATA[Claro]]></Text>
+    <Text key="Theme_Dark"><![CDATA[Escuro]]></Text>
     <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Observação: apenas para usuários avançados. Não modifique nada caso não saiba.]]></Text>
     <Text key="Disk buffer size"><![CDATA[Tamanho do buffer de disco]]></Text>
     <Text key="Package size"><![CDATA[Tamanho do pacote]]></Text>

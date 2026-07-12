@@ -214,9 +214,9 @@ Public Class Configuracion
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
 		
-		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml.GetHashCode.ToString Or ForzarGuardado Then
-			
-			_LastSavedXML = Xml.DocumentElement.OuterXml.GetHashCode.ToString
+		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml Or ForzarGuardado Then
+
+			_LastSavedXML = Xml.DocumentElement.OuterXml
 			
 			' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
 			Xml.DocumentElement.AppendChild(Xml.CreateElement("Usuario")).InnerText = Criptografia.EncryptString_DPAPI(_Usuario)

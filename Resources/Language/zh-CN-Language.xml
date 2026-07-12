@@ -152,6 +152,10 @@
   <Text key="Advanced"><![CDATA[高级]]></Text>
   <Text key="Log level"><![CDATA[日志等级]]></Text>
   <Text key="Language"><![CDATA[语言]]></Text>
+  <Text key="Theme"><![CDATA[主题]]></Text>
+  <Text key="Theme_Auto"><![CDATA[跟随系统]]></Text>
+  <Text key="Theme_Light"><![CDATA[浅色]]></Text>
+  <Text key="Theme_Dark"><![CDATA[深色]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[注释：仅供高级用户。如果你不懂请不要变更任何东西。]]></Text>
   <Text key="Disk buffer size"><![CDATA[缓冲磁区大小]]></Text>
   <Text key="Package size"><![CDATA[Buffer大小]]></Text>

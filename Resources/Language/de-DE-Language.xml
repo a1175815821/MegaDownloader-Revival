@@ -134,6 +134,10 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Advanced"><![CDATA[Fortgeschritten]]></Text>
   <Text key="Log level"><![CDATA[Log-Level]]></Text>
   <Text key="Language"><![CDATA[Sprache]]></Text>
+  <Text key="Theme"><![CDATA[Design]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Automatisch (System folgen)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Hell]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Dunkel]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Hinweis: nur für fortgeschrittene Benutzer. Fassen Sie nichts, wenn Sie nicht ganz sicher sind.]]></Text>
   <Text key="Disk buffer size"><![CDATA[Festplatte Puffergröße]]></Text>
   <Text key="Package size"><![CDATA[Packungsgröße]]></Text>

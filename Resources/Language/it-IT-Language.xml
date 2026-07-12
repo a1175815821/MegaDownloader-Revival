@@ -130,6 +130,10 @@
   <Text key="Advanced"><![CDATA[Avanzato]]></Text>
   <Text key="Log level"><![CDATA[Livello di log]]></Text>
   <Text key="Language"><![CDATA[Lingua]]></Text>
+  <Text key="Theme"><![CDATA[Tema]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Automatico (segui sistema)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Chiaro]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Scuro]]></Text>
   <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Nota: per gli utenti esperti. Non toccare nulla se non si è sicuri.]]></Text>
   <Text key="Disk buffer size"><![CDATA[La dimensione del buffer del disco]]></Text>
   <Text key="Package size"><![CDATA[Formato del pacchetto]]></Text>

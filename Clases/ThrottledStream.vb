@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.IO
 Imports System.Threading
 Imports System.Diagnostics
@@ -185,9 +185,9 @@ Public Class ThrottledStream
     ''' <exception cref="T:System.IO.IOException">An I/O error occurs. </exception>
     ''' <exception cref="T:System.ArgumentOutOfRangeException">offset or count is negative. </exception>
     Public Overrides Function Read(buffer As Byte(), offset As Integer, count As Integer) As Integer
-        Dim int As Integer = _baseStream.Read(buffer, offset, count)
-        Throttle(int)
-        Return int
+        Dim bytesRead As Integer = _baseStream.Read(buffer, offset, count)
+        Throttle(bytesRead)
+        Return bytesRead
     End Function
 
     ''' <summary>
