@@ -139,45 +139,45 @@ Google 短链服务于 2019 年 3 月完全停止解析
 
 | # | 位置 | 问题描述 | 状态 |
 |---|---|---|---|
-| 1 | `Clases/StreamingHelper.vb:5` | `TempStreamingCache` 共享字典非线程安全 | ⬜ |
-| 2 | `HttpModule/StreamingModule.vb:24` | `Urls` 共享字典非线程安全 | ⬜ |
-| 3 | `HttpModule/StreamingLibraryModule.vb:26` | `_RespuestaAjax` 实例字段被并发请求共享 | ⬜ |
-| 4 | `Clases/InternalConfiguration.vb:5` | `XML_CONFIG` 共享字段非线程安全 | ⬜ |
-| 5 | `Forms/ELCForm.vb:229,104,136` | `BackgroundWorkerBusy` 标志无同步 | ⬜ |
-| 6 | `Clases/FileDownloader.vb:595-598` | 迭代 `ChunkList` 无锁 | ⬜ |
+| 1 | `Clases/StreamingHelper.vb:5` | `TempStreamingCache` 共享字典非线程安全 | ⏭️ |
+| 2 | `HttpModule/StreamingModule.vb:24` | `Urls` 共享字典非线程安全 | ⏭️ |
+| 3 | `HttpModule/StreamingLibraryModule.vb:26` | `_RespuestaAjax` 实例字段被并发请求共享 | ⏭️ |
+| 4 | `Clases/InternalConfiguration.vb:5` | `XML_CONFIG` 共享字段非线程安全 | ⏭️ |
+| 5 | `Forms/ELCForm.vb:229,104,136` | `BackgroundWorkerBusy` 标志无同步 | ⏭️ |
+| 6 | `Clases/FileDownloader.vb:595-598` | 迭代 `ChunkList` 无锁 | ⏭️ |
 
 ### 3.2 资源泄漏
 
 | # | 位置 | 问题描述 | 状态 |
 |---|---|---|---|
-| 1 | `Controls/ELCAccountControl.vb:309,327,345,363` | 4 个 `MouseHover` 处理程序 ToolTip 未 Dispose | ⬜ |
-| 2 | `Forms/AddLinks.vb:291,300,319` | ToolTip 资源泄漏 | ⬜ |
-| 3 | `Stegano/SteganoWizardSave.vb:133-146` | ToolTip 资源泄漏 | ⬜ |
-| 4 | `Stegano/SteganoManager.vb:26,41,62` | `Image.FromFile` 锁定源文件,FileStream 从未 Dispose | ⬜ |
-| 5 | `Clases/StreamingLibrary/StreamingLibraryManager.vb:290-306` | `CompressString`/`UnCompressString` 未 Using | ⬜ |
-| 6 | `HttpModule/WebInterfaceModule.vb:52,179,226,278` | 多处 StreamReader/StreamWriter 未 Using | ⬜ |
+| 1 | `Controls/ELCAccountControl.vb:309,327,345,363` | 4 个 `MouseHover` 处理程序 ToolTip 未 Dispose | ✅ |
+| 2 | `Forms/AddLinks.vb:291,300,319` | ToolTip 资源泄漏 | ✅ |
+| 3 | `Stegano/SteganoWizardSave.vb:133-146` | ToolTip 资源泄漏 | ✅ |
+| 4 | `Stegano/SteganoManager.vb:26,41,62` | `Image.FromFile` 锁定源文件,FileStream 从未 Dispose | ✅ |
+| 5 | `Clases/StreamingLibrary/StreamingLibraryManager.vb:290-306` | `CompressString`/`UnCompressString` 未 Using | ✅ |
+| 6 | `HttpModule/WebInterfaceModule.vb:52,179,226,278` | 多处 StreamReader/StreamWriter 未 Using | ✅ |
 | 7 | `Clases/ServerEncoderLinkHelper.vb:35` | `RandomNumberGenerator.Create()` 未 Dispose | ⬜ |
-| 8 | `Forms/Main.vb:215-233` | 7 个 `Image.FromStream(file)` file stream 未关闭 | ⬜ |
-| 9 | `Clases/MegaURIProtocol.vb:13-37` | 注册表操作无 Finally 释放 | ⬜ |
+| 8 | `Forms/Main.vb:215-233` | 7 个 `Image.FromStream(file)` file stream 未关闭 | ✅ |
+| 9 | `Clases/MegaURIProtocol.vb:13-37` | 注册表操作无 Finally 释放 | ✅ |
 | 10 | `Clases/FileDownloader.vb:1068-1076` | `FlushToDisk` 中 FileStream 异时不释放 | ⬜ |
 
 ### 3.3 UI/逻辑错误
 
 | # | 位置 | 问题描述 | 状态 |
 |---|---|---|---|
-| 1 | `Forms/Main.vb:641-642` | `clipChange.DestroyHandle/Uninstall` 顺序反了 | ⬜ |
-| 2 | `Forms/Main.vb:1525-1551` | `EsperarParadeDescargasYWorkers` 漏检查 `bgwDescompresorCompleted` | ⬜ |
+| 1 | `Forms/Main.vb:641-642` | `clipChange.DestroyHandle/Uninstall` 顺序反了 | ✅ |
+| 2 | `Forms/Main.vb:1525-1551` | `EsperarParadeDescargasYWorkers` 漏检查 `bgwDescompresorCompleted` | ✅ |
 | 3 | `Forms/Main.vb:3066` | `Thread.Abort()` 危险 | ⬜ |
 | 4 | `Forms/Main.vb:1104,1205,1336` | 跨线程 MsgBox 未检查窗体是否已关闭 | ⬜ |
 | 5 | `Clases/FileDownloader.vb:509` | 后台线程弹 MessageBox | ⬜ |
 | 6 | `Clases/DescompresorController.vb:138-144` | `Thread.Abort()` 用于取消解压 | ⬜ |
-| 7 | `HttpModule/StreamingLibraryModule.vb:239-241` | `Case "Delete"` 缺 `Return True` | ⬜ |
-| 8 | `HttpModule/StreamingLibraryModule.vb:119-125` | `UsuarioLogueado` 超时逻辑错误 | ⬜ |
-| 9 | `Controls/ELCAccountControl.vb:132-133` | CellClick 未校验 `e.RowIndex` | ⬜ |
+| 7 | `HttpModule/StreamingLibraryModule.vb:239-241` | `Case "Delete"` 缺 `Return True` | ✅ |
+| 8 | `HttpModule/StreamingLibraryModule.vb:119-125` | `UsuarioLogueado` 超时逻辑错误 | ✅ |
+| 9 | `Controls/ELCAccountControl.vb:132-133` | CellClick 未校验 `e.RowIndex` | ✅ |
 | 10 | `Clases/MegaFolderHelper.vb:207` | `FillFolderStructure` 递归无 KeyNotFound 保护 | ⬜ |
-| 11 | `Clases/Conexion.vb:496-512` | `bgPingNewVersion/User` 未解密 URL | ⬜ |
+| 11 | `Clases/Conexion.vb:496-512` | `bgPingNewVersion/User` 未解密 URL | ✅ |
 | 12 | `Forms/ELCForm.vb:241-249` | 无限循环每 300ms 轮询 | ⬜ |
-| 13 | `Clases/StreamingHelper.vb:85` | `Keys.Count / 2` 浮点除法 | ⬜ |
+| 13 | `Clases/StreamingHelper.vb:85` | `Keys.Count / 2` 浮点除法 | ✅ |
 
 ---
 
