@@ -1,4 +1,4 @@
-﻿
+
 Imports System.ComponentModel
 
 Public Partial Class ELCForm
@@ -18,6 +18,7 @@ Public Partial Class ELCForm
 	End Property
 	
 	Private Sub ELCForm_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+		ThemeManager.ApplyTheme(Me)
 		If MainForm IsNot Nothing then
 			Translate()
 			

@@ -2,21 +2,22 @@ Imports System.Drawing
 Imports System.Windows.Forms
 
 ''' <summary>
-''' 简易主题管理器:Auto 模式从注册表读取系统深/浅色偏好,Light/Dark 直接应用预设配色。
-''' 仅修改背景色和前景色,避免与控件的 ForeColor/BackColor 默认值冲突;不改变控件尺寸或布局。
+''' 主题管理器:Auto 模式从注册表读取系统深/浅色偏好,Light/Dark 直接应用预设配色。
+''' 支持 ObjectListView (BrightIdeasSoftware.TreeListView)、ToolStrip 系列(MenuStrip/StatusStrip/ContextMenuStrip)、
+''' 标准控件(TextBox/Button/Label 等)以及容器控件(Panel/GroupBox/TableLayoutPanel)。
 ''' </summary>
 Public NotInheritable Class ThemeManager
 
     Private Sub New()
     End Sub
 
-    ' 当前进程实际生效的主题(Light 或 Dark,不含 Auto)
     Public Enum ResolvedTheme
         Light
         Dark
     End Enum
 
     Private Shared _current As ResolvedTheme = ResolvedTheme.Light
+    Private Shared _currentMode As ConfiguracionUI.ThemeModeType = ConfiguracionUI.ThemeModeType.Auto
 
     ' 浅色配色
     Private Shared ReadOnly LightColors As New Dictionary(Of String, Color) From
@@ -25,7 +26,12 @@ Public NotInheritable Class ThemeManager
         {"Fore", Color.Black},
         {"AltBack", Color.FromArgb(245, 245, 245)},
         {"ControlBack", Color.FromArgb(240, 240, 240)},
-        {"Border", Color.FromArgb(204, 206, 209)}
+        {"Border", Color.FromArgb(204, 206, 209)},
+        {"Selection", Color.FromArgb(0, 120, 215)},
+        {"SelectionFore", Color.White},
+        {"Link", Color.FromArgb(0, 102, 204)},
+        {"ToolBack", Color.FromArgb(240, 240, 240)},
+        {"ToolBorder", Color.FromArgb(204, 206, 209)}
     }
 
     ' 深色配色(VS Code Dark+ 风格)
@@ -35,7 +41,12 @@ Public NotInheritable Class ThemeManager
         {"Fore", Color.FromArgb(241, 241, 241)},
         {"AltBack", Color.FromArgb(45, 45, 48)},
         {"ControlBack", Color.FromArgb(51, 51, 55)},
-        {"Border", Color.FromArgb(90, 90, 90)}
+        {"Border", Color.FromArgb(90, 90, 90)},
+        {"Selection", Color.FromArgb(38, 79, 120)},
+        {"SelectionFore", Color.FromArgb(241, 241, 241)},
+        {"Link", Color.FromArgb(86, 156, 214)},
+        {"ToolBack", Color.FromArgb(45, 45, 48)},
+        {"ToolBorder", Color.FromArgb(90, 90, 90)}
     }
 
     ''' <summary>
@@ -53,14 +64,10 @@ Public NotInheritable Class ThemeManager
                 Return CInt(val) = 0 ' 0 = 深色,1 = 浅色
             End Using
         Catch ex As Exception
-            ' 任何读取失败都安全降级为浅色
             Return False
         End Try
     End Function
 
-    ''' <summary>
-    ''' 根据 ConfiguracionUI.ThemeMode 解析为实际主题(Light 或 Dark)。
-    ''' </summary>
     Public Shared Function Resolve(mode As ConfiguracionUI.ThemeModeType) As ResolvedTheme
         Select Case mode
             Case ConfiguracionUI.ThemeModeType.Dark
@@ -73,68 +80,444 @@ Public NotInheritable Class ThemeManager
     End Function
 
     ''' <summary>
-    ''' 应用主题到指定窗体(递归所有子控件)。
+    ''' 应用主题到指定窗体(递归所有子控件),并设置全局 ToolStrip 渲染器。
     ''' 应在窗体 Load/Shown 后调用,确保所有控件已创建。
     ''' </summary>
     Public Shared Sub ApplyTheme(form As Form, mode As ConfiguracionUI.ThemeModeType)
         Dim resolved As ResolvedTheme = Resolve(mode)
         _current = resolved
-        ApplyThemeRecursive(form, resolved)
+        _currentMode = mode
+        Dim colors As Dictionary(Of String, Color) = If(resolved = ResolvedTheme.Dark, DarkColors, LightColors)
+
+        ' 设置全局 ToolStrip 渲染器(影响 MenuStrip/StatusStrip/ContextMenuStrip 等)
+        ToolStripManager.Renderer = New ToolStripProfessionalRenderer(New ThemeColorTable(colors))
+
+        ApplyThemeRecursive(form, colors, resolved)
     End Sub
 
-    Private Shared Sub ApplyThemeRecursive(control As Control, theme As ResolvedTheme)
-        Dim colors As Dictionary(Of String, Color) = If(theme = ResolvedTheme.Dark, DarkColors, LightColors)
+    ''' <summary>
+    ''' 使用上次保存的主题模式应用到指定窗体。供子窗体在 Load 事件中调用,
+    ''' 无需自行访问 Main.Config。
+    ''' </summary>
+    Public Shared Sub ApplyTheme(form As Form)
+        ApplyTheme(form, _currentMode)
+    End Sub
 
-        ' 对支持 BackColor/ForeColor 的控件统一设置
-        ' ListBox/ListView/DataGridView 等 ItemsControl 默认背景在 SystemColor,需要显式覆盖
+    Private Shared Sub ApplyThemeRecursive(control As Control, colors As Dictionary(Of String, Color), theme As ResolvedTheme)
+
+        ' ObjectListView (BrightIdeasSoftware.TreeListView) - 主窗口的下载列表
+        If TypeOf control Is BrightIdeasSoftware.TreeListView Then
+            ApplyThemeToObjectListView(CType(control, BrightIdeasSoftware.TreeListView), colors, theme)
+            GoTo RecurseChildren
+        End If
+
+        ' ObjectListView 基类(ObjectListView, FastObjectListView 等)
+        If TypeOf control Is BrightIdeasSoftware.ObjectListView Then
+            ApplyThemeToObjectListView(CType(control, BrightIdeasSoftware.ObjectListView), colors, theme)
+            GoTo RecurseChildren
+        End If
+
+        ' Form
         If TypeOf control Is Form Then
             CType(control, Form).BackColor = colors("Back")
             CType(control, Form).ForeColor = colors("Fore")
-        ElseIf TypeOf control Is GroupBox OrElse TypeOf control Is Panel Then
+            GoTo RecurseChildren
+        End If
+
+        ' 容器控件
+        If TypeOf control Is GroupBox OrElse TypeOf control Is Panel OrElse
+           TypeOf control Is TableLayoutPanel OrElse TypeOf control Is FlowLayoutPanel OrElse
+           TypeOf control Is SplitContainer OrElse TypeOf control Is SplitterPanel Then
             control.BackColor = colors("ControlBack")
             control.ForeColor = colors("Fore")
-        ElseIf TypeOf control Is Button Then
+            GoTo RecurseChildren
+        End If
+
+        ' Button
+        If TypeOf control Is Button Then
             control.BackColor = colors("ControlBack")
             control.ForeColor = colors("Fore")
-            CType(control, Button).FlatStyle = FlatStyle.Standard
-        ElseIf TypeOf control Is Label OrElse TypeOf control Is LinkLabel Then
+            Dim btn As Button = CType(control, Button)
+            btn.FlatStyle = FlatStyle.Standard
+            btn.UseVisualStyleBackColor = False
+            GoTo RecurseChildren
+        End If
+
+        ' Label / LinkLabel
+        If TypeOf control Is LinkLabel Then
             control.BackColor = Color.Transparent
             control.ForeColor = colors("Fore")
-        ElseIf TypeOf control Is TextBox OrElse TypeOf control Is ComboBox OrElse
-               TypeOf control Is NumericUpDown OrElse TypeOf control Is MaskedTextBox Then
-            control.BackColor = colors("Back")
-            control.ForeColor = colors("Fore")
-        ElseIf TypeOf control Is CheckBox OrElse TypeOf control Is RadioButton Then
+            CType(control, LinkLabel).LinkColor = colors("Link")
+            CType(control, LinkLabel).VisitedLinkColor = colors("Link")
+            GoTo RecurseChildren
+        End If
+        If TypeOf control Is Label Then
             control.BackColor = Color.Transparent
             control.ForeColor = colors("Fore")
-        ElseIf TypeOf control Is TabPage Then
+            GoTo RecurseChildren
+        End If
+
+        ' 文本类控件
+        If TypeOf control Is TextBox OrElse TypeOf control Is RichTextBox OrElse
+           TypeOf control Is ComboBox OrElse TypeOf control Is NumericUpDown OrElse
+           TypeOf control Is MaskedTextBox Then
             control.BackColor = colors("Back")
             control.ForeColor = colors("Fore")
-        ElseIf TypeOf control Is DataGridView Then
+            GoTo RecurseChildren
+        End If
+
+        ' CheckBox / RadioButton
+        If TypeOf control Is CheckBox OrElse TypeOf control Is RadioButton Then
+            control.BackColor = Color.Transparent
+            control.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+
+        ' TabControl / TabPage
+        If TypeOf control Is TabControl Then
+            Dim tc As TabControl = CType(control, TabControl)
+            tc.BackColor = colors("Back")
+            tc.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+        If TypeOf control Is TabPage Then
+            control.BackColor = colors("Back")
+            control.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+
+        ' DataGridView
+        If TypeOf control Is DataGridView Then
             Dim dgv As DataGridView = CType(control, DataGridView)
             dgv.BackgroundColor = colors("AltBack")
             dgv.DefaultCellStyle.BackColor = colors("Back")
             dgv.DefaultCellStyle.ForeColor = colors("Fore")
+            dgv.DefaultCellStyle.SelectionBackColor = colors("Selection")
+            dgv.DefaultCellStyle.SelectionForeColor = colors("SelectionFore")
             dgv.ColumnHeadersDefaultCellStyle.BackColor = colors("ControlBack")
             dgv.ColumnHeadersDefaultCellStyle.ForeColor = colors("Fore")
+            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = colors("ControlBack")
+            dgv.ColumnHeadersDefaultCellStyle.SelectionForeColor = colors("Fore")
+            dgv.RowHeadersDefaultCellStyle.BackColor = colors("ControlBack")
+            dgv.RowHeadersDefaultCellStyle.ForeColor = colors("Fore")
             dgv.GridColor = colors("Border")
-        Else
-            ' 其他类型按容器背景处理
-            If control.HasChildren Then
-                control.BackColor = colors("Back")
-                control.ForeColor = colors("Fore")
-            End If
+            dgv.EnableHeadersVisualStyles = False
+            GoTo RecurseChildren
         End If
 
-        ' 递归子控件
+        ' ListView (原生,非 OLV)
+        If TypeOf control Is ListView Then
+            Dim lv As ListView = CType(control, ListView)
+            lv.BackColor = colors("Back")
+            lv.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+
+        ' TreeView
+        If TypeOf control Is TreeView Then
+            Dim tv As TreeView = CType(control, TreeView)
+            tv.BackColor = colors("Back")
+            tv.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+
+        ' PictureBox - 透明背景
+        If TypeOf control Is PictureBox Then
+            CType(control, PictureBox).BackColor = Color.Transparent
+            GoTo RecurseChildren
+        End If
+
+        ' ProgressBar
+        If TypeOf control Is ProgressBar Then
+            Dim pb As ProgressBar = CType(control, ProgressBar)
+            pb.BackColor = colors("ControlBack")
+            pb.ForeColor = colors("Selection")
+            GoTo RecurseChildren
+        End If
+
+        ' ToolStrip 系列(MenuStrip/StatusStrip/ToolStrip - 不含 ContextMenuStrip,它不是 Control)
+        If TypeOf control Is ToolStrip Then
+            Dim ts As ToolStrip = CType(control, ToolStrip)
+            ts.BackColor = colors("ToolBack")
+            ts.ForeColor = colors("Fore")
+            ts.RenderMode = ToolStripRenderMode.ManagerRenderMode
+            ' 递归 ToolStrip 项
+            For Each item As ToolStripItem In ts.Items
+                ApplyThemeToToolStripItem(item, colors)
+            Next
+            Return ' ToolStrip 的 Items 不是 Controls.Controls,不要走默认递归
+        End If
+
+        ' 其他类型:若是容器,套用背景;否则保留默认
+        If control.HasChildren Then
+            control.BackColor = colors("Back")
+            control.ForeColor = colors("Fore")
+        End If
+
+RecurseChildren:
         For Each child As Control In control.Controls
-            ApplyThemeRecursive(child, theme)
+            ApplyThemeRecursive(child, colors, theme)
         Next
+    End Sub
+
+    Private Shared Sub ApplyThemeToObjectListView(olv As BrightIdeasSoftware.ObjectListView,
+                                                  colors As Dictionary(Of String, Color),
+                                                  theme As ResolvedTheme)
+        ' 关键:关闭 Explorer 主题,否则自定义颜色不生效
+        Try
+            olv.UseExplorerTheme = False
+        Catch ex As Exception
+        End Try
+        Try
+            olv.UseTranslucentSelection = False
+        Catch ex As Exception
+        End Try
+
+        olv.BackColor = colors("Back")
+        olv.ForeColor = colors("Fore")
+        Try
+            olv.AlternateRowBackColor = colors("AltBack")
+        Catch ex As Exception
+        End Try
+
+        ' 选中行的颜色(失焦/聚焦)- 通过反射访问,因不同 OLV 版本属性名不同
+        TrySetProperty(olv, "SelectedBackColor", colors("Selection"))
+        TrySetProperty(olv, "SelectedForeColor", colors("SelectionFore"))
+        TrySetProperty(olv, "UnfocusedSelectedBackColor", colors("Selection"))
+        TrySetProperty(olv, "UnfocusedSelectedForeColor", colors("SelectionFore"))
+        TrySetProperty(olv, "UseHotControls", False)
+
+        ' 表头样式
+        Try
+            Dim headerStyle As New BrightIdeasSoftware.HeaderFormatStyle()
+            headerStyle.Normal.BackColor = colors("ControlBack")
+            headerStyle.Normal.ForeColor = colors("Fore")
+            headerStyle.Normal.FrameColor = colors("Border")
+            headerStyle.Hot.BackColor = colors("AltBack")
+            headerStyle.Hot.ForeColor = colors("Fore")
+            headerStyle.Hot.FrameColor = colors("Border")
+            headerStyle.Pressed.BackColor = colors("ControlBack")
+            headerStyle.Pressed.ForeColor = colors("Fore")
+            headerStyle.Pressed.FrameColor = colors("Border")
+            olv.HeaderFormatStyle = headerStyle
+            olv.HeaderUsesThemes = False
+        Catch ex As Exception
+        End Try
+
+        ' TreeColumnRenderer (树列的展开/折叠图标所在列) - 仅 TreeListView 有此属性
+        Try
+            Dim renderer As Object = olv.GetType().GetProperty("TreeColumnRenderer").GetValue(olv, Nothing)
+            If renderer IsNot Nothing Then
+                TrySetProperty(renderer, "BranchColor", colors("Border"))
+                TrySetProperty(renderer, "LineColor", colors("Border"))
+            End If
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Shared Sub TrySetProperty(target As Object, propertyName As String, value As Object)
+        Try
+            Dim prop As System.Reflection.PropertyInfo = target.GetType().GetProperty(propertyName)
+            If prop IsNot Nothing AndAlso prop.CanWrite Then
+                prop.SetValue(target, value, Nothing)
+            End If
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Shared Sub ApplyThemeToToolStripItem(item As ToolStripItem, colors As Dictionary(Of String, Color))
+        item.BackColor = colors("ToolBack")
+        item.ForeColor = colors("Fore")
+
+        If TypeOf item Is ToolStripMenuItem Then
+            Dim mi As ToolStripMenuItem = CType(item, ToolStripMenuItem)
+            For Each child As ToolStripItem In mi.DropDownItems
+                ApplyThemeToToolStripItem(child, colors)
+            Next
+        ElseIf TypeOf item Is ToolStripLabel Then
+            CType(item, ToolStripLabel).BackColor = colors("ToolBack")
+        End If
     End Sub
 
     Public Shared ReadOnly Property Current As ResolvedTheme
         Get
             Return _current
+        End Get
+    End Property
+
+End Class
+
+''' <summary>
+''' 自定义 ToolStrip 配色表,使 MenuStrip/StatusStrip/ContextMenuStrip 跟随深/浅色主题。
+''' </summary>
+Friend Class ThemeColorTable
+    Inherits ProfessionalColorTable
+
+    Private ReadOnly _colors As Dictionary(Of String, Color)
+
+    Public Sub New(colors As Dictionary(Of String, Color))
+        _colors = colors
+    End Sub
+
+    Public Overrides ReadOnly Property ToolStripBorder As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ToolStripGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ToolStripGradientMiddle As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ToolStripGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuStripGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuStripGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemBorder As Color
+        Get
+            Return _colors("Border")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuBorder As Color
+        Get
+            Return _colors("Border")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemSelected As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemSelectedGradientBegin As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemSelectedGradientEnd As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemPressedGradientBegin As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemPressedGradientMiddle As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemPressedGradientEnd As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonSelectedHighlight As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonSelectedGradientBegin As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonSelectedGradientEnd As Color
+        Get
+            Return _colors("AltBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonPressedHighlight As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonPressedGradientBegin As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ButtonPressedGradientEnd As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property SeparatorDark As Color
+        Get
+            Return _colors("Border")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property SeparatorLight As Color
+        Get
+            Return _colors("Border")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property StatusStripGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property StatusStripGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginGradientMiddle As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
         End Get
     End Property
 

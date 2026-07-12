@@ -7,6 +7,7 @@ Public Class AddLinks
     Public HiddenLinks As String = String.Empty
 	
 	Private Sub AddLinks_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+		ThemeManager.ApplyTheme(Me)
 		Translate()
 		'OpcionesPaquete.Visible = False
 		

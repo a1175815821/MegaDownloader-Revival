@@ -1,4 +1,4 @@
-﻿Public Class PropiedadesDescarga
+Public Class PropiedadesDescarga
 
     Private _Descarga As IDescarga
     Public WriteOnly Property Descarga As IDescarga
@@ -10,6 +10,7 @@
 
 
     Private Sub PropiedadesDescarga_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        ThemeManager.ApplyTheme(Me)
         Translate()
 
         txtNombre.Text = _Descarga.DescargaNombre

@@ -2,6 +2,7 @@ Public Class Credits
 
 
     Private Sub Credits_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        ThemeManager.ApplyTheme(Me)
         Translate()
     End Sub
 

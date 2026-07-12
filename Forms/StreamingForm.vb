@@ -1,4 +1,4 @@
-﻿Imports System.ComponentModel
+Imports System.ComponentModel
 
 Public Class StreamingForm
 
@@ -9,6 +9,7 @@ Public Class StreamingForm
     Private WithEvents bckActualizador As BackgroundWorker
 
     Private Sub StreamingForm_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        ThemeManager.ApplyTheme(Me)
         Translate()
 
         If Not Config.ServidorStreamingActivo Then

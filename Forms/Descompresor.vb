@@ -1,4 +1,4 @@
-﻿Imports System.ComponentModel
+Imports System.ComponentModel
 
 Public Class Descompresor
 
@@ -7,6 +7,7 @@ Public Class Descompresor
     Private WithEvents bckActualizador As BackgroundWorker
 
     Private Sub Descompresor_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        ThemeManager.ApplyTheme(Me)
         translate()
     End Sub
 

@@ -1,4 +1,4 @@
-﻿Imports System.ComponentModel
+Imports System.ComponentModel
 
 Public Class EncodeLinksForm
 	
@@ -8,6 +8,7 @@ Public Class EncodeLinksForm
 	
 	
 	Private Sub EncodeLinksForm_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+		ThemeManager.ApplyTheme(Me)
 		txtEncodedLinks.Multiline = True
 		txtEncodedLinks.Text = ""
 		

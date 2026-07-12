@@ -1,8 +1,9 @@
-﻿Public Class PantallaMsg
+Public Class PantallaMsg
 
     Public TextoError As String
     Public MostrarCodificarEnlaces As Boolean = False
     Private Sub VerError_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        ThemeManager.ApplyTheme(Me)
     	
         txtDatos.Multiline = True
         txtDatos.Text = (TextoError & "").Replace(vbNewLine, Environment.NewLine)
