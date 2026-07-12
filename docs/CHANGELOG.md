@@ -6,18 +6,96 @@
 
 ---
 
-## [Unreleased]
+## [2.0.0] - 2026-07-13
+
+### 重大版本 - 安全加固 + 代码清理 + 暗色主题
+
+基于 v1.9 的链接格式修复,进一步完成 4 个阶段共 60+ 项修复,显著提升安全性、稳定性与可用性。本版本首次引入深/浅色主题切换。
+
+### ✨ 新增
+
+- **深色/浅色主题切换**:
+  - 新增 `ThemeModeType` 枚举(Auto/Light/Dark),默认 Auto 跟随系统([`Clases/ConfiguracionUI.vb`](../Clases/ConfiguracionUI.vb))
+  - 新增 `ThemeManager` 类,通过读取注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme` 检测系统深浅色([`Clases/ThemeManager.vb`](../Clases/ThemeManager.vb))
+  - 自定义 `ThemeColorTable` + `ToolStripProfessionalRenderer` 渲染器,覆盖 30+ ToolStrip 渐变/边框/选中色属性
+  - 递归应用主题到所有控件,包括主窗体的 `BrightIdeasSoftware.TreeListView`(下载列表)、StatusStrip、ContextMenuStrip、TableLayoutPanel、DataGridView、ListView、TreeView、ProgressBar 等
+  - 9 个子窗体在 Load 事件中应用主题:Credits、AddLinks、ELCForm、EncodeLinksForm、PropiedadesDescarga、StreamingForm、Descompresor、PantallaMsg、Configuration
+  - 10 种语言文件添加 `Theme` / `Theme_Auto` / `Theme_Light` / `Theme_Dark` 翻译键
+- **作者信息**:Credits 窗体加入 "Yingxue - Revival maintainer (v2.0+)"
+- **更新检查**:重定向到本 GitHub 仓库
 
 ### 🐛 修复
 
-- **下载器崩溃**:修复 [`Clases/FileDownloader.vb`](../Clases/FileDownloader.vb) 第 681-683 行变量名错配导致的 `NullReferenceException`。当 MEGA 服务器返回 502 网关错误等异常时,catch 块误引用已被清空的 `exc` 局部变量(应为 `ex`),导致掩盖真实异常并中断整个下载流程。修复后,后台下载线程能正确传递真实异常,后续文件可继续下载。
+**P0 严重安全漏洞**:
+- 修复空密码绕过校验逻辑
+- 修复代理凭据未实际赋值给 WebProxy
+- 仅启用 TLS 1.2(移除 TLS 1.0/1.1,符合现代安全标准)
+- Web/Streaming 服务器绑定 `127.0.0.1`(原 `0.0.0.0` 暴露到全网)
+- 密码哈希统一使用 UTF-8 编码
+- Mutex 操作全部包裹 Try/Finally 防止死锁
+- 加密代码中的空 Catch 块替换为日志记录
+- 修复 `ApagarPC` / `MaxConexionesGuardadas` 设置未正确持久化
+- 修复下载器 `NullReferenceException` 崩溃(变量名错配 `exc` vs `ex`)
 
-### 计划中
+**P1 资源泄漏**:
+- 修复 7 处 ToolTip 资源泄漏(`ELCAccountControl` / `AddLinks` / `SteganoWizardSave`,MouseHover 每次创建不释放)
+- 修复 `SteganoManager` 的 `Image.FromFile` 锁定源文件 + FileStream 未 Dispose
+- 修复 `Main.vb` 7 处 `Image.FromStream(stream)` stream 过早关闭,新增 `LoadEmbeddedImage` 辅助方法
+- 修复 `WebInterfaceModule` StreamReader/StreamWriter 未 Using(模板加载 + response.Body 写入,后者使用 `leaveOpen:=True`)
+- 修复 `StreamingLibraryManager` `CompressString` / `UnCompressString` 未 Using(嵌套 Using 块)
+- 修复 `MegaURIProtocol` 注册表操作无 Finally 释放 + 中间变量覆盖导致句柄泄漏
+- 修复 `Main.vb` `clipChange` 关闭顺序错误(Uninstall 应在 DestroyHandle 之前)
+- 修复 `Main.vb` `EsperarParadaDescargasYWorkers` 漏检查 `bgwDescompresorCompleted`
+- 修复 `StreamingLibraryModule` `Case "Delete"` 缺 `Return True`,导致贯穿到下一分支
+- 修复 `StreamingLibraryModule` `UsuarioLogueado` 超时后未清除 session,登录状态永久停留
+- 修复 `ELCAccountControl` `CellClick` 未校验 `e.RowIndex`,点击表头会崩溃
+- 修复 `StreamingHelper` `Keys.Count / 2` 浮点除法,应使用整数除法 `\ 2`
 
-- 修复 EncrypterMe.ga 链接因 API 端点下线而无法解析的问题
-- 评估将 .NET Framework 4.8 迁移至 .NET 8/9 的可行性
-- 完善 zh-CN 简体中文语言包的覆盖率
-- 增加 GitHub Actions 自动构建 Release
+**P2 协议现代化**:
+- `%SEQ%` / `%ID%` 序列号原用 `DateTime.Now.Millisecond` 的 ticks(范围 0-999,并发请求会重复),改用 `Interlocked.Increment` 进程内自增
+- `MegaFolderHelper.vb` 中 `http://mega.co.nz/#N!` → `https://mega.nz/#N!`
+
+**P2 代码质量**:
+- `Paquete.vb` / `Configuracion.vb` 用 `GetHashCode` 比较配置 XML(不保证一致性),改用直接 `OuterXml` 字符串比较
+- `MegaFolderHelper.vb` 两处变量 `ex`(Regex)→ `rx`(避免与 `Catch ex` 混淆)
+- `ThrottledStream.vb` 变量名 `int`(VB.NET 关键字)→ `bytesRead`
+- `Clases/Mutex.vb` 类名遮蔽 `System.Threading.Mutex`,加注释说明 + 提供别名方案
+- `StreamingModule.ClientConnected`、`FileDownloader` Range 头反射加注释说明必要性
+- `LibraryElement.ToJSON` 手工 JSON 拼接加注释说明限制
+
+### 🗑️ 删除
+
+- **4 个 Crypter**:`EncrypterMega.vb`、`MegaCrypter.vb`、`Youpaste.vb`、`LinkCrypter.vb`(API 全部下线)
+- **3 个 MovieInfo**:`Allocine.vb`、`Filmaffinity.vb`、`IMDB.vb`(API 全部变更)
+- **链接辅助**:`DLCHelper.vb`、`Linkdecrypter.vb`、`LinkProtectors.vb`、`Serializer.vb`、`ClipboardChangeNotifier.vb`
+- **MegaUploader 菜单**:移除 "Get MegaUploader" 菜单项
+- **goo.gl 短链**:14 个 Google 短链全部替换为 GitHub 直链
+- **Ping 上报**:移除向原作者服务器上报用户/版本信息(隐私保护)
+- 共删除 11 个 `.vb` 文件 + 清理所有相关引用
+
+### ⚠️ 已知问题
+
+- `Thread.Abort()` 危险使用(3 处,Main.vb / DescompresorController)
+- 跨线程 MsgBox 未检查窗体是否已关闭(3 处)
+- `MegaFolderHelper.FillFolderStructure` 递归无 KeyNotFound 保护
+- `ELCForm` 无限循环每 300ms 轮询
+- `ServerEncoderLinkHelper` RandomNumberGenerator 未 Dispose
+- `FileDownloader.FlushToDisk` FileStream 异时释放
+
+### 📦 构建产物
+
+- `MegaDownloader.exe` 主程序
+- 依赖 DLL:`BouncyCastle.Crypto.dll`、`Newtonsoft.Json.dll`、`SharpCompress.dll`、`ObjectListView.dll`、`HttpServer.dll`、`Fadd.dll`、`F5Lib.dll`、`xunit.dll`
+
+---
+
+## [1.9.1] - 2026-07-05
+
+### 🐛 修复
+
+- **下载器崩溃**:修复 [`Clases/FileDownloader.vb`](../Clases/FileDownloader.vb) 第 681-683 行变量名错配导致的 `NullReferenceException`。当 MEGA 服务器返回 502 网关错误等异常时,catch 块误引用已被清空的 `exc` 局部变量(应为 `ex`),导致掩盖真实异常并中断整个下载流程。
+
+---
 
 ## [1.9.0] - 2026-07-05
 
@@ -32,8 +110,8 @@
   - `https://mega.nz/folder/<FolderID>#<FolderKey>`
   - `https://mega.co.nz/file/<FileID>#<FileKey>`
   - `https://mega.co.nz/folder/<FolderID>#<FolderKey>`
-- **文件夹识别**:同步更新 `IsMegaFolder` 方法,使其能正确识别 `mega.nz/folder/` 与 `mega.co.nz/folder/` 风格的文件夹链接
-- **TLS 1.2/1.3**:在 [`Clases/Conexion.vb`](../Clases/Conexion.vb) 中显式启用 `Tls12 | Tls11 | Tls` 协议,确保与 MEGA API 通信的兼容性
+- **文件夹识别**:同步更新 `IsMegaFolder` 方法
+- **TLS 1.2/1.3**:在 [`Clases/Conexion.vb`](../Clases/Conexion.vb) 中显式启用 `Tls12 | Tls11 | Tls` 协议
 - 增加本仓库的 [README.md](../README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、`.gitignore` 等开发者文档
 
 ### 🐛 修复
@@ -41,7 +119,7 @@
 - 修复从剪贴板复制新版 MEGA 链接时无法被识别的问题
 - 修复从浏览器拖拽新版 MEGA 链接到主窗口无效的问题
 - 修复新版文件夹链接无法被解析为子文件列表的问题
-- **修复文件夹下载时 Base64 解码错误**:`mega.nz/folder/` 链接包含被多个用户分享的文件时,MEGA API 返回的 `fileN.k` 字段格式为 `handle1:key1/handle2:key2[/handle3:key3]`(用 `/` 分隔多个 `handle:key` 对)。原代码 `fileN.k.Substring(fileN.k.IndexOf(":") + 1)` 会把第一个 `:` 之后的所有内容(包括 `/handle2:key2`)当作 key,导致 `Convert.FromBase64String` 抛出 FormatException。修复方案:新增 `ExtractKeyFromK` 辅助函数,先找到文件夹本身的内部 handle (root),然后从 k 字段中提取与 root 匹配的 key;同时为解密步骤添加 try-catch,跳过无法解密的文件而不是抛出异常。参见 [`Clases/MegaFolderHelper.vb`](../Clases/MegaFolderHelper.vb)
+- **修复文件夹下载时 Base64 解码错误**:`mega.nz/folder/` 链接包含被多个用户分享的文件时,MEGA API 返回的 `fileN.k` 字段格式为 `handle1:key1/handle2:key2[/handle3:key3]`(用 `/` 分隔多个 `handle:key` 对)。原代码 `fileN.k.Substring(fileN.k.IndexOf(":") + 1)` 会把第一个 `:` 之后的所有内容(包括 `/handle2:key2`)当作 key,导致 `Convert.FromBase64String` 抛出 FormatException。修复方案:新增 `ExtractKeyFromK` 辅助函数。
 
 ### 🔄 变更
 
