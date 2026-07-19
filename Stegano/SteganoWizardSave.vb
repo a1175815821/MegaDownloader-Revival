@@ -36,6 +36,7 @@ Namespace Stegano
             Me.Location = New Point(CInt((scr.WorkingArea.Right - Me.Width) / 2), CInt((scr.WorkingArea.Bottom - Me.Height) / 2))
 
             Translate()
+            ThemeManager.ApplyTheme(Me)
         End Sub
 
 

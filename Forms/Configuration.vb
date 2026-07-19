@@ -463,6 +463,16 @@ Public Class Configuration
         Main.Config = Config
         Main.NecesitaCambiarUsuarioYPassword = False
 
+        ' 主题变更后立即刷新主窗体(无需重启)
+        Try
+            If MainForm IsNot Nothing Then
+                MainForm.ApplyCurrentTheme()
+            Else
+                Main.ApplyCurrentTheme()
+            End If
+        Catch ex As Exception
+            Log.WriteError("Failed to re-apply theme after config save: " & ex.ToString)
+        End Try
 
         ' Reiniciamos el servidor 
         ServidorWebController.StopWebServer()

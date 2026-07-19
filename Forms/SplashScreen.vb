@@ -9,6 +9,7 @@
         lblMsg.Text = Language.GetText("Loading please wait")
         'lblThx.Text = Language.GetText("Thanks for using this app")
         lblThx.Text = InternalConfiguration.ObtenerNombreApp & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER")
+        ThemeManager.ApplyTheme(Me)
     End Sub
 
 End Class

@@ -37,6 +37,11 @@ Public Class Main
     ''' <remarks></remarks>
     Private WithEvents dropSink As SimpleDropSink
 
+    ''' <summary>
+    ''' 进度条渲染器(主题切换时需同步颜色)
+    ''' </summary>
+    Private progressBarRenderer As BrightIdeasSoftware.BarRenderer
+
 
     ' WORKERS
 
@@ -302,7 +307,7 @@ Public Class Main
 
         ' 应用主题(在所有控件创建后、用户可见时应用)
         Try
-            ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
+            ApplyCurrentTheme()
         Catch ex As Exception
             Log.WriteError("Failed to apply theme: " & ex.ToString)
         End Try
@@ -867,14 +872,11 @@ Public Class Main
                                              Throw
                                          End Try
                                      End Function
-        Dim barRender As New BrightIdeasSoftware.BarRenderer
-        barRender.UseStandardBar = False
-        barRender.BackgroundColor = System.Drawing.Color.Azure
-        barRender.FillColor = System.Drawing.Color.MediumTurquoise
-        barRender.GradientStartColor = System.Drawing.Color.SpringGreen
-        barRender.GradientEndColor = System.Drawing.Color.MediumTurquoise
-        barRender.MaximumWidth = 9999
-        ListaDescargas.AllColumns(IndiceColumnaPorcentaje).Renderer = barRender
+        progressBarRenderer = New BrightIdeasSoftware.BarRenderer
+        progressBarRenderer.UseStandardBar = False
+        progressBarRenderer.MaximumWidth = 9999
+        ApplyProgressBarThemeColors()
+        ListaDescargas.AllColumns(IndiceColumnaPorcentaje).Renderer = progressBarRenderer
 
         Dim ColVelocidad As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(ListaDescargas.AllColumns(IndiceColumnaVelocidad))
         ColVelocidad.AspectGetter = Function(ele As IDescarga)
@@ -943,16 +945,41 @@ Public Class Main
     End Sub
     Private Sub ListaDescargas_FormatRow(sender As Object, e As BrightIdeasSoftware.FormatRowEventArgs) Handles ListaDescargas.FormatRow
         If e.DisplayIndex Mod 2 = 0 Then
-            e.Item.BackColor = Color.White
+            e.Item.BackColor = ThemeManager.GetColor("Back")
         Else
-            e.Item.BackColor = Color.Honeydew
+            e.Item.BackColor = ThemeManager.GetColor("AltBack")
         End If
         Dim desc As IDescarga = CType(e.Model, IDescarga)
         If desc.DescargaEstado = Estado.Erroneo Then
-            e.Item.ForeColor = Color.Red
+            e.Item.ForeColor = ThemeManager.GetColor("ErrorFore")
         ElseIf desc.DescargaEstado = Estado.Completado Then
-            e.Item.ForeColor = Color.Green
+            e.Item.ForeColor = ThemeManager.GetColor("SuccessFore")
+        Else
+            e.Item.ForeColor = ThemeManager.GetColor("Fore")
         End If
+    End Sub
+
+    ''' <summary>
+    ''' 应用当前配置主题到主窗体,并同步列表进度条等非递归控件颜色。
+    ''' </summary>
+    Public Sub ApplyCurrentTheme()
+        If Config Is Nothing OrElse Config.ConfigUI Is Nothing Then
+            ThemeManager.ApplyTheme(Me)
+        Else
+            ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
+        End If
+        ApplyProgressBarThemeColors()
+        If ListaDescargas IsNot Nothing Then
+            ListaDescargas.Invalidate()
+        End If
+    End Sub
+
+    Private Sub ApplyProgressBarThemeColors()
+        If progressBarRenderer Is Nothing Then Return
+        progressBarRenderer.BackgroundColor = ThemeManager.GetColor("ProgressBack")
+        progressBarRenderer.FillColor = ThemeManager.GetColor("ProgressFill")
+        progressBarRenderer.GradientStartColor = ThemeManager.GetColor("ProgressGradientStart")
+        progressBarRenderer.GradientEndColor = ThemeManager.GetColor("ProgressGradientEnd")
     End Sub
     Private Function PintarVelocidadDescarga(ele As IDescarga) As String
         If ele.DescargaEstado = Estado.Descargando Then

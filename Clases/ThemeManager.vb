@@ -31,7 +31,15 @@ Public NotInheritable Class ThemeManager
         {"SelectionFore", Color.White},
         {"Link", Color.FromArgb(0, 102, 204)},
         {"ToolBack", Color.FromArgb(240, 240, 240)},
-        {"ToolBorder", Color.FromArgb(204, 206, 209)}
+        {"ToolBorder", Color.FromArgb(204, 206, 209)},
+        {"ErrorFore", Color.FromArgb(192, 0, 0)},
+        {"SuccessFore", Color.FromArgb(0, 128, 0)},
+        {"ProgressBack", Color.Azure},
+        {"ProgressFill", Color.MediumTurquoise},
+        {"ProgressGradientStart", Color.SpringGreen},
+        {"ProgressGradientEnd", Color.MediumTurquoise},
+        {"ButtonHover", Color.FromArgb(229, 241, 251)},
+        {"ButtonPressed", Color.FromArgb(204, 228, 247)}
     }
 
     ' 深色配色(VS Code Dark+ 风格)
@@ -46,8 +54,31 @@ Public NotInheritable Class ThemeManager
         {"SelectionFore", Color.FromArgb(241, 241, 241)},
         {"Link", Color.FromArgb(86, 156, 214)},
         {"ToolBack", Color.FromArgb(45, 45, 48)},
-        {"ToolBorder", Color.FromArgb(90, 90, 90)}
+        {"ToolBorder", Color.FromArgb(90, 90, 90)},
+        {"ErrorFore", Color.FromArgb(244, 135, 113)},
+        {"SuccessFore", Color.FromArgb(78, 201, 176)},
+        {"ProgressBack", Color.FromArgb(45, 45, 48)},
+        {"ProgressFill", Color.FromArgb(38, 79, 120)},
+        {"ProgressGradientStart", Color.FromArgb(14, 99, 156)},
+        {"ProgressGradientEnd", Color.FromArgb(38, 79, 120)},
+        {"ButtonHover", Color.FromArgb(62, 62, 66)},
+        {"ButtonPressed", Color.FromArgb(38, 79, 120)}
     }
+
+    Private Shared Function CurrentColors() As Dictionary(Of String, Color)
+        Return If(_current = ResolvedTheme.Dark, DarkColors, LightColors)
+    End Function
+
+    ''' <summary>
+    ''' 按 token 名取当前主题颜色。未知 key 返回 Fore。
+    ''' </summary>
+    Public Shared Function GetColor(key As String) As Color
+        Dim colors = CurrentColors()
+        If colors.ContainsKey(key) Then
+            Return colors(key)
+        End If
+        Return colors("Fore")
+    End Function
 
     ''' <summary>
     ''' 检测系统当前是否使用深色主题。
@@ -93,6 +124,9 @@ Public NotInheritable Class ThemeManager
         ToolStripManager.Renderer = New ToolStripProfessionalRenderer(New ThemeColorTable(colors))
 
         ApplyThemeRecursive(form, colors, resolved)
+
+        ' ContextMenuStrip 不在 Controls 树中,需从 components / 字段显式处理
+        ApplyThemeToFormContextMenus(form, colors)
     End Sub
 
     ''' <summary>
@@ -101,6 +135,39 @@ Public NotInheritable Class ThemeManager
     ''' </summary>
     Public Shared Sub ApplyTheme(form As Form)
         ApplyTheme(form, _currentMode)
+    End Sub
+
+    ''' <summary>
+    ''' 显式主题化 ContextMenuStrip(不在 Form.Controls 树中)。
+    ''' </summary>
+    Public Shared Sub ApplyThemeToContextMenuStrip(cms As ContextMenuStrip)
+        If cms Is Nothing Then Return
+        ApplyThemeToToolStrip(cms, CurrentColors())
+    End Sub
+
+    Private Shared Sub ApplyThemeToFormContextMenus(form As Form, colors As Dictionary(Of String, Color))
+        If form Is Nothing Then Return
+        Try
+            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public Or Reflection.BindingFlags.NonPublic
+            For Each fi As Reflection.FieldInfo In form.GetType().GetFields(flags)
+                If GetType(ContextMenuStrip).IsAssignableFrom(fi.FieldType) Then
+                    Dim cms = TryCast(fi.GetValue(form), ContextMenuStrip)
+                    If cms IsNot Nothing Then
+                        ApplyThemeToToolStrip(cms, colors)
+                    End If
+                End If
+            Next
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Shared Sub ApplyThemeToToolStrip(ts As ToolStrip, colors As Dictionary(Of String, Color))
+        ts.BackColor = colors("ToolBack")
+        ts.ForeColor = colors("Fore")
+        ts.RenderMode = ToolStripRenderMode.ManagerRenderMode
+        For Each item As ToolStripItem In ts.Items
+            ApplyThemeToToolStripItem(item, colors)
+        Next
     End Sub
 
     Private Shared Sub ApplyThemeRecursive(control As Control, colors As Dictionary(Of String, Color), theme As ResolvedTheme)
@@ -124,8 +191,17 @@ Public NotInheritable Class ThemeManager
             GoTo RecurseChildren
         End If
 
+        ' GroupBox: Flat 避免系统 3D 浅色边框
+        If TypeOf control Is GroupBox Then
+            Dim gb As GroupBox = CType(control, GroupBox)
+            gb.BackColor = colors("ControlBack")
+            gb.ForeColor = colors("Fore")
+            gb.FlatStyle = FlatStyle.Flat
+            GoTo RecurseChildren
+        End If
+
         ' 容器控件
-        If TypeOf control Is GroupBox OrElse TypeOf control Is Panel OrElse
+        If TypeOf control Is Panel OrElse
            TypeOf control Is TableLayoutPanel OrElse TypeOf control Is FlowLayoutPanel OrElse
            TypeOf control Is SplitContainer OrElse TypeOf control Is SplitterPanel Then
             control.BackColor = colors("ControlBack")
@@ -133,13 +209,9 @@ Public NotInheritable Class ThemeManager
             GoTo RecurseChildren
         End If
 
-        ' Button
+        ' Button: Flat + 主题边框,避免 Visual Styles 的 3D 白边
         If TypeOf control Is Button Then
-            control.BackColor = colors("ControlBack")
-            control.ForeColor = colors("Fore")
-            Dim btn As Button = CType(control, Button)
-            btn.FlatStyle = FlatStyle.Standard
-            btn.UseVisualStyleBackColor = False
+            ApplyThemeToButton(CType(control, Button), colors)
             GoTo RecurseChildren
         End If
 
@@ -181,8 +253,10 @@ Public NotInheritable Class ThemeManager
             GoTo RecurseChildren
         End If
         If TypeOf control Is TabPage Then
-            control.BackColor = colors("Back")
-            control.ForeColor = colors("Fore")
+            Dim tp As TabPage = CType(control, TabPage)
+            tp.BackColor = colors("Back")
+            tp.ForeColor = colors("Fore")
+            tp.UseVisualStyleBackColor = False
             GoTo RecurseChildren
         End If
 
@@ -194,6 +268,10 @@ Public NotInheritable Class ThemeManager
             dgv.DefaultCellStyle.ForeColor = colors("Fore")
             dgv.DefaultCellStyle.SelectionBackColor = colors("Selection")
             dgv.DefaultCellStyle.SelectionForeColor = colors("SelectionFore")
+            dgv.AlternatingRowsDefaultCellStyle.BackColor = colors("AltBack")
+            dgv.AlternatingRowsDefaultCellStyle.ForeColor = colors("Fore")
+            dgv.AlternatingRowsDefaultCellStyle.SelectionBackColor = colors("Selection")
+            dgv.AlternatingRowsDefaultCellStyle.SelectionForeColor = colors("SelectionFore")
             dgv.ColumnHeadersDefaultCellStyle.BackColor = colors("ControlBack")
             dgv.ColumnHeadersDefaultCellStyle.ForeColor = colors("Fore")
             dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = colors("ControlBack")
@@ -237,14 +315,7 @@ Public NotInheritable Class ThemeManager
 
         ' ToolStrip 系列(MenuStrip/StatusStrip/ToolStrip - 不含 ContextMenuStrip,它不是 Control)
         If TypeOf control Is ToolStrip Then
-            Dim ts As ToolStrip = CType(control, ToolStrip)
-            ts.BackColor = colors("ToolBack")
-            ts.ForeColor = colors("Fore")
-            ts.RenderMode = ToolStripRenderMode.ManagerRenderMode
-            ' 递归 ToolStrip 项
-            For Each item As ToolStripItem In ts.Items
-                ApplyThemeToToolStripItem(item, colors)
-            Next
+            ApplyThemeToToolStrip(CType(control, ToolStrip), colors)
             Return ' ToolStrip 的 Items 不是 Controls.Controls,不要走默认递归
         End If
 
@@ -325,6 +396,19 @@ RecurseChildren:
         End Try
     End Sub
 
+    Private Shared Sub ApplyThemeToButton(btn As Button, colors As Dictionary(Of String, Color))
+        btn.UseVisualStyleBackColor = False
+        btn.FlatStyle = FlatStyle.Flat
+        btn.BackColor = colors("ControlBack")
+        btn.ForeColor = colors("Fore")
+        btn.FlatAppearance.BorderSize = 1
+        btn.FlatAppearance.BorderColor = colors("Border")
+        btn.FlatAppearance.MouseOverBackColor = colors("ButtonHover")
+        btn.FlatAppearance.MouseDownBackColor = colors("ButtonPressed")
+        ' 有图标的工具栏按钮禁用时保持边框可见
+        btn.FlatAppearance.CheckedBackColor = colors("Selection")
+    End Sub
+
     Private Shared Sub ApplyThemeToToolStripItem(item As ToolStripItem, colors As Dictionary(Of String, Color))
         item.BackColor = colors("ToolBack")
         item.ForeColor = colors("Fore")
@@ -345,6 +429,12 @@ RecurseChildren:
         End Get
     End Property
 
+    Public Shared ReadOnly Property CurrentMode As ConfiguracionUI.ThemeModeType
+        Get
+            Return _currentMode
+        End Get
+    End Property
+
 End Class
 
 ''' <summary>
@@ -361,7 +451,7 @@ Friend Class ThemeColorTable
 
     Public Overrides ReadOnly Property ToolStripBorder As Color
         Get
-            Return _colors("ToolBack")
+            Return _colors("ToolBorder")
         End Get
     End Property
 
@@ -378,6 +468,12 @@ Friend Class ThemeColorTable
     End Property
 
     Public Overrides ReadOnly Property ToolStripGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ToolStripDropDownBackground As Color
         Get
             Return _colors("ToolBack")
         End Get
@@ -479,6 +575,30 @@ Friend Class ThemeColorTable
         End Get
     End Property
 
+    Public Overrides ReadOnly Property ButtonCheckedHighlight As Color
+        Get
+            Return _colors("Selection")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property CheckBackground As Color
+        Get
+            Return _colors("Selection")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property CheckSelectedBackground As Color
+        Get
+            Return _colors("Selection")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property CheckPressedBackground As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
     Public Overrides ReadOnly Property SeparatorDark As Color
         Get
             Return _colors("Border")
@@ -518,6 +638,66 @@ Friend Class ThemeColorTable
     Public Overrides ReadOnly Property ImageMarginGradientEnd As Color
         Get
             Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginRevealedGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginRevealedGradientMiddle As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property ImageMarginRevealedGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property RaftingContainerGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property RaftingContainerGradientEnd As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property OverflowButtonGradientBegin As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property OverflowButtonGradientMiddle As Color
+        Get
+            Return _colors("ToolBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property OverflowButtonGradientEnd As Color
+        Get
+            Return _colors("ControlBack")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property GripDark As Color
+        Get
+            Return _colors("Border")
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property GripLight As Color
+        Get
+            Return _colors("Border")
         End Get
     End Property
 

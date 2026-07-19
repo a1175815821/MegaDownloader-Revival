@@ -30,14 +30,26 @@ Public Partial Class ELCAccountControl
 		' SEL Accounts
 		If Config IsNot Nothing Then 
 			ELCAccountH = New ELCAccountHelper(Config)
-			dgELCUsers.BackgroundColor = Color.Azure
+			dgELCUsers.BackgroundColor = ThemeManager.GetColor("AltBack")
 			With dgELCUsers.ColumnHeadersDefaultCellStyle
-				.BackColor = Color.Snow
+				.BackColor = ThemeManager.GetColor("ControlBack")
+				.ForeColor = ThemeManager.GetColor("Fore")
 				.Font = New Font(dgELCUsers.Font, FontStyle.Bold)
 			End With
-			With dgELCUsers.AlternatingRowsDefaultCellStyle
-				.BackColor = Color.SeaShell
+			With dgELCUsers.DefaultCellStyle
+				.BackColor = ThemeManager.GetColor("Back")
+				.ForeColor = ThemeManager.GetColor("Fore")
+				.SelectionBackColor = ThemeManager.GetColor("Selection")
+				.SelectionForeColor = ThemeManager.GetColor("SelectionFore")
 			End With
+			With dgELCUsers.AlternatingRowsDefaultCellStyle
+				.BackColor = ThemeManager.GetColor("AltBack")
+				.ForeColor = ThemeManager.GetColor("Fore")
+				.SelectionBackColor = ThemeManager.GetColor("Selection")
+				.SelectionForeColor = ThemeManager.GetColor("SelectionFore")
+			End With
+			dgELCUsers.GridColor = ThemeManager.GetColor("Border")
+			dgELCUsers.EnableHeadersVisualStyles = False
 			FillELCAccountDataGridView()
 			dgELCUsers.ClearSelection()
 			
@@ -124,7 +136,9 @@ Public Partial Class ELCAccountControl
 				' create a white rectangle so text will be easily readable
 				'grfx.FillRectangle(Brushes.White, New Rectangle(New Point(), New Size(sndr.Width, 25)))
 				' write text on top of the white rectangle just created
-				grfx.DrawString(Language.GetText("Account list empty"), New Font(dgELCUsers.Font.FontFamily, dgELCUsers.Font.Size, FontStyle.Italic), Brushes.Black, New PointF(55, 10))
+				Using emptyBrush As New SolidBrush(ThemeManager.GetColor("Fore"))
+					grfx.DrawString(Language.GetText("Account list empty"), New Font(dgELCUsers.Font.FontFamily, dgELCUsers.Font.Size, FontStyle.Italic), emptyBrush, New PointF(55, 10))
+				End Using
 			End Using
 		End If
 	End Sub

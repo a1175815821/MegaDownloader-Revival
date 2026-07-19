@@ -10,7 +10,7 @@
         'TODO: Customize the application's assembly information in the "Application" pane of the project 
         '  properties dialog (under the "Project" menu).
 
-      
+        ThemeManager.ApplyTheme(Me)
     End Sub
 
 End Class

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  This file is consumed by the MegaDownloader update checker.
+  - Version: latest released version number (major.minor[.build[.revision]])
+  - Link: direct download URL for the portable binary
+  - LinkInstaller: download URL for the installer build
+  - LinkMSD: reserved for MegaSearch Desktop builds (not used in Revival)
+-->
+<MegaDownloader>
+  <Version>2.1.0.0</Version>
+  <Link>https://github.com/a1175815821/MegaDownloader-Revival/releases/latest</Link>
+  <LinkInstaller>https://github.com/a1175815821/MegaDownloader-Revival/releases/latest</LinkInstaller>
+  <LinkMSD>https://github.com/a1175815821/MegaDownloader-Revival/releases/latest</LinkMSD>
+</MegaDownloader>

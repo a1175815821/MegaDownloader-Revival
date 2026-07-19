@@ -37,6 +37,7 @@ x86/
 !Resources/InternalConfig.xml
 !Resources/Language/*.xml
 !HttpModule/Template/XmlTemplateData.xml
+!docs/version.xml
 
 # 项目特定编译产物
 MegaDownloader.xml

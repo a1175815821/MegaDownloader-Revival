@@ -30,6 +30,7 @@
             Me.Location = New Point(CInt((scr.WorkingArea.Right - Me.Width) / 2), CInt((scr.WorkingArea.Bottom - Me.Height) / 2))
 
             Translate()
+            ThemeManager.ApplyTheme(Me)
         End Sub
 
         Private Sub btLoad_Click(sender As Object, e As EventArgs) Handles btLoad.Click
