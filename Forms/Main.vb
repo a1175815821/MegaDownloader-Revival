@@ -426,13 +426,13 @@ Public Class Main
         Me.Menu = New MainMenu
         Dim Archivo As MenuItem = Menu.MenuItems.Add(Language.GetText("&File"))
 
-        Dim OpenDLC As MenuItem = New MenuItem(Language.GetText("Open &DLC"))
-        AddHandler (OpenDLC.Click), AddressOf OpenDLC_Click
+        Dim OpenELC As MenuItem = New MenuItem(Language.GetText("Open &ELC"))
+        AddHandler (OpenELC.Click), AddressOf OpenDLC_Click
 
         Dim Salir As MenuItem = New MenuItem(Language.GetText("E&xit"))
         AddHandler (Salir.Click), AddressOf CerrarToolStripMenuItem_Click
 
-        Archivo.MenuItems.Add(OpenDLC)
+        Archivo.MenuItems.Add(OpenELC)
         Archivo.MenuItems.Add("-")
         Archivo.MenuItems.Add(Salir)
 
@@ -607,23 +607,29 @@ Public Class Main
 
         Log.WriteInfo("Closing, cancelling workers")
 
-        ' Abortamos workers
+        ' 1) Stop accepting new work via Web/Streaming
+        Log.WriteInfo("Stopping web server")
+        ServidorWebController.StopWebServer()
 
+        ' 2) Cancel background workers and extraction
         bgwActualizadorListaDescargas.CancelAsync()
         bgwComprobarMaxConexiones.CancelAsync()
         bgwActualizadorDatosDisco.CancelAsync()
         bgwDescompresor.CancelAsync()
+        Try
+            DescompresorController.GetController.RequestCancel()
+        Catch
+        End Try
 
-        ' Paramos descargas
+        ' 3) Stop downloads and wait
         Log.WriteInfo("Cancelling downloads")
         PararDescargaFicheros()
         EsperarParadaDescargasYWorkers()
 
+        ' 4) Atomic-ish persistence before releasing UI lists
         Log.WriteInfo("Saving download list")
-        ' Guardamos lista descargas
         GuardarFicheroDescargas()
 
-        ' Guardamos configuracion
         If Me.WindowState <> FormWindowState.Minimized Then
             Me.Config.ConfigUI.AnchoVentanaPrincipal = Me.Width
             Me.Config.ConfigUI.AltoVentanaPrincipal = Me.Height
@@ -631,13 +637,9 @@ Public Class Main
         Me.Config.ConfigUI.EstadoLista = Me.ListaDescargas.SaveState
         Me.Config.GuardarXML(False)
 
-        ' Borramos lista descargas
+        ' 5) Release list/UI resources
         ListaDescargas.ClearObjects()
         ListaDescargas.Dispose()
-
-        ' Detenemos el servidor web
-        Log.WriteInfo("Stopping web server")
-        ServidorWebController.StopWebServer()
 
         ' Esto es solo para mostrar la imagen y que no parpadee xD
         If Now.Subtract(Crono).TotalMilliseconds < 500 Then
@@ -699,7 +701,7 @@ Public Class Main
 
         Dim Examinar As New OpenFileDialog
         Examinar.CheckFileExists = True
-        Examinar.Filter = Language.GetText("DLC") & " / " & Language.GetText("ELC") & " (*.dlc, *.elc)|*.dlc;*.elc"
+        Examinar.Filter = Language.GetText("ELC") & " (*.elc)|*.elc|" & Language.GetText("DLC") & " (discontinued) (*.dlc)|*.dlc"
         Examinar.Multiselect = False
 
         Dim DLCPath As String = String.Empty
@@ -1602,23 +1604,28 @@ Public Class Main
         Dim HayCola As Boolean = False
 
         Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
+        Try
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
 
-                HayCola = True
+                    HayCola = True
 
-                If Fichero.DescargaEstado <> Estado.Completado And Fichero.DescargaEstado <> Estado.Erroneo Then
-                    TodosCompletadosOErroneos = False
-                End If
-                If Fichero.DescargaEstado = Estado.Erroneo Then
-                    HayErroneos = True
-                End If
+                    ' Only fully successful tasks count as completed for auto-shutdown
+                    If Fichero.DescargaEstado <> Estado.Completado Then
+                        TodosCompletadosOErroneos = False
+                    End If
+                    If Fichero.DescargaEstado = Estado.Erroneo Then
+                        HayErroneos = True
+                        TodosCompletadosOErroneos = False
+                    End If
 
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
 
-        If HayCola And TodosCompletadosOErroneos Then
+        If HayCola And TodosCompletadosOErroneos And Not HayErroneos Then
             If Not Config.ResetearErrores Or Not HayErroneos Then
                 ' Apagamos el PC!!!
 
@@ -2412,16 +2419,19 @@ Public Class Main
 
 
 
-    Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String)
+    Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String, ByVal Success As Boolean)
         Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each fic As Fichero In paq.ListaFicheros
-                If fic.FileID = Code Then
-                    fic.DescompresionFinalizada()
-                End If
+        Try
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.FileID = Code Then
+                        fic.DescompresionFinalizada(Success)
+                    End If
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
     End Sub
 
 #End Region

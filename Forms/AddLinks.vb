@@ -191,7 +191,8 @@ Public Class AddLinks
 
                     ' Creamos el directorio
                     If .CrearSubdirectorio And Not String.IsNullOrEmpty(txtNombre.Text) Then
-                        .RutaLocal = System.IO.Path.Combine(.RutaLocal, txtNombre.Text)
+                        Dim packageSegment As String = PathGuard.SanitizeFileName(txtNombre.Text, "package")
+                        .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
                         System.IO.Directory.CreateDirectory(.RutaLocal)
                     End If
 
@@ -200,7 +201,7 @@ Public Class AddLinks
                     .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
                     For Each URL In URLs2
 
-                        Dim ruta As String = System.IO.Path.Combine(oPaquete.RutaLocal, URL.Path)
+                        Dim ruta As String = PathGuard.GetSafePathUnderRoot(oPaquete.RutaLocal, If(URL.Path, String.Empty), allowRoot:=True)
                         System.IO.Directory.CreateDirectory(ruta)
 
                         Dim URLFile As String = URL.URL

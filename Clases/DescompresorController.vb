@@ -42,6 +42,7 @@ Public Class DescompresorController
     Private _pathElementoActual As String
     Private _passwordElementoActual As String
     Private _crearDirectorio As Boolean
+    Private _cancelRequested As Boolean
 
     Private _ExtensionesSoportadas As Generic.List(Of String)
 
@@ -72,7 +73,23 @@ Public Class DescompresorController
         Mutex.ReleaseMutex()
     End Sub
 
-   
+    Public Sub RequestCancel()
+        Mutex.WaitOne()
+        Try
+            _cancelRequested = True
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
+    End Sub
+
+    Private Function IsCancelRequested() As Boolean
+        Mutex.WaitOne()
+        Try
+            Return _cancelRequested
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
+    End Function
 
     Private Function PonerElementoAProcesar() As Boolean
         Mutex.WaitOne()
@@ -124,35 +141,45 @@ Public Class DescompresorController
 
         Dim DirectorioExtraccion As String = Directorio
         If _crearDirectorio Then
-            DirectorioExtraccion = Path.Combine(Directorio, FicheroSinExtension)
+            Dim safeFolder As String = PathGuard.SanitizeFileName(FicheroSinExtension, "extracted")
+            DirectorioExtraccion = PathGuard.GetSafePathUnderRoot(Directorio, safeFolder, allowRoot:=False)
         End If
-
-        Dim forceEnd As Boolean = False
-
+        Directory.CreateDirectory(DirectorioExtraccion)
 
         Dim desc As New Descompressor(_pathElementoActual, DirectorioExtraccion, _passwordElementoActual)
+        Dim extractOk As Boolean = False
 
-        Dim Thread As New Threading.Thread(AddressOf desc.Extract)
-        Thread.Priority = Threading.ThreadPriority.BelowNormal
-        Thread.Start()
-        While Not Thread.Join(500) And Not forceEnd
-            If Cancel Then
-                Thread.Abort()
-                System.Threading.Thread.Sleep(300)
-                forceEnd = True
+        Dim extractThread As New Threading.Thread(AddressOf desc.Extract)
+        extractThread.Priority = Threading.ThreadPriority.BelowNormal
+        extractThread.IsBackground = True
+        extractThread.Start()
+        While Not extractThread.Join(500)
+            If Cancel OrElse IsCancelRequested() Then
+                ' Cooperative cancel only — do not Thread.Abort (unsafe mid-write)
+                desc.CancelRequested = True
+                Log.WriteWarning("Decompressor: cancel requested for '" & _codigoElementoActual & "'; waiting for worker to stop.")
+                extractThread.Join(5000)
+                Exit While
             End If
         End While
 
         If desc.Exception IsNot Nothing Then
-            ' Guardar logs
-            Log.WriteError("Decompressor: Error extracting '" & _codigoElementoActual & "' (file '" & _pathElementoActual & "'): " & desc.Exception.ToString)
+            Log.WriteError("Decompressor: Error extracting '" & _codigoElementoActual & "': " & Log.SafeException(desc.Exception))
+            extractOk = False
+        ElseIf Cancel OrElse desc.CancelRequested OrElse IsCancelRequested() Then
+            extractOk = False
+        Else
+            extractOk = True
         End If
         Sw.Stop()
 
+        If extractOk Then
+            Log.WriteInfo("Element '" & _codigoElementoActual & "' extracted in " & Sw.ElapsedMilliseconds & "ms")
+        Else
+            Log.WriteWarning("Element '" & _codigoElementoActual & "' extraction failed or cancelled.")
+        End If
 
-        Log.WriteInfo("Element '" & _codigoElementoActual & "' extracted in " & Sw.ElapsedMilliseconds & "ms")
-
-        RaiseEvent DescompresionFinalizada(_codigoElementoActual)
+        RaiseEvent DescompresionFinalizada(_codigoElementoActual, extractOk)
 
         ' Hemos terminado
         Mutex.WaitOne()
@@ -207,7 +234,7 @@ Public Class DescompresorController
 
 #Region "Región pública"
 
-    Public Event DescompresionFinalizada(ByVal Code As String)
+    Public Event DescompresionFinalizada(ByVal Code As String, ByVal Success As Boolean)
 
     ' Tamaño total de los ficheros dentro del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_TamanoTotal As System.Nullable(Of Long)
@@ -417,12 +444,14 @@ Public Class DescompresorController
         Private PathFichero As String
         Private PathExtraccion As String
         Public Exception As Exception
+        Public CancelRequested As Boolean
 
         Public Sub New(ByVal _Fichero As String, ByVal _PathExtraccion As String, ByVal _Password As String)
 
             PathFichero = _Fichero
             PathExtraccion = _PathExtraccion
             Password = _Password
+            CancelRequested = False
 
             If String.IsNullOrEmpty(Password) Then Password = Nothing ' Evitamos string.empty
         End Sub
@@ -510,11 +539,13 @@ Public Class DescompresorController
                                                 For Each entry As IArchiveEntry In archive.Entries
                                                     c._TamanoTotal += entry.Size
                                                 Next
+                                                EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
                                             Finally
                                                 Mutex.ReleaseMutex()
                                             End Try
 
                                             While reader.MoveToNextEntry
+                                                If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
                                                 If Not reader.Entry.IsDirectory Then
                                                     c._FicActNombre = reader.Entry.Key
 
@@ -522,7 +553,7 @@ Public Class DescompresorController
                                                     c._FicActTamanoTotal = reader.Entry.Size
                                                     c._FicActExtraido = 0
 
-                                                    reader.WriteEntryToDirectory(PathExtraccion, SharpCompress.Common.ExtractOptions.ExtractFullPath Or SharpCompress.Common.ExtractOptions.Overwrite)
+                                                    WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
                                                 End If
                                             End While
                                         Finally
@@ -554,11 +585,13 @@ Public Class DescompresorController
                                                 For Each entry As IArchiveEntry In archive.Entries
                                                     c._TamanoTotal += entry.Size
                                                 Next
+                                                EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
                                             Finally
                                                 Mutex.ReleaseMutex()
                                             End Try
 
                                             While reader.MoveToNextEntry
+                                                If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
                                                 If Not reader.Entry.IsDirectory Then
                                                     c._FicActNombre = reader.Entry.Key
 
@@ -566,7 +599,7 @@ Public Class DescompresorController
                                                     c._FicActTamanoTotal = reader.Entry.Size
                                                     c._FicActExtraido = 0
 
-                                                    reader.WriteEntryToDirectory(PathExtraccion, SharpCompress.Common.ExtractOptions.ExtractFullPath Or SharpCompress.Common.ExtractOptions.Overwrite)
+                                                    WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
                                                 End If
                                             End While
                                         Finally
@@ -613,15 +646,26 @@ Public Class DescompresorController
                                     For Each entry As IArchiveEntry In archive.Entries
                                         c._TamanoTotal += entry.Size
                                     Next
+                                    EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
                                 Finally
                                     Mutex.ReleaseMutex()
                                 End Try
 
+                                Dim entryKeys As New Generic.List(Of String)
                                 For Each entry As IArchiveEntry In archive.Entries
                                     If Not entry.IsDirectory Then
-                                        c._FicActNombre = entry.Key
+                                        entryKeys.Add(entry.Key)
+                                    End If
+                                Next
+                                PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
 
-                                        entry.WriteToDirectory(PathExtraccion, SharpCompress.Common.ExtractOptions.ExtractFullPath Or SharpCompress.Common.ExtractOptions.Overwrite)
+                                For Each entry As IArchiveEntry In archive.Entries
+                                    If CancelRequested Then
+                                        Throw New OperationCanceledException("Extraction cancelled.")
+                                    End If
+                                    If Not entry.IsDirectory Then
+                                        c._FicActNombre = entry.Key
+                                        WriteSafeEntry(entry, PathExtraccion)
                                     End If
                                 Next
                             Finally
@@ -645,6 +689,36 @@ Public Class DescompresorController
             Catch ex As Exception
                 Exception = ex
             End Try
+        End Sub
+
+        Private Const MaxExtractTotalBytes As Long = 50L * 1024L * 1024L * 1024L ' 50 GiB hard cap
+        Private Const MaxExtractEntries As Integer = 100000
+
+        Private Shared Sub EnsureExtractWithinQuota(ByVal totalUncompressed As Long, ByVal entryCount As Integer)
+            If entryCount > MaxExtractEntries Then
+                Throw New InvalidOperationException("Archive rejected: too many entries (" & entryCount & ").")
+            End If
+            If totalUncompressed < 0 OrElse totalUncompressed > MaxExtractTotalBytes Then
+                Throw New InvalidOperationException("Archive rejected: uncompressed size exceeds safety limit.")
+            End If
+        End Sub
+
+        Private Shared Sub WriteSafeEntry(ByVal entry As IArchiveEntry, ByVal extractionRoot As String)
+            Dim dest As String = PathGuard.GetSafeArchiveEntryPath(extractionRoot, entry.Key)
+            Dim parentDir As String = Path.GetDirectoryName(dest)
+            If Not String.IsNullOrEmpty(parentDir) Then
+                Directory.CreateDirectory(parentDir)
+            End If
+            entry.WriteToFile(dest, SharpCompress.Common.ExtractOptions.Overwrite)
+        End Sub
+
+        Private Shared Sub WriteSafeEntry(ByVal reader As IReader, ByVal extractionRoot As String, ByVal entryKey As String)
+            Dim dest As String = PathGuard.GetSafeArchiveEntryPath(extractionRoot, entryKey)
+            Dim parentDir As String = Path.GetDirectoryName(dest)
+            If Not String.IsNullOrEmpty(parentDir) Then
+                Directory.CreateDirectory(parentDir)
+            End If
+            reader.WriteEntryToFile(dest, SharpCompress.Common.ExtractOptions.Overwrite)
         End Sub
 
         Private Sub archive_CompressedBytesRead(sender As Object, e As CompressedBytesReadEventArgs)

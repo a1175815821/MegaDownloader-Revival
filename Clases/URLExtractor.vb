@@ -18,13 +18,14 @@ Public Class URLExtractor
 
     Public Const SERVERENCODEDPREFIX As String = "elc?"
 
+    ' Host-bounded patterns: only mega.nz / mega.co.nz (optional www.), case-insensitive at match time
     Private Shared ReadOnly patternHTTPURI() As String = _
-        {"(http://|https://|)mega.co.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-         "(http://|https://|)mega.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-        "(http://|https://|)mega.nz/file/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
-        "(http://|https://|)mega.nz/folder/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
-        "(http://|https://|)mega.co.nz/file/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?", _
-        "(http://|https://|)mega.co.nz/folder/(?<FileID>[^#/]+)(#(?<FileKey>[\w-]+))?"}
+        {"(?:https?://)?(?:www\.)?mega\.co\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.co\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?"}
 
     Private Shared ReadOnly patternMEGAURI() As String = _
         {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
@@ -55,7 +56,9 @@ Public Class URLExtractor
     Friend Shared Function IsMegaFolder(ByVal URI As String) As Boolean
         Dim Result As Boolean = False
         If String.IsNullOrEmpty(URI) Then Return False
-        Result = URI.Contains("mega.co.nz/#F!") Or URI.Contains("mega.nz/#F!") Or URI.Contains("mega.nz/folder/") Or URI.Contains("mega.co.nz/folder/") ' Enlaces de mega
+        Dim uriLower As String = URI.ToLowerInvariant()
+        Result = uriLower.Contains("mega.co.nz/#f!") OrElse uriLower.Contains("mega.nz/#f!") OrElse
+                 uriLower.Contains("mega.nz/folder/") OrElse uriLower.Contains("mega.co.nz/folder/")
 
         If Not Result Then ' Enlaces mega sin codificar
             For Each pattern As String In patternGetInfoURL()

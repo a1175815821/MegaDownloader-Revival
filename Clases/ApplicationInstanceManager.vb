@@ -173,7 +173,8 @@ Public NotInheritable Class ApplicationInstanceManager
             End If
             PathFile = Path.Combine(PathFile, "Buffer.dat")
             Using t As New StreamWriter(PathFile, True)
-                t.Write(String.Join("|", InstanceProxy.CommandLineArgs))
+                ' One message per line so concurrent second-instance launches do not glue args together
+                t.WriteLine(String.Join("|", InstanceProxy.CommandLineArgs))
             End Using
         Finally
             Mutex.MEGAUriParameters.ReleaseMutex()
@@ -211,9 +212,15 @@ Public NotInheritable Class ApplicationInstanceManager
                     Dim args As New Generic.List(Of String)
                     Using t As New StreamReader(PathLog)
                         While Not t.EndOfStream
-                            Dim l = t.ReadLine.Split("|"c)
-                            If args.Count > 0 Then l = l.Skip(1).ToArray ' Each line has the program name as first parameter, we delete it
-                            args.AddRange(l)
+                            Dim line As String = t.ReadLine()
+                            If String.IsNullOrWhiteSpace(line) Then Continue While
+                            Dim l = line.Split("|"c)
+                            ' Each line starts with the program name as first parameter
+                            If l.Length > 1 Then
+                                args.AddRange(l.Skip(1))
+                            ElseIf l.Length = 1 AndAlso Not String.IsNullOrWhiteSpace(l(0)) Then
+                                args.Add(l(0))
+                            End If
                         End While
                     End Using
                     Using t As New StreamWriter(PathLog, False)

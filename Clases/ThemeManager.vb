@@ -1,8 +1,10 @@
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports Microsoft.Win32
 
 ''' <summary>
 ''' 主题管理器:Auto 模式从注册表读取系统深/浅色偏好,Light/Dark 直接应用预设配色。
+''' Auto 模式下监听系统主题变化并实时刷新已注册窗体。
 ''' 支持 ObjectListView (BrightIdeasSoftware.TreeListView)、ToolStrip 系列(MenuStrip/StatusStrip/ContextMenuStrip)、
 ''' 标准控件(TextBox/Button/Label 等)以及容器控件(Panel/GroupBox/TableLayoutPanel)。
 ''' </summary>
@@ -18,6 +20,8 @@ Public NotInheritable Class ThemeManager
 
     Private Shared _current As ResolvedTheme = ResolvedTheme.Light
     Private Shared _currentMode As ConfiguracionUI.ThemeModeType = ConfiguracionUI.ThemeModeType.Auto
+    Private Shared _systemWatchHooked As Boolean = False
+    Private Shared ReadOnly _watchedForms As New Generic.List(Of WeakReference)
 
     ' 浅色配色
     Private Shared ReadOnly LightColors As New Dictionary(Of String, Color) From
@@ -95,6 +99,7 @@ Public NotInheritable Class ThemeManager
                 Return CInt(val) = 0 ' 0 = 深色,1 = 浅色
             End Using
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
             Return False
         End Try
     End Function
@@ -127,6 +132,69 @@ Public NotInheritable Class ThemeManager
 
         ' ContextMenuStrip 不在 Controls 树中,需从 components / 字段显式处理
         ApplyThemeToFormContextMenus(form, colors)
+
+        RegisterFormForSystemThemeWatch(form)
+        EnsureSystemThemeWatch()
+    End Sub
+
+    Private Shared Sub RegisterFormForSystemThemeWatch(form As Form)
+        If form Is Nothing Then Return
+        For Each wr As WeakReference In _watchedForms
+            If wr.IsAlive AndAlso Object.ReferenceEquals(wr.Target, form) Then Return
+        Next
+        _watchedForms.Add(New WeakReference(form))
+        AddHandler form.FormClosed, AddressOf WatchedForm_FormClosed
+    End Sub
+
+    Private Shared Sub WatchedForm_FormClosed(sender As Object, e As FormClosedEventArgs)
+        Dim form = TryCast(sender, Form)
+        If form Is Nothing Then Return
+        RemoveHandler form.FormClosed, AddressOf WatchedForm_FormClosed
+        For i As Integer = _watchedForms.Count - 1 To 0 Step -1
+            If Not _watchedForms(i).IsAlive OrElse Object.ReferenceEquals(_watchedForms(i).Target, form) Then
+                _watchedForms.RemoveAt(i)
+            End If
+        Next
+    End Sub
+
+    Private Shared Sub EnsureSystemThemeWatch()
+        If _systemWatchHooked Then Return
+        Try
+            AddHandler SystemEvents.UserPreferenceChanged, AddressOf OnUserPreferenceChanged
+            _systemWatchHooked = True
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Sub OnUserPreferenceChanged(sender As Object, e As UserPreferenceChangedEventArgs)
+        If _currentMode <> ConfiguracionUI.ThemeModeType.Auto Then Return
+        If e.Category <> UserPreferenceCategory.General AndAlso e.Category <> UserPreferenceCategory.Color Then Return
+        Dim nextTheme As ResolvedTheme = Resolve(ConfiguracionUI.ThemeModeType.Auto)
+        If nextTheme = _current Then Return
+        Try
+            For Each form As Form In Application.OpenForms.Cast(Of Form)().ToList()
+                If form.IsHandleCreated AndAlso Not form.IsDisposed Then
+                    If form.InvokeRequired Then
+                        form.BeginInvoke(New Action(Of Form)(AddressOf RefreshFormThemeSafe), form)
+                    Else
+                        RefreshFormThemeSafe(form)
+                    End If
+                End If
+            Next
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Sub RefreshFormThemeSafe(form As Form)
+        Try
+            If form Is Nothing OrElse form.IsDisposed Then Return
+            ApplyTheme(form, ConfiguracionUI.ThemeModeType.Auto)
+            Dim main = TryCast(form, Main)
+            If main IsNot Nothing Then
+                main.ApplyCurrentTheme()
+            End If
+        Catch
+        End Try
     End Sub
 
     ''' <summary>
@@ -158,6 +226,7 @@ Public NotInheritable Class ThemeManager
                 End If
             Next
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
     End Sub
 
@@ -338,10 +407,12 @@ RecurseChildren:
         Try
             olv.UseExplorerTheme = False
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
         Try
             olv.UseTranslucentSelection = False
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
 
         olv.BackColor = colors("Back")
@@ -349,6 +420,7 @@ RecurseChildren:
         Try
             olv.AlternateRowBackColor = colors("AltBack")
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
 
         ' 选中行的颜色(失焦/聚焦)- 通过反射访问,因不同 OLV 版本属性名不同
@@ -373,6 +445,7 @@ RecurseChildren:
             olv.HeaderFormatStyle = headerStyle
             olv.HeaderUsesThemes = False
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
 
         ' TreeColumnRenderer (树列的展开/折叠图标所在列) - 仅 TreeListView 有此属性
@@ -383,6 +456,7 @@ RecurseChildren:
                 TrySetProperty(renderer, "LineColor", colors("Border"))
             End If
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
     End Sub
 
@@ -393,6 +467,7 @@ RecurseChildren:
                 prop.SetValue(target, value, Nothing)
             End If
         Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
     End Sub
 

@@ -69,8 +69,7 @@ jobs:
             'HttpServer.dll',
             'Newtonsoft.Json.dll',
             'ObjectListView.dll',
-            'SharpCompress.dll',
-            'xunit.dll'
+            'SharpCompress.dll'
           )
           foreach ($d in $deps) {
             $src = Join-Path $out $d

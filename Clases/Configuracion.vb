@@ -145,6 +145,7 @@ Public Class Configuracion
 	
 	Private Shared _LastSavedXML As String = Nothing
 	Public Sub GuardarXML(ByVal ForzarGuardado As Boolean)
+		ApplyConfigLimits()
 		Dim Xml As New XmlDocument
 		
 		Xml.AppendChild(Xml.CreateElement("Configuration"))
@@ -237,23 +238,12 @@ Public Class Configuracion
 			Log.WriteDebug("Saving configuration")
 			
             Mutex.GuardarConfig.WaitOne()
-
-            ' Save backup
-            Try
-                If System.IO.File.Exists(Fichero & ".bak") Then
-                    System.IO.File.Delete(Fichero & ".bak")
-                End If
-                System.IO.File.Move(Fichero, Fichero & ".bak")
-            Catch ex As Exception
-                ' Error?
-            End Try
-
-
 			Try
-				Xml.Save(Fichero)
+				AtomicFile.SaveXml(Xml, Fichero)
 			Catch ex As Exception
-				Log.WriteError("Error saving configuration XML: " & ex.ToString)
+				Log.WriteError("Error saving configuration XML: " & Log.SafeException(ex))
 				ErrorConfig = ErrorConfigClass.Fichero_No_Creado
+				_LastSavedXML = Nothing
 			Finally
 				Mutex.GuardarConfig.ReleaseMutex()
 			End Try
@@ -277,25 +267,26 @@ Public Class Configuracion
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
 		
-		If Not System.IO.File.Exists(Fichero) Then
-			Log.WriteWarning("Configuration file does not exist")
-			ErrorConfig = ErrorConfigClass.Fichero_No_Existe
-			ConfiguracionDefectoVacia()
-			Exit Sub
-		End If
-		
 		Log.WriteDebug("Loading configuration XML")
 		
-		' Cargamos el XML
-		Dim Xml As New XmlDocument
+		Dim Xml As XmlDocument = Nothing
+		Dim recoveredFromBackup As Boolean = False
 		Mutex.GuardarConfig.WaitOne()
 		Try
-			Xml.Load(Fichero)
-		Catch ex As Exception
-			ErrorConfig = ErrorConfigClass.Fichero_No_Valido
-			ConfiguracionDefectoVacia()
-			Log.WriteError("Configuration file could not be loaded: " & ex.ToString)
-			Exit Sub
+			If Not AtomicFile.TryLoadXml(Fichero, Xml, recoveredFromBackup) Then
+				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
+					Log.WriteWarning("Configuration file does not exist")
+					ErrorConfig = ErrorConfigClass.Fichero_No_Existe
+				Else
+					ErrorConfig = ErrorConfigClass.Fichero_No_Valido
+					Log.WriteError("Configuration file could not be loaded (primary and backup failed).")
+				End If
+				ConfiguracionDefectoVacia()
+				Exit Sub
+			End If
+			If recoveredFromBackup Then
+				Log.WriteWarning("Configuration restored from backup file.")
+			End If
 		Finally
 			Mutex.GuardarConfig.ReleaseMutex()
 		End Try
@@ -357,15 +348,7 @@ Public Class Configuracion
         If ResetearErroresPeriodoMinutos < 1 Or ResetearErroresPeriodoMinutos > 999 Then
             ResetearErroresPeriodoMinutos = 15
         End If
-		If LimiteVelocidadKBs < 0 Then
-			LimiteVelocidadKBs = 0
-		End If
-		If TamanoPaqueteKB < 1 Then
-			TamanoPaqueteKB = 50
-		End If
-		If TamanoBufferKB < 1 Then
-			TamanoBufferKB = 750
-		End If
+		ApplyConfigLimits()
 		
 		NivelLog = Log.LevelLogType.Normal
 		If [Enum].IsDefined(GetType(Log.LevelLogType), LeerNodo(Xml, "NivelLog", "")) Then
@@ -381,12 +364,7 @@ Public Class Configuracion
 		ConexionesPorFichero = 3
 		Integer.TryParse(LeerNodo(Xml, "DescargasSimultaneas", "3"), DescargasSimultaneas)
 		Integer.TryParse(LeerNodo(Xml, "ConexionesPorFichero", "3"), ConexionesPorFichero)
-		If DescargasSimultaneas < 1 Then
-			DescargasSimultaneas = 3
-		End If
-		If ConexionesPorFichero < 1 Then
-			ConexionesPorFichero = 3
-		End If
+		ApplyConfigLimits()
 		
 		' Servidor streaming
 		ServidorStreamingActivo = False
@@ -476,6 +454,47 @@ Public Class Configuracion
 		Me.TamanoBufferKB = 750
 		Me._ELCAccountList = New Generic.List(Of ELCAccountHelper.Account)
 		Me.ConfigUI.ConfiguracionDefectoVacia()
+		ApplyConfigLimits()
+	End Sub
+
+	''' <summary>
+	''' Clamps configuration values so hand-edited XML cannot bypass UI safety limits.
+	''' </summary>
+	Public Sub ApplyConfigLimits()
+		Const MaxPackageKB As Integer = 1024
+		Const MaxBufferKB As Integer = 16 * 1024
+		Const MaxConnections As Integer = 32
+		Const MaxSimultaneous As Integer = 20
+		Const MaxSpeedKBs As Integer = 100 * 1024 * 1024 ' 100 GB/s absurd upper bound
+
+		If LimiteVelocidadKBs < 0 Then LimiteVelocidadKBs = 0
+		If LimiteVelocidadKBs > MaxSpeedKBs Then LimiteVelocidadKBs = MaxSpeedKBs
+		If TamanoPaqueteKB < 1 Then TamanoPaqueteKB = 50
+		If TamanoPaqueteKB > MaxPackageKB Then TamanoPaqueteKB = MaxPackageKB
+		If TamanoBufferKB < 1 Then TamanoBufferKB = 750
+		If TamanoBufferKB > MaxBufferKB Then TamanoBufferKB = MaxBufferKB
+		If TamanoBufferKB < TamanoPaqueteKB Then TamanoBufferKB = Math.Min(MaxBufferKB, TamanoPaqueteKB * 5)
+		If DescargasSimultaneas < 1 Then DescargasSimultaneas = 3
+		If DescargasSimultaneas > MaxSimultaneous Then DescargasSimultaneas = MaxSimultaneous
+		If ConexionesPorFichero < 1 Then ConexionesPorFichero = 3
+		If ConexionesPorFichero > MaxConnections Then ConexionesPorFichero = MaxConnections
+		If MaxConexionesGuardadas < 1 Then MaxConexionesGuardadas = 100
+		If MaxConexionesGuardadas > 10000 Then MaxConexionesGuardadas = 10000
+
+		If Not String.IsNullOrWhiteSpace(VLCPath) Then
+			Try
+				If Directory.Exists(VLCPath) Then
+					' OK: directory containing vlc.exe
+				ElseIf File.Exists(VLCPath) AndAlso VLCPath.ToLowerInvariant().EndsWith(".exe") Then
+					VLCPath = Path.GetDirectoryName(VLCPath)
+				Else
+					Log.WriteWarning("VLC path is invalid and was cleared: " & VLCPath)
+					VLCPath = ""
+				End If
+			Catch
+				VLCPath = ""
+			End Try
+		End If
 	End Sub
 	
 	Public Shared Sub RegisterInStartup(isChecked As Boolean)

@@ -253,7 +253,7 @@ Public Class WebInterfaceModule
             Case PaginaLogin
                 responseBody.Append(PintarPaginaLogin)
             Case PaginaMain
-                responseBody.Append(PintarPaginaMain)
+                responseBody.Append(PintarPaginaMain(session))
 
         End Select
 
@@ -351,7 +351,24 @@ Public Class WebInterfaceModule
         Return vel.ToString("F2") & " " & Dato
     End Function
 
+    Private Function EnsureCsrf(ByRef session As HttpServer.Sessions.IHttpSession) As String
+        If session("csrf") Is Nothing OrElse String.IsNullOrEmpty(CStr(session("csrf"))) Then
+            session("csrf") = Guid.NewGuid().ToString("N")
+        End If
+        Return CStr(session("csrf"))
+    End Function
+
+    Private Function ValidateCsrf(ByRef request As HttpServer.IHttpRequest, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
+        Dim expected As String = EnsureCsrf(session)
+        If request.Param Is Nothing OrElse request.Param.Item("csrf") Is Nothing Then Return False
+        Return String.Equals(request.Param.Item("csrf").Value, expected, StringComparison.Ordinal)
+    End Function
+
     Private Function ProcesoStop(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
+        If Not IsPostBack(request) OrElse Not ValidateCsrf(request, session) Then
+            _RespuestaAjax = "<span class='error'>Forbidden</span>"
+            Return True
+        End If
         Downloader.ControlRemotoParar()
         System.Threading.Thread.Sleep(400)
         _RespuestaAjax = Language.GetText("Download stopped")
@@ -359,6 +376,10 @@ Public Class WebInterfaceModule
     End Function
 
     Private Function ProcesoPlay(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
+        If Not IsPostBack(request) OrElse Not ValidateCsrf(request, session) Then
+            _RespuestaAjax = "<span class='error'>Forbidden</span>"
+            Return True
+        End If
         Downloader.ControlRemotoDescargar()
         System.Threading.Thread.Sleep(400)
         _RespuestaAjax = Language.GetText("Download started")
@@ -371,6 +392,7 @@ Public Class WebInterfaceModule
                 If MD5Utils.MD5CalcString(request.Param.Item("Password").Value) = Me._Password Then
                     session("Logueado") = "1"
                     session("LoginDate") = Now
+                    EnsureCsrf(session)
                     response.Redirect(PaginaMain)
                     Return False
                 Else
@@ -393,7 +415,7 @@ Public Class WebInterfaceModule
             If request.Param.Item("links") IsNot Nothing And _
                request.Param.Item("pckname") IsNot Nothing And _
                request.Param.Item("createdirpck") IsNot Nothing And _
-               IsPostBack(request) Then
+               IsPostBack(request) AndAlso ValidateCsrf(request, session) Then
 
                 Dim links As String = request.Param.Item("links").Value
                 Dim createdirpck As String = request.Param.Item("createdirpck").Value
@@ -431,10 +453,12 @@ Public Class WebInterfaceModule
     Private Function PintarPaginaLogin() As String
         Return PintarComun(Template.Replace(CONST_CONTENT, BodyLogin).Replace(CONST_HEAD, HeadMain(False)).Replace(CONST_TITLE, "Login"))
     End Function
-    Private Function PintarPaginaMain() As String
+    Private Function PintarPaginaMain(ByRef session As HttpServer.Sessions.IHttpSession) As String
+        Dim csrf As String = EnsureCsrf(session)
+        Dim js As String = "var CSRF_TOKEN='" & csrf & "';" & vbNewLine & BodyJavaScript()
         Return PintarComun(Template.Replace( _
                             CONST_CONTENT, BodyMain).Replace( _
-                            CONST_JAVASCRIPT, BodyJavaScript).Replace( _
+                            CONST_JAVASCRIPT, js).Replace( _
                             CONST_HEAD, HeadMain(True)).Replace( _
                             CONST_TITLE, Me._TitlePersonalizado))
     End Function

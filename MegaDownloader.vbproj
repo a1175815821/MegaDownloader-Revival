@@ -21,20 +21,15 @@
     <SccAuxPath>SAK</SccAuxPath>
     <SccProvider>SAK</SccProvider>
     <PublishUrl>publish\</PublishUrl>
-    <Install>true</Install>
+    <Install>false</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <ApplicationVersion>2.2.0.0</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
+    <BootstrapperEnabled>false</BootstrapperEnabled>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -145,9 +140,6 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="xunit">
-      <HintPath>Resources\DLLs\xunit.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Import Include="Microsoft.VisualBasic" />
@@ -205,6 +197,8 @@
     <Compile Include="Clases\MD5Utils.vb" />
     <Compile Include="Clases\Mutex.vb" />
     <Compile Include="Clases\Paquete.vb" />
+    <Compile Include="Clases\PathGuard.vb" />
+    <Compile Include="Clases\AtomicFile.vb" />
     <Compile Include="Clases\PreSharedKeyManager.vb" />
     <Compile Include="Clases\ResourceHelper.vb" />
     <Compile Include="Clases\ServidorWebController.vb" />
@@ -416,7 +410,6 @@
     <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
     <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
     <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
-    <EmbeddedResource Include="Resources\DLLs\xunit.dll" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\Language\en-US-Language.xml">
@@ -479,34 +472,9 @@
     <EmbeddedResource Include="Resources\Language\zh-CN-Language.xml" />
     <Content Include="TODO\TODO.txt" />
   </ItemGroup>
-  <ItemGroup>
-    <BootstrapperPackage Include=".NETFramework,Version=v4.0">
-      <Visible>False</Visible>
-      <ProductName>Microsoft .NET Framework 4 %28x86 and x64%29</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Windows.Installer.4.5">
-      <Visible>False</Visible>
-      <ProductName>Windows Installer 4.5</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>
-    <PostBuildEvent>if $(ConfigurationName) == Release $(ProjectDir)\resources\tools\mpress.exe -s -m -u  $(ProjectDir)$(OutDir)$(TargetFileName)
-
-if $(ConfigurationName) == Release_MSD $(ProjectDir)\resources\tools\mpress.exe -s -m -u  $(ProjectDir)$(OutDir)$(TargetFileName)
-if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"
+    <PostBuildEvent>if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"
 if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\MegaSearchDesktop.exe"
 if $(ConfigurationName) == Release_MSD copy "$(ProjectDir)$(OutDir)$(TargetFileName)" "$(ProjectDir)Resources\Installer MSD"
 if $(ConfigurationName) == Release_MSD rename "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)" "MegaSearchDesktop.exe"</PostBuildEvent>

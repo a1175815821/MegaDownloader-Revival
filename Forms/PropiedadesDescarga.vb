@@ -150,15 +150,19 @@ Public Class PropiedadesDescarga
 
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
 
+        Dim LimiteVelocidadMB As Integer = 0
+        Integer.TryParse(txtLimiteVelocidad.Text, LimiteVelocidadMB)
         Dim LimiteVelocidad As Integer = 0
-        Integer.TryParse(txtLimiteVelocidad.Text, LimiteVelocidad)
         If Not chkLimitarVelocidad.Checked Then
             LimiteVelocidad = 0
-        ElseIf LimiteVelocidad <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidad.Text) Then
+        ElseIf LimiteVelocidadMB <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidad.Text) Then
             MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
+        Else
+            Dim asLong As Long = CLng(LimiteVelocidadMB) * 1024L
+            If asLong > Integer.MaxValue Then asLong = Integer.MaxValue
+            LimiteVelocidad = CInt(asLong)
         End If
-        LimiteVelocidad *= 1024
 
 
         If TypeOf (_Descarga) Is Fichero Then

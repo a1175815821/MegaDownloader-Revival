@@ -21,7 +21,9 @@ Public Class StreamingModule
 
 
 
+    Private Shared ReadOnly UrlsLock As New Object
     Private Shared Urls As New Generic.Dictionary(Of String, KeyValuePair(Of Date, Conexion.InformacionFichero))
+    Private Const MaxUrlCacheEntries As Integer = 64
 
     Public Overrides Function Process(request As HttpServer.IHttpRequest, _
         response As HttpServer.IHttpResponse, _
@@ -68,24 +70,30 @@ Public Class StreamingModule
                 Return True
             End If
 
-            Dim PathQuery As String = request.Uri.PathAndQuery
+            ' Cache key must not include password/secret query values
+            Dim cacheKey As String = FileID & "|" & FileKey
 
-            Dim InfoFichero As Conexion.InformacionFichero
-            If Not Urls.ContainsKey(PathQuery) OrElse Urls(PathQuery).Key < Now Then
-                InfoFichero = Conexion.ObtenerInformacionFichero(Me._Config, FileID, FileKey, True)
-                If InfoFichero.Err <> Conexion.TipoError.SinErrores Then
-                    ComprimirRespuesta(request, response, "Error: " & InfoFichero.Errtxt)
-                    Return True
-                Else
-                    FileKey = InfoFichero.FileKey
-                    FileID = InfoFichero.FileID
+            Dim InfoFichero As Conexion.InformacionFichero = Nothing
+            SyncLock UrlsLock
+                PruneUrlCacheUnlocked()
+                If Urls.ContainsKey(cacheKey) AndAlso Urls(cacheKey).Key >= Now Then
+                    InfoFichero = Urls(cacheKey).Value
                 End If
-                Urls(PathQuery) = New KeyValuePair(Of Date, Conexion.InformacionFichero)(Now.AddMinutes(3), InfoFichero)
-            Else
-                InfoFichero = CType(Urls(PathQuery).Value, Conexion.InformacionFichero)
-                FileKey = InfoFichero.FileKey
-                FileID = InfoFichero.FileID
+            End SyncLock
+
+            If InfoFichero Is Nothing Then
+                InfoFichero = Conexion.ObtenerInformacionFichero(Me._Config, FileID, FileKey, True)
+                If InfoFichero Is Nothing OrElse InfoFichero.Err <> Conexion.TipoError.SinErrores Then
+                    Dim errTxt As String = If(InfoFichero Is Nothing, "Unknown", InfoFichero.Errtxt)
+                    ComprimirRespuesta(request, response, "Error: " & errTxt)
+                    Return True
+                End If
+                SyncLock UrlsLock
+                    Urls(cacheKey) = New KeyValuePair(Of Date, Conexion.InformacionFichero)(Now.AddMinutes(3), InfoFichero)
+                End SyncLock
             End If
+            FileKey = InfoFichero.FileKey
+            FileID = InfoFichero.FileID
 
             ' Folder links (new format)
             If FileKey.Contains("=###n=") Then
@@ -118,7 +126,11 @@ Public Class StreamingModule
 
                 response.ContentLength = content 'InfoFichero.Tamano 
                 response.ContentType = "application/octet-stream"
-                response.Status = HttpStatusCode.PartialContent
+                If String.IsNullOrEmpty(request.Headers("Range")) Then
+                    response.Status = HttpStatusCode.OK
+                Else
+                    response.Status = HttpStatusCode.PartialContent
+                End If
                 response.Connection = ConnectionType.Close
 
 
@@ -137,7 +149,7 @@ Public Class StreamingModule
                 webResp = CType(webReq.GetResponse, HttpWebResponse)
 
 
-                oCipher.IncrementCounter(CInt(Math.Ceiling(rangeStart / oCipher.GetBlockSize)))
+                oCipher.SeekToFileOffset(rangeStart)
 
 
 
@@ -239,17 +251,38 @@ Public Class StreamingModule
         End If
 
 
+        If FileSize <= 0 Then
+            rangeStart = 0
+            rangeEnd = 0
+            requestRangeStart = 0
+            requestRangeEnd = 0
+            content = 0
+            response.Status = HttpStatusCode.OK
+            response.AddHeader("Content-Length", "0")
+            Return
+        End If
+
         rangeEnd = If(rangeEnd = 0, FileSize - 1, rangeEnd)
         requestRangeEnd = (If(requestRangeEnd > 0, requestRangeEnd, FileSize - 1))
+
+        If rangeStart > FileSize - 1 Then rangeStart = FileSize - 1
+        If rangeEnd > FileSize - 1 Then rangeEnd = FileSize - 1
+        If requestRangeStart > FileSize - 1 Then requestRangeStart = FileSize - 1
+        If requestRangeEnd > FileSize - 1 Then requestRangeEnd = FileSize - 1
+        If rangeEnd < rangeStart Then rangeEnd = rangeStart
+        If requestRangeEnd < requestRangeStart Then requestRangeEnd = requestRangeStart
 
         content = (requestRangeEnd - requestRangeStart) + 1
 
         response.AddHeader("Content-Length", content.ToString())
         response.ContentType = "application/octet-stream"
+        response.AddHeader("Accept-Ranges", "bytes")
 
-        If Not String.IsNullOrEmpty(request.Headers("Range")) Then
-            response.AddHeader("Accept-Ranges", "bytes")
-            response.AddHeader("Content-Range", "bytes " & requestRangeStart & "-" & requestRangeEnd.ToString() & "/" + (FileSize).ToString())
+        If String.IsNullOrEmpty(request.Headers("Range")) Then
+            response.Status = HttpStatusCode.OK
+        Else
+            response.Status = HttpStatusCode.PartialContent
+            response.AddHeader("Content-Range", "bytes " & requestRangeStart & "-" & requestRangeEnd.ToString() & "/" & FileSize.ToString())
         End If
         ' / Range adjustment
     End Sub
@@ -294,6 +327,19 @@ Public Class StreamingModule
     Private Function IsStreaming(ByRef request As HttpServer.IHttpRequest) As Boolean
         Return request.Uri.LocalPath = PaginaStreaming
     End Function
+
+    Private Shared Sub PruneUrlCacheUnlocked()
+        Dim expired = Urls.Where(Function(kv) kv.Value.Key < Now).Select(Function(kv) kv.Key).ToList()
+        For Each k As String In expired
+            Urls.Remove(k)
+        Next
+        If Urls.Count <= MaxUrlCacheEntries Then Return
+        Dim ordered = Urls.OrderBy(Function(kv) kv.Value.Key).ToList()
+        Dim removeCount As Integer = Urls.Count - MaxUrlCacheEntries
+        For i As Integer = 0 To removeCount - 1
+            Urls.Remove(ordered(i).Key)
+        Next
+    End Sub
 
 
     Public Shared Function ExtraerStreamingFileKey(ByVal URL As String) As String

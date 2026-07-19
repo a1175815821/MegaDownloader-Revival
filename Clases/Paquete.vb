@@ -209,35 +209,19 @@ Public Class Paquete
 
     Public Shared Function CargarDesdeFichero() As Generic.List(Of Paquete)
         Dim Fichero As String = ObtenerRutaFicheroDescargas()
-        If Not System.IO.File.Exists(Fichero) Then
-            Return New Generic.List(Of Paquete)
-        End If
 
         Log.WriteDebug("Loading download list XML")
 
-        Dim XML As New XmlDocument
+        Dim XML As XmlDocument = Nothing
+        Dim recoveredFromBackup As Boolean = False
         Mutex.GuardarDownloadList.WaitOne()
         Try
-            XML.Load(Fichero)
-        Catch ex As Exception
-
-            ' Error manager - try to load bak file if it exists
-            Log.WriteError("Error loading download list XML: " & ex.ToString)
-
-            If System.IO.File.Exists(Fichero & ".bak") Then
-
-                Log.WriteError("Let's try to load the backup file: " & Fichero & ".bak")
-                Try
-                    XML.Load(Fichero & ".bak")
-                Catch ex2 As Exception
-                    Log.WriteError("Error loading download backup list XML: " & ex2.ToString)
-                    Return New Generic.List(Of Paquete)
-                End Try
-
-            Else
+            If Not AtomicFile.TryLoadXml(Fichero, XML, recoveredFromBackup) Then
                 Return New Generic.List(Of Paquete)
             End If
-
+            If recoveredFromBackup Then
+                Log.WriteWarning("Download list restored from backup file.")
+            End If
         Finally
             Mutex.GuardarDownloadList.ReleaseMutex()
         End Try
@@ -284,28 +268,22 @@ Public Class Paquete
 
         If _LastSavedXML Is Nothing OrElse _LastSavedXML <> XML.DocumentElement.OuterXml Then
 
-            _LastSavedXML = XML.DocumentElement.OuterXml
+            Dim previousSaved As String = _LastSavedXML
 
             ' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
             XML = GuardarXML(ListaPaquetes, True)
             Log.WriteDebug("Saving download list")
 
-
             Mutex.GuardarDownloadList.WaitOne()
-
-            ' Save backup
             Try
-                If System.IO.File.Exists(Fichero & ".bak") Then
-                    System.IO.File.Delete(Fichero & ".bak")
-                End If
-                System.IO.File.Move(Fichero, Fichero & ".bak")
+                AtomicFile.SaveXml(XML, Fichero)
+                _LastSavedXML = previousSaved
+                ' Update cache only after successful save (compare against unencrypted snapshot next time)
+                Dim compareXml As XmlDocument = GuardarXML(ListaPaquetes, False)
+                _LastSavedXML = compareXml.DocumentElement.OuterXml
             Catch ex As Exception
-                ' Error?
-            End Try
-
-            Try
-                XML.Save(Fichero)
-                'Serializer.SerializarFichero(ListaPaquetes, Fichero)
+                Log.WriteError("Error saving download list XML: " & Log.SafeException(ex))
+                _LastSavedXML = previousSaved
             Finally
                 Mutex.GuardarDownloadList.ReleaseMutex()
             End Try

@@ -66,6 +66,8 @@ Public Class Conexion
         System.Net.ServicePointManager.DefaultConnectionLimit = 10000
 
         Dim webrq As HttpWebRequest = CType(Net.WebRequest.Create(Url), HttpWebRequest)
+        webrq.Timeout = 60000
+        webrq.ReadWriteTimeout = 120000
 
         If _UsarProxy Then
             Dim proxy As New WebProxy(_ProxyIP, _ProxyPort)
@@ -152,10 +154,10 @@ Public Class Conexion
             Catch exc As WebException
                 ' Oh, well, we tried
             End Try
-            Log.WriteError("Error accessing the URL: " & ex.ToString & " - Message received: " & Resultado.Mensaje)
+            Log.WriteError("Error accessing the URL: " & Log.SafeException(ex) & " - Message received: " & Log.Redact(Resultado.Mensaje))
             Resultado.Excepcion = ex
         Catch ex As Exception
-            Log.WriteError("Error accessing the URL: " & ex.ToString)
+            Log.WriteError("Error accessing the URL: " & Log.SafeException(ex))
             Resultado.Excepcion = ex
         Finally
             If webRS IsNot Nothing Then webRS.Close()
@@ -256,10 +258,10 @@ Public Class Conexion
             Catch exc As WebException
                 ' Oh, well, we tried
             End Try
-            Log.WriteError("Error accessing the URL: " & ex.ToString & " - Message received: " & Res.Mensaje)
+            Log.WriteError("Error accessing the URL: " & Log.SafeException(ex) & " - Message received: " & Log.Redact(Res.Mensaje))
             Res.Excepcion = ex
         Catch ex As Exception
-            Log.WriteError("Error accessing the URL: " & ex.ToString)
+            Log.WriteError("Error accessing the URL: " & Log.SafeException(ex))
             Res.Excepcion = ex
         Finally
             If webResp IsNot Nothing Then webResp.Close()

@@ -24,11 +24,11 @@ Public Class Updater
             Dim UltimaVersion As System.Version = Nothing
             Dim VersionActual As System.Version = Nothing
 
-            Dim ultimaVersionStr As String = LeerNodo(XML, "Version", "")
-
+            Dim ultimaVersionStr As String = NormalizeVersionString(LeerNodo(XML, "Version", ""))
+            Dim actualVersionStr As String = NormalizeVersionString(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE"))
 
             If System.Version.TryParse(ultimaVersionStr, UltimaVersion) AndAlso _
-               System.Version.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE"), VersionActual) Then
+               System.Version.TryParse(actualVersionStr, VersionActual) Then
                 If UltimaVersion > VersionActual Then
 
 
@@ -86,5 +86,22 @@ Public Class Updater
         Else
             Return nodo.InnerText
         End If
+    End Function
+
+    ''' <summary>
+    ''' Normalizes "2.0" and "2.0.0.0" to the same four-part version string for comparisons.
+    ''' </summary>
+    Private Shared Function NormalizeVersionString(ByVal value As String) As String
+        If String.IsNullOrWhiteSpace(value) Then Return "0.0.0.0"
+        Dim parts = value.Trim().Split("."c).ToList()
+        While parts.Count < 4
+            parts.Add("0")
+        End While
+        If parts.Count > 4 Then parts = parts.Take(4).ToList()
+        For i As Integer = 0 To parts.Count - 1
+            Dim n As Integer
+            If Not Integer.TryParse(parts(i), n) OrElse n < 0 Then parts(i) = "0"
+        Next
+        Return String.Join(".", parts)
     End Function
 End Class

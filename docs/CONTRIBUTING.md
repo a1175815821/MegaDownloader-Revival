@@ -157,8 +157,8 @@ git push origin feature/你的功能名称
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
 4. 在 `InternalConfig.xml`(Base64 编码)中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 创建 Git Tag(触发 CI 自动构建与 Release):`git tag -a v2.1.0 -m "Release v2.1.0"`
-7. 推送分支与 Tag:`git push origin main` 后 `git push origin v2.1.0`
+6. 创建 Git Tag(触发 CI 自动构建与 Release):`git tag -a v2.2.0 -m "Release v2.2.0"`
+7. 推送分支与 Tag:`git push origin main` 后 `git push origin v2.2.0`
 8. CI 在 tag `v*` 上自动打包并创建 GitHub Release
 
 ## 联系方式

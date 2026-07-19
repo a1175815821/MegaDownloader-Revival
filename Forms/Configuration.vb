@@ -318,15 +318,19 @@ Public Class Configuration
             Exit Sub
         End If
 
+        Dim LimiteVelocidadMB As Integer = 0
+        Integer.TryParse(txtLimiteVelocidadKBs.Text, LimiteVelocidadMB)
         Dim LimiteVelocidad As Integer = 0
-        Integer.TryParse(txtLimiteVelocidadKBs.Text, LimiteVelocidad)
         If Not chkLimitarVelocidad.Checked Then
             LimiteVelocidad = 0
-        ElseIf LimiteVelocidad <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidadKBs.Text) Then
+        ElseIf LimiteVelocidadMB <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidadKBs.Text) Then
             MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
+        Else
+            Dim asLong As Long = CLng(LimiteVelocidadMB) * 1024L
+            If asLong > Integer.MaxValue Then asLong = Integer.MaxValue
+            LimiteVelocidad = CInt(asLong)
         End If
-        LimiteVelocidad *= 1024
 
         Dim servidorWebPuerto As Integer = 0
         Integer.TryParse(txtServidorWebPort.Text, servidorWebPuerto)
@@ -384,7 +388,16 @@ Public Class Configuration
             Config.Password = txtPassword.Text
         End If
 
-        Config.VLCPath = txtVLCPath.Text
+        Dim vlcPath As String = txtVLCPath.Text.Trim()
+        If Not String.IsNullOrEmpty(vlcPath) Then
+            If System.IO.File.Exists(vlcPath) AndAlso vlcPath.ToLowerInvariant().EndsWith(".exe") Then
+                vlcPath = System.IO.Path.GetDirectoryName(vlcPath)
+            ElseIf Not System.IO.Directory.Exists(vlcPath) Then
+                MessageBox.Show(Language.GetText("VLC path is not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End If
+        End If
+        Config.VLCPath = vlcPath
         Config.Usuario = txtUsuario.Text
         Config.RutaDefecto = txtRuta.Text
         Config.ExtraerAutomaticamente = chkUnZip.Checked

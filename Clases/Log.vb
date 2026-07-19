@@ -22,8 +22,28 @@ Public Class Log
     End Property
 
     Public Shared Sub WriteError(Text As String)
-        WriteLog(Text, LevelLogType.Minimal)
+        WriteLog(Redact(Text), LevelLogType.Minimal)
     End Sub
+
+    ''' <summary>
+    ''' Exception text without full URI / MEGA link material.
+    ''' </summary>
+    Public Shared Function SafeException(ByVal ex As Exception) As String
+        If ex Is Nothing Then Return String.Empty
+        Return Redact(ex.GetType().Name & ": " & ex.Message)
+    End Function
+
+    Public Shared Function Redact(ByVal text As String) As String
+        If String.IsNullOrEmpty(text) Then Return text
+        Dim t As String = text
+        Try
+            t = System.Text.RegularExpressions.Regex.Replace(t, "https?://[^\s""']+", "[url]")
+            t = System.Text.RegularExpressions.Regex.Replace(t, "mega://[^\s""']+", "[mega-link]")
+            t = System.Text.RegularExpressions.Regex.Replace(t, "(?i)(filekey|key|sid|password|token)\s*[=:]\s*[^\s,;]+", "$1=[redacted]")
+        Catch
+        End Try
+        Return t
+    End Function
 
     Public Shared Sub WriteWarning(Text As String)
         WriteLog(Text, LevelLogType.Normal)

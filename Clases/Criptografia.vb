@@ -648,34 +648,128 @@ Public Class Criptografia
             cipher.Reset()
         End Sub
 
-        Public Sub IncrementCounter(Optional ByVal NumberOfIncrements As Integer = 1)
-            ' Increment the counter
-            If NumberOfIncrements < 16 Then
-                For aux As Integer = 1 To NumberOfIncrements
+        ''' <summary>
+        ''' Seeks CTR to the block that covers the given absolute file offset (floor division by block size).
+        ''' </summary>
+        Public Sub SeekToFileOffset(ByVal fileOffset As Long)
+            If fileOffset < 0 Then Throw New ArgumentOutOfRangeException("fileOffset")
+            Reset()
+            Dim blockIndex As Long = fileOffset \ CLng(blockSize)
+            IncrementCounter(blockIndex)
+        End Sub
 
-                    Dim j As Integer = counter.Length - 1
+        Public Sub IncrementCounter(Optional ByVal NumberOfIncrements As Long = 1)
+            If NumberOfIncrements <= 0 Then Return
+            AddToCounter(NumberOfIncrements)
+        End Sub
 
-                    If j >= 0 Then counter(j) = CByte(If(counter(j) + 1 > Byte.MaxValue, 0, counter(j) + 1))
-                    While j >= 0 AndAlso 0 = counter(j)
-                        j -= 1
-                        If j >= 0 Then counter(j) = CByte(If(counter(j) + 1 > Byte.MaxValue, 0, counter(j) + 1))
-                    End While
-                Next
-            Else
-                Dim bi As New Org.BouncyCastle.Math.BigInteger(counter)
-                bi = bi.Add(New Org.BouncyCastle.Math.BigInteger(NumberOfIncrements.ToString))
-                Dim l As List(Of Byte) = bi.ToByteArray.ToList
-                If l.Count < 16 Then
-                    For i As Integer = l.Count + 1 To 16
-                        l.Insert(0, 0)
-                    Next
-                End If
-                Array.Copy(l.ToArray, 0, counter, 0, counter.Length)
-            End If
-
+        Private Sub AddToCounter(ByVal value As Long)
+            If value <= 0 Then Return
+            Dim carry As Long = value
+            For i As Integer = counter.Length - 1 To 0 Step -1
+                If carry = 0 Then Exit For
+                Dim sum As Long = CLng(counter(i)) + (carry And &HFFL)
+                counter(i) = CByte(sum And &HFFL)
+                carry = (carry >> 8) + (sum >> 8)
+            Next
         End Sub
 
     End Class
+
+#End Region
+
+#Region "MEGA MetaMAC"
+
+    ''' <summary>
+    ''' Verifies MEGA file MetaMAC (words 6-7 of the 8-word file key) over plaintext on disk.
+    ''' </summary>
+    Friend Shared Function VerifyMegaMetaMac(ByVal filePath As String, ByVal pKey As String) As Boolean
+        If String.IsNullOrEmpty(filePath) OrElse Not File.Exists(filePath) Then Return False
+        If String.IsNullOrEmpty(pKey) Then Return False
+
+        Dim keyWithoutN As String = pKey
+        If keyWithoutN.Contains("=###n=") Then
+            keyWithoutN = keyWithoutN.Substring(0, keyWithoutN.IndexOf("=###n="))
+        End If
+
+        Dim b64Dec As Byte() = B64Decode(keyWithoutN)
+        Dim intKey As Integer() = ByteArrayToIntArray(b64Dec)
+        If intKey Is Nothing OrElse intKey.Length < 8 Then Return False
+
+        Dim aesKey As Byte() = IntArrayToBytesArray(New Integer() {
+            intKey(0) Xor intKey(4),
+            intKey(1) Xor intKey(5),
+            intKey(2) Xor intKey(6),
+            intKey(3) Xor intKey(7)
+        })
+        Dim expectedMac0 As Integer = intKey(6)
+        Dim expectedMac1 As Integer = intKey(7)
+
+        Dim engine As New AesEngine()
+        Dim keyParam As New KeyParameter(aesKey)
+        engine.Init(True, keyParam)
+
+        Dim fileLen As Long = New FileInfo(filePath).Length
+        Dim fileMac As Integer() = New Integer() {0, 0, 0, 0}
+        Dim chunkStart As Long = 0
+        Dim chunkSize As Long = &H20000 ' 128 KiB, grows by 128 KiB up to 1 MiB
+
+        Using fs As New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read)
+            While chunkStart < fileLen
+                Dim thisChunk As Long = Math.Min(chunkSize, fileLen - chunkStart)
+                Dim chunkMac As Integer() = CbcMacChunk(engine, fs, thisChunk)
+                fileMac(0) = fileMac(0) Xor chunkMac(0)
+                fileMac(1) = fileMac(1) Xor chunkMac(1)
+                fileMac(2) = fileMac(2) Xor chunkMac(2)
+                fileMac(3) = fileMac(3) Xor chunkMac(3)
+                fileMac = AesEncryptBlock(engine, fileMac)
+
+                chunkStart += thisChunk
+                If chunkSize < &H100000 Then
+                    chunkSize += &H20000
+                End If
+            End While
+        End Using
+
+        Dim cond0 As Integer = fileMac(0) Xor fileMac(1)
+        Dim cond1 As Integer = fileMac(2) Xor fileMac(3)
+        Return cond0 = expectedMac0 AndAlso cond1 = expectedMac1
+    End Function
+
+    Private Shared Function CbcMacChunk(ByVal engine As AesEngine, ByVal stream As Stream, ByVal length As Long) As Integer()
+        Dim mac As Integer() = New Integer() {0, 0, 0, 0}
+        Dim buffer(15) As Byte
+        Dim remaining As Long = length
+        While remaining > 0
+            Dim toRead As Integer = CInt(Math.Min(16, remaining))
+            Dim read As Integer = 0
+            While read < toRead
+                Dim n As Integer = stream.Read(buffer, read, toRead - read)
+                If n = 0 Then Exit While
+                read += n
+            End While
+            If read < 16 Then
+                For i As Integer = read To 15
+                    buffer(i) = 0
+                Next
+            End If
+            Dim block As Integer() = ByteArrayToIntArray(buffer)
+            mac(0) = mac(0) Xor block(0)
+            mac(1) = mac(1) Xor block(1)
+            mac(2) = mac(2) Xor block(2)
+            mac(3) = mac(3) Xor block(3)
+            mac = AesEncryptBlock(engine, mac)
+            remaining -= toRead
+        End While
+        Return mac
+    End Function
+
+    Private Shared Function AesEncryptBlock(ByVal engine As AesEngine, ByVal words As Integer()) As Integer()
+        Dim input As Byte() = IntArrayToBytesArray(words)
+        Dim output(15) As Byte
+        engine.ProcessBlock(input, 0, output, 0)
+        Return ByteArrayToIntArray(output)
+    End Function
 
 #End Region
 

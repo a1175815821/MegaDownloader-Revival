@@ -91,6 +91,12 @@ Public Class MegaFolderHelper
                     Continue For
                 End If
 
+                Try
+                    FolderName = PathGuard.RequireSafePathSegment(FolderName, "remote folder name")
+                Catch
+                    FolderName = PathGuard.SanitizeFileName(FolderName, "folder")
+                End Try
+
                 ' 父级 handle: 如果 fileN.h == root,说明这是根文件夹本身,没有父级
                 Dim parent As String = If(fileN.h = root, "", fileN.p)
                 htFolderEstructure.Add(FileID, New KeyValuePair(Of String, String)(FolderName, parent))
@@ -198,18 +204,43 @@ Public Class MegaFolderHelper
     End Function
 
     Private Shared Sub FillFolderStructure(id As String, final As Generic.Dictionary(Of String, String), unprocessed As Generic.Dictionary(Of String, KeyValuePair(Of String, String)))
-    
-        If unprocessed.ContainsKey(id) Then
+        ' Two-phase safe build: index first so parent order does not matter.
+        If final.Count = 0 AndAlso unprocessed.Count > 0 Then
+            Dim remaining As New Generic.HashSet(Of String)(unprocessed.Keys)
+            Dim guard As Integer = 0
+            While remaining.Count > 0 AndAlso guard < unprocessed.Count + 2
+                guard += 1
+                Dim progressed As Boolean = False
+                For Each nodeId As String In remaining.ToList()
+                    Dim parent As String = unprocessed(nodeId).Value
+                    If String.IsNullOrEmpty(parent) OrElse parent = id Then
+                        final(nodeId) = ""
+                        remaining.Remove(nodeId)
+                        progressed = True
+                    ElseIf final.ContainsKey(parent) Then
+                        final(nodeId) = PathGuard.CombineSafeRelativePath(final(parent), unprocessed(nodeId).Key)
+                        remaining.Remove(nodeId)
+                        progressed = True
+                    End If
+                Next
+                If Not progressed Then
+                    ' Orphans: place at relative root with sanitized name
+                    For Each nodeId As String In remaining
+                        final(nodeId) = PathGuard.SanitizeFileName(unprocessed(nodeId).Key, "folder")
+                    Next
+                    Exit While
+                End If
+            End While
+            Return
+        End If
 
+        If unprocessed.ContainsKey(id) AndAlso Not final.ContainsKey(id) Then
             Dim parent As String = unprocessed(id).Value
-            If Not String.IsNullOrEmpty(parent) Then
-                Dim parentPath As String = final(parent)
-                final.Add(id, System.IO.Path.Combine(parentPath, unprocessed(id).Key))
+            If Not String.IsNullOrEmpty(parent) AndAlso final.ContainsKey(parent) Then
+                final.Add(id, PathGuard.CombineSafeRelativePath(final(parent), unprocessed(id).Key))
             Else
-                final.Add(id, "") ' primer nivel descartado
+                final.Add(id, "")
             End If
-
-            ' examinar los hijos
             For Each son In (From n In unprocessed.Keys Where unprocessed(n).Value = id)
                 FillFolderStructure(son, final, unprocessed)
             Next

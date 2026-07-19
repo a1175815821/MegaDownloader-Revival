@@ -10,6 +10,7 @@ Public Class Language
 
     Private Shared LanguageFileDisk As XmlDocument = Nothing
     Private Shared LanguageFileInternal As XmlDocument = Nothing
+    Private Shared LanguageFileEnUs As XmlDocument = Nothing
 
     Public Shared Function GetCurrentLanguageCode() As String
         Return culture.Name
@@ -58,27 +59,28 @@ Public Class Language
                 End Try
 
                 Dim CodigoIdioma As String = xmlIdioma.DocumentElement.Attributes("id").Value
-                Dim XMLFile As String = Path.Combine(LangPath, CodigoIdioma & ".xml")
-                If Not IO.File.Exists(XMLFile) Then
-                    xmlIdioma.Save(XMLFile)
-                Else
-                    ' Si hay cambios, machacamos...
-                    Dim xmlIdioma2 As New XmlDocument
-                    xmlIdioma2.Load(XMLFile)
-                    If xmlIdioma2.OuterXml <> xmlIdioma.OuterXml Then
-                        IO.File.Delete(XMLFile)
-                        xmlIdioma.Save(XMLFile)
-                    End If
-                End If
+                ' Built-in packs go under Language/Builtin so user customizations are never overwritten
+                Dim builtinDir As String = Path.Combine(LangPath, "Builtin")
+                If Not Directory.Exists(builtinDir) Then Directory.CreateDirectory(builtinDir)
+                Dim XMLFile As String = Path.Combine(builtinDir, CodigoIdioma & ".xml")
+                xmlIdioma.Save(XMLFile)
 
+                ' Seed user language file only if missing (do not overwrite custom edits)
+                Dim userLangFile As String = Path.Combine(LangPath, CodigoIdioma & ".xml")
+                If Not IO.File.Exists(userLangFile) Then
+                    xmlIdioma.Save(userLangFile)
+                End If
 
                 If CodigoIdioma.ToLowerInvariant = culture.Name.ToLowerInvariant Then
                     LanguageFileInternal = xmlIdioma
                 ElseIf CodigoIdioma.ToLowerInvariant.Contains("-") And culture.Name.ToLowerInvariant.Contains("-") AndAlso
                        CodigoIdioma.ToLowerInvariant.Split("-"c)(0) = culture.Name.ToLowerInvariant.Split("-"c)(0) Then
-                    LanguageFileInternal = xmlIdioma
-                ElseIf LanguageFileInternal Is Nothing And CodigoIdioma.ToLowerInvariant = "en-us" Then
-                    LanguageFileInternal = xmlIdioma
+                    If LanguageFileInternal Is Nothing OrElse LanguageFileInternal.DocumentElement.Attributes("id").Value.ToLowerInvariant <> culture.Name.ToLowerInvariant Then
+                        LanguageFileInternal = xmlIdioma
+                    End If
+                ElseIf CodigoIdioma.ToLowerInvariant = "en-us" Then
+                    If LanguageFileInternal Is Nothing Then LanguageFileInternal = xmlIdioma
+                    LanguageFileEnUs = xmlIdioma
                 End If
 
             End If
@@ -87,6 +89,7 @@ Public Class Language
             Log.WriteError("Internal error: LanguageFileInternal is nothing")
             Throw New ApplicationException("LanguageFileInternal could not be intialized")
         End If
+        If LanguageFileEnUs Is Nothing Then LanguageFileEnUs = LanguageFileInternal
         Log.WriteDebug("LanguageFileInternal loaded: " & LanguageFileInternal.DocumentElement.Attributes("id").Value)
 
 
@@ -117,19 +120,28 @@ Public Class Language
 
 
     Public Shared Function GetText(key As String) As String
-        ' Intentamos sacarlo del XML de disco
-        Dim nodo As XmlNode = LanguageFileDisk.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
-        If nodo IsNot Nothing Then Return ProcessMsg(nodo.InnerText)
+        ' 1) Current language on disk (may be user-customized)
+        Dim nodo As XmlNode = Nothing
+        If LanguageFileDisk IsNot Nothing Then
+            nodo = LanguageFileDisk.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
+            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
+        End If
 
         Log.WriteDebug("Translation not found on disk: " & key)
 
-        ' Si no está en el XML de disco (el idioma no existe o está incompleto) lo sacamos del XML integrado
-        nodo = LanguageFileInternal.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
-        If nodo IsNot Nothing Then Return ProcessMsg(nodo.InnerText)
+        ' 2) Built-in pack for current language
+        If LanguageFileInternal IsNot Nothing Then
+            nodo = LanguageFileInternal.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
+            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
+        End If
+
+        ' 3) Stable fallback to en-US
+        If LanguageFileEnUs IsNot Nothing AndAlso Not Object.ReferenceEquals(LanguageFileEnUs, LanguageFileInternal) Then
+            nodo = LanguageFileEnUs.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
+            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
+        End If
 
         Log.WriteDebug("Translation not found on disk and internal lang file: " & key)
-
-        ' Sino... pues nada, mostramos la key!!
         Return ProcessMsg(key)
     End Function
 

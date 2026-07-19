@@ -27,41 +27,61 @@ Public Class LibraryElement
         Me.LastModification = Now
     End Sub
 
-    ' 手工拼接 JSON 而不引入 Newtonsoft.Json 等外部依赖。
-    ' 字段值已 Replace("""", "\""") 转义双引号;但未转义 \n / \t 等控制字符,
-    ' 这些字段(用户输入的 Name/Description/Comments 等)若包含换行符会破坏 JSON 结构。
-    ' 当前调用方(StreamingLibraryModule)返回的 JSON 由浏览器解析,实际很少触发该场景。
     Public Function ToJSON(CurrentURL As String, ByRef Config As Configuracion) As String
-        Dim str As New System.Text.StringBuilder
-        str.Append("{")
-        str.Append("""ID"":")
-        str.Append("""" & (ID & "").Replace("""", "\""") & """,")
-        str.Append("""Name"":")
-        str.Append("""" & (Name & "").Replace("""", "\""") & """,")
-        str.Append("""Desc"":")
-        str.Append("""" & (Description & "").Replace("""", "\""") & """,")
-        str.Append("""Com"":")
-        str.Append("""" & (Comments & "").Replace("""", "\""") & """,")
-        str.Append("""Poster"":")
-        str.Append("""" & (Poster & "").Replace("""", "\""") & """,")
-        str.Append("""IMDB"":")
-        str.Append("""" & (IMDB & "").Replace("""", "\""") & """,")
-        str.Append("""Filmaffinity"":")
-        str.Append("""" & (Filmaffinity & "").Replace("""", "\""") & """,")
-        str.Append("""Allocine"":")
-        str.Append("""" & (Allocine & "").Replace("""", "\""") & """,")
-        str.Append("""Date"":")
-        str.Append("""" & LastModification.ToString("yyyy-MM-dd HH:mm") & """,")
-        str.Append("""Link"":")
         Dim linkStr As String = HIDDEN_LINK_DESC
         If LinkVisible Then
             linkStr = Criptografia.ToInsecureString(Link)
         End If
-        str.Append("""" & linkStr & """,")
-        str.Append("""VlcLink"":")
-        str.Append("""" & StreamingHelper.CreateStreamingLinkFromLibrary(ID, CurrentURL, Config).Replace("""", "\""") & """")
+        Dim vlc As String = StreamingHelper.CreateStreamingLinkFromLibrary(ID, CurrentURL, Config)
+        Dim str As New System.Text.StringBuilder
+        str.Append("{")
+        str.Append("""ID"":").Append(JsonString(ID)).Append(","c)
+        str.Append("""Name"":").Append(JsonString(Name)).Append(","c)
+        str.Append("""Desc"":").Append(JsonString(Description)).Append(","c)
+        str.Append("""Com"":").Append(JsonString(Comments)).Append(","c)
+        str.Append("""Poster"":").Append(JsonString(Poster)).Append(","c)
+        str.Append("""IMDB"":").Append(JsonString(IMDB)).Append(","c)
+        str.Append("""Filmaffinity"":").Append(JsonString(Filmaffinity)).Append(","c)
+        str.Append("""Allocine"":").Append(JsonString(Allocine)).Append(","c)
+        str.Append("""Date"":").Append(JsonString(LastModification.ToString("yyyy-MM-dd HH:mm"))).Append(","c)
+        str.Append("""Link"":").Append(JsonString(linkStr)).Append(","c)
+        str.Append("""VlcLink"":").Append(JsonString(vlc))
         str.Append("}")
         Return str.ToString
+    End Function
+
+    Friend Shared Function JsonString(ByVal value As String) As String
+        If value Is Nothing Then value = ""
+        Dim sb As New System.Text.StringBuilder(value.Length + 2)
+        sb.Append(""""c)
+        For Each ch As Char In value
+            Select Case ch
+                Case """"c
+                    sb.Append("\""")
+                Case "\"c
+                    sb.Append("\\")
+                Case "/"c
+                    sb.Append("\/")
+                Case ChrW(8)
+                    sb.Append("\b")
+                Case ChrW(12)
+                    sb.Append("\f")
+                Case ChrW(10)
+                    sb.Append("\n")
+                Case ChrW(13)
+                    sb.Append("\r")
+                Case ChrW(9)
+                    sb.Append("\t")
+                Case Else
+                    If AscW(ch) < 32 Then
+                        sb.Append("\u").Append(AscW(ch).ToString("x4"))
+                    Else
+                        sb.Append(ch)
+                    End If
+            End Select
+        Next
+        sb.Append(""""c)
+        Return sb.ToString()
     End Function
 
 

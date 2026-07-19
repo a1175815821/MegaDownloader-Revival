@@ -214,8 +214,6 @@ Public Class StreamingLibraryModule
 
     Private Function ProcesoAjax(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
 
-        'If Not IsPostBack(request) Then Return False
-
         Dim url As String = request.Uri.Authority
 
         If request.Param IsNot Nothing Then
@@ -223,7 +221,15 @@ Public Class StreamingLibraryModule
                 PrepareAjaxResponse("Action not specified")
                 Return True
             End If
-            Select Case request.Param.Item("Action").Value
+
+            Dim actionName As String = request.Param.Item("Action").Value
+            Dim mutating As Boolean = (actionName = "Delete" OrElse actionName = "Save" OrElse actionName = "OpenVLC" OrElse actionName = "ImportLinks" OrElse actionName = "ExportLinks")
+            If mutating AndAlso Not IsPostBack(request) Then
+                PrepareAjaxResponse("POST required")
+                Return True
+            End If
+
+            Select Case actionName
 
                 Case "Load"
                     If request.Param.Item("Element") Is Nothing OrElse String.IsNullOrEmpty(request.Param.Item("Element").Value) Then
@@ -393,19 +399,19 @@ Public Class StreamingLibraryModule
     End Function
 
     Private Sub PrepareAjaxResponseExport(code As String)
-        _RespuestaAjax = "{""error"": """", ""code"": """ & code & """}"
+        _RespuestaAjax = "{""error"":"""",""code"":" & LibraryElement.JsonString(code) & "}"
     End Sub
 
     Private Sub PrepareAjaxResponseImport(ByVal numReceived As Integer, ByVal numImported As Integer)
-        _RespuestaAjax = "{""error"": """", ""numR"": """ & numReceived.ToString & """, ""numI"": """ & numImported.ToString & """}"
+        _RespuestaAjax = "{""error"":"""",""numR"":" & LibraryElement.JsonString(numReceived.ToString) & ",""numI"":" & LibraryElement.JsonString(numImported.ToString) & "}"
     End Sub
     Private Sub PrepareAjaxResponse(CurrentURL As String, ByVal ele As LibraryElement)
-        _RespuestaAjax = "{""error"": """", ""Data"": [" & ele.ToJSON(CurrentURL, Me.Config) & "]}"
+        _RespuestaAjax = "{""error"":"""",""Data"":[" & ele.ToJSON(CurrentURL, Me.Config) & "]}"
     End Sub
 
     Private Sub PrepareAjaxResponse(CurrentURL As String, ByVal ele As IEnumerable(Of LibraryElement))
         Dim str As New System.Text.StringBuilder
-        str.Append("{""error"": """", ""Data"": [")
+        str.Append("{""error"":"""",""Data"":[")
         Dim primero As Boolean = True
         For Each e As LibraryElement In ele
             If Not primero Then str.Append(",")
@@ -416,15 +422,9 @@ Public Class StreamingLibraryModule
         _RespuestaAjax = str.ToString
     End Sub
 
-
-   
     Private Sub PrepareAjaxResponse(ByVal ErrorMessage As String)
-        _RespuestaAjax = "{""error"": """ & JSONEscape(ErrorMessage) & """}"
+        _RespuestaAjax = "{""error"":" & LibraryElement.JsonString(ErrorMessage) & "}"
     End Sub
-
-    Private Function JSONEscape(str As String) As String
-        Return (str & "").Replace("""", "\""")
-    End Function
 
 
 #End Region

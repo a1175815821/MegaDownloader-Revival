@@ -6,6 +6,45 @@
 
 ---
 
+## [2.2.0] - 2026-07-20
+
+### 安全加固与下载完整性
+
+基于深度静态审计结论，完成路径安全（P0）、下载完整性（P1）与一批可靠性/发布现代化（P2/P3）修复。
+
+### 🔒 路径安全（P0）
+
+- 统一 `PathGuard`：远端文件名/目录名、解压条目、删除与写出均限制在 canonical 下载根目录内
+- 修复 Zip Slip：解压前校验全部条目，拒绝 `../`、绝对路径、设备名等逃逸
+- 修复 MEGA 文件夹路径拼接与任务删除越界风险
+
+### 📦 下载完整性与可靠性（P1）
+
+- 下载完成前校验 **MEGA MetaMAC**；失败不重命名为最终文件
+- HTTP Range：校验 Partial Content / Content-Range；拒绝忽略 Range 的错误响应
+- 提前 EOF 作为失败；CTR counter 使用 Int64 seek，修复大偏移风险
+- 断点元数据校验，避免 `.part` 缺失时的“假完成”
+- 配置与下载队列原子保存（`AtomicFile`）；HTTP 默认超时；日志脱敏
+- 远程 Web：Stop/Play/AddLink 改为 POST + CSRF；Streaming 媒体 URL 固定 loopback
+- 解压协作取消（移除 Thread.Abort）、解压结果成功/失败分离、资源配额
+- 关闭顺序：先停 Web → 取消 worker/解压 → 停下载 → 再保存
+
+### ✨ 体验与工程（P2/P3）
+
+- 配置模型层上限（Buffer/连接数/速度）、磁盘空间预检、文件名冲突与进度除零防护
+- 语言：内置包与用户自定义分离，缺 key 回退 en-US
+- 单实例 IPC 按行写入，避免链接参数粘连；主题 Auto 跟随系统实时变化
+- 移除生产 xUnit 依赖与 MPRESS Release 后处理；DPI PerMonitorV2
+- 版本比较规范化；DLC 入口标为 discontinued（保留 ELC）
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.2.0.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.2`
+- `docs/version.xml` → `2.2.0.0`
+
+---
+
 ## [2.1.0] - 2026-07-19
 
 ### 主题完善 - 深色模式可用性修复

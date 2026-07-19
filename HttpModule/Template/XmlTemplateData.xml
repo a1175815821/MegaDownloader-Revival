@@ -554,7 +554,9 @@ function closestEnabledButton( element ) {
 
         $('#divIniciar').html('Starting...');
         $.ajax({
+            type: "POST",
             url: "ajax_resumedownload",
+            data: { csrf: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '') },
             success: function(data) {
                 $('#divIniciar').html(data);
             },
@@ -573,7 +575,9 @@ function closestEnabledButton( element ) {
 
         $('#divDetener').html('Stopping...');
         $.ajax({
+            type: "POST",
             url: "ajax_stopdownload",
+            data: { csrf: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '') },
             success: function(data) {
                 $('#divDetener').html(data);
             }, 
@@ -619,7 +623,8 @@ function closestEnabledButton( element ) {
             data: { 
                 links: $('#txtAgregarLinks').val(), 
                 pckname: $('#txtNomPaquete').val(), 
-                createdirpck: $('#chkCrearDirectorioPaquete').is(':checked')
+                createdirpck: $('#chkCrearDirectorioPaquete').is(':checked'),
+                csrf: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')
                 }, 
             success: function(data) {
                 $('#divAgregarLinkResult').html(data);

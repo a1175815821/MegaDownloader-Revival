@@ -79,7 +79,7 @@ Public Class Fichero
 
     Private Version As Integer
 
-    Private Const NUM_MAX_ERRORES_CHUNK As Integer = 100
+    Private Const NUM_MAX_ERRORES_CHUNK As Integer = 30
 	
 	Public Sub New()
 		Me.New("")
@@ -283,7 +283,9 @@ Public Class Fichero
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
 					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
-					If Not String.IsNullOrEmpty(Info.Nombre) then Me.NombreFichero = Info.Nombre
+					If Not String.IsNullOrEmpty(Info.Nombre) Then
+						Me.NombreFichero = PathGuard.SanitizeFileName(Info.Nombre, "file")
+					End If
 					Me.MD5 = Info.MD5
 					Me.DescargaProcesada = True
 					Me.SetDescargaEstado = EstadoAnterior
@@ -317,11 +319,14 @@ Public Class Fichero
 			Mutex.DeletingFiles.WaitOne()
 			Dim Ruta As String = String.Empty
 			Try
-				Ruta = System.IO.Path.Combine(Me.RutaLocal, Me.NombreFichero)
+				If String.IsNullOrWhiteSpace(Me.RutaLocal) OrElse String.IsNullOrWhiteSpace(Me.NombreFichero) Then
+					Throw New InvalidOperationException("Local path or file name is missing.")
+				End If
+				Ruta = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero)
 				If System.IO.File.Exists(Ruta) Then
 					System.IO.File.Delete(Ruta)
 				End If
-				Ruta = System.IO.Path.Combine(Me.RutaLocal, Me.NombreFichero & ".part")
+				Ruta = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, PathGuard.SanitizeFileName(Me.NombreFichero) & ".part")
 				If System.IO.File.Exists(Ruta) Then
 					System.IO.File.Delete(Ruta)
 				End If
@@ -410,11 +415,21 @@ Public Class Fichero
 				Me.Downloader.Start()
 			End If
 		Catch ex As Exception
-			Log.WriteError("Error on bgArranque_DoWork: " & ex.ToString)
-			bgArranque = Nothing
+			Log.WriteError("Error on bgArranque_DoWork: " & Log.SafeException(ex))
+			Me.EstablecerError("The download could not be started." & vbNewLine & _
+				" * File code: " & Me.FileID & vbNewLine & _
+				" * Internal info: " & Log.SafeException(ex))
 		End Try
 	End Sub
 	Private Sub bgArranque_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgArranque.RunWorkerCompleted
+		If e.Error IsNot Nothing Then
+			Log.WriteError("bgArranque completed with error: " & Log.SafeException(e.Error))
+			If Me.EstadoDescarga <> Estado.Erroneo Then
+				Me.EstablecerError("The download could not be started." & vbNewLine & _
+					" * File code: " & Me.FileID & vbNewLine & _
+					" * Internal info: " & Log.SafeException(e.Error))
+			End If
+		End If
 		bgArranque.Dispose()
 		bgArranque = Nothing
 	End Sub
@@ -464,9 +479,13 @@ Public Class Fichero
 		End If
 	End Sub
 	
-	Public Sub DescompresionFinalizada()
+	Public Sub DescompresionFinalizada(Optional ByVal success As Boolean = True)
 		If Me.EstadoDescarga = Estado.Descomprimiendo Then
-			Me.EstadoDescarga = Estado.Completado
+			If success Then
+				Me.EstadoDescarga = Estado.Completado
+			Else
+				Me.EstablecerError("Automatic extraction failed or was cancelled." & vbNewLine & " * File code: " & Me.FileID)
+			End If
 		End If
 	End Sub
 	
@@ -548,7 +567,7 @@ Public Class Fichero
 				Me.EstadoDescarga = Estado.ComprobandoMD5
 				Dim Hash As String = ""
 				Try
-					Hash = MD5Utils.MD5CalcFile(IO.Path.Combine(Me.RutaLocal, Me.NombreFichero))
+					Hash = MD5Utils.MD5CalcFile(PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero))
 					If Hash.ToUpper = Me.MD5.ToUpper Then
 						Me.EstadoDescarga = Estado.Completado
 						Log.WriteInfo("MD5 file " & Me.FileID & " verified.")
@@ -562,10 +581,10 @@ Public Class Fichero
 						Log.WriteInfo("File " & Me.FileID & " checked, MD5 does not match.")
 					End If
 				Catch ex As Exception
-					Log.WriteError("Error verifying MD5: " & ex.ToString)
-					' Que hacemos??
-					' De momento decimos que está ok...
-					Me.EstadoDescarga = Estado.Completado
+					Log.WriteError("Error verifying MD5: " & Log.SafeException(ex))
+					Me.EstablecerError("MD5 verification threw an exception; file cannot be marked complete." & vbNewLine & _
+						" * File code: " & Me.FileID & vbNewLine & _
+						" * Internal info: " & Log.SafeException(ex))
 				End Try
 				
 			End If
@@ -575,7 +594,7 @@ Public Class Fichero
 			' Descomprimimos fichero
 			' Crear directorio al descomprimir?? De momento ponemos siempre que sí...
             If Me.ExtraccionFicheroAutomatica AndAlso _
-                DescompresorController.GetController.AgregarElemento(Me.FileID, IO.Path.Combine(Me.RutaLocal, Me.NombreFichero), True, Me.DescargaExtraccionPassword) Then
+                DescompresorController.GetController.AgregarElemento(Me.FileID, PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero), True, Me.DescargaExtraccionPassword) Then
                 Me.EstadoDescarga = Estado.Descomprimiendo
             End If
 		End If
@@ -784,6 +803,18 @@ Public Class Fichero
                     Boolean.TryParse(LeerNodo(NodoChunk, "Available", "false"), Chunk.Available)
                     Me.DatosPartes.ChunkList.Add(Chunk)
                 Next
+            End If
+            ' Do not trust AllFinished without a consistent layout / full progress
+            If Me.DatosPartes.ChunkList Is Nothing OrElse Me.DatosPartes.ChunkList.Count = 0 Then
+                Me.DatosPartes.AllFinished = False
+            ElseIf Me.TamanoBytes > 0 Then
+                Me.DatosPartes.ValidateAndNormalize(Me.TamanoBytes)
+            Else
+                Dim anyIncomplete As Boolean = False
+                For Each c As FileDownloader.DataPart.Chunk In Me.DatosPartes.ChunkList
+                    If c.Index <> c.Size Then anyIncomplete = True
+                Next
+                If anyIncomplete Then Me.DatosPartes.AllFinished = False
             End If
         End If
 

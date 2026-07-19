@@ -2,6 +2,7 @@ Imports System.IO
 Imports System.Net
 Imports System.ComponentModel
 Imports System.Reflection
+Imports System.Linq
 
 
 #Region "Public Class FileDownloader"
@@ -95,50 +96,100 @@ Public Class FileDownloader
 
         Public Sub ResetAvailableParts()
             Me._Mutex.WaitOne()
-            For Each c1 As Chunk In Me.ChunkList
-                If c1.Index <> c1.Size Then
-                    c1.Available = True
-                End If
-            Next
-            Me._Mutex.ReleaseMutex()
+            Try
+                For Each c1 As Chunk In Me.ChunkList
+                    If c1.Index <> c1.Size Then
+                        c1.Available = True
+                    End If
+                Next
+            Finally
+                Me._Mutex.ReleaseMutex()
+            End Try
         End Sub
 
 
         Public ReadOnly Property NextAvailablePartIndex As Int32?
             Get
                 Me._Mutex.WaitOne()
-                Dim ret As Int32? = Nothing
-                Dim i As Integer = 0
-                For Each c1 As Chunk In Me.ChunkList
-                    If c1.Available Then
-                        ret = i
-                        c1.Available = False
-                        Exit For
-                    End If
-                    i += 1
-                Next
-                Me._Mutex.ReleaseMutex()
-                Return ret
+                Try
+                    Dim ret As Int32? = Nothing
+                    Dim i As Integer = 0
+                    For Each c1 As Chunk In Me.ChunkList
+                        If c1.Available Then
+                            ret = i
+                            c1.Available = False
+                            Exit For
+                        End If
+                        i += 1
+                    Next
+                    Return ret
+                Finally
+                    Me._Mutex.ReleaseMutex()
+                End Try
             End Get
         End Property
 
         Public Sub SetProgress(chunkIndex As Int32, index As Long)
             Me._Mutex.WaitOne()
-            Dim c As Chunk = Me.ChunkList(chunkIndex)
-            c.Index = index
-            If c.Index = c.Size Then
-                Dim Missing As Boolean = False
-                For Each c1 As Chunk In Me.ChunkList
-                    If c1.Index <> c1.Size Then
-                        Missing = True
+            Try
+                Dim c As Chunk = Me.ChunkList(chunkIndex)
+                c.Index = index
+                If c.Index = c.Size Then
+                    Dim Missing As Boolean = False
+                    For Each c1 As Chunk In Me.ChunkList
+                        If c1.Index <> c1.Size Then
+                            Missing = True
+                        End If
+                    Next
+                    If Not Missing Then
+                        Me.AllFinished = True
                     End If
-                Next
-                If Not Missing Then
-                    Me.AllFinished = True
                 End If
-            End If
-            Me._Mutex.ReleaseMutex()
+            Finally
+                Me._Mutex.ReleaseMutex()
+            End Try
         End Sub
+
+        ''' <summary>
+        ''' Validates chunk layout and clears AllFinished when incomplete or inconsistent.
+        ''' </summary>
+        Public Function ValidateAndNormalize(ByVal expectedSize As Long) As Boolean
+            Me._Mutex.WaitOne()
+            Try
+                If Me.ChunkList Is Nothing OrElse Me.ChunkList.Count = 0 Then
+                    Me.AllFinished = False
+                    Return False
+                End If
+                If expectedSize < 0 Then
+                    Me.AllFinished = False
+                    Return False
+                End If
+
+                Dim ordered = Me.ChunkList.OrderBy(Function(c) c.StartIndex).ToList()
+                Dim cursor As Long = 0
+                For Each c As Chunk In ordered
+                    If c.StartIndex < 0 OrElse c.Size < 0 OrElse c.Index < 0 OrElse c.Index > c.Size Then
+                        Me.AllFinished = False
+                        Return False
+                    End If
+                    If c.StartIndex <> cursor Then
+                        Me.AllFinished = False
+                        Return False
+                    End If
+                    cursor += c.Size
+                Next
+                If cursor <> expectedSize Then
+                    Me.AllFinished = False
+                    Return False
+                End If
+
+                Dim missing As Boolean = ordered.Any(Function(c) c.Index <> c.Size)
+                Me.AllFinished = Not missing
+                Return True
+            Finally
+                Me._Mutex.ReleaseMutex()
+            End Try
+        End Function
 
     End Class
 
@@ -163,10 +214,7 @@ Public Class FileDownloader
                 Return _Name
             End Get
             Set(value As String)
-                Me._Name = value & ""
-                For Each c As Char In System.IO.Path.GetInvalidFileNameChars
-                    Me._Name = Me.Name.Replace(c, " "c)
-                Next
+                Me._Name = PathGuard.SanitizeFileName(value & "", "file")
             End Set
         End Property
         ''' <summary>Create a new instance of FileInfo</summary>
@@ -193,19 +241,27 @@ Public Class FileDownloader
                     Throw New InvalidOperationException("Must specify size")
                 End If
                 Me._Mutex.WaitOne()
-                If _dataPart Is Nothing Then
-                    _dataPart = New DataPart(Me.Size, Me.NumParts)
-                End If
-                Me._Mutex.ReleaseMutex()
-                Return _dataPart
+                Try
+                    If _dataPart Is Nothing Then
+                        _dataPart = New DataPart(Me.Size, Me.NumParts)
+                    End If
+                    Return _dataPart
+                Finally
+                    Me._Mutex.ReleaseMutex()
+                End Try
             End Get
         End Property
 
         Public Sub SetDataPart(ByVal d As DataPart)
-            If d IsNot Nothing Then
-                Me._dataPart = d
-                Me._dataPart.ResetAvailableParts()
-            End If
+            Me._Mutex.WaitOne()
+            Try
+                If d IsNot Nothing Then
+                    Me._dataPart = d
+                    Me._dataPart.ResetAvailableParts()
+                End If
+            Finally
+                Me._Mutex.ReleaseMutex()
+            End Try
         End Sub
 
         Public Property Size As Long
@@ -451,9 +507,9 @@ Public Class FileDownloader
     Public Shared Function FormatSizeBinary(ByVal size As Int64, Optional ByVal decimals As Int32 = 2) As String
         ' By De Dauw Jeroen - April 2009 - jeroen_dedauw@yahoo.com
         Dim sizes() As String = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"}
-        Dim formattedSize As Double = size
+        Dim formattedSize As Double = Math.Abs(CDbl(size))
         Dim sizeIndex As Int32 = 0
-        While formattedSize >= 1024 And sizeIndex < sizes.Length
+        While formattedSize >= 1024 AndAlso sizeIndex < sizes.Length - 1
             formattedSize /= 1024
             sizeIndex += 1
         End While
@@ -466,13 +522,48 @@ Public Class FileDownloader
     Public Shared Function FormatSizeDecimal(ByVal size As Int64, Optional ByVal decimals As Int32 = 2) As String
         ' By De Dauw Jeroen - April 2009 - jeroen_dedauw@yahoo.com
         Dim sizes() As String = {"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
-        Dim formattedSize As Double = size
+        Dim formattedSize As Double = Math.Abs(CDbl(size))
         Dim sizeIndex As Int32 = 0
-        While formattedSize >= 1000 And sizeIndex < sizes.Length
+        While formattedSize >= 1000 AndAlso sizeIndex < sizes.Length - 1
             formattedSize /= 1000
             sizeIndex += 1
         End While
         Return Math.Round(formattedSize, decimals).ToString & sizes(sizeIndex)
+    End Function
+
+    ''' <summary>
+    ''' Resolves remote content length via HEAD, falling back to a 1-byte ranged GET.
+    ''' </summary>
+    Private Shared Function ProbeRemoteFileSize(ByVal url As String) As Long
+        Try
+            Dim webReq As HttpWebRequest = Conexion.CreateHttpWebRequest(url)
+            webReq.Method = "HEAD"
+            webReq.Timeout = 15000
+            Using webResp As HttpWebResponse = CType(webReq.GetResponse, HttpWebResponse)
+                If webResp.ContentLength >= 0 Then Return webResp.ContentLength
+            End Using
+        Catch
+            ' HEAD may be unsupported; try ranged GET below
+        End Try
+
+        Dim rangeReq As HttpWebRequest = Conexion.CreateHttpWebRequest(url)
+        rangeReq.Method = "GET"
+        rangeReq.Timeout = 15000
+        rangeReq.AddRange(0, 0)
+        Using rangeResp As HttpWebResponse = CType(rangeReq.GetResponse, HttpWebResponse)
+            Dim contentRange As String = rangeResp.Headers.Item("Content-Range")
+            If Not String.IsNullOrEmpty(contentRange) AndAlso contentRange.Contains("/"c) Then
+                Dim totalPart As String = contentRange.Substring(contentRange.LastIndexOf("/"c) + 1).Trim()
+                Dim totalLen As Long
+                If totalPart <> "*" AndAlso Long.TryParse(totalPart, totalLen) AndAlso totalLen >= 0 Then
+                    Return totalLen
+                End If
+            End If
+            If rangeResp.ContentLength >= 0 AndAlso rangeResp.StatusCode = HttpStatusCode.OK Then
+                Return rangeResp.ContentLength
+            End If
+        End Using
+        Return -1
     End Function
 #End Region
 
@@ -516,26 +607,20 @@ Public Class FileDownloader
 
         Log.WriteWarning("Starting file download " & file.Name)
 
-        Dim FicheroPART As String = Path.Combine(Me.LocalDirectory, file.Name & ".part")
-        Dim FicheroReal As String = Path.Combine(Me.LocalDirectory, file.Name)
+        Dim FicheroPART As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name & ".part")
+        Dim FicheroReal As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name)
 
         Dim exc As Exception = Nothing
 
         Try
 
-            ' Get size
+            ' Get size (HEAD, fall back to ranged GET if HEAD unsupported)
             If file.Size = 0 Then
                 Try
-                    Dim webReq As HttpWebRequest = Nothing
-                    Dim webResp As HttpWebResponse = Nothing
-                    ' Obtenemos el tamaño total
-                    webReq = Conexion.CreateHttpWebRequest(Me.File.Path)
-                    webReq.Method = "HEAD"
-                    webResp = CType(webReq.GetResponse, HttpWebResponse)
-
-                    Dim TotalSize As Long = webResp.ContentLength
-                    webResp.Close()
-
+                    Dim TotalSize As Long = ProbeRemoteFileSize(Me.File.Path)
+                    If TotalSize < 0 Then
+                        Throw New ApplicationException("Could not determine remote file size.")
+                    End If
                     file.Size = TotalSize
                     m_currentFileSize = TotalSize
                     Log.WriteInfo("File size " & file.Name & ": " & TotalSize)
@@ -548,14 +633,51 @@ Public Class FileDownloader
 
             ' Check errors
             If exc IsNot Nothing Then
-                Log.WriteError("Error downloading file " & file.Name & " - " & exc.ToString)
+                Log.WriteError("Error downloading file " & file.Name & " - " & Log.SafeException(exc))
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
                 exc = Nothing
                 Exit Try
             End If
 
+            ' Disk space precheck (file size + 64 MiB margin)
+            Try
+                Dim root As String = Path.GetPathRoot(Path.GetFullPath(Me.LocalDirectory))
+                If Not String.IsNullOrEmpty(root) Then
+                    Dim di As New DriveInfo(root)
+                    If di.IsReady AndAlso di.AvailableFreeSpace < file.Size + (64L * 1024L * 1024L) Then
+                        Throw New IOException("Insufficient disk space for download.")
+                    End If
+                End If
+            Catch ex As IOException
+                exc = ex
+            Catch ex As Exception
+                Log.WriteWarning("Disk space check skipped: " & Log.SafeException(ex))
+            End Try
+            If exc IsNot Nothing Then
+                Log.WriteError("Error preparing download " & file.Name & " - " & Log.SafeException(exc))
+                bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
+                exc = Nothing
+                Exit Try
+            End If
+
+            ' Validate resume metadata before trusting AllFinished
+            If file.DataPartInitialized Then
+                If Not file.GetDataPart.ValidateAndNormalize(file.Size) Then
+                    Log.WriteWarning("Invalid resume metadata for " & file.Name & "; restarting chunks.")
+                    file.SetDataPart(New DataPart(file.Size, file.NumParts))
+                End If
+            End If
+
             ' Check size
             If Not System.IO.File.Exists(FicheroPART) Then
+                If file.GetDataPart.AllFinished Then
+                    ' XML said complete but .part is missing — never invent a finished file
+                    file.GetDataPart.AllFinished = False
+                    For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
+                        c.Index = 0
+                        c.Available = True
+                    Next
+                End If
 
                 fireEventFromBgw([Event].CreatingFilesLocal)
                 ' Creamos un fichero vacío con ese tamaño
@@ -563,7 +685,7 @@ Public Class FileDownloader
                 Try
                     Using Stream As System.IO.FileStream = System.IO.File.Create(FicheroPART, 64 * 1024, FileOptions.RandomAccess)
                         Stream.SetLength(file.Size)
-                        Stream.Flush()
+                        Stream.Flush(True)
                     End Using
                 Catch ex As Exception
                     exc = ex
@@ -585,7 +707,7 @@ Public Class FileDownloader
 
             ' Check errors
             If exc IsNot Nothing Then
-                Log.WriteError("Error creating file on disk " & file.Name & " - " & exc.ToString)
+                Log.WriteError("Error creating file on disk " & file.Name & " - " & Log.SafeException(exc))
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
                 exc = Nothing
                 Exit Try
@@ -603,45 +725,82 @@ Public Class FileDownloader
                 Exit Sub
             End If
 
-            For i As Integer = 1 To Me.NumConnections
-                Log.WriteDebug("Event raised for starting a new connection")
-                bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, Nothing)
-            Next
-            Do
-                System.Threading.Thread.Sleep(100)
+            ' Already fully downloaded on disk with valid metadata — still verify MAC before success
+            If Not file.GetDataPart.AllFinished Then
+                For i As Integer = 1 To Me.NumConnections
+                    Log.WriteDebug("Event raised for starting a new connection")
+                    bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, Nothing)
+                Next
+                Do
+                    System.Threading.Thread.Sleep(100)
 
-                trigger.WaitOne()
-                If bgwDownloader.CancellationPending Then
-                    Log.WriteDebug("Aborting connection - stop requested")
+                    trigger.WaitOne()
+                    If bgwDownloader.CancellationPending Then
+                        Log.WriteDebug("Aborting connection - stop requested")
+                        Me.Mutex.WaitOne()
+                        Try
+                            For Each w As DownloaderWorker In Me.listDownloaders
+                                If w.IsBusy Then
+                                    w.CancelAsync()
+                                End If
+                            Next
+                        Finally
+                            Me.Mutex.ReleaseMutex()
+                        End Try
+                        Log.WriteWarning("File download stopped - " & file.Name)
+                        Exit Do
+                    End If
+
+                    If file.GetDataPart.AllFinished Then
+                        Exit Do
+                    End If
+                Loop
+
+                ' Wait until chunk workers finish before rename
+                Dim waitUntil As Date = Now.AddSeconds(30)
+                While Now < waitUntil
                     Me.Mutex.WaitOne()
+                    Dim busy As Boolean
                     Try
-                        For Each w As DownloaderWorker In Me.listDownloaders
-                            If w.IsBusy Then
-                                w.CancelAsync()
-                            End If
-                        Next
+                        busy = Me.listDownloaders.Any(Function(w) w.IsBusy)
                     Finally
                         Me.Mutex.ReleaseMutex()
                     End Try
-                    Log.WriteWarning("File download stopped - " & file.Name)
-                    Exit Do
-                End If
-
-                If file.GetDataPart.AllFinished Then
-                    Exit Do
-                End If
-            Loop
+                    If Not busy Then Exit While
+                    System.Threading.Thread.Sleep(50)
+                End While
+            End If
         Catch ex As Exception
             exc = ex
         Finally
             If exc IsNot Nothing Then
-                Log.WriteError("Error trying to download file " & file.Name & " - " & exc.ToString)
+                Log.WriteError("Error trying to download file " & file.Name & " - " & Log.SafeException(exc))
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
             End If
         End Try
 
         Try
-            If file.GetDataPart.AllFinished Then
+            If file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
+                If Not System.IO.File.Exists(FicheroPART) Then
+                    Throw New ApplicationException("Download reported finished but partial file is missing.")
+                End If
+                Dim partInfo As New System.IO.FileInfo(FicheroPART)
+                If partInfo.Length <> file.Size Then
+                    Throw New ApplicationException("Download size mismatch before rename.")
+                End If
+
+                ' Integrity: MEGA MetaMAC
+                Dim keyForMac As String = file.FileKey
+                If Not String.IsNullOrEmpty(keyForMac) AndAlso keyForMac.Contains("=###n=") Then
+                    keyForMac = keyForMac.Substring(0, keyForMac.IndexOf("=###n="))
+                End If
+                If Not String.IsNullOrEmpty(keyForMac) Then
+                    Log.WriteInfo("Verifying MEGA MetaMAC for " & file.Name)
+                    If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForMac) Then
+                        Throw New ApplicationException("Integrity check failed (MEGA MetaMAC mismatch). The file is corrupted or incomplete.")
+                    End If
+                End If
+
                 Me.MutexFile.WaitOne()
                 Try
                     If System.IO.File.Exists(FicheroPART) Then
@@ -657,17 +816,30 @@ Public Class FileDownloader
                             Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
 
                             Dim i As Integer = 1
+                            Dim renamed As Boolean = False
                             Do
                                 i += 1
                                 Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
                                 If Not System.IO.File.Exists(FicheroReal2) Then
                                     Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
                                     FileSystem.Rename(FicheroPART, FicheroReal2)
+                                    renamed = True
                                     Exit Do
                                 End If
 
-                                If i > 9999 Then Exit Do
+                                If i > 9999 Then
+                                    Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
+                                    Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
+                                    FileSystem.Rename(FicheroPART, uniqueName)
+                                    renamed = True
+                                    Exit Do
+                                End If
                             Loop
+                            If Not renamed Then
+                                Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
+                            End If
 
                         End If
 
@@ -679,7 +851,7 @@ Public Class FileDownloader
                 fireEventFromBgw([Event].FileDownloadSucceeded)
             End If
         Catch ex As Exception
-            Log.WriteError("Error checking if the download has stopped " & file.Name & " - " & ex.ToString)
+            Log.WriteError("Error finalizing download " & file.Name & " - " & Log.SafeException(ex))
             bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, ex)
         End Try
     End Sub
@@ -768,7 +940,7 @@ Public Class FileDownloader
             Dim file As FileInfo = Me.File
 
 
-            Dim FicheroPART As String = Me.LocalDirectory & "\" & file.Name & ".part"
+            Dim FicheroPART As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name & ".part")
 
             Dim FileKey As String = file.FileKey
 
@@ -826,46 +998,59 @@ Public Class FileDownloader
 
                     webResp = CType(webReq.GetResponse, HttpWebResponse)
 
-                    Dim contentRangeHeader As String = webResp.Headers.Item("Content-Range")
-                    ' Content-Range: bytes 1769472-2147111/2147112
-                    If Not String.IsNullOrEmpty(contentRangeHeader) _
-                        AndAlso contentRangeHeader.StartsWith("bytes ") _
-                        AndAlso contentRangeHeader.Contains("-") Then
-
-                        Dim tokenInit As String = contentRangeHeader.Substring(6).Split("-"c)(0)
-                        If IsNumeric(tokenInit) Then
-                            Dim InitDescarga As Long = CLng(tokenInit)
-                            If ChunkStart <> InitDescarga Then
-
-                                If InitDescarga < Chunk.StartIndex Then
-                                    ' Before StartIndex (before chunk starts) -> make chunk bigger
-
-                                    Chunk.Size += Chunk.StartIndex - InitDescarga
-                                    Chunk.StartIndex = InitDescarga
-                                    Chunk.Index = 0
-
-                                    ChunkStart = Chunk.StartIndex + Chunk.Index ' Update chunkstart & chunkstop
-                                    ChunkStop = Chunk.StartIndex + Chunk.Size - 1
-
-                                ElseIf InitDescarga < Chunk.StartIndex + Chunk.Index Then
-                                    ' After StartIndex and before current index -> start index from the point Mega sends the file
-
-                                    Chunk.Index -= Chunk.StartIndex + Chunk.Index - InitDescarga
-                                    ChunkStart = Chunk.StartIndex + Chunk.Index ' Update chunkstart & chunkstop
-                                    ChunkStop = Chunk.StartIndex + Chunk.Size - 1
-
+                    ' Require Partial Content for ranged requests
+                    If webResp.StatusCode <> HttpStatusCode.PartialContent AndAlso webResp.StatusCode <> HttpStatusCode.OK Then
+                        exc = New ApplicationException("Unexpected HTTP status for ranged download: " & CInt(webResp.StatusCode).ToString())
+                    Else
+                        Dim contentRangeHeader As String = webResp.Headers.Item("Content-Range")
+                        ' Content-Range: bytes 1769472-2147111/2147112
+                        If webResp.StatusCode = HttpStatusCode.OK AndAlso String.IsNullOrEmpty(contentRangeHeader) Then
+                            ' Server ignored Range and returned full body
+                            If ChunkStart <> 0 Then
+                                exc = New ApplicationException("Server ignored Range request (HTTP 200 without Content-Range).")
+                            End If
+                        ElseIf String.IsNullOrEmpty(contentRangeHeader) OrElse Not contentRangeHeader.StartsWith("bytes ") Then
+                            If ChunkStart <> 0 Then
+                                exc = New ApplicationException("Missing Content-Range for partial download.")
+                            End If
+                        Else
+                            Dim rangeBody As String = contentRangeHeader.Substring(6).Trim()
+                            Dim slashIdx As Integer = rangeBody.IndexOf("/"c)
+                            Dim rangePart As String = If(slashIdx >= 0, rangeBody.Substring(0, slashIdx), rangeBody)
+                            Dim totalPart As String = If(slashIdx >= 0, rangeBody.Substring(slashIdx + 1), "")
+                            Dim dashIdx As Integer = rangePart.IndexOf("-"c)
+                            If dashIdx < 0 Then
+                                exc = New ApplicationException("Invalid Content-Range: " & contentRangeHeader)
+                            Else
+                                Dim tokenInit As String = rangePart.Substring(0, dashIdx)
+                                Dim tokenEnd As String = rangePart.Substring(dashIdx + 1)
+                                Dim InitDescarga As Long
+                                Dim EndDescarga As Long
+                                If Not Long.TryParse(tokenInit, InitDescarga) OrElse Not Long.TryParse(tokenEnd, EndDescarga) Then
+                                    exc = New ApplicationException("Invalid Content-Range numbers: " & contentRangeHeader)
                                 Else
-                                    exc = New ApplicationException(String.Format("Error when downloading chunk {0}-{1}: received {2}", _
-                                                                                 ChunkStart, _
-                                                                                 ChunkStop, _
-                                                                                 InitDescarga))
+                                    If Not String.IsNullOrEmpty(totalPart) AndAlso totalPart <> "*" Then
+                                        Dim totalLen As Long
+                                        If Long.TryParse(totalPart, totalLen) AndAlso file.Size > 0 AndAlso totalLen <> file.Size Then
+                                            exc = New ApplicationException(String.Format("Content-Range total length mismatch: {0} vs {1}", totalLen, file.Size))
+                                        End If
+                                    End If
+                                    If exc Is Nothing AndAlso InitDescarga <> ChunkStart Then
+                                        If InitDescarga < Chunk.StartIndex OrElse InitDescarga > Chunk.StartIndex + Chunk.Index Then
+                                            exc = New ApplicationException(String.Format("Error when downloading chunk {0}-{1}: received start {2}", ChunkStart, ChunkStop, InitDescarga))
+                                        ElseIf InitDescarga <> Chunk.StartIndex + Chunk.Index Then
+                                            ' Align resume to what the server actually sent (must stay inside chunk)
+                                            Chunk.Index = InitDescarga - Chunk.StartIndex
+                                            ChunkStart = Chunk.StartIndex + Chunk.Index
+                                            ChunkStop = Chunk.StartIndex + Chunk.Size - 1
+                                        End If
+                                    End If
+                                    If exc Is Nothing AndAlso EndDescarga < ChunkStart Then
+                                        exc = New ApplicationException("Content-Range end is before requested start.")
+                                    End If
                                 End If
-
-
                             End If
                         End If
-
-
                     End If
 
                 Catch ex As WebException
@@ -877,7 +1062,7 @@ Public Class FileDownloader
 
                 If exc IsNot Nothing Then
                     worker.ChunkDownloadFailed = True
-                    Log.WriteError("Connection error when downloading file " & file.Name & " - " & exc.ToString)
+                    Log.WriteError("Connection error when downloading file " & file.Name & " - " & Log.SafeException(exc))
                     worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                     Exit Try
                 End If
@@ -888,12 +1073,11 @@ Public Class FileDownloader
                     FileKeyWithoutN = FileKeyWithoutN.Substring(0, FileKey.IndexOf("=###n="))
                 End If
 
-                ' Inicializamos el Cipher
-                ' Como no tenemos acceso al contador interno, tenemos que recorrerlo secuencialmente (chapu, pero bueno)
+                ' Inicializamos el Cipher (floor seek by absolute file offset)
                 Log.WriteDebug("Starting SicBlockCipher seek position " & ChunkStart)
                 Dim crono As Date = Now
                 Dim oCipher As Criptografia.SicSeekableBlockCipher = Criptografia.GetInstaceCipher(FileKeyWithoutN)
-                oCipher.IncrementCounter(CInt(Math.Ceiling(ChunkStart / oCipher.GetBlockSize)))
+                oCipher.SeekToFileOffset(ChunkStart)
                 Log.WriteDebug("Finishing SicBlockCipher seek [" & Now.Subtract(crono).TotalMilliseconds & "ms]")
 
                 If m_currentFileProgress > 0 Then
@@ -908,6 +1092,9 @@ Public Class FileDownloader
                     While Chunk.Index < Chunk.Size Or currentBuffersize > 0
 
                         If worker.CancellationPending Then
+                            If currentBuffersize > 0 Then
+                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                            End If
                             speedTimer.Stop()
                             Exit Sub
                         End If
@@ -919,7 +1106,6 @@ Public Class FileDownloader
                             worker.CancellationPending Or _
                             currentBuffersize + Me.PackageSize > Me.BufferSize) Then
 
-                            'Dim [continue] As Boolean = FlushToDisk(worker, FicheroPART, oCipher, BufferDisk, currentBuffersize, Chunk)
                             Dim [continue] As Boolean = FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
                             If Not [continue] Then
                                 Exit While
@@ -929,6 +1115,9 @@ Public Class FileDownloader
 
                         trigger.WaitOne()
                         If worker.CancellationPending Then
+                            If currentBuffersize > 0 Then
+                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                            End If
                             Log.WriteDebug("Download stopped - " & file.Name)
                             speedTimer.Stop()
                             Exit Sub
@@ -938,47 +1127,37 @@ Public Class FileDownloader
 
                             ' Fill the packageSize
                             currentPackageSize = 0
+                            Dim unexpectedEof As Boolean = False
 
                             While currentPackageSize < Me.PackageSize
                                 Dim bytesDownloaded As Integer = TStream.Read(BufferMem, currentPackageSize, Me.PackageSize - currentPackageSize)
                                 currentPackageSize += bytesDownloaded
 
-                                ' bytesDownloaded = 0 -> end of stream 
-                                ' https://msdn.microsoft.com/en-us/library/29tb55d8%28v=VS.100%29.aspx
-                                If bytesDownloaded = 0 Or _
-                                    Chunk.Index + currentBuffersize + currentPackageSize >= Chunk.Size Then
+                                If bytesDownloaded = 0 Then
+                                    If Chunk.Index + currentBuffersize + currentPackageSize < Chunk.Size Then
+                                        unexpectedEof = True
+                                    End If
+                                    Exit While
+                                End If
+                                If Chunk.Index + currentBuffersize + currentPackageSize >= Chunk.Size Then
                                     Exit While
                                 End If
                             End While
 
+                            If unexpectedEof Then
+                                Throw New ApplicationException("UnexpectedEndOfStream: connection closed before chunk completed.")
+                            End If
 
-                            'currentPackageSize = TStream.Read(BufferMem, 0, Me.PackageSize)
-
-                            '' Forzamos a que haya bloques de 16 bytes
-                            'Dim diff As Integer = oCipher.GetBlockSize - currentPackageSize Mod oCipher.GetBlockSize
-                            'If diff <> oCipher.GetBlockSize Then
-
-                            '    If Chunk.Index + currentBuffersize + currentPackageSize < Chunk.Size Then
-                            '        currentPackageSize += TStream.Read(BufferMem, currentPackageSize, diff)
-                            '    End If
-
-                            '    '' New code... it works... although currentBuffersize is not used, why? :S
-                            '    ' Dont release yet...
-                            '    'If Chunk.Index + currentPackageSize < Chunk.Size Then
-                            '    '    currentPackageSize += TStream.Read(readBytes, currentPackageSize, diff)
-                            '    'Else
-                            '    '    currentPackageSize += diff
-                            '    'End If
-
-                            'End If
+                            If currentPackageSize = 0 Then
+                                If Chunk.Index + currentBuffersize >= Chunk.Size Then
+                                    Exit While
+                                End If
+                                Throw New ApplicationException("UnexpectedEndOfStream: zero-byte read with incomplete chunk.")
+                            End If
 
                             For tempIndex As Integer = 0 To currentPackageSize - 1 Step oCipher.GetBlockSize
                                 oCipher.ProcessBlock(BufferMem, tempIndex, BufferDisk, currentBuffersize + tempIndex)
                             Next
-
-                            'If Now.Millisecond < 200 Then
-                            '    Throw New ApplicationException("TEST PRUEBA STOP, SIMULAMOS PROBLEMA CONEXION, ABORTAMOS CONEXION")
-                            'End If
 
                         Catch ex As WebException
                             exc = ex
@@ -987,6 +1166,12 @@ Public Class FileDownloader
                         End Try
 
                         If exc IsNot Nothing Then
+                            If currentBuffersize > 0 Then
+                                Try
+                                    FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                                Catch
+                                End Try
+                            End If
                             worker.ChunkDownloadFailed = True
                             worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                             speedTimer.Stop()
@@ -994,9 +1179,12 @@ Public Class FileDownloader
                         End If
 
                         Me.Mutex.WaitOne()
-                        m_currentFileProgress += currentPackageSize
-                        m_totalProgress += currentPackageSize
-                        Me.Mutex.ReleaseMutex()
+                        Try
+                            m_currentFileProgress += currentPackageSize
+                            m_totalProgress += currentPackageSize
+                        Finally
+                            Me.Mutex.ReleaseMutex()
+                        End Try
 
                         bytesDownloadedSinceLastTimer += currentPackageSize
 
@@ -1065,14 +1253,15 @@ Public Class FileDownloader
         '''''''''''''''''''''''
 
 
-        'Me.MutexFile.WaitOne()
+        Me.MutexFile.WaitOne()
         Try
-            Dim writer As New FileStream(filePath, IO.FileMode.Open, FileAccess.Write, FileShare.ReadWrite, CurrentBufferSize, FileOptions.RandomAccess)
-            writer.Position = Chunk.StartIndex + Chunk.Index
-            writer.Write(BufferDisk, 0, CurrentBufferSize)
-            writer.Close()
+            Using writer As New FileStream(filePath, IO.FileMode.Open, FileAccess.Write, FileShare.ReadWrite, Math.Max(CurrentBufferSize, 4096), FileOptions.RandomAccess)
+                writer.Position = Chunk.StartIndex + Chunk.Index
+                writer.Write(BufferDisk, 0, CurrentBufferSize)
+                writer.Flush(True)
+            End Using
         Finally
-            'Me.MutexFile.ReleaseMutex()
+            Me.MutexFile.ReleaseMutex()
         End Try
 
         Dim IndexProgress As Long = Chunk.Index + CurrentBufferSize
@@ -1115,8 +1304,11 @@ Public Class FileDownloader
         If Not HasBeenCanceled Then
 
             If worker.ChunkDownloadFailed Then
-                ' Ha fallado, antes de reconectar esperamos unos segundos, entre 1 y 4
-                Dim TiempoEspera As Double = 1000 + (Now.Millisecond * 4)
+                ' Exponential backoff with jitter (cap ~30s)
+                Dim attempt As Integer = Math.Min(10, Math.Max(0, Me.listDownloaders.Count))
+                Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, Math.Min(4, attempt))))
+                Dim jitter As Integer = (Now.Millisecond Mod 500)
+                Dim TiempoEspera As Double = baseMs + jitter
                 Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
                 While Now < Limite
                     System.Threading.Thread.Sleep(50)
@@ -1184,7 +1376,8 @@ Public Class FileDownloader
 
     Private Sub cleanUpFile()
         If File IsNot Nothing Then
-            Dim fullPath As String = Path.Combine(Me.LocalDirectory, Me.File.Name)
+            Dim fullPath As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, Me.File.Name)
+            PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, fullPath, allowRoot:=False)
             If IO.File.Exists(fullPath) Then IO.File.Delete(fullPath)
         End If
     End Sub
@@ -1195,12 +1388,9 @@ Public Class FileDownloader
 
         bgwDownloader.ReportProgress(InvokeType.CalculatingFileNrRaiser, Nothing)
         Try
-            Dim webReq As HttpWebRequest = Conexion.CreateHttpWebRequest(Me.File.Path)
-            webReq.Method = "HEAD"
-            webReq.Timeout = 15000
-            Dim webResp As HttpWebResponse = CType(webReq.GetResponse, HttpWebResponse)
-            m_totalSize = webResp.ContentLength
-            webResp.Close()
+            Dim size As Long = ProbeRemoteFileSize(Me.File.Path)
+            If size < 0 Then Throw New ApplicationException("Could not determine remote file size.")
+            m_totalSize = size
         Catch ex As Exception
             Throw New ApplicationException("Connection error: " & ex.Message)
         End Try
@@ -1211,11 +1401,34 @@ Public Class FileDownloader
     Protected Overridable Sub Dispose(ByVal disposing As Boolean)
         If Not m_disposed Then
             If disposing Then
-                ' Free other state (managed objects)
-                bgwDownloader.Dispose()
+                Try
+                    If bgwDownloader IsNot Nothing AndAlso bgwDownloader.IsBusy Then
+                        bgwDownloader.CancelAsync()
+                    End If
+                    Me.Mutex.WaitOne()
+                    Try
+                        For Each w As DownloaderWorker In Me.listDownloaders.ToList()
+                            If w.IsBusy Then w.CancelAsync()
+                        Next
+                    Finally
+                        Me.Mutex.ReleaseMutex()
+                    End Try
+                    Dim waitUntil As Date = Now.AddSeconds(5)
+                    While Now < waitUntil
+                        Me.Mutex.WaitOne()
+                        Dim busy As Boolean
+                        Try
+                            busy = Me.listDownloaders.Any(Function(x) x.IsBusy)
+                        Finally
+                            Me.Mutex.ReleaseMutex()
+                        End Try
+                        If Not busy Then Exit While
+                        System.Threading.Thread.Sleep(50)
+                    End While
+                Catch
+                End Try
+                If bgwDownloader IsNot Nothing Then bgwDownloader.Dispose()
             End If
-            ' Free your own state (unmanaged objects)
-            ' Set large fields to null
             Me.File = Nothing
         End If
         m_disposed = True
@@ -1357,19 +1570,21 @@ Public Class FileDownloader
     End Property
 
     Public Sub setBufferAndPackageSize(bufferSize As Int32, packageSize As Int32)
+        Const MaxPackage As Integer = 1024 * 1024 ' 1 MiB
+        Const MaxBuffer As Integer = 16 * 1024 * 1024 ' 16 MiB
         If bufferSize <= 0 Then
-            ' The BufferSize needs to be greater than 0
             bufferSize = 750 * 1024
             Log.WriteWarning("Warning: BufferSize is 0 or less, setting default value 750KB")
         End If
         If packageSize <= 0 Then
-            ' The PackageSize needs to be greater than 0
             packageSize = 50 * 1024
-            Log.WriteWarning("Warning: PackageSize is 0 or less, setting default value 750KB")
+            Log.WriteWarning("Warning: PackageSize is 0 or less, setting default value 50KB")
         End If
+        If packageSize > MaxPackage Then packageSize = MaxPackage
+        If bufferSize > MaxBuffer Then bufferSize = MaxBuffer
         If bufferSize < packageSize Then
             Log.WriteWarning("Warning: BufferSize needs to be greater than PackageSize, setting 5x")
-            bufferSize = 5 * packageSize
+            bufferSize = Math.Min(MaxBuffer, 5 * packageSize)
         End If
         m_packageSize = packageSize
         m_bufferSize = bufferSize
@@ -1499,6 +1714,7 @@ Public Class FileDownloader
     Public ReadOnly Property TotalPercentage(Optional ByVal decimals As Int32 = 0) As Double
         Get
             If Me.SupportsProgress Then
+                If Me.TotalSize <= 0 Then Return If(Me.TotalProgress > 0, 100.0, 0.0)
                 Dim Perc As Double = Me.TotalProgress / Me.TotalSize * 100
                 If Perc > 100 Then Perc = 100
                 Return Math.Round(Perc, decimals)
@@ -1511,7 +1727,10 @@ Public Class FileDownloader
     ''' <summary>Gets the percentage of the current file progress</summary>
     Public ReadOnly Property CurrentFilePercentage(Optional ByVal decimals As Int32 = 0) As Double
         Get
-            Return Math.Round(Me.CurrentFileProgress / Me.CurrentFileSize * 100, decimals)
+            If Me.CurrentFileSize <= 0 Then Return If(Me.CurrentFileProgress > 0, 100.0, 0.0)
+            Dim Perc As Double = Me.CurrentFileProgress / Me.CurrentFileSize * 100
+            If Perc > 100 Then Perc = 100
+            Return Math.Round(Perc, decimals)
         End Get
     End Property
 
