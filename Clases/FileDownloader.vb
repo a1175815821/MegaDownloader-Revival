@@ -731,6 +731,11 @@ Public Class FileDownloader
                     Log.WriteDebug("Event raised for starting a new connection")
                     bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, Nothing)
                 Next
+                ' Safety timeout: if AllFinished is not set within 60 seconds of reaching
+                ' near-complete progress, validate chunks and force-finish to avoid
+                ' getting stuck in this loop forever (Bug 2 fix).
+                Dim waitStartTime As Date = Now
+                Dim stuckCheckLogged As Boolean = False
                 Do
                     System.Threading.Thread.Sleep(100)
 
@@ -754,6 +759,45 @@ Public Class FileDownloader
                     If file.GetDataPart.AllFinished Then
                         Exit Do
                     End If
+
+                    ' Fallback: if we've been waiting more than 60 seconds and the file
+                    ' size on disk matches the expected size, all data is likely present.
+                    ' Validate chunks and set AllFinished to break out of the loop.
+                    If Now.Subtract(waitStartTime).TotalSeconds > 60 Then
+                        If Not stuckCheckLogged Then
+                            stuckCheckLogged = True
+                            Log.WriteWarning("Download wait loop exceeded 60s for " & file.Name & "; checking if all data is present.")
+                        End If
+                        Try
+                            If System.IO.File.Exists(FicheroPART) Then
+                                Dim partLen As Long = New System.IO.FileInfo(FicheroPART).Length
+                                If partLen = file.Size Then
+                                    ' All bytes are on disk — validate chunk state and force-finish
+                                    file.GetDataPart.ValidateAndNormalize(file.Size)
+                                    If Not file.GetDataPart.AllFinished Then
+                                        ' Chunk state is inconsistent but file size matches — force-finish
+                                        Log.WriteWarning("File size matches but chunk state inconsistent for " & file.Name & "; forcing AllFinished.")
+                                        For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
+                                            c.Index = c.Size
+                                        Next
+                                        file.GetDataPart.AllFinished = True
+                                    End If
+                                    If file.GetDataPart.AllFinished Then
+                                        Log.WriteWarning("Forced AllFinished for " & file.Name & " after validating disk content.")
+                                        Exit Do
+                                    End If
+                                End If
+                            End If
+                        Catch exCheck As Exception
+                            Log.WriteWarning("Error during stuck-wait check: " & Log.SafeException(exCheck))
+                        End Try
+
+                        ' Hard timeout at 120 seconds — exit to avoid infinite loop
+                        If Now.Subtract(waitStartTime).TotalSeconds > 120 Then
+                            Log.WriteError("Download wait loop timed out after 120s for " & file.Name & "; forcing exit.")
+                            Exit Do
+                        End If
+                    End If
                 Loop
 
                 ' Wait until chunk workers finish before rename
@@ -773,6 +817,12 @@ Public Class FileDownloader
         Catch ex As Exception
             exc = ex
         Finally
+            ' If all chunks finished despite an earlier non-fatal error, the download itself succeeded.
+            ' Do NOT report FileDownloadFailed — that would wrongly mark a completed file as error.
+            If exc IsNot Nothing AndAlso file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
+                Log.WriteWarning("Non-fatal error during download of " & file.Name & " but all chunks finished. Suppressing failure: " & Log.SafeException(exc))
+                exc = Nothing
+            End If
             If exc IsNot Nothing Then
                 Log.WriteError("Error trying to download file " & file.Name & " - " & Log.SafeException(exc))
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)

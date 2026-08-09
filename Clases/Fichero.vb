@@ -1,4 +1,4 @@
-﻿Imports System.Collections.Specialized
+Imports System.Collections.Specialized
 Imports System.Text.RegularExpressions
 Imports System.ComponentModel
 Imports System.Xml
@@ -395,6 +395,7 @@ Public Class Fichero
 			AddHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
 			AddHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
 			AddHandler Me.Downloader.Completed, AddressOf downloader_Completed
+			AddHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
 			AddHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
 			AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
 			AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
@@ -556,6 +557,15 @@ Public Class Fichero
 		End If
 	End Sub
 	
+	Private Sub downloader_FileDownloadSucceeded(ByVal sender As System.Object, ByVal e As System.EventArgs)
+		' This event fires as soon as the file is verified and renamed — before the Completed event.
+		' Setting Completado here ensures the UI reflects the true state immediately, even if the
+		' Completed event is delayed or the background worker's RunWorkerCompleted is slow to fire.
+		If Me.EstadoDescarga <> Estado.Erroneo Then
+			Me.EstadoDescarga = Estado.Completado
+		End If
+	End Sub
+
 	Private Sub downloader_Completed(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		If Me.EstadoDescarga <> Estado.Erroneo Then
 			Log.WriteWarning("File " & Me.FileID & " downloaded.")
@@ -615,6 +625,7 @@ Public Class Fichero
 				RemoveHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
 				RemoveHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
 				RemoveHandler Me.Downloader.Completed, AddressOf downloader_Completed
+				RemoveHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
 				RemoveHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
 				RemoveHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
 				RemoveHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
@@ -668,6 +679,20 @@ Public Class Fichero
 				End If
 				If Me.TamanoBytes > 0 Then
 					Me.Porcentaje = CDec(100 * Me.BytesDescargados / Me.TamanoBytes)
+				End If
+
+				' Fallback: if the download is at 100% and AllFinished is set, but the state
+				' is still Descargando (because the Completed/FileDownloadSucceeded event was
+				' delayed or missed), correct it here. This is a safety net for Bug 2.
+				If Me.EstadoDescarga = Estado.Descargando AndAlso
+				   Me.TamanoBytes > 0 AndAlso
+				   Me.BytesDescargados >= Me.TamanoBytes AndAlso
+				   Me.Downloader.File IsNot Nothing AndAlso
+				   Me.Downloader.File.DataPartInitialized AndAlso
+				   Me.Downloader.File.GetDataPart.AllFinished AndAlso
+				   Not Me.Downloader.IsBusy Then
+					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Correcting to Completado. File: " & Me.FileID)
+					Me.EstadoDescarga = Estado.Completado
 				End If
 			End If
 			If EstadoDescarga = Estado.Descargando Then

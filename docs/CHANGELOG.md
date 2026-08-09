@@ -6,6 +6,33 @@
 
 ---
 
+## [2.2.1] - 2026-08-09
+
+### 🐛 下载状态修复
+
+修复两个用户报告的下载完成状态显示问题。
+
+### Bug 1: 多文件下载完成(100%)但显示错误
+
+- **根因**: `FileDownloader.downloadFile()` 的 `Finally` 块在 `exc` 不为空时报告 `FileDownloadFailedRaiser`。即使所有分块已成功完成(`AllFinished = True`),之前发生的非致命异常仍会触发失败事件,将状态错误地设为 `Erroneo`。
+- **修复**: 在 `Finally` 块中检查 `AllFinished` 状态,如果下载实际完成则清除 `exc`,仅记录警告而不报告失败。
+
+### Bug 2: 单文件下载完成(100%)但仍显示"正在下载"
+
+- **根因**: `Completed` 事件只在 `bgwDownloader_RunWorkerCompleted` 中触发,如果等待循环因竞态条件无法退出,`Completed` 永远不会触发,状态停留在 `Descargando`。
+- **修复**: 三层防护
+  1. **事件层**: 新增 `FileDownloadSucceeded` 处理器,文件验证和重命名成功后立即设置 `Completado` 状态
+  2. **循环层**: 等待循环增加 60 秒超时检查,若磁盘文件大小匹配则强制完成;120 秒硬超时防止死锁
+  3. **定时器层**: `ActualizarDatosDescarga` 增加兜底检查,进度 100% 且 `AllFinished` 时自动修正状态
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.2.1.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.2.1`
+- `docs/version.xml` → `2.2.1.0`
+
+---
+
 ## [2.2.0] - 2026-07-20
 
 ### 安全加固与下载完整性
