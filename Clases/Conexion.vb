@@ -280,12 +280,6 @@ Public Class Conexion
         Const RepoRawUrl As String = "https://raw.githubusercontent.com/a1175815821/MegaDownloader-Revival/main/docs/version.xml"
         Return RepoRawUrl
     End Function
-    'Public Shared Function GetAppID() As String
-    '    Dim Code As String = InternalConfiguration.ObtenerValueFromInternalConfig("APP_ID")
-    '    Code = Criptografia.AES_DecryptString(Code, keyUrl)
-    '    Code &= InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER")
-    '    Return Code
-    'End Function
 
 
     Private Shared Function TratarUsuario(ByVal Usuario As String) As String
@@ -433,15 +427,6 @@ Public Class Conexion
             Log.WriteError("Error getting the info for file " & FileID & ": " & Resultado.Excepcion.Message & " - Message received: " & Resultado.Mensaje)
         End If
         Return Info
-    End Function
-
-    Private Shared Function LeerNodo(ByRef DocumentoXML As XmlDocument, ByRef Path As String, ByVal ValorDefecto As String) As String
-        Dim nodo As XmlNode = DocumentoXML.DocumentElement.SelectSingleNode(Path)
-        If nodo Is Nothing Then
-            Return ValorDefecto
-        Else
-            Return nodo.InnerText
-        End If
     End Function
 
 

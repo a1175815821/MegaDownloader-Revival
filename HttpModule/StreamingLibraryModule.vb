@@ -23,7 +23,11 @@ Public Class StreamingLibraryModule
     Public TemplateManagerData As String
     Public TemplateData As String
     Public TemplateLogin As String
-    Private _RespuestaAjax As String = ""
+    ' AsyncLocal isolates the value per async/await execution context. The HttpServer
+    ' framework dispatches each request on a thread-pool thread inside an isolated
+    ' ExecutionContext, so concurrent requests no longer overwrite each other's
+    ' AJAX response (previously a shared instance field caused cross-request pollution).
+    Private Shared _RespuestaAjax As System.Threading.AsyncLocal(Of String) = New System.Threading.AsyncLocal(Of String)()
     Private _TimeoutSesion As Integer
 
     Public Sub New(ByRef Downloader As Main, ByRef Config As Configuracion)
@@ -186,7 +190,7 @@ Public Class StreamingLibraryModule
 #Region "Proceso páginas"
 
     Private Function CargarAjax() As String
-        Return _RespuestaAjax
+        Return _RespuestaAjax.Value
     End Function
 
 
@@ -399,14 +403,14 @@ Public Class StreamingLibraryModule
     End Function
 
     Private Sub PrepareAjaxResponseExport(code As String)
-        _RespuestaAjax = "{""error"":"""",""code"":" & LibraryElement.JsonString(code) & "}"
+        _RespuestaAjax.Value = "{""error"":"""",""code"":" & LibraryElement.JsonString(code) & "}"
     End Sub
 
     Private Sub PrepareAjaxResponseImport(ByVal numReceived As Integer, ByVal numImported As Integer)
-        _RespuestaAjax = "{""error"":"""",""numR"":" & LibraryElement.JsonString(numReceived.ToString) & ",""numI"":" & LibraryElement.JsonString(numImported.ToString) & "}"
+        _RespuestaAjax.Value = "{""error"":"""",""numR"":" & LibraryElement.JsonString(numReceived.ToString) & ",""numI"":" & LibraryElement.JsonString(numImported.ToString) & "}"
     End Sub
     Private Sub PrepareAjaxResponse(CurrentURL As String, ByVal ele As LibraryElement)
-        _RespuestaAjax = "{""error"":"""",""Data"":[" & ele.ToJSON(CurrentURL, Me.Config) & "]}"
+        _RespuestaAjax.Value = "{""error"":"""",""Data"":[" & ele.ToJSON(CurrentURL, Me.Config) & "]}"
     End Sub
 
     Private Sub PrepareAjaxResponse(CurrentURL As String, ByVal ele As IEnumerable(Of LibraryElement))
@@ -419,11 +423,11 @@ Public Class StreamingLibraryModule
             primero = False
         Next
         str.Append("]}")
-        _RespuestaAjax = str.ToString
+        _RespuestaAjax.Value = str.ToString
     End Sub
 
     Private Sub PrepareAjaxResponse(ByVal ErrorMessage As String)
-        _RespuestaAjax = "{""error"":" & LibraryElement.JsonString(ErrorMessage) & "}"
+        _RespuestaAjax.Value = "{""error"":" & LibraryElement.JsonString(ErrorMessage) & "}"
     End Sub
 
 

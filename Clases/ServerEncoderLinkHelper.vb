@@ -1,4 +1,4 @@
-﻿Imports System.Xml
+Imports System.Xml
 Imports System.Security.Cryptography
 
 Public Class ServerEncoderLinkHelper
@@ -31,8 +31,10 @@ Public Class ServerEncoderLinkHelper
 			Dim linksToEncode As String = strBuilderLinks.ToString
 			
 			' 1) Generate random password
-			Dim b As [Byte]() = New [Byte](23) {} 
-			System.Security.Cryptography.RandomNumberGenerator.Create.GetBytes(b)
+			Dim b As [Byte]() = New [Byte](23) {}
+			Using rng As System.Security.Cryptography.RandomNumberGenerator = System.Security.Cryptography.RandomNumberGenerator.Create()
+				rng.GetBytes(b)
+			End Using
 			Dim Password As String = Convert.ToBase64String(b)
 			
 			' 2) Encode data
@@ -266,6 +268,7 @@ Public Class ServerEncoderLinkHelper
 						Try
 							objCryptoStream.FlushFinalBlock()
 						Catch ex As Exception
+							Log.WriteError("Cipher: FlushFinalBlock failed during AES decryption (PaddingMode.Zeros, data may be unaligned): " & ex.Message)
 						End Try
 						
 						Return Response

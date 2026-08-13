@@ -12,8 +12,21 @@ Public Class Criptografia
 #Region "Criptografía interna"
 
 
-    Shared entropy As Byte() = System.Text.Encoding.Unicode.GetBytes("G*SNAfhHW5A¿Amck+XMLCM6M#$xEK;9q")
-    ' Un salt para dificultar un posible hackeo, usando DPAPI.
+    ' DPAPI application-specific entropy. Derived from the assembly identity so the
+    ' literal is not present in source. Note: DPAPI security primarily relies on the
+    ' CurrentUser scope; the entropy only isolates this app from other apps running
+    ' under the same user. An attacker who can run code as the user can bypass DPAPI
+    ' regardless of the entropy value.
+    Shared entropy As Byte() = DeriveAppEntropy()
+    ' Legacy entropy retained solely for decrypting data persisted by versions prior
+    ' to the derivation change. New encryptions always use the derived entropy above.
+    Private Shared legacyEntropy As Byte() = System.Text.Encoding.Unicode.GetBytes("G*SNAfhHW5A¿Amck+XMLCM6M#$xEK;9q")
+
+    Private Shared Function DeriveAppEntropy() As Byte()
+        Using sha As New SHA256Managed()
+            Return sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(System.Reflection.Assembly.GetExecutingAssembly().GetName().FullName))
+        End Using
+    End Function
 
     Public Shared Function EncryptString_DPAPI(input As System.Security.SecureString) As String
         Dim encryptedData As Byte() = System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.Unicode.GetBytes(ToInsecureString(input)), entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
@@ -25,7 +38,13 @@ Public Class Criptografia
             Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(encryptedData), entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
             Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
         Catch
-            Return New SecureString()
+            ' Fall back to the legacy entropy for data persisted by previous versions.
+            Try
+                Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(encryptedData), legacyEntropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
+                Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
+            Catch
+                Return New SecureString()
+            End Try
         End Try
     End Function
 
@@ -484,52 +503,8 @@ Public Class Criptografia
         Return res.ToArray()
     End Function
 
-    'Public Shared Sub DecryptFile(pEncFile As String, pOutDecFile As String, pKey As String)
-    '    Dim cipher As SicBlockCipher = GetInstaceCipher(pKey)
-
-    '    Using fs = New FileStream(pEncFile, FileMode.Open)
-    '        If System.IO.File.Exists(pOutDecFile) Then
-    '            System.IO.File.Delete(pOutDecFile)
-    '        End If
-    '        Using fw = New FileStream(pOutDecFile, FileMode.CreateNew)
-    '            Dim i = 0
-    '            While i < fs.Length
-    '                Dim buff As Byte() = New Byte(CInt(If(fs.Length - i > cipher.GetBlockSize(), cipher.GetBlockSize(), fs.Length - i) - 1)) {}
-    '                fs.Read(buff, 0, buff.Length)
-    '                Dim result = cipherData(cipher, buff)
-    '                fw.Write(result, 0, result.Length)
-    '                i += cipher.GetBlockSize()
-    '            End While
-    '        End Using
-    '    End Using
-    'End Sub
-
-'    Private Shared Function cipherData(cipher As SicBlockCipher, data As Byte()) As Byte()
-'        Dim originalLength = data.Length
-'        Dim outBuff As Byte() = New Byte(data.Length - 1) {}
-'        Dim i = 0
-'        While i < data.Length
-'            If i + cipher.GetBlockSize() < data.Length Then
-'                cipher.ProcessBlock(data, i, outBuff, i)
-'            Else
-'                Dim diff = (i + cipher.GetBlockSize()) - data.Length
-'                Dim tmp = data.ToList()
-'                tmp.AddRange(New Byte(diff - 1) {})
-'                data = tmp.ToArray()
-'
-'                tmp = outBuff.ToList()
-'                tmp.AddRange(New Byte(diff - 1) {})
-'                outBuff = tmp.ToArray()
-'
-'                cipher.ProcessBlock(data, i, outBuff, i)
-'            End If
-'            i += cipher.GetBlockSize()
-'        End While
-'        Return outBuff.Take(originalLength).ToArray()
-'    End Function
 
 
-   
     Public Shared Function base64urlencode(pData() As Byte) As String
         Dim d As String = System.Convert.ToBase64String(pData)
         d = d.Replace("+", "-").Replace("/", "_").Replace("=", "")

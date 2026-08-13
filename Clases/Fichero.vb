@@ -199,7 +199,6 @@ Public Class Fichero
         Public FileID As String
         Public URLFichero As String
         Public URL As String
-        Public OptionalPassword As String
     End Class
     Private CacheSecureData As Cache = Nothing
     Private Sub RegenerateCacheSecureData()
@@ -480,12 +479,13 @@ Public Class Fichero
 		End If
 	End Sub
 	
-	Public Sub DescompresionFinalizada(Optional ByVal success As Boolean = True)
+	Public Sub DescompresionFinalizada(Optional ByVal success As Boolean = True, Optional ByVal errorMessage As String = "")
 		If Me.EstadoDescarga = Estado.Descomprimiendo Then
 			If success Then
 				Me.EstadoDescarga = Estado.Completado
 			Else
-				Me.EstablecerError("Automatic extraction failed or was cancelled." & vbNewLine & " * File code: " & Me.FileID)
+				Dim detail As String = If(String.IsNullOrEmpty(errorMessage), "", vbNewLine & " * Reason: " & errorMessage)
+				Me.EstablecerError("Automatic extraction failed or was cancelled." & vbNewLine & " * File code: " & Me.FileID & detail)
 			End If
 		End If
 	End Sub
@@ -521,6 +521,7 @@ Public Class Fichero
 				End Using
 			End If
 		Catch ex As Exception
+			Log.WriteError("downloader_FileDownloadFailed: could not read server error response: " & Log.SafeException(ex))
 		End Try
 		Me.EstablecerError("File download failed." & vbNewLine & _
 			" * File code: " & Me.FileID & vbNewLine & _
@@ -542,6 +543,7 @@ Public Class Fichero
 				End Using
 			End If
 		Catch ex As Exception
+			Log.WriteError("downloader_ChunkDownloadFailed: could not read server error response: " & Log.SafeException(ex))
 		End Try
 		Dim descError As String = "Chunk download failed. Reconnecting. " & vbNewLine & _
 			" * File code: " & Me.FileID & vbNewLine & _
@@ -684,6 +686,9 @@ Public Class Fichero
 				' Fallback: if the download is at 100% and AllFinished is set, but the state
 				' is still Descargando (because the Completed/FileDownloadSucceeded event was
 				' delayed or missed), correct it here. This is a safety net for Bug 2.
+				' NOTE: we must run the full completion flow (MD5 verification + automatic
+				' extraction), not just flip the state — otherwise the UI shows "complete"
+				' while integrity is never checked and auto-extract never fires.
 				If Me.EstadoDescarga = Estado.Descargando AndAlso
 				   Me.TamanoBytes > 0 AndAlso
 				   Me.BytesDescargados >= Me.TamanoBytes AndAlso
@@ -691,8 +696,8 @@ Public Class Fichero
 				   Me.Downloader.File.DataPartInitialized AndAlso
 				   Me.Downloader.File.GetDataPart.AllFinished AndAlso
 				   Not Me.Downloader.IsBusy Then
-					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Correcting to Completado. File: " & Me.FileID)
-					Me.EstadoDescarga = Estado.Completado
+					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Running full completion flow. File: " & Me.FileID)
+					Me.downloader_Completed(Nothing, EventArgs.Empty)
 				End If
 			End If
 			If EstadoDescarga = Estado.Descargando Then
@@ -726,6 +731,43 @@ Public Class Fichero
 		Me.DescripcionError = msj
 		Me.FechaUltimoError = Now
 	End Sub
+
+	''' <summary>
+	''' 重设下载状态：清理 DatosPartes/BytesDescargados/Porcentaje 并删除残留的 .part 文件。
+	''' 用于从错误状态恢复，确保下次能从头下载而不是卡在"100% 但验证失败"的死循环。
+	''' </summary>
+	Public Sub ResetearDescarga()
+		' 重置分块状态：AllFinished=False 且所有 chunk 回到未下载
+		If Me.DatosPartes IsNot Nothing Then
+			Me.DatosPartes.AllFinished = False
+			If Me.DatosPartes.ChunkList IsNot Nothing Then
+				For Each c As FileDownloader.DataPart.Chunk In Me.DatosPartes.ChunkList
+					c.Index = 0
+					c.Available = True
+				Next
+			End If
+		End If
+		Me.BytesDescargados = 0
+		Me.Porcentaje = 0
+		Me.NumErroresChunk = 0
+		Me.UltimoErrorChunk = Nothing
+		Me.DescripcionError = Nothing
+		Me.FechaUltimoError = Nothing
+		Me.TiempoEstimadoDescarga = ""
+
+		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
+		If Not String.IsNullOrWhiteSpace(Me.RutaLocal) AndAlso Not String.IsNullOrWhiteSpace(Me.NombreFichero) Then
+			Try
+				Dim partPath As String = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, PathGuard.SanitizeFileName(Me.NombreFichero) & ".part")
+				If System.IO.File.Exists(partPath) Then
+					System.IO.File.Delete(partPath)
+					Log.WriteInfo("Deleted .part file during reset: " & partPath)
+				End If
+			Catch ex As Exception
+				Log.WriteWarning("Could not delete .part file during reset: " & Log.SafeException(ex))
+			End Try
+		End If
+	End Sub
 	
 	
 	#End Region
@@ -746,6 +788,19 @@ Public Class Fichero
 					End If
 				Catch ex As Exception
 					Log.WriteError("Error disposing downloader: " & Log.SafeException(ex))
+				End Try
+				' bgArranque is a BackgroundWorker that is only disposed in its
+				' RunWorkerCompleted handler. If the Fichero is disposed while the
+				' startup worker is still running (e.g. app closed during link
+				' resolution), RunWorkerCompleted never fires and the worker leaks.
+				Try
+					If Me.bgArranque IsNot Nothing Then
+						If Me.bgArranque.IsBusy Then Me.bgArranque.CancelAsync()
+						Me.bgArranque.Dispose()
+						Me.bgArranque = Nothing
+					End If
+				Catch ex As Exception
+					Log.WriteError("Error disposing bgArranque: " & Log.SafeException(ex))
 				End Try
 			End If
 		End If
@@ -800,7 +855,21 @@ Public Class Fichero
         Boolean.TryParse(LeerNodo(XML, "ExtraccionFicheroAutomatica", "false"), ExtraccionFicheroAutomatica)
         Dim tempPass As String = LeerNodo(XML, "ExtraccionFicheroPassword", "")
         If Not String.IsNullOrEmpty(tempPass) Then
-            Me.ExtraccionFicheroPassword = Criptografia.AES_DecryptString(tempPass, "passZIP")
+            ' Decrypt with DPAPI (current scheme, machine/user bound).
+            Dim decrypted As String = ""
+            Try
+                decrypted = Criptografia.ToInsecureString(Criptografia.DecryptString_DPAPI(tempPass))
+            Catch ex As Exception
+                Log.WriteWarning("ExtraccionFicheroPassword: DPAPI decrypt failed, trying legacy AES fallback: " & ex.Message)
+            End Try
+            ' Legacy fallback for queue files saved before the DPAPI migration.
+            ' Kept for backward compatibility only; new saves always use DPAPI.
+            If String.IsNullOrEmpty(decrypted) Then
+                decrypted = Criptografia.AES_DecryptString(tempPass, "passZIP")
+            End If
+            If Not String.IsNullOrEmpty(decrypted) Then
+                Me.ExtraccionFicheroPassword = decrypted
+            End If
         End If
 
 
@@ -866,7 +935,6 @@ Public Class Fichero
             NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = CacheSecureData.FileKey
             NodoFic.AppendChild(XML.CreateElement("URL")).InnerText = CacheSecureData.URL
             NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = CacheSecureData.URLFichero
-            NodoFic.AppendChild(XML.CreateElement("OptionalPassword")).InnerText = CacheSecureData.OptionalPassword
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
             'NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = Criptografia.ToInsecureString(_FileKey)
@@ -888,7 +956,7 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroAutomatica")).InnerText = ExtraccionFicheroAutomatica.ToString
 
         If Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
-            NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = Criptografia.AES_EncryptString(ExtraccionFicheroPassword, "passZIP")
+            NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = Criptografia.EncryptString_DPAPI(Criptografia.ToSecureString(ExtraccionFicheroPassword))
         End If
 
         NodoFic.AppendChild(XML.CreateElement("Prioridad")).InnerText = Prioridad.ToString

@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 
 Public Class Log
 
@@ -12,7 +12,11 @@ Public Class Log
     Private Shared _syncObject As Object = New Object
     Private Shared _LogLevel As LevelLogType = LevelLogType.Normal
     Private Shared _Buffer As System.Text.StringBuilder = Nothing
-    Private Shared _LastWrite As Date = Now
+    Private Shared _LastWrite As Date = DateTime.UtcNow
+    ' Log retention: files older than this many days are purged. Purge runs once
+    ' per process session to avoid scanning the log folder on every flush.
+    Private Const RetentionDays As Integer = 30
+    Private Shared _purgePerformed As Boolean = False
 
 
     Public Shared WriteOnly Property SetLogLevel() As LevelLogType
@@ -67,10 +71,10 @@ Public Class Log
                 _Buffer = New System.Text.StringBuilder
             End If
 
-            _Buffer.Append(Now.ToString("s"))
+            _Buffer.Append(DateTime.UtcNow.ToString("s"))
             _Buffer.Append(":")
-            _Buffer.Append(Now.ToString("fff"))
-            _Buffer.Append(" [ID#")
+            _Buffer.Append(DateTime.UtcNow.ToString("fff"))
+            _Buffer.Append("Z [ID#")
             _Buffer.Append(System.Threading.Thread.CurrentThread.ManagedThreadId)
             _Buffer.Append("] >>> ")
             _Buffer.AppendLine(Text)
@@ -84,7 +88,7 @@ Public Class Log
         Dim DoFlush As Boolean = False
 
         SyncLock (_syncObject)
-            DoFlush = (_LastWrite.AddSeconds(10) < Now)
+            DoFlush = (_LastWrite.AddSeconds(10) < DateTime.UtcNow)
 
             If (DoFlush Or forceFlush) And _Buffer IsNot Nothing AndAlso _Buffer.Length > 0 Then
                 Dim PathLog As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Log")
@@ -92,13 +96,37 @@ Public Class Log
                 If Not System.IO.Directory.Exists(PathLog) Then
                     System.IO.Directory.CreateDirectory(PathLog)
                 End If
-                Using t As New StreamWriter(PathLog & "\Log_" & Now.ToString("yyyyMMdd") & ".txt", True)
+                Using t As New StreamWriter(PathLog & "\Log_" & DateTime.UtcNow.ToString("yyyyMMdd") & ".txt", True)
                     t.Write(_Buffer.ToString)
                 End Using
                 _Buffer = Nothing
-                _LastWrite = Now
+                _LastWrite = DateTime.UtcNow
+
+                ' Purge old log files once per process session.
+                If Not _purgePerformed Then
+                    _purgePerformed = True
+                    PurgeOldLogs(PathLog, RetentionDays)
+                End If
             End If
         End SyncLock
+    End Sub
+
+    ''' <summary>
+    ''' Deletes log files older than the retention period. Best-effort: any error
+    ''' is swallowed so logging never fails because of cleanup issues.
+    ''' </summary>
+    Private Shared Sub PurgeOldLogs(logDir As String, days As Integer)
+        Try
+            Dim cutoff As Date = DateTime.UtcNow.AddDays(-days)
+            For Each f As String In System.IO.Directory.GetFiles(logDir, "Log_*.txt")
+                Try
+                    Dim fi As New System.IO.FileInfo(f)
+                    If fi.LastWriteTimeUtc < cutoff Then fi.Delete()
+                Catch
+                End Try
+            Next
+        Catch
+        End Try
     End Sub
 
 

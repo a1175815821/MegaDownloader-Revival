@@ -63,6 +63,8 @@ Public Partial Class ELCForm
 	Private Sub Cerrando() Handles Me.FormClosed
 		ClosingForm = True
 		bckELCGenerator.CancelAsync()
+		' Wake the worker so it can observe CancellationPending and exit promptly.
+		elcSignal.Set()
 	End Sub
 	
 	Private Sub PantallaMsg_Shown(sender As Object, e As EventArgs) Handles Me.Shown	
@@ -142,6 +144,7 @@ Public Partial Class ELCForm
                 Me.MegaLinkList = Mlist
                 Me.TextTemplateToPrint = modifiedText.ToString
                 Me.Action = "GenerateELC_Multiple"
+                elcSignal.Set()
             Else
                 ' 1 ELC for all links
 
@@ -170,6 +173,7 @@ Public Partial Class ELCForm
                 Me.MegaLinkList = Mlist
                 Me.TextTemplateToPrint = String.Empty
                 Me.Action = "GenerateELC"
+                elcSignal.Set()
             End If
 
         
@@ -203,7 +207,8 @@ Public Partial Class ELCForm
 			
 			Me.ELCFilePath = Me.txtExaminar.Text 
 			Me.BackgroundWorkerBusy = True
-			Me.Action = "SaveELC"			
+		Me.Action = "SaveELC"
+		elcSignal.Set()			
 			
 		Catch ex As Exception
 			Log.WriteError("Error generating ELC: " & ex.ToString)
@@ -235,20 +240,23 @@ Public Partial Class ELCForm
 	Private ELCResult As String = Nothing
 	Private ErrorGeneratingELC As Exception = Nothing
 	Private ELCFilePath As string
-	
+	' Replaces the previous 300ms busy-poll. The worker blocks on this handle until a
+	' task is queued (Action is set + Set() is called) or cancellation is requested.
+	Private elcSignal As New Threading.AutoResetEvent(False)
+
 	Public Sub bckELCGenerator_DoWork(sender As Object, e As DoWorkEventArgs) Handles bckELCGenerator.DoWork
 		Dim worker As BackgroundWorker = CType(sender, BackgroundWorker)
-		
+
 		While Not worker.CancellationPending
-			
-			System.Threading.Thread.Sleep(300)
-			
+			' Block until a task is signalled or cancellation wakes us up.
+			elcSignal.WaitOne()
+
 			If worker.CancellationPending Then Exit While
-			
+
 			GenerateELC
-			
+
 		End While
-		
+
 		bckELCGenerator = Nothing
 	End Sub
 	

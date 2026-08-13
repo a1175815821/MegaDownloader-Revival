@@ -598,7 +598,14 @@ Public Class FileDownloader
             End If
         Catch ex As Exception
             Log.WriteError("Error in bgwDownloader.DoWork: " & ex.ToString)
-            MessageBox.Show("Error: " & ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            ' Do not call MessageBox.Show from a background thread — it has no parent window,
+            ' blocks the worker, and can hang the download pipeline. Surface the failure via
+            ' the standard progress channel so the UI thread can present it.
+            Try
+                bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, ex)
+            Catch reportEx As Exception
+                Log.WriteError("Failed to report bgwDownloader.DoWork error: " & reportEx.ToString)
+            End Try
         End Try
     End Sub
 
@@ -904,6 +911,20 @@ Public Class FileDownloader
         Catch ex As Exception
             Log.WriteError("Error finalizing download " & file.Name & " - " & Log.SafeException(ex))
             bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, ex)
+
+            ' 修复：验证/重命名失败后必须重置 AllFinished 和 chunk 状态，
+            ' 否则下次启动会因 AllFinished=True 跳过下载直接进入验证，导致
+            ' "重设也无法下载" 的死循环。
+            Try
+                file.GetDataPart.AllFinished = False
+                For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
+                    c.Index = 0
+                    c.Available = True
+                Next
+                Log.WriteWarning("Reset chunk state after finalization failure for " & file.Name)
+            Catch cleanupEx As Exception
+                Log.WriteWarning("Error during cleanup after finalization failure: " & Log.SafeException(cleanupEx))
+            End Try
         End Try
     End Sub
 
@@ -1220,7 +1241,8 @@ Public Class FileDownloader
                             If currentBuffersize > 0 Then
                                 Try
                                     FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
-                                Catch
+                                Catch flushEx As Exception
+                                    Log.WriteError("ChunkDownloader_DoWork: best-effort FlushToDisk before failure reporting failed: " & flushEx.ToString)
                                 End Try
                             End If
                             worker.ChunkDownloadFailed = True
@@ -1476,7 +1498,24 @@ Public Class FileDownloader
                         If Not busy Then Exit While
                         System.Threading.Thread.Sleep(50)
                     End While
-                Catch
+                Catch ex As Exception
+                    Log.WriteError("FileDownloader.Dispose: error while cancelling workers: " & ex.ToString)
+                End Try
+                ' Dispose every worker we spawned, not just the outer bgwDownloader.
+                ' Workers that were still running when CancelAsync was called will not
+                ' have hit their RunWorkerCompleted handler, so they must be disposed here.
+                Me.Mutex.WaitOne()
+                Try
+                    For Each w As DownloaderWorker In Me.listDownloaders.ToList()
+                        Try
+                            w.Dispose()
+                        Catch ex As Exception
+                            Log.WriteError("FileDownloader.Dispose: worker dispose failed: " & ex.ToString)
+                        End Try
+                    Next
+                    Me.listDownloaders.Clear()
+                Finally
+                    Me.Mutex.ReleaseMutex()
                 End Try
                 If bgwDownloader IsNot Nothing Then bgwDownloader.Dispose()
             End If

@@ -6,6 +6,70 @@
 
 ---
 
+## [2.4.0] - 2026-08-14
+
+### 🐛 全面 Bug 修复 - 21 项确认存在的问题
+
+基于对 v2.3.0 全项目代码的逐文件核查，修复 21 项经确切代码证据确认的 bug，涵盖用户可感知报错、死锁/资源泄漏、并发缺陷、异常吞噬、安全债务与死代码。
+
+### 一、用户层面可感知的报错
+
+| 修复 | 说明 |
+| --- | --- |
+| 后台线程弹 MessageBox 卡死下载 | `FileDownloader.bgwDownloader_DoWork` 的 Catch 块不再在线程池线程上调用 `MessageBox.Show`，改为通过 `ReportProgress(FileDownloadFailedRaiser)` 上报失败，由 UI 线程统一呈现 |
+| 关闭期间跨线程 MsgBox 崩溃 | `Main.vb` 三处 `BackgroundWorker.DoWork` 异常分支不再直接 `MsgBox`，新增 `SafeShowError` 辅助方法，检查 `IsDisposed`/`IsHandleCreated` 并通过 `Invoke` 切回 UI 线程 |
+| 7z multipart 解压崩溃 | `DescompresorController` 两处 `NotImplementedException` 改为 `NotSupportedException` 带友好消息；`DescompresionFinalizada` 事件扩展传递错误消息，用户可在错误状态中看到具体原因 |
+| 兜底完成漏做 MD5 校验/解压 | `Fichero.ActualizarDatosDescarga` 的兜底状态修正不再仅翻转状态，改为调用完整 `downloader_Completed` 流程（含 MD5 校验和自动解压），避免"显示完成但未校验完整性" |
+
+### 二、死锁与资源泄漏
+
+| 修复 | 说明 |
+| --- | --- |
+| Mutex 无 Try/Finally 死锁 | `Main.AgregarPaquete` 和 `bgwComprobarMaxConexiones` 两处 Mutex 加 `Try/Finally`，中间异常不再导致永久死锁 |
+| 下载 worker 未 Dispose | `FileDownloader.Dispose` 中循环释放 `listDownloaders` 里的所有 worker，不再只 `CancelAsync` |
+| bgArranque worker 泄漏 | `Fichero.Dispose` 新增释放 `bgArranque`（下载启动 worker），关闭期间启动阶段中断不再泄漏 |
+| ELCForm 300ms 忙轮询 | 改为 `AutoResetEvent` 事件驱动，无任务时零 CPU 消耗，有任务时立即响应 |
+
+### 三、并发与逻辑缺陷
+
+| 修复 | 说明 |
+| --- | --- |
+| AJAX 响应并发污染 | `StreamingLibraryModule._RespuestaAjax` 改为 `AsyncLocal(Of String)`，并发 HTTP 请求互不覆盖响应 |
+| FlushFinalBlock 异常吞噬 | `ServerEncoderLinkHelper.Cipher` 解密路径的空 Catch 改为 `Log.WriteError` |
+
+### 四、异常吞噬（掩盖真实故障）
+
+| 修复 | 说明 |
+| --- | --- |
+| FlushToDisk 磁盘错误被吞 | `FileDownloader.ChunkDownloader_DoWork` 中 `FlushToDisk` 的空 Catch 改为日志 |
+| 服务器错误响应读取失败被吞 | `Fichero.downloader_FileDownloadFailed` / `downloader_ChunkDownloadFailed` 两处空 Catch 改为日志 |
+| 解压取消异常被吞 | `Main` 关闭流程中 `RequestCancel` 的空 Catch 改为日志 |
+
+### 五、安全与技术债务
+
+| 修复 | 说明 |
+| --- | --- |
+| DPAPI entropy 硬编码 | `Criptografia` 的 DPAPI entropy 改为从程序集标识 SHA256 派生，保留 legacy entropy 解密旧数据 |
+| ZIP 密码硬编码 "passZIP" | `Fichero` 的 ZIP 解压密码加密改用 DPAPI，解密先 DPAPI 后回退旧 AES 兼容旧队列文件 |
+| OptionalPassword 死字段 | 删除 `Cache.OptionalPassword` 字段及 XML 写出（声明后从未赋值、从不读取） |
+| RandomNumberGenerator 未释放 | `ServerEncoderLinkHelper` 的 `RandomNumberGenerator.Create()` 用 `Using` 包裹释放 |
+| 日志无 UTC 时间戳 | `Log` 全部时间戳改用 `DateTime.UtcNow`（加 `Z` 后缀），新增 30 天日志保留清理策略 |
+
+### 六、死代码清理
+
+| 修复 | 说明 |
+| --- | --- |
+| Criptografia 注释死代码 | 删除注释掉的 `DecryptFile` 和 `cipherData` 函数 |
+| Conexion 死代码 | 删除注释的 `GetAppID` 和无调用的 `LeerNodo` 函数 |
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.4.0.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.4`
+- `docs/version.xml` → `2.4.0.0`
+
+---
+
 ## [2.3.0] - 2026-08-13
 
 ### 🐛 稳定性修复

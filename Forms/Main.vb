@@ -618,7 +618,8 @@ Public Class Main
         bgwDescompresor.CancelAsync()
         Try
             DescompresorController.GetController.RequestCancel()
-        Catch
+        Catch ex As Exception
+            Log.WriteError("Shutdown: DescompresorController.RequestCancel failed: " & ex.ToString)
         End Try
 
         ' 3) Stop downloads and wait
@@ -1039,11 +1040,14 @@ Public Class Main
     Friend Sub AgregarPaquete(ByVal Paquete As Paquete, AgregadoDesdeServidorWeb As Boolean)
 
         Mutex.ListaDescargas.WaitOne()
-        Me.ListaPaquetes.Add(Paquete)
-        If String.IsNullOrEmpty(Paquete.Nombre) Then
-            Paquete.Nombre = Language.GetText("Package") & " #" & Me.ListaPaquetes.Count.ToString
-        End If
-        Mutex.ListaDescargas.ReleaseMutex()
+        Try
+            Me.ListaPaquetes.Add(Paquete)
+            If String.IsNullOrEmpty(Paquete.Nombre) Then
+                Paquete.Nombre = Language.GetText("Package") & " #" & Me.ListaPaquetes.Count.ToString
+            End If
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
         Log.WriteError("Package added: " & Paquete.Nombre)
 
         ReordenarPrioridadPaquetes(True)
@@ -1074,6 +1078,31 @@ Public Class Main
 #Region "Background Workers"
 
 
+    ''' <summary>
+    ''' Marshals an error dialog to the UI thread. BackgroundWorker.DoWork handlers run on
+    ''' thread-pool threads; calling MsgBox directly can throw InvalidOperationException
+    ''' if the form is closing/closed, and produces a parentless dialog. This helper
+    ''' checks IsDisposed/IsHandleCreated and uses Invoke; if marshalling is impossible
+    ''' (form gone or InvokeRequired check itself fails) the error is logged only.
+    ''' </summary>
+    Private Sub SafeShowError(message As String)
+        Try
+            If Me.IsDisposed OrElse Not Me.IsHandleCreated Then
+                Log.WriteError("SafeShowError: form not available; message was: " & message)
+                Return
+            End If
+            If Me.InvokeRequired Then
+                Me.Invoke(New Action(Of String)(AddressOf SafeShowError), message)
+                Return
+            End If
+            MessageBox.Show(Me, message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Catch ex As InvalidOperationException
+            Log.WriteError("SafeShowError: could not marshal to UI thread: " & ex.ToString & " (original message: " & message & ")")
+        Catch ex As Exception
+            Log.WriteError("SafeShowError: unexpected failure: " & ex.ToString & " (original message: " & message & ")")
+        End Try
+    End Sub
+
     Private Sub bgwComprobarMaxConexiones_DoWork(ByVal sender As Object, ByVal e As DoWorkEventArgs) Handles bgwComprobarMaxConexiones.DoWork
         Dim worker As BackgroundWorker = DirectCast(sender, BackgroundWorker)
 
@@ -1100,8 +1129,11 @@ Public Class Main
                     If Config.CheckUpdates Then
 
                         Mutex.NumeroConexionesMaxima.WaitOne()
-                        Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
-                        Mutex.NumeroConexionesMaxima.ReleaseMutex()
+                        Try
+                            Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
+                        Finally
+                            Mutex.NumeroConexionesMaxima.ReleaseMutex()
+                        End Try
                         If Not String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) Then
                             ActivarUpdateButton()
                             ProximoAvisoActualizacion = Now.AddSeconds(15)
@@ -1139,7 +1171,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwComprobarMaxConexiones")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwComprobarMaxConexiones: " & ex.ToString)
-            MsgBox(ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            SafeShowError(ex.ToString)
         Finally
             bgwComprobarMaxConexionesCompleted = True
         End Try
@@ -1240,7 +1272,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwActualizadorDatosDisco")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwActualizadorDatosDisco: " & ex.ToString)
-            MsgBox(ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            SafeShowError(ex.ToString)
         Finally
             bgwActualizadorDatosDiscoCompleted = True
         End Try
@@ -1371,7 +1403,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwActualizadorListaDescargas")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwActualizadorListaDescargas: " & ex.ToString)
-            MsgBox(ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            SafeShowError(ex.ToString)
         Finally
             If sw.ElapsedMilliseconds > 5000 Then
                 Log.WriteError("bgwActualizadorListaDescargas was too slow (" & sw.ElapsedMilliseconds & " ms): " & vbNewLine & Flujo)
@@ -1421,6 +1453,7 @@ Public Class Main
             Next
             Mutex.ListaDescargas.ReleaseMutex()
             For Each Fichero In ColaReseteo
+                Fichero.ResetearDescarga()
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Log.WriteInfo("Reseting file " & Fichero.FileID & " automatically.")
             Next
@@ -2419,13 +2452,13 @@ Public Class Main
 
 
 
-    Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String, ByVal Success As Boolean)
+    Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String, ByVal Success As Boolean, ByVal ErrorMessage As String)
         Mutex.ListaDescargas.WaitOne()
         Try
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
                     If fic.FileID = Code Then
-                        fic.DescompresionFinalizada(Success)
+                        fic.DescompresionFinalizada(Success, ErrorMessage)
                     End If
                 Next
             Next
@@ -2732,6 +2765,7 @@ Public Class Main
                 For Each fic As Fichero In CType(obj, Paquete).ListaFicheros
                     If fic.DescargaEstado = Estado.Erroneo Then
                         Log.WriteDebug("Reseting file " & fic.NombreFichero)
+                        fic.ResetearDescarga()
                         fic.SetDescargaEstado = Estado.EnCola
                     End If
                 Next

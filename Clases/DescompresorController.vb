@@ -1,4 +1,4 @@
-﻿Imports System.ComponentModel
+Imports System.ComponentModel
 Imports SharpCompress.Archive
 Imports SharpCompress.Archive.IArchiveEntryExtensions
 Imports SharpCompress.Reader
@@ -163,11 +163,14 @@ Public Class DescompresorController
             End If
         End While
 
+        Dim extractErrorMessage As String = ""
         If desc.Exception IsNot Nothing Then
             Log.WriteError("Decompressor: Error extracting '" & _codigoElementoActual & "': " & Log.SafeException(desc.Exception))
             extractOk = False
+            extractErrorMessage = desc.Exception.Message
         ElseIf Cancel OrElse desc.CancelRequested OrElse IsCancelRequested() Then
             extractOk = False
+            extractErrorMessage = "Extraction cancelled."
         Else
             extractOk = True
         End If
@@ -179,7 +182,7 @@ Public Class DescompresorController
             Log.WriteWarning("Element '" & _codigoElementoActual & "' extraction failed or cancelled.")
         End If
 
-        RaiseEvent DescompresionFinalizada(_codigoElementoActual, extractOk)
+        RaiseEvent DescompresionFinalizada(_codigoElementoActual, extractOk, extractErrorMessage)
 
         ' Hemos terminado
         Mutex.WaitOne()
@@ -234,7 +237,7 @@ Public Class DescompresorController
 
 #Region "Región pública"
 
-    Public Event DescompresionFinalizada(ByVal Code As String, ByVal Success As Boolean)
+    Public Event DescompresionFinalizada(ByVal Code As String, ByVal Success As Boolean, ByVal ErrorMessage As String)
 
     ' Tamaño total de los ficheros dentro del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_TamanoTotal As System.Nullable(Of Long)
@@ -475,7 +478,7 @@ Public Class DescompresorController
 
                 ' No tenemos soporte para 7zip con multipart... (.7z.001, .7z.002, etc)
                 If PathFichero.ToLower.Contains(".7z.") Then
-                    Throw New NotImplementedException
+                    Throw New NotSupportedException("7z multipart archives (.7z.001, .7z.002, ...) are not supported by the built-in extractor. Please merge them into a single .7z file first.")
                 End If
 
                 Using archive As IArchive = getIArchive(PathFichero, Password)
@@ -519,7 +522,7 @@ Public Class DescompresorController
                                 Next
 
                                 If LengthPart > 0 And Not String.IsNullOrEmpty(Password) Then
-                                    Throw New NotImplementedException ' De momento no soportamos multipartes con contraseña
+                                    Throw New NotSupportedException("Solid RAR multipart archives with password are not supported by the built-in extractor.")
                                 End If
 
                                 If ListaFicheros.Count = 1 Then
