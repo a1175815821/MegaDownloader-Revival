@@ -739,6 +739,14 @@ Public Class Fichero
 	Protected Overridable Sub Dispose(disposing As Boolean)
 		If Not Me.disposedValue Then
 			If disposing Then
+				Try
+					If Me.Downloader IsNot Nothing Then
+						Me.Downloader.Dispose()
+						Me.Downloader = Nothing
+					End If
+				Catch ex As Exception
+					Log.WriteError("Error disposing downloader: " & Log.SafeException(ex))
+				End Try
 			End If
 		End If
 		Me.disposedValue = True

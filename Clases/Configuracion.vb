@@ -508,11 +508,15 @@ Public Class Configuracion
 				' Could not open/create the registry key; nothing else to do.
 				Return
 			End If
-			If isChecked Then
-				registryKey.SetValue("MegaDownloader", """" & Application.ExecutablePath & """ -silent")
-			Else
-				registryKey.DeleteValue("MegaDownloader", False)
-			End If
+			Try
+				If isChecked Then
+					registryKey.SetValue("MegaDownloader", """" & Application.ExecutablePath & """ -silent")
+				Else
+					registryKey.DeleteValue("MegaDownloader", False)
+				End If
+			Finally
+				registryKey.Close()
+			End Try
 
 		Catch ex As UnauthorizedAccessException
             Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry (CU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run). Execute the application with administrator privileges (at least one time) in order to access the registry. Please note that if you move the application, you will have to execute it again with administrator privileges.")

@@ -6,6 +6,27 @@
 
 ---
 
+## [2.3.0] - 2026-08-13
+
+### 🐛 稳定性修复
+
+基于代码审查，修复一批崩溃、资源泄漏与潜在死锁问题。
+
+| 修复 | 说明 |
+| --- | --- |
+| AES 加密失败崩溃 | `AES_EncryptString` 加密异常后仍对 `Nothing` 做 Base64 转换导致二次抛异常；改为失败返回空串并用 `Using` 释放 `RijndaelManaged`/`CryptoStream`/`MemoryStream` |
+| AES 解密截断/坏输入崩溃 | `AES_DecryptString` 的 `Convert.FromBase64String` 移入异常处理；用 `CopyTo` 完整读取明文（原单次 `Read` 可能截断）；失败返回空串 |
+| 下载项资源泄漏 | `Fichero.Dispose` 由空实现改为释放 `FileDownloader` 并置空 |
+| 潜在死锁 | `FileInfo.Size` setter 的 `ReleaseMutex` 放入 `Try/Finally`，循环内异常不再导致永久死锁 |
+| 注册表句柄泄漏 | `RegisterInStartup` 的注册表键用 `Try/Finally` + `Close()` 释放 |
+| 危险 `Thread.Abort` | DLC 处理 30 秒超时不再硬杀线程，改为协作式标记失败并让 worker 自然结束 |
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.3.0.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.3`
+- `docs/version.xml` → `2.3.0.0`
+
 ## [2.2.1] - 2026-08-09
 
 ### 🐛 下载状态修复

@@ -1,7 +1,7 @@
 # MegaDownloader
 
 > **MegaDownloader 复活计划 (Revival Project)**  
-> 基于 MegaDownloader v1.8 反编译源码修复而成。v2.2 完成路径安全、下载完整性(MetaMAC/Range/断点)与一批可靠性加固;v2.1 完善深色模式;v2.0 完成 4 阶段 60+ 项修复与主题切换。
+> 基于 MegaDownloader v1.8 反编译源码修复而成。v2.3 修复加密失败崩溃与资源泄漏;v2.2 完成路径安全、下载完整性(MetaMAC/Range/断点)与一批可靠性加固;v2.1 完善深色模式;v2.0 完成 4 阶段 60+ 项修复与主题切换。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
@@ -18,6 +18,7 @@
 ## 目录
 
 - [项目背景](#项目背景)
+- [v2.3 主要变更](#v23-主要变更)
 - [v2.2 主要变更](#v22-主要变更)
 - [v2.1 主要变更](#v21-主要变更)
 - [v2.0 主要变更](#v20-主要变更)
@@ -43,8 +44,19 @@ MegaDownloader 是一款由西班牙开发者 **Andres Soliño [andres_age]** �
 - **v2.0**(2026-07-13):完成 4 阶段 60+ 项修复,涵盖安全、资源泄漏、代码清理,新增深/浅色主题切换
 - **v2.1**(2026-07-19):深色主题可用性修复(主列表、进度条、按钮白边、右键菜单、设置即时换肤等)
 - **v2.2**(2026-07-20):路径安全、MEGA MetaMAC/Range/断点完整性、原子配置保存、Web CSRF、解压与发布加固
+- **v2.3**(2026-08-13):修复加密失败崩溃、资源泄漏与潜在死锁,移除 DLC 处理的 `Thread.Abort`
 
 > ⚠️ **法律声明**:本项目源自对第三方已发布软件的反编译,目的仅在于修复兼容性问题以恢复其可用性。若原作者认为本仓库侵犯了其权益,请通过 Issue 联系,我们将配合处理。
+
+## v2.3 主要变更
+
+### 稳定性修复
+
+| 修复 | 说明 |
+| --- | --- |
+| AES 加解密 | 修复加密失败崩溃、解密截断与坏输入崩溃，并补齐资源释放 |
+| 资源 / 死锁 | `Fichero.Dispose` 释放下载器；`FileInfo.Size` 锁释放进 `Finally`；注册表句柄释放 |
+| 移除 `Thread.Abort` | DLC 超时改为协作式取消 |
 
 ## v2.2 主要变更
 

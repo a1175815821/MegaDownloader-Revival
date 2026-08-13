@@ -3079,19 +3079,16 @@ Public Class Main
     End Sub
     Private Sub StartProcessDLC()
         Dim Thread As New System.Threading.Thread(AddressOf ProcessDLC)
+        Thread.IsBackground = True
         Thread.Start()
         Dim d As Action(Of Boolean)
 
         If Not Thread.Join(New TimeSpan(0, 0, 0, 30)) Then ' 30 seconds timeout
+            ' Never call Thread.Abort(): it can interrupt I/O mid-flight and corrupt state.
+            ' Mark the result as failed; the worker (a local file read) finishes on its own.
             DLCProcessing = False
-            Thread.Abort()
             DLCResults = Nothing
-
-            d = Sub(x As Boolean)
-                    MessageBox.Show(Language.GetText("The DLC could not be loaded. Reason: %REASON").Replace("%REASON", "30s timeout"), _
-                                    Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                End Sub
-            Me.Invoke(d, True)
+            DLCErrorProcessing = New ApplicationException("30s timeout")
         End If
         DLCPath = String.Empty
         d = Sub(x As Boolean)

@@ -95,35 +95,30 @@ Public Class Criptografia
         Dim bytValue() As Byte
         Dim bytEncoded() As Byte = Nothing
         Dim bytIV() As Byte = {121, 241, 10, 1, 132, 74, 11, 39, 255, 91, 45, 78, 14, 211, 22, 62}
-        Dim objMemoryStream As New MemoryStream()
-        Dim objCryptoStream As CryptoStream
-        Dim objRijndaelManaged As RijndaelManaged
 
         vstrTextToBeEncrypted = StripNullCharacters(vstrTextToBeEncrypted & "") ' Evitamos nothing
 
         bytValue = Encoding.GetBytes(vstrTextToBeEncrypted.ToCharArray)
 
-
-        objRijndaelManaged = New RijndaelManaged()
-
         Try
-
-            objCryptoStream = New CryptoStream(objMemoryStream, _
-              objRijndaelManaged.CreateEncryptor(bytKey, bytIV), _
-              CryptoStreamMode.Write)
-            objCryptoStream.Write(bytValue, 0, bytValue.Length)
-
-            objCryptoStream.FlushFinalBlock()
-
-            bytEncoded = objMemoryStream.ToArray
-            objMemoryStream.Close()
-            objCryptoStream.Close()
+            Using objRijndaelManaged As New RijndaelManaged()
+                Using objMemoryStream As New MemoryStream()
+                    Using objCryptoStream As New CryptoStream(objMemoryStream, _
+                          objRijndaelManaged.CreateEncryptor(bytKey, bytIV), _
+                          CryptoStreamMode.Write, leaveOpen:=True)
+                        objCryptoStream.Write(bytValue, 0, bytValue.Length)
+                        objCryptoStream.FlushFinalBlock()
+                    End Using
+                    bytEncoded = objMemoryStream.ToArray
+                End Using
+            End Using
         Catch ex As CryptographicException
             Log.WriteError("AES_EncryptString failed: " & ex.ToString)
         Catch ex As Exception
             Log.WriteError("AES_EncryptString unexpected error: " & ex.ToString)
         End Try
 
+        If bytEncoded Is Nothing Then Return String.Empty
         Return Convert.ToBase64String(bytEncoded)
 
     End Function
@@ -164,16 +159,8 @@ Public Class Criptografia
                                              ByVal Encoding As System.Text.Encoding) As String
 
         Dim bytDataToBeDecrypted() As Byte
-        Dim bytTemp() As Byte
+        Dim bytPlain() As Byte = Nothing
         Dim bytIV() As Byte = {121, 241, 10, 1, 132, 74, 11, 39, 255, 91, 45, 78, 14, 211, 22, 62}
-        Dim objRijndaelManaged As New RijndaelManaged()
-        Dim objMemoryStream As MemoryStream
-        Dim objCryptoStream As CryptoStream
-
-
-        Dim strReturnString As String = String.Empty
-
-        bytDataToBeDecrypted = Convert.FromBase64String(vstrStringToBeDecrypted)
 
         '   ********************************************************************
         '   ******   Encryption Key must be 256 bits long (32 bytes)      ******
@@ -183,35 +170,31 @@ Public Class Criptografia
         '   ********************************************************************
 
 
-        ReDim bytTemp(bytDataToBeDecrypted.Length)
-
-        objMemoryStream = New MemoryStream(bytDataToBeDecrypted)
-
         Try
+            bytDataToBeDecrypted = Convert.FromBase64String(vstrStringToBeDecrypted)
 
-            objCryptoStream = New CryptoStream(objMemoryStream, _
-               objRijndaelManaged.CreateDecryptor(bytDecryptionKey, bytIV), _
-               CryptoStreamMode.Read)
-
-            objCryptoStream.Read(bytTemp, 0, bytTemp.Length)
-            Try
-                objCryptoStream.FlushFinalBlock()
-            Catch ex As CryptographicException
-                Log.WriteError("AES_DecryptString FlushFinalBlock failed: " & ex.ToString)
-            Catch ex As Exception
-                Log.WriteError("AES_DecryptString FlushFinalBlock unexpected error: " & ex.ToString)
-            End Try
-
-            objMemoryStream.Close()
-            objCryptoStream.Close()
-
+            Using objRijndaelManaged As New RijndaelManaged()
+                Using objMemoryStream As New MemoryStream(bytDataToBeDecrypted)
+                    Using objCryptoStream As New CryptoStream(objMemoryStream, _
+                           objRijndaelManaged.CreateDecryptor(bytDecryptionKey, bytIV), _
+                           CryptoStreamMode.Read, leaveOpen:=True)
+                        Using plainStream As New MemoryStream()
+                            objCryptoStream.CopyTo(plainStream)
+                            bytPlain = plainStream.ToArray
+                        End Using
+                    End Using
+                End Using
+            End Using
         Catch ex As CryptographicException
             Log.WriteError("AES_DecryptString failed: " & ex.ToString)
+        Catch ex As FormatException
+            Log.WriteError("AES_DecryptString failed (invalid input): " & ex.ToString)
         Catch ex As Exception
             Log.WriteError("AES_DecryptString unexpected error: " & ex.ToString)
         End Try
 
-        Return StripNullCharacters(Encoding.GetString(bytTemp))
+        If bytPlain Is Nothing Then Return String.Empty
+        Return StripNullCharacters(Encoding.GetString(bytPlain))
 
     End Function
 

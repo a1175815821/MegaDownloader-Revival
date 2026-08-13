@@ -271,18 +271,19 @@ Public Class FileDownloader
             Set(value As Long)
                 Me._Size = value
                 If DataPartInitialized Then
-                    Me._Mutex.WaitOne()
                     Dim Tamano As Long = 0
-
-                    For Each c As DataPart.Chunk In _dataPart.ChunkList
-                        'Tamano += c.Size
-                        ' Now the chunks can be resized depending on MEGA response... so we will take the biggest chunk
-                        If c.StartIndex + c.Size > Tamano Then
-                            Tamano = c.StartIndex + c.Size
-                        End If
-                    Next
-
-                    Me._Mutex.ReleaseMutex()
+                    Me._Mutex.WaitOne()
+                    Try
+                        For Each c As DataPart.Chunk In _dataPart.ChunkList
+                            'Tamano += c.Size
+                            ' Now the chunks can be resized depending on MEGA response... so we will take the biggest chunk
+                            If c.StartIndex + c.Size > Tamano Then
+                                Tamano = c.StartIndex + c.Size
+                            End If
+                        Next
+                    Finally
+                        Me._Mutex.ReleaseMutex()
+                    End Try
                     If value <> Tamano Then
                         Throw New InvalidOperationException("File size does not match [" & value & " - " & Tamano & "]")
                     End If
