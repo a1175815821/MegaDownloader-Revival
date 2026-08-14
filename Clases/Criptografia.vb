@@ -640,6 +640,10 @@ Public Class Criptografia
 
     ''' <summary>
     ''' Verifies MEGA file MetaMAC (words 6-7 of the 8-word file key) over plaintext on disk.
+    ''' Public link keys carry only 4 words (16 bytes, the AES key itself) and do NOT
+    ''' embed a MetaMAC — verification is impossible for them and is skipped (True).
+    ''' Only 8-word (32-byte) node keys, obtained e.g. from folder API responses,
+    ''' contain the nonce (words 4-5) and MetaMAC (words 6-7) needed to verify.
     ''' </summary>
     Friend Shared Function VerifyMegaMetaMac(ByVal filePath As String, ByVal pKey As String) As Boolean
         If String.IsNullOrEmpty(filePath) OrElse Not File.Exists(filePath) Then Return False
@@ -652,7 +656,15 @@ Public Class Criptografia
 
         Dim b64Dec As Byte() = B64Decode(keyWithoutN)
         Dim intKey As Integer() = ByteArrayToIntArray(b64Dec)
-        If intKey Is Nothing OrElse intKey.Length < 8 Then Return False
+        If intKey Is Nothing OrElse intKey.Length < 4 Then Return False
+
+        If intKey.Length < 8 Then
+            ' 4-word public link key: no MetaMAC is embedded in the key, so there is
+            ' nothing to verify against. Skipping must NOT be treated as a failure —
+            ' treating it as one wrongly errored every completed public-link download.
+            Log.WriteInfo("VerifyMegaMetaMac: key has " & intKey.Length & " words (public link key); no MetaMAC available, skipping verification for " & filePath)
+            Return True
+        End If
 
         Dim aesKey As Byte() = IntArrayToBytesArray(New Integer() {
             intKey(0) Xor intKey(4),

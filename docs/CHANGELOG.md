@@ -6,6 +6,32 @@
 
 ---
 
+## [2.4.1] - 2026-08-15
+
+### 🐛 修复:下载完成但显示错误(用户实测确认)
+
+**症状**:文件下载到 100% 时直接弹错误,`.part` 文件不重命名;手动去掉 `.part` 后缀后文件可正常使用,证明文件实际已完整下载。
+
+**根因**:v2.2.0 引入的 MEGA MetaMAC 完整性校验存在系统性误报:
+
+1. **单文件公开链接必然误报**:公开链接的 FileKey 仅 16 字节(4 words,只有 AES 密钥本身),**不含 MetaMAC**;而 `VerifyMegaMetaMac` 要求至少 8 words(32 字节,含 nonce + MetaMAC),不满足直接返回 False → 完成路径抛 "Integrity check failed" → 状态错误、不重命名。只有文件夹 API 返回的 32 字节 node key 才真正含 MetaMAC,因此误报集中在最常见的单文件链接场景
+2. **8 words key 的边界规则差异也可能误报**:MEGA 客户端历史上的 MAC 分块边界规则有版本差异,不匹配不等于文件损坏(大小精确校验是更强证据)
+
+**修复**(两层防护):
+
+| 位置 | 修复 |
+| --- | --- |
+| `Criptografia.VerifyMegaMetaMac` | 4 words 公开链接 key 记日志说明"无 MetaMAC 可验证"并跳过(返回 True),不再误判失败 |
+| `FileDownloader.downloadFile` | 8 words key 的 MetaMAC 不匹配降级为日志警告并继续完成重命名;文件大小精确校验(不匹配仍报错)保留为主要完整性防线 |
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.4.1.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.4.1`
+- `docs/version.xml` → `2.4.1.0`
+
+---
+
 ## [2.4.0] - 2026-08-14
 
 ### 🐛 全面 Bug 修复 - 21 项确认存在的问题
