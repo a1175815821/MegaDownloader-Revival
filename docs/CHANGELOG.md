@@ -6,6 +6,38 @@
 
 ---
 
+## [2.4.2] - 2026-08-19
+
+### 🐛 修复:下载文件真实损坏(用户实测确认)
+
+**症状**:下载完成且文件大小精确匹配,但文件内容损坏无法使用。日志证实旧版(含 v2.4.1)在 MetaMAC 校验失败后仍"警告并放行"完成了重命名,损坏文件直接落地。
+
+**根因**(三个独立缺陷叠加):
+
+1. **MetaMAC 分块调度算法错误**:v2.4.1 采用"128K 起步翻倍增长、8 MiB/1 MiB 双封顶"的调度,与 MEGA 官方 SDK `ChunkedHash::chunkfloor/chunkceil` 的真实调度不一致,导致大量合法文件被误判 mismatch(也为下游放行逻辑制造了借口)
+2. **mismatch 放行策略**:算法错误的前提下,v2.4.1 把"mismatch 即失败"回退成了"记警告、照常完成重命名"——校验形同虚设,真实损坏(如 URL 过期后 403 期间的空洞写入)被直接放行
+3. **非对齐续传导致 CTR 密钥流错位**:连接中断时的 best-effort flush 会把不足 16 字节对齐的进度持久化;重试时 `SeekToFileOffset` 只能按整块定位密钥流,从错位点起**后续所有数据解密错位**——这是"大小正确但内容损坏"的直接成因
+
+**修复**:
+
+| 位置 | 修复 |
+| --- | --- |
+| `Criptografia.ComputeMegaFileMac` | 分块调度改为 MEGA SDK 线性边界:128 KiB × i(i=1..8,即 128/256/384/512/640/768/896 KiB),之后固定 1 MiB;删除双 cap fallback,单次计算 |
+| `Criptografia.VerifyMegaMetaMac` | 空文件直接返回 (0,0)(MEGA 空文件 MetaMAC 即为 0) |
+| `FileDownloader.downloadFile` | MetaMAC 不匹配记错误日志但按 MEGA SDK 宽松策略继续完成(SDK 对历史遗留的"MAC 缺失尾部条目"同样宽松);文件大小精确校验保留为硬门禁 |
+| `FileDownloader.FlushToDisk` | 中断 flush 时把持久化进度向下对齐到 16 字节边界,杜绝非对齐续传点(<16 字节已解密数据重试时自动重取) |
+| `ChunkDownloader_DoWork` | 续传请求前校验起点对齐:非 16 字节对齐的续传起点直接中止 chunk,防止密钥流错位 |
+| `DataPart.ValidateAndNormalize` | 启动时将旧版本遗留的非对齐 XML 进度自动回退到 16 字节边界 |
+| `FileDownloader.downloadFile`(v2.4.1 已引入) | 保留:移除"文件大小匹配即强制完成"的 force-finish;仅真实 chunk 全部完成才判定完成;120 秒超时上报失败并保留断点 |
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.4.2.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.4.2`
+- `docs/version.xml` → `2.4.2.0`
+
+---
+
 ## [2.4.1] - 2026-08-15
 
 ### 🐛 修复:下载完成但显示错误(用户实测确认)

@@ -183,6 +183,18 @@ Public Class FileDownloader
                     Return False
                 End If
 
+                ' Round any non-aligned partial progress down to a 16-byte boundary.
+                ' The CTR keystream can only be seeked in whole blocks; resuming from a
+                ' non-aligned offset (persisted by older builds) would decrypt all
+                ' following data with the wrong keystream and corrupt the file.
+                For Each c As Chunk In ordered
+                    If c.Index <> c.Size AndAlso c.Index > 0 AndAlso (c.Index And 15) <> 0 Then
+                        Log.WriteWarning("ValidateAndNormalize: rounding chunk progress down to a 16-byte boundary (" &
+                                         c.StartIndex & "+" & c.Index & " -> " & (c.StartIndex + (c.Index And Not 15)) & ")")
+                        c.Index = c.Index And Not 15L
+                    End If
+                Next
+
                 Dim missing As Boolean = ordered.Any(Function(c) c.Index <> c.Size)
                 Me.AllFinished = Not missing
                 Return True
@@ -739,11 +751,13 @@ Public Class FileDownloader
                     Log.WriteDebug("Event raised for starting a new connection")
                     bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, Nothing)
                 Next
-                ' Safety timeout: if AllFinished is not set within 60 seconds of reaching
-                ' near-complete progress, validate chunks and force-finish to avoid
-                ' getting stuck in this loop forever (Bug 2 fix).
+                ' Wait until all chunks finish. NOTE: there is deliberately NO size-based
+                ' force-finish here — the .part file is preallocated to the full size, so
+                ' "file size == expected size" is ALWAYS true and proves nothing about the
+                ' downloaded content. AllFinished is only ever set by real chunk completion
+                ' (a 403 storm at the tail previously left holes that were force-finished).
                 Dim waitStartTime As Date = Now
-                Dim stuckCheckLogged As Boolean = False
+                Dim timedOut As Boolean = False
                 Do
                     System.Threading.Thread.Sleep(100)
 
@@ -768,45 +782,21 @@ Public Class FileDownloader
                         Exit Do
                     End If
 
-                    ' Fallback: if we've been waiting more than 60 seconds and the file
-                    ' size on disk matches the expected size, all data is likely present.
-                    ' Validate chunks and set AllFinished to break out of the loop.
-                    If Now.Subtract(waitStartTime).TotalSeconds > 60 Then
-                        If Not stuckCheckLogged Then
-                            stuckCheckLogged = True
-                            Log.WriteWarning("Download wait loop exceeded 60s for " & file.Name & "; checking if all data is present.")
-                        End If
-                        Try
-                            If System.IO.File.Exists(FicheroPART) Then
-                                Dim partLen As Long = New System.IO.FileInfo(FicheroPART).Length
-                                If partLen = file.Size Then
-                                    ' All bytes are on disk — validate chunk state and force-finish
-                                    file.GetDataPart.ValidateAndNormalize(file.Size)
-                                    If Not file.GetDataPart.AllFinished Then
-                                        ' Chunk state is inconsistent but file size matches — force-finish
-                                        Log.WriteWarning("File size matches but chunk state inconsistent for " & file.Name & "; forcing AllFinished.")
-                                        For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
-                                            c.Index = c.Size
-                                        Next
-                                        file.GetDataPart.AllFinished = True
-                                    End If
-                                    If file.GetDataPart.AllFinished Then
-                                        Log.WriteWarning("Forced AllFinished for " & file.Name & " after validating disk content.")
-                                        Exit Do
-                                    End If
-                                End If
-                            End If
-                        Catch exCheck As Exception
-                            Log.WriteWarning("Error during stuck-wait check: " & Log.SafeException(exCheck))
-                        End Try
-
-                        ' Hard timeout at 120 seconds — exit to avoid infinite loop
-                        If Now.Subtract(waitStartTime).TotalSeconds > 120 Then
-                            Log.WriteError("Download wait loop timed out after 120s for " & file.Name & "; forcing exit.")
-                            Exit Do
-                        End If
+                    ' Hard timeout at 120 seconds — report failure but keep the chunk
+                    ' state so a retry resumes from the .part file instead of restarting.
+                    If Now.Subtract(waitStartTime).TotalSeconds > 120 Then
+                        Log.WriteError("Download wait loop timed out after 120s for " & file.Name & "; aborting.")
+                        timedOut = True
+                        Exit Do
                     End If
                 Loop
+
+                ' Report the timeout as a download failure (e.g. persistent 403 from an
+                ' expired URL). Chunk state is intentionally preserved for resumption.
+                If timedOut AndAlso Not bgwDownloader.CancellationPending Then
+                    bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
+                        New ApplicationException("Download timed out: chunks did not finish within 120 seconds (the MEGA URL may have expired). Please retry to resume."))
+                End If
 
                 ' Wait until chunk workers finish before rename
                 Dim waitUntil As Date = Now.AddSeconds(30)
@@ -847,12 +837,15 @@ Public Class FileDownloader
                     Throw New ApplicationException("Download size mismatch before rename.")
                 End If
 
-                ' Integrity: MEGA MetaMAC.
-                ' NOTE: a mismatch is logged as a warning and does NOT fail the download.
-                ' The exact file size was already validated above, and the MetaMAC chunk
-                ' boundary schedule has varied across MEGA client versions, so a mismatch
-                ' can be a false positive. Failing here wrongly errored fully-downloaded
-                ' files and left them stuck as ".part" (user-verified regression).
+                ' Integrity: MEGA MetaMAC. The schedule is now computed exactly as MEGA
+                ' clients do (ChunkedHash: 128 KiB * i for i = 1..8, then a fixed 1 MiB),
+                ' so for 8-word keys a mismatch means the bytes on disk differ from the
+                ' uploaded file. MEGA's own client is lenient here, though: some historical
+                ' uploads attached a MAC missing trailing entries (the SDK's
+                ' checkMetaMacWithMissingLateEntries handles them), so failing hard would
+                ' reject those still-valid files. Log a warning and keep the exact file-size
+                ' check above as the hard integrity gate. 4-word public link keys have no
+                ' embedded MetaMAC and skip verification inside VerifyMegaMetaMac.
                 Dim keyForMac As String = file.FileKey
                 If Not String.IsNullOrEmpty(keyForMac) AndAlso keyForMac.Contains("=###n=") Then
                     keyForMac = keyForMac.Substring(0, keyForMac.IndexOf("=###n="))
@@ -1063,6 +1056,16 @@ Public Class FileDownloader
 
 
                     Log.WriteInfo("Starting connection - " & file.Name & " from byte " & ChunkStart & " to " & ChunkStop)
+
+                    ' Resume-offset alignment guard: the CTR keystream is seeked in whole
+                    ' 16-byte blocks, so a resume from a non-aligned offset would decrypt
+                    ' every following block with the wrong keystream (silent corruption).
+                    ' Fail the chunk instead; the aligned progress is kept for the retry.
+                    ' (Reaching the tail of the chunk is exempt: no data follows.)
+                    If (ChunkStart And 15) <> 0 AndAlso ChunkStart < Chunk.StartIndex + Chunk.Size Then
+                        Throw New ApplicationException(String.Format(
+                            "Resume offset {0} for {1} is not block-aligned; aborting chunk to avoid keystream misalignment.", ChunkStart, file.Name))
+                    End If
 
                     ' Pequeño hack para soportar ficheros de más de 2 GB:
                     ' http://forums.codeguru.com/showthread.php?467570-WebRequest.AddRange-what-about-files-gt-2gb&p=1794639
@@ -1330,6 +1333,21 @@ Public Class FileDownloader
 
         '''''''''''''''''''''''
 
+
+        ' Block alignment guard. The CTR keystream can only be seeked in whole
+        ' 16-byte blocks: if a failed/interrupted download leaves Chunk.Index at a
+        ' non-aligned offset, the retry would resume decryption with the keystream
+        ' of the wrong block and corrupt EVERYTHING written after that point
+        ' (verified root cause of "size correct but file damaged" downloads).
+        ' Unless this write reaches the end of the chunk (no further data follows),
+        ' round the persisted progress down to a 16-byte boundary. The dropped
+        ' tail (< 16 bytes of already-decrypted data) is simply re-fetched on retry.
+        If Chunk.Index + CurrentBufferSize < Chunk.Size AndAlso (CurrentBufferSize And 15) <> 0 Then
+            Log.WriteWarning("FlushToDisk: rounding buffered bytes down to a 16-byte boundary (" &
+                             CurrentBufferSize & " -> " & (CurrentBufferSize And Not 15) & ") to keep the resume offset block-aligned")
+            CurrentBufferSize = CurrentBufferSize And Not 15
+            If CurrentBufferSize = 0 Then Return Chunk.Index < Chunk.Size
+        End If
 
         Me.MutexFile.WaitOne()
         Try

@@ -644,6 +644,10 @@ Public Class Criptografia
     ''' embed a MetaMAC — verification is impossible for them and is skipped (True).
     ''' Only 8-word (32-byte) node keys, obtained e.g. from folder API responses,
     ''' contain the nonce (words 4-5) and MetaMAC (words 6-7) needed to verify.
+    ''' The chunk-size schedule is MEGA's ChunkedHash: 128 KiB * i for the first 8
+    ''' chunks (128, 256, 384, 512, 640, 768, 896 KiB, then 1 MiB), and a fixed 1 MiB
+    ''' for every chunk after that. This mirrors the MEGA SDK's
+    ''' ChunkedHash::chunkfloor/chunkceil (SEGSIZE = 131072).
     ''' </summary>
     Friend Shared Function VerifyMegaMetaMac(ByVal filePath As String, ByVal pKey As String) As Boolean
         If String.IsNullOrEmpty(filePath) OrElse Not File.Exists(filePath) Then Return False
@@ -675,19 +679,66 @@ Public Class Criptografia
         Dim expectedMac0 As Integer = intKey(6)
         Dim expectedMac1 As Integer = intKey(7)
 
+        Dim mac As Integer() = ComputeMegaFileMac(filePath, aesKey)
+        Return mac(0) = expectedMac0 AndAlso mac(1) = expectedMac1
+    End Function
+
+    ''' <summary>
+    ''' Computes the MEGA file MetaMAC using the SDK's ChunkedHash schedule: chunk sizes
+    ''' are 128 KiB * i for the first 8 chunks (i = 1..8), then a fixed 1 MiB. Each chunk
+    ''' contributes a CBC-MAC (AES, zero IV, zero-padded final block), folded into the
+    ''' file MAC with fileMac = AES(fileMac XOR chunkMac). Returns the 2-word MetaMAC
+    ''' (fileMac0^fileMac1, fileMac2^fileMac3).
+    ''' </summary>
+    Private Shared Function ComputeMegaFileMac(ByVal filePath As String, ByVal aesKey As Byte()) As Integer()
         Dim engine As New AesEngine()
-        Dim keyParam As New KeyParameter(aesKey)
-        engine.Init(True, keyParam)
+        engine.Init(True, New KeyParameter(aesKey))
 
         Dim fileLen As Long = New FileInfo(filePath).Length
+
+        ' An empty file has no chunks, so MEGA's MetaMAC for it is (0, 0).
+        If fileLen = 0 Then Return New Integer() {0, 0}
+
         Dim fileMac As Integer() = New Integer() {0, 0, 0, 0}
-        Dim chunkStart As Long = 0
-        Dim chunkSize As Long = &H20000 ' 128 KiB, grows by 128 KiB up to 1 MiB
 
         Using fs As New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read)
+            Dim chunkStart As Long = 0
+            Dim chunkNumber As Integer = 1 ' 1-based chunk index
+
             While chunkStart < fileLen
+                ' ChunkedHash: 128 KiB * i for i = 1..8, then a fixed 1 MiB.
+                Dim chunkSize As Long = If(chunkNumber <= 8, CLng(chunkNumber) * &H20000L, &H100000L)
                 Dim thisChunk As Long = Math.Min(chunkSize, fileLen - chunkStart)
-                Dim chunkMac As Integer() = CbcMacChunk(engine, fs, thisChunk)
+
+                ' CBC-MAC over this chunk (zero IV, zero-padded final partial block).
+                Dim chunkMac As Integer() = New Integer() {0, 0, 0, 0}
+                Dim remaining As Long = thisChunk
+                Dim buffer(15) As Byte
+                While remaining > 0
+                    Dim toRead As Integer = CInt(Math.Min(16, remaining))
+                    Dim read As Integer = 0
+                    While read < toRead
+                        Dim n As Integer = fs.Read(buffer, read, toRead - read)
+                        If n = 0 Then Exit While
+                        read += n
+                    End While
+                    If read < 16 Then
+                        For i As Integer = read To 15
+                            buffer(i) = 0
+                        Next
+                    End If
+
+                    Dim block As Integer() = ByteArrayToIntArray(buffer)
+                    chunkMac(0) = chunkMac(0) Xor block(0)
+                    chunkMac(1) = chunkMac(1) Xor block(1)
+                    chunkMac(2) = chunkMac(2) Xor block(2)
+                    chunkMac(3) = chunkMac(3) Xor block(3)
+                    chunkMac = AesEncryptBlock(engine, chunkMac)
+
+                    remaining -= toRead
+                End While
+
+                ' Fold the chunk MAC into the file MAC.
                 fileMac(0) = fileMac(0) Xor chunkMac(0)
                 fileMac(1) = fileMac(1) Xor chunkMac(1)
                 fileMac(2) = fileMac(2) Xor chunkMac(2)
@@ -695,43 +746,11 @@ Public Class Criptografia
                 fileMac = AesEncryptBlock(engine, fileMac)
 
                 chunkStart += thisChunk
-                If chunkSize < &H100000 Then
-                    chunkSize += &H20000
-                End If
+                chunkNumber += 1
             End While
         End Using
 
-        Dim cond0 As Integer = fileMac(0) Xor fileMac(1)
-        Dim cond1 As Integer = fileMac(2) Xor fileMac(3)
-        Return cond0 = expectedMac0 AndAlso cond1 = expectedMac1
-    End Function
-
-    Private Shared Function CbcMacChunk(ByVal engine As AesEngine, ByVal stream As Stream, ByVal length As Long) As Integer()
-        Dim mac As Integer() = New Integer() {0, 0, 0, 0}
-        Dim buffer(15) As Byte
-        Dim remaining As Long = length
-        While remaining > 0
-            Dim toRead As Integer = CInt(Math.Min(16, remaining))
-            Dim read As Integer = 0
-            While read < toRead
-                Dim n As Integer = stream.Read(buffer, read, toRead - read)
-                If n = 0 Then Exit While
-                read += n
-            End While
-            If read < 16 Then
-                For i As Integer = read To 15
-                    buffer(i) = 0
-                Next
-            End If
-            Dim block As Integer() = ByteArrayToIntArray(buffer)
-            mac(0) = mac(0) Xor block(0)
-            mac(1) = mac(1) Xor block(1)
-            mac(2) = mac(2) Xor block(2)
-            mac(3) = mac(3) Xor block(3)
-            mac = AesEncryptBlock(engine, mac)
-            remaining -= toRead
-        End While
-        Return mac
+        Return New Integer() {fileMac(0) Xor fileMac(1), fileMac(2) Xor fileMac(3)}
     End Function
 
     Private Shared Function AesEncryptBlock(ByVal engine As AesEngine, ByVal words As Integer()) As Integer()

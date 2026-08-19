@@ -128,3 +128,6 @@ release-stage/
 # TRAE IDE 临时文件
 .trae/
 TODO/
+
+# Codebuff 本地工具标识
+.freebuff/
