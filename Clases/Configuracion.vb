@@ -105,6 +105,22 @@ Public Class Configuracion
 	
 	Public ServidorWebTimeout As Integer
 
+	''' <summary>
+	''' Allow LAN devices to reach the web remote-control interface.
+	''' False (default) binds 127.0.0.1 only — local machine access.
+	''' True binds all interfaces so phones/other PCs can push downloads;
+	''' requires ServidorWebPassword to be set (enforced at server start).
+	''' </summary>
+	Public ServidorWebPermitirLAN As Boolean
+
+	''' <summary>
+	''' Specific local IP address to bind when ServidorWebPermitirLAN is enabled.
+	''' Empty (default) binds all interfaces (0.0.0.0). Useful on multi-NIC
+	''' machines to expose the listener on the LAN adapter only, keeping it
+	''' off VPN/virtual adapters.
+	''' </summary>
+	Public ServidorWebBindIP As String
+
 	Public VLCPath As String
 	
 	Public ListaPreSharedKeys As List(Of SecureString)
@@ -204,7 +220,9 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebRutaPlantilla")).InnerText = ServidorWebRutaPlantilla
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebTimeout")).InnerText = ServidorWebTimeout.ToString
-		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPuerto")).InnerText = ServidorWebPuerto.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPermitirLAN")).InnerText = ServidorWebPermitirLAN.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebBindIP")).InnerText = ServidorWebBindIP
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPuerto")).InnerText = ServidorWebPuerto.ToString
 		
 		If HideCollaborateButton Then Xml.DocumentElement.AppendChild(Xml.CreateElement("HideCollaborateButton")).InnerText = HideCollaborateButton.ToString
 		
@@ -387,6 +405,9 @@ Public Class Configuracion
 		End Try
 		ServidorWebTimeout = 5
 		Integer.TryParse(LeerNodo(Xml, "ServidorWebTimeout", "5"), ServidorWebTimeout)
+		ServidorWebPermitirLAN = False
+		Boolean.TryParse(LeerNodo(Xml, "ServidorWebPermitirLAN", "false"), ServidorWebPermitirLAN)
+		ServidorWebBindIP = LeerNodo(Xml, "ServidorWebBindIP", "")
 		ServidorWebPuerto = 0
 		Integer.TryParse(LeerNodo(Xml, "ServidorWebPuerto", "0"), ServidorWebPuerto)
 		
@@ -441,6 +462,8 @@ Public Class Configuracion
 		Me.ConexionesPorFichero = 3
 		Me.ProxyIP = ""
 		Me.ServidorWebTimeout = 5
+		Me.ServidorWebPermitirLAN = False
+		Me.ServidorWebBindIP = ""
         Me.MaxConexionesGuardadas = 100
 		Me.NivelLog = Log.LevelLogType.Normal
 		Me.ServidorStreamingActivo = False

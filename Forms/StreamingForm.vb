@@ -55,12 +55,13 @@ Public Class StreamingForm
 
             ActualizarDatos()
         End While
-
-        bckActualizador = Nothing
     End Sub
 
     Private Sub Cerrando() Handles Me.FormClosed
-        bckActualizador.CancelAsync()
+        Try
+            If bckActualizador IsNot Nothing Then bckActualizador.CancelAsync()
+        Catch
+        End Try
     End Sub
 
     Private PreviousURLMega As String = String.Empty

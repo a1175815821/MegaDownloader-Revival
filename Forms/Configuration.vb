@@ -132,6 +132,8 @@ Public Class Configuration
         If Config.ServidorStreamingPuerto = 0 Then txtStreamingPort.Text = ""
 
         chkServidorWeb.Checked = Config.ServidorWebActivo
+        chkServidorWebLAN.Checked = Config.ServidorWebPermitirLAN
+        txtServidorWebBindIP.Text = Config.ServidorWebBindIP
         txtServidorWebNombre.Text = Config.ServidorWebNombre
         txtServidorWebPassword.Text = Config.ServidorWebPassword
         txtServidorWebPort.Text = Config.ServidorWebPuerto.ToString
@@ -216,6 +218,8 @@ Public Class Configuration
         Me.Label17.Text = Language.GetText("Password") & ":"
 
         Me.chkServidorWeb.Text = Language.GetText("Use web server")
+        Me.chkServidorWebLAN.Text = Language.GetText("Allow LAN access")
+        Me.lblServidorWebBindIP.Text = Language.GetText("Bind IP (empty = all)") & ":"
         Me.GroupBox2.Text = Language.GetText("Proxy")
         Me.Label23.Text = Language.GetText("User (optional)") & ":"
         Me.Label22.Text = Language.GetText("Password (optional)") & ":"
@@ -362,6 +366,18 @@ Public Class Configuration
             MessageBox.Show(Language.GetText("The web server password must have at least %A characters").Replace("%A", "8"), _
                             Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
+        ElseIf chkServidorWebLAN.Checked AndAlso String.IsNullOrEmpty(txtServidorWebPassword.Text) Then
+            MessageBox.Show(Language.GetText("A web server password is required to allow LAN access"), _
+                            Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Exit Sub
+        ElseIf chkServidorWebLAN.Checked AndAlso Not String.IsNullOrEmpty(txtServidorWebBindIP.Text.Trim) Then
+            Try
+                System.Net.IPAddress.Parse(txtServidorWebBindIP.Text.Trim)
+            Catch
+                MessageBox.Show(Language.GetText("Invalid IP address format"), _
+                                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End Try
         End If
 
         If Not chkStreamingServer.Checked Then
@@ -427,6 +443,8 @@ Public Class Configuration
 
 
         Config.ServidorWebActivo = chkServidorWeb.Checked
+        Config.ServidorWebPermitirLAN = chkServidorWebLAN.Checked
+        Config.ServidorWebBindIP = txtServidorWebBindIP.Text.Trim
         Config.ServidorWebNombre = txtServidorWebNombre.Text
         Config.ServidorWebPassword = txtServidorWebPassword.Text
         Config.ServidorWebPuerto = servidorWebPuerto
@@ -559,6 +577,16 @@ Public Class Configuration
         txtServidorWebTemplate.Enabled = chkServidorWeb.Checked
         txtServidorWebTimeout.Enabled = chkServidorWeb.Checked
         btnExaminarTemplate.Enabled = chkServidorWeb.Checked
+        chkServidorWebLAN.Enabled = chkServidorWeb.Checked
+        ActualizarEstadoBindIP()
+    End Sub
+
+    Private Sub chkServidorWebLAN_CheckedChanged(sender As System.Object, e As System.EventArgs) Handles chkServidorWebLAN.CheckedChanged
+        ActualizarEstadoBindIP()
+    End Sub
+
+    Private Sub ActualizarEstadoBindIP()
+        txtServidorWebBindIP.Enabled = chkServidorWeb.Checked AndAlso chkServidorWebLAN.Checked
     End Sub
 
     Private Sub chkServidorStreaming_CheckedChanged(sender As System.Object, e As System.EventArgs) Handles chkStreamingServer.CheckedChanged

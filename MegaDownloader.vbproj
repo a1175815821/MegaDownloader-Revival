@@ -410,6 +410,9 @@
     <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
     <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
     <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
+    <EmbeddedResource Include="Resources\Binaries\7zr.exe">
+      <LogicalName>MegaDownloader.7zr.exe</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\Language\en-US-Language.xml">

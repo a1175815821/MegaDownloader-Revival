@@ -62,9 +62,15 @@ Public Partial Class ELCForm
 	
 	Private Sub Cerrando() Handles Me.FormClosed
 		ClosingForm = True
-		bckELCGenerator.CancelAsync()
+		Try
+			If bckELCGenerator IsNot Nothing Then bckELCGenerator.CancelAsync()
+		Catch
+		End Try
 		' Wake the worker so it can observe CancellationPending and exit promptly.
-		elcSignal.Set()
+		Try
+			elcSignal.Set()
+		Catch
+		End Try
 	End Sub
 	
 	Private Sub PantallaMsg_Shown(sender As Object, e As EventArgs) Handles Me.Shown	
@@ -256,8 +262,6 @@ Public Partial Class ELCForm
 			GenerateELC
 
 		End While
-
-		bckELCGenerator = Nothing
 	End Sub
 	
 	

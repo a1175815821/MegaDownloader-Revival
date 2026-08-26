@@ -168,6 +168,10 @@
   <Text key="Start with Windows"><![CDATA[开机自动启动]]></Text>
   <Text key="Web server"><![CDATA[服务器]]></Text>
   <Text key="Use web server"><![CDATA[使用服务器]]></Text>
+  <Text key="Allow LAN access"><![CDATA[允许局域网访问]]></Text>
+  <Text key="Bind IP (empty = all)"><![CDATA[绑定IP（留空=全部）]]></Text>
+  <Text key="Invalid IP address format"><![CDATA[IP地址格式无效]]></Text>
+  <Text key="A web server password is required to allow LAN access"><![CDATA[允许局域网访问前必须先设置服务器密码。]]></Text>
   <Text key="Interrupt session"><![CDATA[工作阶段逾时]]></Text>
   <Text key="Name (optional)"><![CDATA[名称（选择性）]]></Text>
   <Text key="User (optional)"><![CDATA[帐号（选择性）]]></Text>

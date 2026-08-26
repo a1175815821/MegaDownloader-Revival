@@ -1343,9 +1343,23 @@ Public Class FileDownloader
         ' round the persisted progress down to a 16-byte boundary. The dropped
         ' tail (< 16 bytes of already-decrypted data) is simply re-fetched on retry.
         If Chunk.Index + CurrentBufferSize < Chunk.Size AndAlso (CurrentBufferSize And 15) <> 0 Then
+            Dim originalSize As Integer = CurrentBufferSize
+            Dim roundedSize As Integer = CurrentBufferSize And Not 15
             Log.WriteWarning("FlushToDisk: rounding buffered bytes down to a 16-byte boundary (" &
-                             CurrentBufferSize & " -> " & (CurrentBufferSize And Not 15) & ") to keep the resume offset block-aligned")
-            CurrentBufferSize = CurrentBufferSize And Not 15
+                             originalSize & " -> " & roundedSize & ") to keep the resume offset block-aligned")
+            Dim discarded As Integer = originalSize - roundedSize
+            If discarded > 0 Then
+                Me.Mutex.WaitOne()
+                Try
+                    m_currentFileProgress -= discarded
+                    If m_currentFileProgress < 0 Then m_currentFileProgress = 0
+                    m_totalProgress -= discarded
+                    If m_totalProgress < 0 Then m_totalProgress = 0
+                Finally
+                    Me.Mutex.ReleaseMutex()
+                End Try
+            End If
+            CurrentBufferSize = roundedSize
             If CurrentBufferSize = 0 Then Return Chunk.Index < Chunk.Size
         End If
 

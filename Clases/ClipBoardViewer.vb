@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.ComponentModel
 Imports System.Runtime.InteropServices
 Imports System.Security.Permissions
@@ -175,7 +175,7 @@ Public Class ClipboardViewer
                 If Not _firstUse Then
                     _firstUse = Not _firstUse
                 Else
-                    If Not Clipboard.ContainsData(CS_CLIPBOARD_VIEWER_IGNORE) Then
+                    If Not ContainsIgnoreMarker() Then
                         ' content of clipboard has changed:
                         OnClipboardChanged()
                     End If
@@ -187,7 +187,7 @@ Public Class ClipboardViewer
                 Exit Select
             Case WM_CLIPBOARDUPDATE
                 ' New Windows Vista Clipboard API
-                If Not Clipboard.ContainsData(CS_CLIPBOARD_VIEWER_IGNORE) Then
+                If Not ContainsIgnoreMarker() Then
                     ' content of clipboard has changed:
                     OnClipboardChanged()
                 End If
@@ -234,7 +234,9 @@ Public Class ClipboardViewer
         End If
 
         If IsVista() Then
-            AddClipboardFormatListener(Handle)
+            If AddClipboardFormatListener(Handle) Then
+                _installedHandle = Handle
+            End If
         Else
             _nextViewerHandle = SetClipboardViewer(Handle)
             _installedHandle = Handle
@@ -251,6 +253,7 @@ Public Class ClipboardViewer
 
         If IsVista() Then
             RemoveClipboardFormatListener(_installedHandle)
+            _installedHandle = IntPtr.Zero
         Else
             ChangeClipboardChain(_installedHandle, _nextViewerHandle)
             _nextViewerHandle = IntPtr.Zero
@@ -266,6 +269,23 @@ Public Class ClipboardViewer
     End Function
 
     ''' <summary>
+    ''' Checks for the ignore marker without letting a transient CLIPBRD_E_CANT_OPEN
+    ''' (another process holding the clipboard open, common with delayed rendering
+    ''' from web browsers) bubble up through the WndProc and break the message loop.
+    ''' When the clipboard cannot be opened we report "no marker" so the change is
+    ''' still processed — the read itself is retried by the event consumer.
+    ''' </summary>
+    Private Function ContainsIgnoreMarker() As Boolean
+        Try
+            Return Clipboard.ContainsData(CS_CLIPBOARD_VIEWER_IGNORE)
+        Catch ex As Exception
+            ' CLIPBRD_E_CANT_OPEN or similar transient failure — assume no marker
+            ' so the change notification is still delivered.
+            Return False
+        End Try
+    End Function
+
+    ''' <summary>
     ''' Raises the <c>ClipboardChanged</c> event.
     ''' </summary>
     Protected Overridable Sub OnClipboardChanged()
@@ -276,20 +296,29 @@ Public Class ClipboardViewer
 
         If handled.Handled AndAlso ClearOnReceive Then
             ' Borramos el portapapeles
-            Clipboard.Clear()
-        ElseIf handled.Handled Then
-            Dim data = Clipboard.GetDataObject()
-            If data IsNot Nothing Then
-                ' Los datos han sido tratados, volvemos a ponerlos en el portapapeles
-                Dim newData = New DataObject(CS_CLIPBOARD_VIEWER_IGNORE, 0)
-
-                For Each format As String In data.GetFormats(False)
-                    newData.SetData(format, True, data.GetData(format))
-                Next
-
+            Try
                 Clipboard.Clear()
-                Clipboard.SetDataObject(newData, True)
-            End If
+            Catch ex As Exception
+                ' Clipboard busy — not fatal, the marker simply won't be applied
+            End Try
+        ElseIf handled.Handled Then
+            Try
+                Dim data = Clipboard.GetDataObject()
+                If data IsNot Nothing Then
+                    ' Los datos han sido tratados, volvemos a ponerlos en el portapapeles
+                    Dim newData = New DataObject(CS_CLIPBOARD_VIEWER_IGNORE, 0)
+
+                    For Each format As String In data.GetFormats(False)
+                        newData.SetData(format, True, data.GetData(format))
+                    Next
+
+                    Clipboard.Clear()
+                    Clipboard.SetDataObject(newData, True)
+                End If
+            Catch ex As Exception
+                ' CLIPBRD_E_CANT_OPEN while restoring data — the copy stays as-is,
+                ' it will simply be re-analyzed on the next clipboard change.
+            End Try
         End If
     End Sub
 

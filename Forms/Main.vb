@@ -2227,9 +2227,47 @@ Public Class Main
         'Application.DoEvents()
 
         If Config IsNot Nothing AndAlso Config.AnalizarPortapapeles Then
-            Dim TextoPortapapeles As String = CStr(Clipboard.GetDataObject.GetData(GetType(String)))
-            ComprobarYAgregarLinks(TextoPortapapeles, True, False)
+            LeerPortapapelesYAgregarLinks()
         End If
+    End Sub
+
+    ''' <summary>
+    ''' Reads the clipboard text and pushes it through ComprobarYAgregarLinks.
+    ''' Web browsers (Chrome/Edge/Firefox) use DELAYED RENDERING: when the clipboard
+    ''' change notification arrives the data has not been written yet, and an
+    ''' immediate read returns empty or throws CLIPBRD_E_CANT_OPEN because the
+    ''' source process still owns the clipboard. Retry for a short window before
+    ''' giving up (fixes "clipboard monitoring misses copies from web pages").
+    ''' </summary>
+    Private Async Sub LeerPortapapelesYAgregarLinks()
+        Const MaxIntentos As Integer = 5
+        Const RetrasoMs As Integer = 150
+
+        For intento As Integer = 1 To MaxIntentos
+            Dim textoPortapapeles As String = Nothing
+            Try
+                Dim data As IDataObject = Clipboard.GetDataObject()
+                If data IsNot Nothing Then
+                    textoPortapapeles = TryCast(data.GetData(GetType(String)), String)
+                End If
+            Catch ex As System.Runtime.InteropServices.ExternalException
+                ' CLIPBRD_E_CANT_OPEN: another process holds the clipboard open — retry shortly
+                Log.WriteWarning("Clipboard busy on change notification (attempt " & intento & "): " & Log.SafeException(ex))
+            Catch ex As Exception
+                Log.WriteWarning("Clipboard read failed (attempt " & intento & "): " & Log.SafeException(ex))
+            End Try
+
+            If Not String.IsNullOrEmpty(textoPortapapeles) Then
+                ComprobarYAgregarLinks(textoPortapapeles, True, False)
+                Return
+            End If
+
+            ' Empty read: either delayed rendering (data not materialized yet) or
+            ' a non-text copy. Wait briefly and try again before discarding.
+            If intento < MaxIntentos Then
+                Await Threading.Tasks.Task.Delay(RetrasoMs)
+            End If
+        Next
     End Sub
 
     Public Shared Function IsFormAlreadyOpen(FormType As Type) As Form

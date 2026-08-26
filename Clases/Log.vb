@@ -50,15 +50,15 @@ Public Class Log
     End Function
 
     Public Shared Sub WriteWarning(Text As String)
-        WriteLog(Text, LevelLogType.Normal)
+        WriteLog(Redact(Text), LevelLogType.Normal)
     End Sub
 
     Public Shared Sub WriteInfo(Text As String)
-        WriteLog(Text, LevelLogType.Info)
+        WriteLog(Redact(Text), LevelLogType.Info)
     End Sub
 
     Public Shared Sub WriteDebug(Text As String)
-        WriteLog(Text, LevelLogType.Debug)
+        WriteLog(Redact(Text), LevelLogType.Debug)
     End Sub
 
 

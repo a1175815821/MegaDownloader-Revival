@@ -39,7 +39,10 @@ Public Class EncodeLinksForm
 	
 	Private Sub Cerrando() Handles Me.FormClosed
 		ClosingForm = True
-		bckActualizador.CancelAsync()
+		Try
+			If bckActualizador IsNot Nothing Then bckActualizador.CancelAsync()
+		Catch
+		End Try
 	End Sub
 	
 	
@@ -57,8 +60,6 @@ Public Class EncodeLinksForm
 			ActualizarDatos()
 			
 		End While
-		
-		bckActualizador = Nothing
 	End Sub
 	
 	

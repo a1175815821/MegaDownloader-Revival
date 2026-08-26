@@ -24,6 +24,28 @@ Public Class ServidorWebController
                 Return "Port " & Config.ServidorWebPuerto & " is not valid or is in use."
             End If
 
+            ' Default security posture: bind loopback only. Opt-in LAN access
+            ' binds all interfaces so phones/other PCs can push downloads, but a
+            ' password is MANDATORY — an open LAN listener would let anyone on
+            ' the network control the downloader.
+            Dim bindAddress As System.Net.IPAddress = System.Net.IPAddress.Loopback
+            If Config.ServidorWebPermitirLAN Then
+                If String.IsNullOrEmpty(Config.ServidorWebPassword) Then
+                    Return "A web server password is required to allow LAN access."
+                End If
+                If Not String.IsNullOrEmpty(Config.ServidorWebBindIP) Then
+                    Try
+                        bindAddress = System.Net.IPAddress.Parse(Config.ServidorWebBindIP)
+                    Catch ex As FormatException
+                        Return "Invalid web server bind IP: " & Config.ServidorWebBindIP
+                    End Try
+                    Log.WriteWarning("Web server: LAN access enabled — binding to " & bindAddress.ToString & " (password required).")
+                Else
+                    bindAddress = System.Net.IPAddress.Any
+                    Log.WriteWarning("Web server: LAN access enabled — listening on all interfaces (password required).")
+                End If
+            End If
+
             Try
                 _WebServer = New HttpServer.HttpServer()
                 _WebServer.ServerName = "Internal"
@@ -34,7 +56,7 @@ Public Class ServidorWebController
                                                 Config.ServidorWebNombre, _
                                                 Config.ServidorWebTimeout * 60, _
                                                 Language.GetCurrentLanguageCode))
-                _WebServer.Start(System.Net.IPAddress.Loopback, Config.ServidorWebPuerto)
+                _WebServer.Start(bindAddress, Config.ServidorWebPuerto)
 
                 'Console.WriteLine("Server is loaded. Go to http://localhost:" & port & "/")
             Catch ex As Exception

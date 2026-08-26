@@ -210,10 +210,12 @@ Public NotInheritable Class ApplicationInstanceManager
                 Mutex.MEGAUriParameters.WaitOne()
                 Try
                     Dim args As New Generic.List(Of String)
+                    Dim rawLines As New Generic.List(Of String)
                     Using t As New StreamReader(PathLog)
                         While Not t.EndOfStream
                             Dim line As String = t.ReadLine()
                             If String.IsNullOrWhiteSpace(line) Then Continue While
+                            rawLines.Add(line)
                             Dim l = line.Split("|"c)
                             ' Each line starts with the program name as first parameter
                             If l.Length > 1 Then
@@ -229,13 +231,39 @@ Public NotInheritable Class ApplicationInstanceManager
                     _getParametersLastCheck = Now
 
                     If args.Count > 0 Then
-                        Dim d As Action(Of Boolean) = Sub(x As Boolean)
-                                                          My.MyApplication.Main_Form.ProcessArgs(args.ToArray)
-                                                          My.MyApplication.Main_Form.Activate()
-                                                      End Sub
-                        My.MyApplication.Main_Form.Invoke(d, True)
-
-                        Return True
+                        Dim invoked As Boolean = False
+                        Try
+                            Dim mainFrm = My.MyApplication.Main_Form
+                            If mainFrm IsNot Nothing AndAlso Not mainFrm.IsDisposed AndAlso mainFrm.IsHandleCreated Then
+                                Dim d As Action(Of Boolean) = Sub(x As Boolean)
+                                                                  mainFrm.ProcessArgs(args.ToArray)
+                                                                  mainFrm.Activate()
+                                                              End Sub
+                                If mainFrm.InvokeRequired Then
+                                    mainFrm.Invoke(d, True)
+                                Else
+                                    d.Invoke(True)
+                                End If
+                                invoked = True
+                                Return True
+                            Else
+                                Log.WriteWarning("GetParameters: Main_Form not ready, deferring " & args.Count & " arg(s)")
+                            End If
+                        Catch ex As Exception
+                            Log.WriteError("GetParameters Invoke failed: " & Log.SafeException(ex))
+                        End Try
+                        If Not invoked Then
+                            ' Restore raw lines so next poll can retry; do not lose args
+                            Try
+                                Using t As New StreamWriter(PathLog, True)
+                                    For Each rl As String In rawLines
+                                        t.WriteLine(rl)
+                                    Next
+                                End Using
+                            Catch
+                            End Try
+                            _getParametersLastCheck = Date.MinValue
+                        End If
                     End If
 
                 Finally

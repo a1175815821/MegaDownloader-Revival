@@ -94,6 +94,9 @@ Partial Class Configuration
         Me.txtServidorWebPort = New System.Windows.Forms.TextBox()
         Me.Label16 = New System.Windows.Forms.Label()
         Me.chkServidorWeb = New System.Windows.Forms.CheckBox()
+        Me.chkServidorWebLAN = New System.Windows.Forms.CheckBox()
+        Me.lblServidorWebBindIP = New System.Windows.Forms.Label()
+        Me.txtServidorWebBindIP = New System.Windows.Forms.TextBox()
         Me.GroupBox2 = New System.Windows.Forms.GroupBox()
         Me.Label23 = New System.Windows.Forms.Label()
         Me.txtProxyName = New System.Windows.Forms.TextBox()
@@ -782,6 +785,9 @@ Partial Class Configuration
         Me.GroupBox5.Controls.Add(Me.txtServidorWebPort)
         Me.GroupBox5.Controls.Add(Me.Label16)
         Me.GroupBox5.Controls.Add(Me.chkServidorWeb)
+        Me.GroupBox5.Controls.Add(Me.chkServidorWebLAN)
+        Me.GroupBox5.Controls.Add(Me.lblServidorWebBindIP)
+        Me.GroupBox5.Controls.Add(Me.txtServidorWebBindIP)
         Me.GroupBox5.Location = New System.Drawing.Point(6, 232)
         Me.GroupBox5.Name = "GroupBox5"
         Me.GroupBox5.Size = New System.Drawing.Size(599, 144)
@@ -913,6 +919,34 @@ Partial Class Configuration
         Me.chkServidorWeb.TabIndex = 0
         Me.chkServidorWeb.Text = "Usar servidor web"
         Me.chkServidorWeb.UseVisualStyleBackColor = True
+        '
+        'chkServidorWebLAN
+        '
+        Me.chkServidorWebLAN.AutoSize = True
+        Me.chkServidorWebLAN.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.chkServidorWebLAN.Location = New System.Drawing.Point(140, 19)
+        Me.chkServidorWebLAN.Name = "chkServidorWebLAN"
+        Me.chkServidorWebLAN.Size = New System.Drawing.Size(160, 17)
+        Me.chkServidorWebLAN.TabIndex = 8
+        Me.chkServidorWebLAN.Text = "Permitir acceso LAN"
+        Me.chkServidorWebLAN.UseVisualStyleBackColor = True
+        '
+        'lblServidorWebBindIP
+        '
+        Me.lblServidorWebBindIP.AutoSize = True
+        Me.lblServidorWebBindIP.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.lblServidorWebBindIP.Location = New System.Drawing.Point(310, 21)
+        Me.lblServidorWebBindIP.Name = "lblServidorWebBindIP"
+        Me.lblServidorWebBindIP.Size = New System.Drawing.Size(112, 13)
+        Me.lblServidorWebBindIP.TabIndex = 13
+        Me.lblServidorWebBindIP.Text = "Bind IP (empty = all):"
+        '
+        'txtServidorWebBindIP
+        '
+        Me.txtServidorWebBindIP.Location = New System.Drawing.Point(428, 18)
+        Me.txtServidorWebBindIP.Name = "txtServidorWebBindIP"
+        Me.txtServidorWebBindIP.Size = New System.Drawing.Size(120, 20)
+        Me.txtServidorWebBindIP.TabIndex = 14
         '
         'GroupBox2
         '
@@ -1303,6 +1337,9 @@ Partial Class Configuration
     Friend WithEvents txtServidorWebPort As System.Windows.Forms.TextBox
     Friend WithEvents Label16 As System.Windows.Forms.Label
     Friend WithEvents chkServidorWeb As System.Windows.Forms.CheckBox
+    Friend WithEvents chkServidorWebLAN As System.Windows.Forms.CheckBox
+    Friend WithEvents lblServidorWebBindIP As System.Windows.Forms.Label
+    Friend WithEvents txtServidorWebBindIP As System.Windows.Forms.TextBox
     Friend WithEvents linkUltConfig As System.Windows.Forms.LinkLabel
     Friend WithEvents chkUltimaConfig As System.Windows.Forms.CheckBox
     Friend WithEvents Label23 As System.Windows.Forms.Label

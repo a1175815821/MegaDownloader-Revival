@@ -132,12 +132,11 @@ Public Partial Class ELCAccountControl
 		
 		If Config IsNot Nothing AndAlso sndr IsNot Nothing AndAlso sndr.Rows.Count = 0 Then
 			' <-- if there are no rows in the DataGridView when it paints, then it will create your message
-			Using grfx As Graphics = e.Graphics
-				' create a white rectangle so text will be easily readable
-				'grfx.FillRectangle(Brushes.White, New Rectangle(New Point(), New Size(sndr.Width, 25)))
-				' write text on top of the white rectangle just created
+					Using grfx As Graphics = e.Graphics
 				Using emptyBrush As New SolidBrush(ThemeManager.GetColor("Fore"))
-					grfx.DrawString(Language.GetText("Account list empty"), New Font(dgELCUsers.Font.FontFamily, dgELCUsers.Font.Size, FontStyle.Italic), emptyBrush, New PointF(55, 10))
+					Using f As New Font(dgELCUsers.Font.FontFamily, dgELCUsers.Font.Size, FontStyle.Italic)
+						grfx.DrawString(Language.GetText("Account list empty"), f, emptyBrush, New PointF(55, 10))
+					End Using
 				End Using
 			End Using
 		End If
