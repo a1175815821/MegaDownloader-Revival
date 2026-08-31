@@ -1,7 +1,7 @@
 # MegaDownloader
 
 > **MegaDownloader 复活计划 (Revival Project)**  
-> 基于 MegaDownloader v1.8 反编译源码修复而成。v2.3 修复加密失败崩溃与资源泄漏;v2.2 完成路径安全、下载完整性(MetaMAC/Range/断点)与一批可靠性加固;v2.1 完善深色模式;v2.0 完成 4 阶段 60+ 项修复与主题切换。
+> 基于 MegaDownloader v1.8 反编译源码修复而成，完成60+ 项修复。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
@@ -19,10 +19,6 @@
 
 - [项目背景](#项目背景)
 - [v2.4 主要变更](#v24-主要变更)
-- [v2.3 主要变更](#v23-主要变更)
-- [v2.2 主要变更](#v22-主要变更)
-- [v2.1 主要变更](#v21-主要变更)
-- [v2.0 主要变更](#v20-主要变更)
 - [功能特性](#功能特性)
 - [技术栈](#技术栈)
 - [项目结构](#项目结构)
@@ -86,86 +82,6 @@ MegaDownloader 是一款由西班牙开发者 **Andres Soliño [andres_age]** �
 | 资源泄漏 | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报 | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败 |
 
-## v2.3 主要变更
-
-### 稳定性修复
-
-| 修复 | 说明 |
-| --- | --- |
-| AES 加解密 | 修复加密失败崩溃、解密截断与坏输入崩溃，并补齐资源释放 |
-| 资源 / 死锁 | `Fichero.Dispose` 释放下载器；`FileInfo.Size` 锁释放进 `Finally`；注册表句柄释放 |
-| 移除 `Thread.Abort` | DLC 超时改为协作式取消 |
-
-## v2.2 主要变更
-
-### 路径安全与下载完整性
-
-| 项 | 说明 |
-| --- | --- |
-| PathGuard | 远端名/解压/删除/写出限制在下载根目录内,防目录逃逸与 Zip Slip |
-| MetaMAC | 下载完成前校验 MEGA 文件完整性,失败不标记成功 |
-| Range / EOF / CTR | 严格校验分块响应;提前 EOF 失败;大文件 CTR seek 使用 Int64 |
-| 断点续传 | 校验分块元数据,避免 `.part` 缺失时的假完成 |
-| 原子保存 | 配置与下载队列 temp + `File.Replace` |
-| Web / Streaming | 状态修改 POST+CSRF;媒体 URL 固定 `127.0.0.1` |
-| 其它 | 解压配额与真实结果状态、语言 en-US 回退、去 MPRESS/xUnit、DPI PerMonitorV2 |
-
-详见 [CHANGELOG.md](docs/CHANGELOG.md)。
-
-## v2.1 主要变更
-
-### 深色主题可用性
-
-| 修复 | 说明 |
-| --- | --- |
-| 下载列表斑马纹 | 不再写死 White/Honeydew,使用主题 Back/AltBack |
-| 进度条 | 主题化 Progress 色,告别高亮青/绿 |
-| 按钮白边 | Flat + 主题 Border,去掉 Visual Styles 3D 高光 |
-| 设置即时换肤 | 保存主题后主窗立即刷新,无需重启 |
-| 右键菜单 / ELC / Stegano | ContextMenu、账号表、隐写向导与 Splash 均套主题 |
-| 语义色 | ErrorFore / SuccessFore 在深色下可读 |
-
-详见 [CHANGELOG.md](docs/CHANGELOG.md)。
-
-## v2.0 主要变更
-
-### 新增功能
-
-#### 深色/浅色主题切换
-
-- **默认跟随系统**:Auto 模式通过读取注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme` 自动匹配 Windows 深浅色设置
-- **手动切换**:在 设置 → 常规 → 主题 中可选 Auto / Light / Dark
-- **完整覆盖**:主窗体下载列表(TreeListView)、StatusStrip、ContextMenuStrip、所有 9 个子窗体、30+ ToolStrip 渐变属性
-
-### 安全加固
-
-| 修复 | 说明 |
-| --- | --- |
-| TLS 协议 | 仅启用 TLS 1.2,移除 TLS 1.0/1.1 |
-| 服务器绑定 | Web/Streaming 服务器绑定 `127.0.0.1`(原 `0.0.0.0` 暴露到全网) |
-| 密码验证 | 修复空密码绕过校验 |
-| 代理凭据 | 修复代理用户名/密码未实际赋值给 WebProxy |
-| 密码哈希 | 统一使用 UTF-8 编码 |
-| 死锁防护 | Mutex 操作全部包裹 Try/Finally |
-
-### 资源泄漏修复(12 项)
-
-- 7 处 ToolTip 泄漏、Image 生命周期、StreamReader/Writer 未 Using、注册表句柄泄漏、关闭顺序错误等,详见 [CHANGELOG.md](docs/CHANGELOG.md)
-
-### 死代码删除(11 个文件)
-
-- 4 个 Crypter(EncrypterMega / MegaCrypter / Youpaste / LinkCrypter)
-- 3 个 MovieInfo(Allocine / Filmaffinity / IMDB)
-- DLCHelper / Linkdecrypter / LinkProtectors / Serializer / ClipboardChangeNotifier
-- MegaUploader 菜单项、14 个 goo.gl 短链、Ping 上报
-
-### 协议与代码质量
-
-- `%SEQ%` / `%ID%` 序列号改用 `Interlocked.Increment`(原用毫秒 ticks,范围 0-999)
-- `http://mega.co.nz/#N!` → `https://mega.nz/#N!`
-- `GetHashCode` 比较改为直接 `OuterXml` 字符串比较
-- 变量名冲突修复(`ex` → `rx`,`int` → `bytesRead`)
-
 ## 功能特性
 
 - **多线程下载**:支持对同一文件建立多路并发连接,大幅提升下载速度
@@ -201,7 +117,6 @@ MegaDownloader 是一款由西班牙开发者 **Andres Soliño [andres_age]** �
 | HttpServer (Fadd) | 内置 Web 服务器 |
 | F5Lib | 隐写术 (Stegano) |
 | xUnit | 单元测试 |
-| ~~mpress~~ | v2.2 起已从 Release 构建移除 |
 
 ## 项目结构
 
@@ -374,7 +289,7 @@ mega://enc2?abcDEFgh-IjklMNop
   - [ObjectListView](http://objectlistview.sourceforge.net/)
   - [xUnit.net](https://xunit.net/)
   - [mpress](https://www.matcode.com/mpress.htm)
-  - [7-Zip](https://www.7-zip.org/) — 内置的 7zr.exe(v2.4.3+,公共域)用于 7z 格式解压
+  - [7-Zip](https://www.7-zip.org/) 
 
 ## 许可协议
 
