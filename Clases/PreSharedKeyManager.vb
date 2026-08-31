@@ -1,11 +1,12 @@
-﻿Public Class PreSharedKeyManager
+Public Class PreSharedKeyManager
 
     Public Shared Function GetFileKeyFromPreSharedKeys(ByRef Config As Configuracion) As List(Of String)
 
 
         Dim list2 As New List(Of String)
         For Each key As Security.SecureString In Config.ListaPreSharedKeys
-            list2.Add(Criptografia.GetFileKeyFromPreSharedKey(Criptografia.ToInsecureString(key)))
+            Dim derived As String = Criptografia.GetFileKeyFromPreSharedKey(Criptografia.ToInsecureString(key))
+            If derived IsNot Nothing Then list2.Add(derived)
         Next
 
         Return list2

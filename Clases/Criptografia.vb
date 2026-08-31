@@ -50,9 +50,11 @@ Public Class Criptografia
 
     Public Shared Function ToSecureString(input As String) As SecureString
         Dim secure As New SecureString()
-        For Each c As Char In input
-            secure.AppendChar(c)
-        Next
+        If input IsNot Nothing Then
+            For Each c As Char In input
+                secure.AppendChar(c)
+            Next
+        End If
         secure.MakeReadOnly()
         Return secure
     End Function
@@ -70,14 +72,16 @@ Public Class Criptografia
 
 
     Public Shared Function AES_EncryptString(ByVal vstrTextToBeEncrypted As String, _
-                                             ByVal vstrEncryptionKey As String) As String
+                                             ByVal vstrEncryptionKey As String, _
+                                             Optional ByVal useRandomIV As Boolean = True) As String
 
-        Return AES_EncryptString(vstrTextToBeEncrypted, vstrEncryptionKey, System.Text.Encoding.ASCII)
+        Return AES_EncryptString(vstrTextToBeEncrypted, vstrEncryptionKey, System.Text.Encoding.ASCII, useRandomIV)
 
     End Function
     Public Shared Function AES_EncryptString(ByVal vstrTextToBeEncrypted As String, _
                                              ByVal vstrEncryptionKey As String, _
-                                             ByVal Encoding As System.Text.Encoding) As String
+                                             ByVal Encoding As System.Text.Encoding, _
+                                             Optional ByVal useRandomIV As Boolean = True) As String
 
         Dim intRemaining As Integer
         Dim intLength As Integer
@@ -103,21 +107,38 @@ Public Class Criptografia
 
         bytKey = System.Text.Encoding.ASCII.GetBytes(vstrEncryptionKey.ToCharArray)
 
-        Return AES_EncryptString(vstrTextToBeEncrypted, bytKey, Encoding)
+        Return AES_EncryptString(vstrTextToBeEncrypted, bytKey, Encoding, useRandomIV)
 
     End Function
 
+    ' 旧格式密文复用的静态 IV。仅为兼容历史落盘数据保留读取能力；
+    ' 新写入的数据一律 useRandomIV=True（见下方重载）。
+    Private Shared ReadOnly LegacyStaticIV() As Byte = {121, 241, 10, 1, 132, 74, 11, 39, 255, 91, 45, 78, 14, 211, 22, 62}
+
     Public Shared Function AES_EncryptString(ByVal vstrTextToBeEncrypted As String, _
                                              ByVal bytKey() As Byte, _
-                                             ByVal Encoding As System.Text.Encoding) As String
+                                             ByVal Encoding As System.Text.Encoding, _
+                                             Optional ByVal useRandomIV As Boolean = True) As String
 
         Dim bytValue() As Byte
         Dim bytEncoded() As Byte = Nothing
-        Dim bytIV() As Byte = {121, 241, 10, 1, 132, 74, 11, 39, 255, 91, 45, 78, 14, 211, 22, 62}
 
         vstrTextToBeEncrypted = StripNullCharacters(vstrTextToBeEncrypted & "") ' Evitamos nothing
 
         bytValue = Encoding.GetBytes(vstrTextToBeEncrypted.ToCharArray)
+
+        ' CBC 模式下复用 IV 会泄露明文前缀相等性。默认每次加密生成随机 IV，
+        ' 并以 {版本字节=1}||{IV}||{密文} 的自描述格式存储（总长 mod 16 == 1，
+        ' 与旧格式密文（mod 16 == 0）无歧义）。useRandomIV=False 仅供需要被
+        ' 旧版本程序解密的对外格式（如兼容模式编码链接）使用。
+        Dim bytIV(15) As Byte
+        If useRandomIV Then
+            Using rng As New RNGCryptoServiceProvider()
+                rng.GetBytes(bytIV)
+            End Using
+        Else
+            Array.Copy(LegacyStaticIV, bytIV, 16)
+        End If
 
         Try
             Using objRijndaelManaged As New RijndaelManaged()
@@ -137,7 +158,18 @@ Public Class Criptografia
             Log.WriteError("AES_EncryptString unexpected error: " & ex.ToString)
         End Try
 
-        If bytEncoded Is Nothing Then Return String.Empty
+        ' 失败返回 Nothing（而非空串）：调用方能区分“加密失败”与“合法空值”，
+        ' 避免把静默空值写进配置/链接。
+        If bytEncoded Is Nothing Then Return Nothing
+
+        If useRandomIV Then
+            Dim result(bytEncoded.Length + 16) As Byte
+            result(0) = 1
+            Array.Copy(bytIV, 0, result, 1, 16)
+            Array.Copy(bytEncoded, 0, result, 17, bytEncoded.Length)
+            Return Convert.ToBase64String(result)
+        End If
+
         Return Convert.ToBase64String(bytEncoded)
 
     End Function
@@ -179,21 +211,35 @@ Public Class Criptografia
 
         Dim bytDataToBeDecrypted() As Byte
         Dim bytPlain() As Byte = Nothing
-        Dim bytIV() As Byte = {121, 241, 10, 1, 132, 74, 11, 39, 255, 91, 45, 78, 14, 211, 22, 62}
 
         '   ********************************************************************
         '   ******   Encryption Key must be 256 bits long (32 bytes)      ******
         '   ******   If it is longer than 32 bytes it will be truncated.  ******
         '   ******   If it is shorter than 32 bytes it will be padded     ******
-        '   ******   with upper-case Xs.                                  ****** 
+        '   ******   with upper-case Xs.                                  ******
         '   ********************************************************************
 
 
         Try
             bytDataToBeDecrypted = Convert.FromBase64String(vstrStringToBeDecrypted)
 
+            ' 自动识别密文格式：新格式 {1}||{IV16}||{CBC密文} 总长 mod 16 == 1；
+            ' 旧格式为纯 CBC 密文，总长 mod 16 == 0。两种长度不重叠，无歧义。
+            Dim bytIV(15) As Byte
+            Dim bytCipher() As Byte
+            If bytDataToBeDecrypted.Length > 17 _
+                    AndAlso (bytDataToBeDecrypted.Length Mod 16) = 1 _
+                    AndAlso bytDataToBeDecrypted(0) = 1 Then
+                Array.Copy(bytDataToBeDecrypted, 1, bytIV, 0, 16)
+                ReDim bytCipher(bytDataToBeDecrypted.Length - 18)
+                Array.Copy(bytDataToBeDecrypted, 17, bytCipher, 0, bytCipher.Length)
+            Else
+                Array.Copy(LegacyStaticIV, bytIV, 16)
+                bytCipher = bytDataToBeDecrypted
+            End If
+
             Using objRijndaelManaged As New RijndaelManaged()
-                Using objMemoryStream As New MemoryStream(bytDataToBeDecrypted)
+                Using objMemoryStream As New MemoryStream(bytCipher)
                     Using objCryptoStream As New CryptoStream(objMemoryStream, _
                            objRijndaelManaged.CreateDecryptor(bytDecryptionKey, bytIV), _
                            CryptoStreamMode.Read, leaveOpen:=True)
@@ -219,28 +265,11 @@ Public Class Criptografia
 
 
     Private Shared Function StripNullCharacters(ByVal vstrStringWithNulls As String) As String
-
-        Dim intPosition As Integer
-        Dim strStringWithOutNulls As String
-
-        intPosition = 1
-        strStringWithOutNulls = vstrStringWithNulls
-
-        Do While intPosition > 0
-            intPosition = InStr(intPosition, vstrStringWithNulls, vbNullChar)
-
-            If intPosition > 0 Then
-                strStringWithOutNulls = Left$(strStringWithOutNulls, intPosition - 1) & _
-                                  Right$(strStringWithOutNulls, Len(strStringWithOutNulls) - intPosition)
-            End If
-
-            If intPosition > strStringWithOutNulls.Length Then
-                Exit Do
-            End If
-        Loop
-
-        Return strStringWithOutNulls
-
+        ' 旧实现按“原始字符串里的位置”在“已缩短的副本”上删除 null：
+        ' 每删一个字符副本变短，后续删除位置整体偏移，单个 null 就会把
+        ' 后续内容全部截断。Replace 一次遍历删除所有 null，无位置偏移。
+        If vstrStringWithNulls Is Nothing Then Return String.Empty
+        Return vstrStringWithNulls.Replace(vbNullChar, String.Empty)
     End Function
 
 
@@ -250,8 +279,37 @@ Public Class Criptografia
 
 #Region "Criptografía MEGA"
 
+    ''' <summary>
+    ''' 常量时间字节比较，避免逐字符短路比较泄露“匹配到第几位”的时序信号。
+    ''' </summary>
+    Friend Shared Function FixedTimeEquals(ByVal a As Byte(), ByVal b As Byte()) As Boolean
+        If a Is Nothing OrElse b Is Nothing OrElse a.Length <> b.Length Then Return False
+        Dim diff As Byte = 0
+        For i As Integer = 0 To a.Length - 1
+            diff = diff Or (a(i) Xor b(i))
+        Next
+        Return diff = 0
+    End Function
+
+    Friend Shared Function Utf8BytesOrNull(ByVal s As String) As Byte()
+        If s Is Nothing Then Return New Byte() {}
+        Return System.Text.Encoding.UTF8.GetBytes(s)
+    End Function
+
 
     Friend Shared Function GetFileKeyFromPreSharedKey(ByVal PreSharedKey As String) As String
+        ' MEGA pre-shared keys are base64url text. Silently truncating non-ASCII
+        ' characters to their low byte (as GetBytes did) derived a WRONG key with no
+        ' hint to the user — reject such keys explicitly instead.
+        If PreSharedKey IsNot Nothing Then
+            For Each c As Char In PreSharedKey
+                If c > ChrW(255) Then
+                    Log.WriteError("GetFileKeyFromPreSharedKey: the pre-shared key contains a non-ASCII character (U+" & AscW(c).ToString("X4") & ") and cannot be valid; skipping this key.")
+                    Return Nothing
+                End If
+            Next
+        End If
+
         Dim PSK As String = PreSharedKey.PadRight(24, "#"c).Substring(0, 24)
 
         Dim bitArray() As Byte = GetBytes(PSK)
@@ -676,28 +734,37 @@ Public Class Criptografia
             intKey(2) Xor intKey(6),
             intKey(3) Xor intKey(7)
         })
-        Dim expectedMac0 As Integer = intKey(6)
-        Dim expectedMac1 As Integer = intKey(7)
+        Dim expectedMac As Integer() = New Integer() {intKey(6), intKey(7)}
 
-        Dim mac As Integer() = ComputeMegaFileMac(filePath, aesKey)
-        Return mac(0) = expectedMac0 AndAlso mac(1) = expectedMac1
+        ' MEGA chunk-MAC initialisation: the first 8 bytes of each chunk's CBC-MAC
+        ' IV are the file nonce (key words 4-5) and the second 8 bytes repeat the
+        ' same nonce (SDK: SymmCipher::ctr_crypt does memcpy(mac, ctr, 8) twice).
+        Dim nonceWords As Integer() = New Integer() {intKey(4), intKey(5)}
+
+        Return VerifyMegaFileMac(filePath, aesKey, expectedMac, nonceWords)
     End Function
 
     ''' <summary>
-    ''' Computes the MEGA file MetaMAC using the SDK's ChunkedHash schedule: chunk sizes
+    ''' Verifies the MEGA file MetaMAC using the SDK's ChunkedHash schedule: chunk sizes
     ''' are 128 KiB * i for the first 8 chunks (i = 1..8), then a fixed 1 MiB. Each chunk
-    ''' contributes a CBC-MAC (AES, zero IV, zero-padded final block), folded into the
-    ''' file MAC with fileMac = AES(fileMac XOR chunkMac). Returns the 2-word MetaMAC
-    ''' (fileMac0^fileMac1, fileMac2^fileMac3).
+    ''' contributes a CBC-MAC whose initial IV is the file nonce repeated twice
+    ''' ([n0, n1, n0, n1] — SDK: SymmCipher::ctr_crypt initialises mac = [ctriv, ctriv]),
+    ''' with a zero-padded final partial block, folded into the file MAC starting from
+    ''' zero with fileMac = AES(fileMac XOR chunkMac).
+    '''
+    ''' The final file MAC is compared with the expected value exactly once, after the
+    ''' whole file has been read — the same single full comparison the SDK performs
+    ''' (generateMetaMac + macsmac). Any mismatch means the bytes on disk genuinely
+    ''' differ from the uploaded file.
     ''' </summary>
-    Private Shared Function ComputeMegaFileMac(ByVal filePath As String, ByVal aesKey As Byte()) As Integer()
+    Private Shared Function VerifyMegaFileMac(ByVal filePath As String, ByVal aesKey As Byte(), ByVal expectedMac As Integer(), ByVal nonceWords As Integer()) As Boolean
         Dim engine As New AesEngine()
         engine.Init(True, New KeyParameter(aesKey))
 
         Dim fileLen As Long = New FileInfo(filePath).Length
 
         ' An empty file has no chunks, so MEGA's MetaMAC for it is (0, 0).
-        If fileLen = 0 Then Return New Integer() {0, 0}
+        If fileLen = 0 Then Return expectedMac(0) = 0 AndAlso expectedMac(1) = 0
 
         Dim fileMac As Integer() = New Integer() {0, 0, 0, 0}
 
@@ -710,8 +777,12 @@ Public Class Criptografia
                 Dim chunkSize As Long = If(chunkNumber <= 8, CLng(chunkNumber) * &H20000L, &H100000L)
                 Dim thisChunk As Long = Math.Min(chunkSize, fileLen - chunkStart)
 
-                ' CBC-MAC over this chunk (zero IV, zero-padded final partial block).
-                Dim chunkMac As Integer() = New Integer() {0, 0, 0, 0}
+                ' CBC-MAC over this chunk. Initial IV = [n0, n1, n0, n1]: the file nonce
+                ' (key words 4-5) repeated twice, exactly as the MEGA SDK initialises the
+                ' per-chunk mac in SymmCipher::ctr_crypt. A zero IV here computes a MAC
+                ' that matches nothing uploaded by any MEGA client. Final partial block
+                ' is zero-padded.
+                Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWords(0), nonceWords(1)}
                 Dim remaining As Long = thisChunk
                 Dim buffer(15) As Byte
                 While remaining > 0
@@ -750,7 +821,9 @@ Public Class Criptografia
             End While
         End Using
 
-        Return New Integer() {fileMac(0) Xor fileMac(1), fileMac(2) Xor fileMac(3)}
+        ' SDK macsmac(): m[0] ^= m[1]; m[1] = m[2] ^ m[3] — single full comparison
+        ' over the complete file, exactly as MEGA clients verify downloads.
+        Return (fileMac(0) Xor fileMac(1)) = expectedMac(0) AndAlso (fileMac(2) Xor fileMac(3)) = expectedMac(1)
     End Function
 
     Private Shared Function AesEncryptBlock(ByVal engine As AesEngine, ByVal words As Integer()) As Integer()

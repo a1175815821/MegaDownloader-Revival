@@ -144,7 +144,10 @@ Public Class LibraryElement
 
         Dim link2 As String = If(LinkVisible, "", HIDDEN_LINK) & Criptografia.ToInsecureString(Link)
         If Export Then
-            ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = Criptografia.AES_EncryptString(link2, ExportPassword)
+            Dim encryptedLink As String = Criptografia.AES_EncryptString(link2, ExportPassword)
+            If encryptedLink IsNot Nothing Then
+                ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = encryptedLink
+            End If
         Else
             Dim link3 As SecureString = Criptografia.ToSecureString(link2)
             ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = Criptografia.EncryptString_DPAPI(link3)

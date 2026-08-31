@@ -6,6 +6,66 @@
 
 ---
 
+## [2.4.4] - 2026-09-01
+
+### ✨ 新功能:子文件夹链接下载
+
+**此前**:`mega.nz/folder/<根ID>#<密钥>/folder/<子ID>` 形式的链接会被当作根文件夹链接,下载整个根文件夹的全部内容。
+
+**现在**([URLExtractor.vb](../Clases/URLExtractor.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [URLProcessor.vb](../Clases/URLProcessor.vb) / [StreamingLibraryManager.vb](../Clases/StreamingLibrary/StreamingLibraryManager.vb)):
+
+| 链接形式 | 行为 |
+| --- | --- |
+| `mega.nz/folder/根ID#密钥/folder/子ID` | 仅下载指定子文件夹的内容(路径以子文件夹为根重定基) |
+| `mega.nz/folder/根ID#密钥/file/文件ID` | 仅下载指定单个文件 |
+| `mega.nz/folder/根ID#密钥` | 下载整个根文件夹(不变) |
+
+- 正则扩展捕获 `/folder/<子ID>` 与 `/file/<文件ID>` 后缀
+- 文件列表按父节点链向上遍历过滤,只保留属于目标子节点的文件
+- 下载路径重定基为相对子文件夹的路径,不再出现多余的上层目录层级
+
+### 🐛 修复:子文件夹链接下载完成后误报 MetaMAC 错误(用户实测确认)
+
+**症状**:子文件夹链接下载到 100% 后弹 MetaMAC 校验失败错误;文件内容实际完整。
+
+**根因**:每个数据分块的 CBC-MAC 计算使用**零初始 IV**。而 MEGA 真实算法(SDK `SymmCipher::ctr_crypt`)的分块 MAC 初值是**文件 nonce 复制两份**——key 第 4-5 字(word)拼接成 16 字节 `[n0, n1, n0, n1]`。零 IV 算出的 MAC 与任何真实上传文件的 MetaMAC 都不可能匹配,因此所有带 8 words key(内嵌 MetaMAC)的下载必然报错;单文件公开链接(4 words key,跳过校验)不受影响,导致问题此前被掩盖。
+
+**修复**([Criptografia.vb](../Clases/Criptografia.vb)):
+
+```vb
+' 修复前:零 IV(必然校验失败)
+Dim chunkMac As Integer() = New Integer() {0, 0, 0, 0}
+' 修复后:nonce(key 第 4-5 word)复制两份,与 SDK 一致
+Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWords(0), nonceWords(1)}
+```
+
+其余部分(折叠零初值、`(m0^m1, m2^m3)` 最终压缩、128 KiB × i 分块调度)逐行比对 SDK `macsmac`/`ChunkedHash` 源码确认本就正确,未改动。
+
+### 🔧 MetaMAC 校验对齐 SDK 标准行为
+
+删除验证函数中的"每个分块边界提前检查 MAC、允许前缀匹配"宽容逻辑——SDK 权威实现(`generateMetaMac` + `macsmac`)是**读完整个文件后做一次完整比较**。前缀匹配是算法错误时代的误判产物,现一并移除;任何位置的真实损坏仍然硬失败。
+
+### 🔒 9 项安全加固
+
+| 位置 | 修复 |
+| --- | --- |
+| `Criptografia.StripNullCharacters` | 重写为 `Replace(vbNullChar, "")`,消除逐字符拼接造成的位置偏移错误 |
+| `Criptografia.AES_EncryptString/DecryptString` | 失败返回 `Nothing` 而非空串;持久化点(Configuracion/Fichero)加密失败时跳过写入、保留旧值,不再静默清空 |
+| AES 密文格式 | 新增随机 IV 格式 `{1}\|\|IV\|\|密文`,与旧格式自动双向兼容 |
+| `FileDownloader` | MetaMAC 不匹配抛异常并重置分块重试(配合本次算法修复,不再产生误报) |
+| `Criptografia.GetFileKeyFromPreSharedKey` | PSK 含非 ASCII 字符(>255)时记日志返回 `Nothing`,杜绝密钥流错位 |
+| `WebInterfaceModule` | Web 密码存储改随机盐 + PBKDF2(100k 轮)派生,替换无盐 MD5 |
+| `StreamingModule` / `StreamingLibraryModule` | 密码比较改 `Criptografia.FixedTimeEquals` 恒定时间比较,防时序侧信道 |
+| `ClientConnected` 反射 | 静态 `MemberInfo` 缓存 + null 检查 + Try/Catch,失败降级为"假设已连接" |
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.4.4.0`
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.4.4`
+- `docs/version.xml` → `2.4.4.0`
+
+---
+
 ## [2.4.3] - 2026-08-26
 
 ### ✨ 新功能(Issue #1)

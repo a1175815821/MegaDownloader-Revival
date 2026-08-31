@@ -20,7 +20,20 @@ Public Class MegaFolderHelper
         Public ts As Long
     End Class
 
-    Public Shared Function RetrieveLinksFromFolder(ByVal FolderID As String, ByVal FolderKey As String) As Generic.List(Of URLProcessor.FileURL)
+    ''' <summary>
+    ''' Retrieves the download links of the files inside a shared MEGA folder.
+    ''' </summary>
+    ''' <param name="FolderID">Root folder handle (from the link).</param>
+    ''' <param name="FolderKey">Root folder key (from the link).</param>
+    ''' <param name="SubFolderID">Optional subfolder handle from a modern link
+    ''' (mega.nz/folder/&lt;id&gt;#&lt;key&gt;/folder/&lt;subID&gt;). When set, only the files
+    ''' inside that subfolder are returned, with paths relative to the subfolder.</param>
+    ''' <param name="SubFileID">Optional file handle from a modern link
+    ''' (mega.nz/folder/&lt;id&gt;#&lt;key&gt;/file/&lt;fileID&gt;). When set, only that file
+    ''' is returned.</param>
+    Public Shared Function RetrieveLinksFromFolder(ByVal FolderID As String, ByVal FolderKey As String, _
+                                                    Optional ByVal SubFolderID As String = "", _
+                                                    Optional ByVal SubFileID As String = "") As Generic.List(Of URLProcessor.FileURL)
         Dim jsonRQ As String
         Dim res As Conexion.Respuesta
 
@@ -61,6 +74,34 @@ Public Class MegaFolderHelper
                 End If
             End If
         Next
+
+        ' 原始父级关系表 (handle -> parent handle), 用于子文件夹过滤的祖先链判断。
+        ' 与 htFolderEstructure 不同, 这里不经解密——中间某层文件夹即使解密失败,
+        ' 祖先链依然完整, 其下文件的归属判断不受影响。
+        Dim parentMap As New Generic.Dictionary(Of String, String)
+        For Each fileN As FileNode In FileList.f
+            If fileN.t = 1 AndAlso Not parentMap.ContainsKey(fileN.h) Then
+                parentMap(fileN.h) = If(fileN.h = root, "", fileN.p)
+            End If
+        Next
+
+        If Not String.IsNullOrEmpty(SubFolderID) Then
+            If Not parentMap.ContainsKey(SubFolderID) Then
+                Throw New ApplicationException("The subfolder specified in the link was not found in the shared folder (it may have been deleted).")
+            End If
+        End If
+        If Not String.IsNullOrEmpty(SubFileID) Then
+            Dim found As Boolean = False
+            For Each fileN As FileNode In FileList.f
+                If fileN.t = 0 AndAlso fileN.h = SubFileID Then
+                    found = True
+                    Exit For
+                End If
+            Next
+            If Not found Then
+                Throw New ApplicationException("The file specified in the link was not found in the shared folder (it may have been deleted).")
+            End If
+        End If
 
 
         ' Get folder structure
@@ -106,18 +147,36 @@ Public Class MegaFolderHelper
         Dim htFolders As New Generic.Dictionary(Of String, String)
         FillFolderStructure(root, htFolders, htFolderEstructure)
 
+        ' 子文件夹链接: 路径表重定基为以子文件夹为根 (handle 级 BFS, 不依赖字符串前缀去除,
+        ' 避免不同层级同名文件夹造成的路径误判)。解密失败的文件夹不在 htFolderEstructure 中,
+        ' 其下文件路径退化为 "" —— 与整文件夹下载时对同类节点的处理一致。
+        Dim pathMap As Generic.Dictionary(Of String, String) = htFolders
+        If Not String.IsNullOrEmpty(SubFolderID) Then
+            pathMap = BuildSubfolderPaths(SubFolderID, htFolderEstructure)
+        End If
+
 
         ' Get files
         For Each fileN As FileNode In FileList.f
 
             If fileN.t = 0 Then
+                ' 单文件链接: 只保留链接指向的那个文件
+                If Not String.IsNullOrEmpty(SubFileID) AndAlso Not fileN.h = SubFileID Then
+                    Continue For
+                End If
+
+                ' 子文件夹链接: 只保留父级祖先链包含目标子文件夹的文件
+                If Not String.IsNullOrEmpty(SubFolderID) AndAlso Not IsUnderFolder(fileN.p, SubFolderID, parentMap) Then
+                    Continue For
+                End If
+
                 ' 从 k 字段提取与 root handle 匹配的 key
                 Dim FileKey As String = ExtractKeyFromK(fileN.k, root)
                 If String.IsNullOrEmpty(FileKey) Then Continue For
 
                 Dim path As String = String.Empty
-                If htFolders.ContainsKey(fileN.p) Then
-                    path = htFolders(fileN.p)
+                If pathMap.ContainsKey(fileN.p) Then
+                    path = pathMap(fileN.p)
                 End If
 
                 Try
@@ -163,6 +222,58 @@ Public Class MegaFolderHelper
         Next
 
         Return Results
+    End Function
+
+    ' 判断 startFolder 的祖先链 (含自身) 是否包含 targetFolder。
+    ' parentMap: handle -> parent handle (root 的父级为 "")。带环路防护。
+    Private Shared Function IsUnderFolder(ByVal startFolder As String, ByVal targetFolder As String, _
+                                          ByVal parentMap As Generic.Dictionary(Of String, String)) As Boolean
+        If String.IsNullOrEmpty(startFolder) OrElse String.IsNullOrEmpty(targetFolder) Then Return False
+
+        Dim current As String = startFolder
+        Dim guard As Integer = 0
+        While Not String.IsNullOrEmpty(current) AndAlso guard < 10000
+            If String.Equals(current, targetFolder, StringComparison.Ordinal) Then Return True
+            If Not parentMap.ContainsKey(current) Then Return False
+            current = parentMap(current)
+            guard += 1
+        End While
+        Return False
+    End Function
+
+    ' 构建以 subFolderID 为根的相对路径表 (handle -> 相对子文件夹的路径)。
+    ' 只遍历子文件夹的后代; 子文件夹本身路径为 ""。
+    Private Shared Function BuildSubfolderPaths(ByVal subFolderID As String, _
+                                                ByVal folderEstructure As Generic.Dictionary(Of String, KeyValuePair(Of String, String))) As Generic.Dictionary(Of String, String)
+        Dim childrenMap As New Generic.Dictionary(Of String, Generic.List(Of String))
+        For Each entry As KeyValuePair(Of String, KeyValuePair(Of String, String)) In folderEstructure
+            Dim parentHandle As String = entry.Value.Value
+            If String.IsNullOrEmpty(parentHandle) Then Continue For
+            Dim children As Generic.List(Of String) = Nothing
+            If Not childrenMap.TryGetValue(parentHandle, children) Then
+                children = New Generic.List(Of String)()
+                childrenMap(parentHandle) = children
+            End If
+            children.Add(entry.Key)
+        Next
+
+        Dim paths As New Generic.Dictionary(Of String, String)
+        Dim pending As New Generic.Queue(Of String)
+        paths(subFolderID) = ""
+        pending.Enqueue(subFolderID)
+
+        While pending.Count > 0
+            Dim current As String = pending.Dequeue()
+            Dim children As Generic.List(Of String) = Nothing
+            If Not childrenMap.TryGetValue(current, children) Then Continue While
+            For Each child As String In children
+                If paths.ContainsKey(child) Then Continue For
+                paths(child) = PathGuard.CombineSafeRelativePath(paths(current), folderEstructure(child).Key)
+                pending.Enqueue(child)
+            Next
+        End While
+
+        Return paths
     End Function
 
     ' 从 MEGA API 的 k 字段中提取指定 handle 对应的 key

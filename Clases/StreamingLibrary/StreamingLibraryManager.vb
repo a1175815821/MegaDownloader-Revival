@@ -174,7 +174,9 @@ Public Class StreamingLibraryManager
 			If URLExtractor.IsMegaFolder(URL) Then
 				Dim FolderID As String = URLExtractor.ExtraerFileID(URL)
 				Dim FolderKey As String = URLExtractor.ExtraerFileKey(URL)
-                For Each FileURL In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey)
+				Dim SubFolderID As String = URLExtractor.ExtraerSubFolderID(URL)
+				Dim SubFileID As String = URLExtractor.ExtraerSubFileID(URL)
+                For Each FileURL In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID)
                     URLs2.Add(FileURL.URL)
                 Next
 			ElseIf URLExtractor.IsELC(URL) Then
@@ -183,7 +185,9 @@ Public Class StreamingLibraryManager
                     If URLExtractor.IsMegaFolder(FileURL) Then
                         Dim FolderID As String = URLExtractor.ExtraerFileID(FileURL)
                         Dim FolderKey As String = URLExtractor.ExtraerFileKey(FileURL)
-                        For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey)
+                        Dim SubFolderID As String = URLExtractor.ExtraerSubFolderID(FileURL)
+                        Dim SubFileID As String = URLExtractor.ExtraerSubFileID(FileURL)
+                        For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID)
                             URLs2.Add(Fichero.HIDDEN_LINK & FileURL2.URL)
                         Next
                     Else

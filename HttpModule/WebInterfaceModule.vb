@@ -33,7 +33,26 @@ Public Class WebInterfaceModule
     Public XmlTemplateData As Xml.XmlDocument = Nothing
     Private _RespuestaAjax As String = ""
 
-    Private _Password As String
+    ' 登录口令校验。旧实现存无盐 MD5——同样的哈希可被彩虹表直接反查。
+    ' 现改为：每次启动生成随机 salt，内存中仅保留 PBKDF2 派生值；salt 是
+    ' 进程内随机数，彩虹表/预计算完全失效，比对用常量时间比较。
+    Private _PasswordSalt As Byte()
+    Private _PasswordHash As Byte()
+
+    Private Shared Function DeriveLoginHash(ByVal password As String, ByVal salt As Byte()) As Byte()
+        Using pbkdf2 As New Security.Cryptography.Rfc2898DeriveBytes(password, salt, 100000)
+            Return pbkdf2.GetBytes(32)
+        End Using
+    End Function
+
+    Private Shared Function FixedTimeEquals(ByVal a As Byte(), ByVal b As Byte()) As Boolean
+        If a Is Nothing OrElse b Is Nothing OrElse a.Length <> b.Length Then Return False
+        Dim diff As Byte = 0
+        For i As Integer = 0 To a.Length - 1
+            diff = diff Or (a(i) Xor b(i))
+        Next
+        Return diff = 0
+    End Function
     Private _TitlePersonalizado As String
     Private _TimeoutSesion As Integer
     Private _Language As String
@@ -73,7 +92,12 @@ Public Class WebInterfaceModule
         Me.Downloader = Downloader
         Me._TimeoutSesion = TimeOutSesion
         Me._Language = LanguageCode
-        Me._Password = MD5Utils.MD5CalcString(Password)
+        Dim salt(15) As Byte
+        Using rng As New Security.Cryptography.RNGCryptoServiceProvider()
+            rng.GetBytes(salt)
+        End Using
+        Me._PasswordSalt = salt
+        Me._PasswordHash = DeriveLoginHash(Password, salt)
     End Sub
 
     Private Sub CheckTemplate()
@@ -389,7 +413,8 @@ Public Class WebInterfaceModule
     Private Function ProcesoLogin(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If request.Param IsNot Nothing Then
             If request.Param.Item("Password") IsNot Nothing And IsPostBack(request) Then
-                If MD5Utils.MD5CalcString(request.Param.Item("Password").Value) = Me._Password Then
+                Dim submittedPassword As String = If(request.Param.Item("Password").Value, "")
+                If FixedTimeEquals(DeriveLoginHash(submittedPassword, Me._PasswordSalt), Me._PasswordHash) Then
                     session("Logueado") = "1"
                     session("LoginDate") = Now
                     EnsureCsrf(session)

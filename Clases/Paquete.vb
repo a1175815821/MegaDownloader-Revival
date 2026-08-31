@@ -354,7 +354,10 @@ Public Class Paquete
         NodoPaq.AppendChild(XML.CreateElement("CrearSubdirectorio")).InnerText = CrearSubdirectorio.ToString
         NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroAutomatica")).InnerText = ExtraccionFicheroAutomatica.ToString
         If Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
-            NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = Criptografia.AES_EncryptString(ExtraccionFicheroPassword, "passZIP")
+            Dim encryptedZipPass As String = Criptografia.AES_EncryptString(ExtraccionFicheroPassword, "passZIP")
+            If encryptedZipPass IsNot Nothing Then
+                NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = encryptedZipPass
+            End If
         End If
         NodoPaq.AppendChild(XML.CreateElement("Prioridad")).InnerText = Prioridad.ToString
         NodoPaq.AppendChild(XML.CreateElement("Porcentaje")).InnerText = Porcentaje.ToString

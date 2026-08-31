@@ -19,13 +19,19 @@ Public Class URLExtractor
     Public Const SERVERENCODEDPREFIX As String = "elc?"
 
     ' Host-bounded patterns: only mega.nz / mega.co.nz (optional www.), case-insensitive at match time
+    ' Modern folder links may address a subfolder or a single file inside the folder:
+    '   https://mega.nz/folder/<rootID>#<key>                     -> whole folder
+    '   https://mega.nz/folder/<rootID>#<key>/folder/<subID>      -> subfolder only
+    '   https://mega.nz/folder/<rootID>#<key>/file/<fileID>       -> single file only
+    ' The SubFolderID/SubFileID groups keep the suffix inside match.Value so link
+    ' extraction (clipboard / add-links dialog) does not silently drop it.
     Private Shared ReadOnly patternHTTPURI() As String = _
         {"(?:https?://)?(?:www\.)?mega\.co\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
          "(?:https?://)?(?:www\.)?mega\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
          "(?:https?://)?(?:www\.)?mega\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
+         "(?:https?://)?(?:www\.)?mega\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?(?:/folder/(?<SubFolderID>[\w\-]+))?(?:/file/(?<SubFileID>[\w\-]+))?", _
          "(?:https?://)?(?:www\.)?mega\.co\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?"}
+         "(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?(?:/folder/(?<SubFolderID>[\w\-]+))?(?:/file/(?<SubFileID>[\w\-]+))?"}
 
     Private Shared ReadOnly patternMEGAURI() As String = _
         {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
@@ -361,9 +367,15 @@ Public Class URLExtractor
         Dim link As String = "!" & FileID & "!" & FileKey
         Dim str As String = Nothing
         If Compatibility Then
-            str = Criptografia.AES_EncryptString(link, ENCODE_PASSWORD)
+            ' 兼容模式：保持旧静态 IV 密文格式，确保旧版本程序仍能解密。
+            str = Criptografia.AES_EncryptString(link, ENCODE_PASSWORD, useRandomIV:=False)
         Else
             str = Criptografia.AES_EncryptString(link, getENC2Bytes, System.Text.Encoding.ASCII)
+        End If
+
+        ' 加密失败返回 Nothing：显式报错而非生成损坏的编码链接。
+        If str Is Nothing Then
+            Throw New ApplicationException("Failed to encrypt the encoded link.")
         End If
 
         str = str.Replace("+", "-").Replace("/", "_").Replace("=", "")
@@ -373,6 +385,48 @@ Public Class URLExtractor
 
 
 #Region "Extract FileID/FileKey"
+
+    ''' <summary>
+    ''' Extracts the subfolder handle from a modern folder link
+    ''' (mega.nz/folder/ID#KEY/folder/SUBID). Empty for whole-folder links.
+    ''' </summary>
+    Public Shared Function ExtraerSubFolderID(ByVal URL As String) As String
+        If String.IsNullOrEmpty(URL) Then Return ""
+
+        Dim m As System.Text.RegularExpressions.Match = Nothing
+        For Each pattern As String In patternHTTPURI
+            Dim regex As New System.Text.RegularExpressions.Regex(pattern)
+            If regex.IsMatch(URL) Then
+                m = regex.Match(URL)
+                Exit For
+            End If
+        Next
+
+        If m Is Nothing OrElse Not m.Success Then Return ""
+        Dim subFolderID As String = m.Groups("SubFolderID").Value & ""
+        Return subFolderID.Trim()
+    End Function
+
+    ''' <summary>
+    ''' Extracts the single-file handle from a modern folder link
+    ''' (mega.nz/folder/ID#KEY/file/FILEID). Empty for whole-folder links.
+    ''' </summary>
+    Public Shared Function ExtraerSubFileID(ByVal URL As String) As String
+        If String.IsNullOrEmpty(URL) Then Return ""
+
+        Dim m As System.Text.RegularExpressions.Match = Nothing
+        For Each pattern As String In patternHTTPURI
+            Dim regex As New System.Text.RegularExpressions.Regex(pattern)
+            If regex.IsMatch(URL) Then
+                m = regex.Match(URL)
+                Exit For
+            End If
+        Next
+
+        If m Is Nothing OrElse Not m.Success Then Return ""
+        Dim subFileID As String = m.Groups("SubFileID").Value & ""
+        Return subFileID.Trim()
+    End Function
 
     Public Shared Function ExtraerFileID(ByVal URL As String) As String
         If String.IsNullOrEmpty(URL) Then Return ""

@@ -837,15 +837,15 @@ Public Class FileDownloader
                     Throw New ApplicationException("Download size mismatch before rename.")
                 End If
 
-                ' Integrity: MEGA MetaMAC. The schedule is now computed exactly as MEGA
+                ' Integrity: MEGA MetaMAC. The schedule is computed exactly as MEGA
                 ' clients do (ChunkedHash: 128 KiB * i for i = 1..8, then a fixed 1 MiB),
-                ' so for 8-word keys a mismatch means the bytes on disk differ from the
-                ' uploaded file. MEGA's own client is lenient here, though: some historical
-                ' uploads attached a MAC missing trailing entries (the SDK's
-                ' checkMetaMacWithMissingLateEntries handles them), so failing hard would
-                ' reject those still-valid files. Log a warning and keep the exact file-size
-                ' check above as the hard integrity gate. 4-word public link keys have no
-                ' embedded MetaMAC and skip verification inside VerifyMegaMetaMac.
+                ' and the final MAC is compared once over the whole file, exactly as the
+                ' SDK does (generateMetaMac + macsmac). The .part file is preallocated
+                ' so the size check above proves nothing about content — a mismatch
+                ' means the bytes on disk genuinely differ from the uploaded file and
+                ' MUST fail hard instead of delivering a damaged file as a success.
+                ' 4-word public link keys have no embedded MetaMAC and skip
+                ' verification inside VerifyMegaMetaMac.
                 Dim keyForMac As String = file.FileKey
                 If Not String.IsNullOrEmpty(keyForMac) AndAlso keyForMac.Contains("=###n=") Then
                     keyForMac = keyForMac.Substring(0, keyForMac.IndexOf("=###n="))
@@ -853,7 +853,7 @@ Public Class FileDownloader
                 If Not String.IsNullOrEmpty(keyForMac) Then
                     Log.WriteInfo("Verifying MEGA MetaMAC for " & file.Name)
                     If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForMac) Then
-                        Log.WriteError("MEGA MetaMAC mismatch reported for " & file.Name & " (size is exact: " & partInfo.Length & " bytes). Proceeding with completion; if the file is damaged please retry the download.")
+                        Throw New ApplicationException("MEGA MetaMAC verification failed: the downloaded data does not match the uploaded file (size was exact: " & partInfo.Length & " bytes). The download will restart from the last valid chunk state.")
                     End If
                 End If
 

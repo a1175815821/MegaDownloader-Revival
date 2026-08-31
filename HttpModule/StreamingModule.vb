@@ -35,7 +35,8 @@ Public Class StreamingModule
 
 
             If Not String.IsNullOrEmpty(Me._Config.ServidorStreamingPassword) Then
-                If request.Param.Item("p") Is Nothing OrElse request.Param.Item("p").Value <> Me._Config.ServidorStreamingPassword Then
+                If request.Param.Item("p") Is Nothing OrElse Not Criptografia.FixedTimeEquals(Criptografia.Utf8BytesOrNull(request.Param.Item("p").Value), _
+                                                                                              Criptografia.Utf8BytesOrNull(Me._Config.ServidorStreamingPassword)) Then
                     ComprimirRespuesta(request, response, "Error: Access denied")
                     Return True
                 End If
@@ -288,14 +289,52 @@ Public Class StreamingModule
     End Sub
 
     ' 通过反射访问 HttpServer 库的私有字段 _context / Stream.Connected,
-    ' 因为该库未公开 "客户端是否仍连接" 的检查接口。库升级时此处可能失效。
+    ' 因为该库未公开 "客户端是否仍连接" 的检查接口。成员查找结果静态缓存；
+    ' 每一步都做 Nothing 防护——库升级导致成员改名时降级为 "视为已连接"
+    ' (记一次日志),由后续写异常自然终止传输,而不是让每个流式响应直接 NRE 崩掉。
+    Private Shared _ContextField As Reflection.FieldInfo
+    Private Shared _StreamProp As Reflection.PropertyInfo
+    Private Shared _ConnectedProp As Reflection.PropertyInfo
+    Private Shared _ReflectBrokenLogged As Boolean = False
+
+    Private Shared Function ReflectBroken() As Boolean
+        If Not _ReflectBrokenLogged Then
+            _ReflectBrokenLogged = True
+            Log.WriteWarning("ClientConnected: cannot access HttpServer internals (_context/Stream/Connected) via reflection; assuming clients stay connected. Transfers will end on write errors instead.")
+        End If
+        Return True
+    End Function
+
     Private Function ClientConnected(response As HttpServer.IHttpResponse) As Boolean
-        Dim fi As Reflection.FieldInfo = response.GetType.GetField("_context", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
-        Dim Contexto As Object = fi.GetValue(response)
-        Dim pi As Reflection.PropertyInfo = Contexto.GetType.GetProperty("Stream", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
-        Dim St As System.IO.Stream = CType(pi.GetValue(Contexto, Nothing), System.IO.Stream)
-        pi = St.GetType.GetProperty("Connected", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
-        Return CBool(pi.GetValue(St, Nothing))
+        Try
+            If _ContextField Is Nothing Then
+                _ContextField = response.GetType.GetField("_context", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
+            End If
+            If _ContextField Is Nothing Then Return ReflectBroken()
+
+            Dim Contexto As Object = _ContextField.GetValue(response)
+            If Contexto Is Nothing Then Return ReflectBroken()
+
+            If _StreamProp Is Nothing Then
+                _StreamProp = Contexto.GetType.GetProperty("Stream", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
+            End If
+            If _StreamProp Is Nothing Then Return ReflectBroken()
+
+            Dim St As Object = _StreamProp.GetValue(Contexto, Nothing)
+            If St Is Nothing Then Return ReflectBroken()
+
+            If _ConnectedProp Is Nothing Then
+                _ConnectedProp = St.GetType.GetProperty("Connected", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
+            End If
+            If _ConnectedProp Is Nothing Then Return ReflectBroken()
+
+            Dim ConnectedValue As Object = _ConnectedProp.GetValue(St, Nothing)
+            If ConnectedValue Is Nothing Then Return ReflectBroken()
+
+            Return CBool(ConnectedValue)
+        Catch ex As Exception
+            Return ReflectBroken()
+        End Try
     End Function
 
     Private Sub ComprimirRespuesta(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef ResponseBody As String)

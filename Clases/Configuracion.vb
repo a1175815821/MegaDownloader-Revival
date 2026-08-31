@@ -218,7 +218,11 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebActivo")).InnerText = ServidorWebActivo.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebNombre")).InnerText = ServidorWebNombre
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebRutaPlantilla")).InnerText = ServidorWebRutaPlantilla
-		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
+		' 加密失败返回 Nothing：跳过写入该节点，保留磁盘上的旧密文而非存入空值
+		Dim encryptedWebPassword As String = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
+		If encryptedWebPassword IsNot Nothing Then
+			Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
+		End If
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebTimeout")).InnerText = ServidorWebTimeout.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPermitirLAN")).InnerText = ServidorWebPermitirLAN.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebBindIP")).InnerText = ServidorWebBindIP

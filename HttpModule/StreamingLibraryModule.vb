@@ -197,7 +197,8 @@ Public Class StreamingLibraryModule
     Private Function ProcesoLogin(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If request.Param IsNot Nothing Then
             If request.Param.Item("Password") IsNot Nothing And IsPostBack(request) Then
-                If request.Param.Item("Password").Value = Me.Config.ServidorStreamingPassword Then
+                If Criptografia.FixedTimeEquals(Criptografia.Utf8BytesOrNull(request.Param.Item("Password").Value), _
+                                                Criptografia.Utf8BytesOrNull(Me.Config.ServidorStreamingPassword)) Then
                     session("Logueado") = "1"
                     session("LoginDate") = Now
                     response.Redirect(PaginaMain)
