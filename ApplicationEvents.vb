@@ -31,6 +31,25 @@ Namespace My
 
             My.Application.MinimumSplashScreenDisplayTime = 600
             AddHandler AppDomain.CurrentDomain.AssemblyResolve, AddressOf LoadDLLFromStream
+            ' 后台线程未处理异常至少留下日志,否则进程直接消失且无任何线索
+            AddHandler AppDomain.CurrentDomain.UnhandledException, AddressOf OnDomainUnhandledException
+        End Sub
+
+        Private Shared Sub OnDomainUnhandledException(sender As Object, e As System.UnhandledExceptionEventArgs)
+            Try
+                Global.MegaDownloader.Log.WriteError("AppDomain unhandled exception (isTerminating=" & e.IsTerminating.ToString() & "): " & If(e.ExceptionObject Is Nothing, "<null>", e.ExceptionObject.ToString()))
+            Catch
+                ' 日志系统本身不可用时无处可写,只能放弃
+            End Try
+        End Sub
+
+        Private Sub MyApplication_UnhandledException(sender As Object, e As Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs) Handles Me.UnhandledException
+            Try
+                Global.MegaDownloader.Log.WriteError("Unhandled exception: " & e.Exception.ToString())
+            Catch
+            End Try
+            ' 不直接终止进程:错误已写日志,让用户有机会保存状态后手动退出
+            e.ExitApplication = False
         End Sub
 
         Private Shared Sub SingleInstanceCallback(sender As Object, args As InstanceCallbackEventArgs)

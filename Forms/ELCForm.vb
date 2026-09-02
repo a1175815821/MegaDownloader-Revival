@@ -273,7 +273,7 @@ Public Partial Class ELCForm
                 Try
                     If String.IsNullOrEmpty(ELC_URL) Or MegaLinkList Is Nothing OrElse MegaLinkList.Count = 0 Then
                         ' Check input
-                        Throw New ApplicationException("Invalid input data")
+                        Throw New ApplicationException(Language.GetText("Invalid input data"))
                     Else
                         ' Encode
                         Dim temp As String = Me.TextTemplateToPrint
@@ -298,7 +298,7 @@ Public Partial Class ELCForm
                 Try
                     If String.IsNullOrEmpty(ELC_URL) Or MegaLinkList Is Nothing OrElse MegaLinkList.Count = 0 Then
                         ' Check input
-                        Throw New ApplicationException("Invalid input data")
+                        Throw New ApplicationException(Language.GetText("Invalid input data"))
                     Else
                         ' Encode
                         ELCResult = "mega://elc?" & ServerEncoderLinkHelper.ServerEncode(ELC_URL, MegaLinkList, Me.MainForm.Config)
@@ -315,7 +315,7 @@ Public Partial Class ELCForm
                 Try
                     If String.IsNullOrEmpty(ELCFilePath) Or String.IsNullOrEmpty(ELCResult) Then
                         ' Check input
-                        Throw New ApplicationException("Invalid input data")
+                        Throw New ApplicationException(Language.GetText("Invalid input data"))
                     Else
                         Using t As New System.IO.StreamWriter(ELCFilePath, False)
                             t.Write(ELCResult)

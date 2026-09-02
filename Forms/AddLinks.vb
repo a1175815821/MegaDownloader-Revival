@@ -235,7 +235,7 @@ Public Class AddLinks
             End If
         Catch ex As Exception
             Log.WriteError("Error while adding the link: " & ex.ToString)
-            MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             btnAgregar.Enabled = True
             btnAgregar.Text = Language.GetText("Add links")
         End Try
@@ -284,7 +284,9 @@ Public Class AddLinks
             Exit Sub
         End If
 
-        StreamingHelper.WatchOnline(Config.VLCPath, link)
+        If Not StreamingHelper.WatchOnline(Config.VLCPath, link) Then
+            MessageBox.Show(Language.GetText("VLC could not be started"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End If
         Me.Close()
     End Sub
 

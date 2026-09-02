@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
  <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
     <head>
@@ -125,6 +125,9 @@
         </style>
         <script type="text/javascript">
             $(document).ready(function () {
+                // CSRF token:后端渲染时替换,随所有 AJAX 请求自动携带
+                $.ajaxSetup({ data: { csrf: '%CSRF_TOKEN%' } });
+
                 $.getJSON("/ajax",
 		       {
 		           Action: "LoadAll"
@@ -214,14 +217,19 @@
 
 		   function OpenVLC_remote() {
 		       var link = $('#videoPlayer_a2').attr('href');
-		       $.getJSON("/ajax",
-		       {
-		           Action: "OpenVLC",
-		           URL: encodeURI(link)
-		       },
-		       function (data) {
-		           if (data.error != '') {
-		               alert("Error trying to open VLC: \n" + data.error);
+		       // OpenVLC 是状态变更操作:必须 POST 并携带 CSRF token(随 $.ajaxSetup 自动附加)
+		       $.ajax({
+		           type: "POST",
+		           url: "/ajax",
+		           data: {
+		               Action: "OpenVLC",
+		               URL: encodeURI(link)
+		           },
+		           success: function (data) {
+		               var d = eval('[' + data + ']')[0];
+		               if (d.error != '') {
+		                   alert("Error trying to open VLC: \n" + d.error);
+		               }
 		           }
 		       });
 		       return false;

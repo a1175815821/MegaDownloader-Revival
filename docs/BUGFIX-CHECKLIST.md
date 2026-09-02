@@ -3,6 +3,18 @@
 > 基于 2026-07-13 全项目代码审查生成
 > 共发现问题 200+ 个,按优先级分阶段处理
 
+> ⚠️ **状态警示(2026-09-02)**:本清单自 2026-07-13 起未再逐项核对,**大量 ⬜ 项实际已修复**,
+> 照此清单逐项"修复"会做重复劳动。使用前请先对照当前代码核实。已确认修复的条目包括(不限于):
+> - 1.1#2:Web 密码已改 PBKDF2+随机盐+常量时间比较(`HttpModule/WebInterfaceModule.vb` 的 `DeriveLoginHash`)
+> - 1.1#5:Web 界面已有 `EnsureCsrf`/`ValidateCsrf`(`WebInterfaceModule.vb`),流媒体库亦已补齐(`StreamingLibraryModule.vb`)
+> - 1.1#15 / 1.2#16:版本号已更新至 2.4.4(`InternalConfig.xml` / `AssemblyInfo.vb`)
+> - 1.2#19:`SingleInstanceCallback` 已实现(`ApplicationEvents.vb`)
+> - 1.2#20:`LoadDLLFromStream` 已判空(`ApplicationEvents.vb`)
+> - 1.3#26:`FileDownloader.Dispose` 已释放 workers
+> - 2.2 中 goo.gl 短链已全部替换为 github/mega.io 域名
+> 另:全局异常兜底(`ApplicationEvents.vb`)、缺分卷 RAR 假成功(`DescompresorController.vb`)、
+> streaming Range 的 RFC 7233 合规(`StreamingModule.vb`)、登录限速等亦已于 2026-09-02 修复。
+
 ---
 
 ## 第一阶段:P0 严重 Bug(必须修复)

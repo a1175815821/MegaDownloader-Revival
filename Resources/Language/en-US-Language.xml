@@ -471,4 +471,12 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[If the image has a password, enter it. If not, just leave it empty.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Warning: image too small, maybe the data is corrupted.]]></Text>
   <Text key="Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image"><![CDATA[Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image.]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[Only .elc and .dlc files are supported by drag & drop.]]></Text>
+  <Text key="ELC file is empty"><![CDATA[The ELC file is empty.]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead.]]></Text>
+  <Text key="Invalid input data"><![CDATA[Invalid input data.]]></Text>
+  <Text key="VLC could not be started"><![CDATA[VLC could not be started. Please check that VLC is installed and its path is configured.]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[The archive is incomplete: one or more volumes are missing.]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[Too many login attempts, please try again later.]]></Text>
 </Language>

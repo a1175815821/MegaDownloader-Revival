@@ -22,10 +22,13 @@ Public Class DescompresorController
     Private Shared _Controller As DescompresorController
     Public Shared Function GetController() As DescompresorController
         Mutex.WaitOne()
-        If _Controller Is Nothing Then
-            _Controller = New DescompresorController
-        End If
-        Mutex.ReleaseMutex()
+        Try
+            If _Controller Is Nothing Then
+                _Controller = New DescompresorController
+            End If
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
         Return _Controller
     End Function
 
@@ -59,18 +62,21 @@ Public Class DescompresorController
 
     Private Sub New()
         Mutex.WaitOne()
-        _colaElementos = New Generic.Dictionary(Of String, QueueItem)()
-        _codigoElementoActual = Nothing
-        _pathElementoActual = Nothing
-        _passwordElementoActual = Nothing
-        _ExtensionesSoportadas = New Generic.List(Of String)
-        With _ExtensionesSoportadas
-            .Add("7z")
-            .Add("rar")
-            .Add("tar")
-            .Add("zip")
-        End With
-        Mutex.ReleaseMutex()
+        Try
+            _colaElementos = New Generic.Dictionary(Of String, QueueItem)()
+            _codigoElementoActual = Nothing
+            _pathElementoActual = Nothing
+            _passwordElementoActual = Nothing
+            _ExtensionesSoportadas = New Generic.List(Of String)
+            With _ExtensionesSoportadas
+                .Add("7z")
+                .Add("rar")
+                .Add("tar")
+                .Add("zip")
+            End With
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
     End Sub
 
     Public Sub RequestCancel()
@@ -130,9 +136,12 @@ Public Class DescompresorController
         If Not ObtenerNombres(_pathElementoActual, Directorio, Fichero, FicheroSinExtension, False, 0) Then
             ' Elemento inválido
             Mutex.WaitOne()
-            Me._pathElementoActual = Nothing
-            Me._passwordElementoActual = Nothing
-            Mutex.ReleaseMutex()
+            Try
+                Me._pathElementoActual = Nothing
+                Me._passwordElementoActual = Nothing
+            Finally
+                Mutex.ReleaseMutex()
+            End Try
 
             Log.WriteWarning("Decompressor: invalid element, discarding: '" & _codigoElementoActual & "'")
 
@@ -194,10 +203,13 @@ Public Class DescompresorController
 
         ' Hemos terminado
         Mutex.WaitOne()
-        Me._pathElementoActual = Nothing
-        Me._passwordElementoActual = Nothing
-        Me._codigoElementoActual = Nothing
-        Mutex.ReleaseMutex()
+        Try
+            Me._pathElementoActual = Nothing
+            Me._passwordElementoActual = Nothing
+            Me._codigoElementoActual = Nothing
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
 
 
     End Sub
@@ -392,8 +404,13 @@ Public Class DescompresorController
             Log.WriteInfo("Adding to decompression queue element '" & Code & "' (file '" & Path & "')")
 
             Mutex.WaitOne()
-            If Not _colaElementos.ContainsKey(Code) Then _colaElementos.Add(Code, New QueueItem With {.Path = Path, .CreateDirectory = CrearDirectorio, .Password = Password})
-            Mutex.ReleaseMutex()
+            Try
+                ' 同一 Code 重复入队时更新既有条目(索引器赋值"存在即更新"):
+                ' 此前重复项被静默跳过却仍返回 True,上游状态会卡在"正在解压"且进度条不动
+                _colaElementos(Code) = New QueueItem With {.Path = Path, .CreateDirectory = CrearDirectorio, .Password = Password}
+            Finally
+                Mutex.ReleaseMutex()
+            End Try
 
             Return True
         Else
@@ -712,6 +729,10 @@ Public Class DescompresorController
 
 
                         End If
+                    Else
+                        ' 缺分卷等不完整压缩包必须显式失败:此前静默跳过整个解压块且不置
+                        ' Exception,上游会把一个字节都没解出来的任务误报为"解压成功"
+                        Throw New ApplicationException(Language.GetText("Archive is incomplete: one or more volumes are missing"))
                     End If
 
                 End Using

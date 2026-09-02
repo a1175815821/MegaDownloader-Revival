@@ -75,6 +75,20 @@ Public Class StreamingLibraryModule
         Return request.Method = "POST"
     End Function
 
+    ''' <summary>获取(必要时生成)当前会话的 CSRF token</summary>
+    Private Function EnsureCsrf(ByRef session As HttpServer.Sessions.IHttpSession) As String
+        If session("csrf") Is Nothing OrElse String.IsNullOrEmpty(CStr(session("csrf"))) Then
+            session("csrf") = Guid.NewGuid().ToString("N")
+        End If
+        Return CStr(session("csrf"))
+    End Function
+
+    Private Function ValidateCsrf(ByRef request As HttpServer.IHttpRequest, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
+        Dim expected As String = EnsureCsrf(session)
+        If request.Param Is Nothing OrElse request.Param.Item("csrf") Is Nothing Then Return False
+        Return String.Equals(request.Param.Item("csrf").Value, expected, StringComparison.Ordinal)
+    End Function
+
 
 
     Private Sub ResetRequestVar(ByRef request As HttpServer.IHttpRequest)
@@ -150,9 +164,10 @@ Public Class StreamingLibraryModule
 
         Select Case request.Uri.LocalPath
             Case PaginaManagement
-                responseBody.Append(TemplateManagerData)
+                ' 渲染时注入 CSRF token,页面内所有 AJAX 请求(见模板 $.ajaxSetup)会自动携带
+                responseBody.Append(TemplateManagerData.Replace("%CSRF_TOKEN%", EnsureCsrf(session)))
             Case PaginaMain
-                responseBody.Append(TemplateData)
+                responseBody.Append(TemplateData.Replace("%CSRF_TOKEN%", EnsureCsrf(session)))
             Case PaginaAjax
                 responseBody.Append(CargarAjax)
             Case PaginaLogin
@@ -180,10 +195,12 @@ Public Class StreamingLibraryModule
                 response.Body.Write(bytes, 0, bytes.Length)
             End Using
         Else
-            Dim writer As New StreamWriter(response.Body)
-            writer.Write(ResponseBody)
-            writer.Flush()
-            ' No tenemos que cerrar el stream sino da error al ejecutar
+            ' leaveOpen 保证响应流不被关闭(框架负责其生命周期),同时确定性释放 writer;
+            ' UTF8Encoding(False) 明确不写 BOM
+            Using writer As New StreamWriter(response.Body, New System.Text.UTF8Encoding(False), 1024, leaveOpen:=True)
+                writer.Write(ResponseBody)
+                writer.Flush()
+            End Using
         End If
     End Sub
 
@@ -229,8 +246,10 @@ Public Class StreamingLibraryModule
 
             Dim actionName As String = request.Param.Item("Action").Value
             Dim mutating As Boolean = (actionName = "Delete" OrElse actionName = "Save" OrElse actionName = "OpenVLC" OrElse actionName = "ImportLinks" OrElse actionName = "ExportLinks")
-            If mutating AndAlso Not IsPostBack(request) Then
-                PrepareAjaxResponse("POST required")
+            ' 状态变更操作除必须 POST 外,还要携带有效 CSRF token:
+            ' 仅靠 IsPostBack 挡不住已登录用户被第三方页面 CSRF 删改流媒体库
+            If mutating AndAlso (Not IsPostBack(request) OrElse Not ValidateCsrf(request, session)) Then
+                PrepareAjaxResponse("Forbidden")
                 Return True
             End If
 

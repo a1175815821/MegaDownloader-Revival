@@ -828,7 +828,9 @@ Public Class FileDownloader
         End Try
 
         Try
-            If file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
+            ' file.Size=0(远端探活失败)时 GetDataPart 会抛 "Must specify size",
+            ' 掩盖上一步已通过 FileDownloadFailed 报告的真实错误(连接失败/404 等),必须前置短路
+            If file.Size > 0 AndAlso file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
                 If Not System.IO.File.Exists(FicheroPART) Then
                     Throw New ApplicationException("Download reported finished but partial file is missing.")
                 End If
@@ -1414,22 +1416,28 @@ Public Class FileDownloader
         If Not HasBeenCanceled Then
 
             If worker.ChunkDownloadFailed Then
-                ' Exponential backoff with jitter (cap ~30s)
-                Dim attempt As Integer = Math.Min(10, Math.Max(0, Me.listDownloaders.Count))
-                Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, Math.Min(4, attempt))))
-                Dim jitter As Integer = (Now.Millisecond Mod 500)
-                Dim TiempoEspera As Double = baseMs + jitter
-                Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
-                While Now < Limite
-                    System.Threading.Thread.Sleep(50)
-                    If HasBeenCanceled Then
-                        Exit Sub
-                    End If
-                End While
+                ' Exponential backoff with jitter (cap ~30s).
+                ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
+                ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
+                System.Threading.Tasks.Task.Run(Sub()
+                                                   Dim attempt As Integer = Math.Min(10, Math.Max(0, Me.listDownloaders.Count))
+                                                   Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, Math.Min(4, attempt))))
+                                                   Dim jitter As Integer = (Now.Millisecond Mod 500)
+                                                   Dim TiempoEspera As Double = baseMs + jitter
+                                                   Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
+                                                   While Now < Limite
+                                                       System.Threading.Thread.Sleep(50)
+                                                       If HasBeenCanceled Then
+                                                           Return
+                                                       End If
+                                                   End While
+                                                   ' Lanzar nuevo worker
+                                                   NewDownloaderWorker()
+                                               End Sub)
+            Else
+                ' Lanzar nuevo worker
+                NewDownloaderWorker()
             End If
-
-            ' Lanzar nuevo worker
-            NewDownloaderWorker()
         End If
     End Sub
 
@@ -1554,7 +1562,35 @@ Public Class FileDownloader
                 Finally
                     Me.Mutex.ReleaseMutex()
                 End Try
-                If bgwDownloader IsNot Nothing Then bgwDownloader.Dispose()
+                If bgwDownloader IsNot Nothing Then
+                    ' 等主 worker 退出后再释放同步原语,避免 DoWork 仍在使用 Mutex 时句柄被关
+                    Dim waitMain As Date = Now.AddSeconds(10)
+                    While bgwDownloader.IsBusy AndAlso Now < waitMain
+                        System.Threading.Thread.Sleep(50)
+                    End While
+                    bgwDownloader.Dispose()
+                End If
+
+                ' 确定性释放本实例的同步原语(此前从不释放,每个下载任务泄漏 3 个内核句柄)。
+                ' 极端时序下若仍有路径在使用,仅记日志,不让清理失败中断 Dispose
+                Try
+                    If trigger IsNot Nothing Then
+                        trigger.Set() ' 唤醒可能还在 Pause 等待的路径,让其尽快退出
+                        trigger.Close()
+                    End If
+                Catch ex As Exception
+                    Log.WriteWarning("FileDownloader.Dispose: trigger close failed: " & ex.ToString)
+                End Try
+                Try
+                    If MutexFile IsNot Nothing Then MutexFile.Close()
+                Catch ex As Exception
+                    Log.WriteWarning("FileDownloader.Dispose: MutexFile close failed: " & ex.ToString)
+                End Try
+                Try
+                    If Mutex IsNot Nothing Then Mutex.Close()
+                Catch ex As Exception
+                    Log.WriteWarning("FileDownloader.Dispose: Mutex close failed: " & ex.ToString)
+                End Try
             End If
             Me.File = Nothing
         End If

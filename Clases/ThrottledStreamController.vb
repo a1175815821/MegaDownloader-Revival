@@ -1,4 +1,4 @@
-﻿Public Class ThrottledStreamController
+Public Class ThrottledStreamController
 
 #Region "Región Shared"
     Private Shared Mutex As New System.Threading.Mutex()
@@ -6,10 +6,13 @@
     Private Shared _Controller As ThrottledStreamController
     Public Shared Function GetController() As ThrottledStreamController
         Mutex.WaitOne()
-        If _Controller Is Nothing Then
-            _Controller = New ThrottledStreamController
-        End If
-        Mutex.ReleaseMutex()
+        Try
+            If _Controller Is Nothing Then
+                _Controller = New ThrottledStreamController
+            End If
+        Finally
+            Mutex.ReleaseMutex()
+        End Try
         Return _Controller
     End Function
 

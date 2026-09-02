@@ -105,7 +105,9 @@ Public Class StreamingForm
     Private Sub btnLanzarVLC_Click(sender As System.Object, e As System.EventArgs) Handles btnLanzarVLC.Click
 
         If Not ValidURLMega Then Exit Sub
-        StreamingHelper.WatchOnline(Config.VLCPath, txtUrlStreaming.Text)
+        If Not StreamingHelper.WatchOnline(Config.VLCPath, txtUrlStreaming.Text) Then
+            MessageBox.Show(Language.GetText("VLC could not be started"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End If
 
     End Sub
 

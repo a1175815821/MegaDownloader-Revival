@@ -47,8 +47,11 @@ Public Class StreamingModule
             Dim FileID As String = String.Empty
             If request.Param.Item("mega") IsNot Nothing AndAlso Not String.IsNullOrEmpty(request.Param.Item("mega").Value) Then
                 ' http://localhost:5000/streaming?mega=!vNFx2D4Y!a1uUcgUF0OV6quLPf2UT83PvGKo_VvTgG4hl-yk0FdU
-                FileKey = ExtraerStreamingFileKey(request.Uri.PathAndQuery)
-                FileID = ExtraerStreamingFileID(request.Uri.PathAndQuery)
+                ' 直接使用框架解析好的参数值:此前手动 Substring(IndexOf("?")+6) 只认得
+                ' mega 恰好是第一个查询参数的情形(?p=密码&mega=... 会解析失败返回空)
+                Dim megaValue As String = request.Param.Item("mega").Value
+                FileKey = ExtraerStreamingFileKey(megaValue)
+                FileID = ExtraerStreamingFileID(megaValue)
             ElseIf request.Param.Item("id") IsNot Nothing AndAlso Not String.IsNullOrEmpty(request.Param.Item("id").Value) Then
                 Dim ele As LibraryElement = StreamingLibraryManager.GetElementByID(request.Param.Item("id").Value)
                 If ele Is Nothing Then
@@ -116,6 +119,9 @@ Public Class StreamingModule
                 Dim requestRangeEnd As Long = 0
                 Dim content As Long = 0
                 RangeAdjust(rangeStart, rangeEnd, requestRangeStart, requestRangeEnd, content, request, response, InfoFichero.Tamano)
+                If response.Status = HttpStatusCode.RequestedRangeNotSatisfiable Then
+                    Return True ' 416 响应已写好,直接结束本次请求
+                End If
 
 
                 'response.AddHeader("Content-Disposition", "attachment; filename=" & InfoFichero.Nombre)
@@ -187,6 +193,12 @@ Public Class StreamingModule
                             Buffer = Buffer.ToList().GetRange(CInt(requestRangeStart - rangeStart), Buffer.Length - CInt(requestRangeStart - rangeStart)).ToArray()
                         End If
 
+                        ' 尾块截断到请求长度:16 字节对齐的补齐字节不能发给客户端,
+                        ' 否则响应体超过 Content-Length,播放器可能解析错乱
+                        If DownloadIndex + Buffer.Length > content Then
+                            Buffer = Buffer.ToList().GetRange(0, CInt(content - DownloadIndex)).ToArray()
+                        End If
+
                         response.SendBody(Buffer)
 
                         DownloadIndex += currentPackageSize
@@ -217,11 +229,15 @@ Public Class StreamingModule
     End Function
 
 
-    Private Sub RangeAdjust(ByRef rangeStart As Long, ByRef rangeEnd As Long, _
+    ''' <summary>
+    ''' 计算 Range:range* 为内部解密用的 16 字节对齐范围,requestRange* 为协议响应用的原始范围。
+    ''' 返回 False 表示请求不可满足(416 已写好),调用方应立即结束本次请求。
+    ''' </summary>
+    Private Function RangeAdjust(ByRef rangeStart As Long, ByRef rangeEnd As Long, _
         ByRef requestRangeStart As Long, ByRef requestRangeEnd As Long, _
         ByRef content As Long, _
         request As HttpServer.IHttpRequest, response As HttpServer.IHttpResponse, _
-        FileSize As Long)
+        FileSize As Long) As Boolean
         rangeStart = 0
         rangeEnd = 0
 
@@ -229,17 +245,37 @@ Public Class StreamingModule
             Dim mRange = System.Text.RegularExpressions.Regex.Match(request.Headers("Range"), "bytes=(\d*)-(\d*)")
             If mRange.Success Then
                 'range = mRange.Groups[1].Value + "-" + mRange.Groups[2].Value;
-                If Not String.IsNullOrEmpty(mRange.Groups(1).Value) Then
+                Dim hasStart As Boolean = Not String.IsNullOrEmpty(mRange.Groups(1).Value)
+                Dim hasEnd As Boolean = Not String.IsNullOrEmpty(mRange.Groups(2).Value)
+                If hasStart Then
                     Long.TryParse(mRange.Groups(1).Value, rangeStart)
                 End If
-                If Not String.IsNullOrEmpty(mRange.Groups(2).Value) Then
+                If hasEnd Then
                     Long.TryParse(mRange.Groups(2).Value, rangeEnd)
+                End If
+                ' RFC 7233 此前不支持的形式:
+                '   bytes=-N  后缀区间 = 最后 N 个字节
+                '   bytes=N- 开放区间 = 从 N 到文件末尾
+                If Not hasStart AndAlso hasEnd Then
+                    rangeStart = Math.Max(0, FileSize - rangeEnd)
+                    rangeEnd = FileSize - 1
+                ElseIf hasStart AndAlso Not hasEnd Then
+                    rangeEnd = FileSize - 1
                 End If
             End If
         End If
 
         requestRangeStart = rangeStart
         requestRangeEnd = rangeEnd
+
+        ' RFC 7233:起始位置超出文件末尾必须回应 416(带 bytes */size),不能静默钳位
+        If FileSize > 0 AndAlso requestRangeStart > FileSize - 1 Then
+            response.Status = HttpStatusCode.RequestedRangeNotSatisfiable
+            response.AddHeader("Content-Range", "bytes */" & FileSize.ToString())
+            response.ContentLength = 0
+            rangeStart = 0 : rangeEnd = 0 : requestRangeStart = 0 : requestRangeEnd = 0 : content = 0
+            Return False
+        End If
 
         If rangeStart Mod 16 <> 0 Then
             rangeStart = rangeStart - (rangeStart Mod 16)
@@ -260,10 +296,18 @@ Public Class StreamingModule
             content = 0
             response.Status = HttpStatusCode.OK
             response.AddHeader("Content-Length", "0")
-            Return
+            Return True
         End If
 
-        rangeEnd = If(rangeEnd = 0, FileSize - 1, rangeEnd)
+        ' rangeEnd=0 的两种来源:无 Range 头(取整个文件)与 bytes=0-0 单字节探测
+        ' (后者只取一个 16 字节对齐块,避免向 MEGA 请求整个文件造成带宽放大)
+        If rangeEnd = 0 Then
+            If String.IsNullOrEmpty(request.Headers("Range")) Then
+                rangeEnd = FileSize - 1
+            Else
+                rangeEnd = Math.Min(rangeStart + 15, FileSize - 1)
+            End If
+        End If
         requestRangeEnd = (If(requestRangeEnd > 0, requestRangeEnd, FileSize - 1))
 
         If rangeStart > FileSize - 1 Then rangeStart = FileSize - 1
@@ -285,8 +329,9 @@ Public Class StreamingModule
             response.Status = HttpStatusCode.PartialContent
             response.AddHeader("Content-Range", "bytes " & requestRangeStart & "-" & requestRangeEnd.ToString() & "/" & FileSize.ToString())
         End If
+        Return True
         ' / Range adjustment
-    End Sub
+    End Function
 
     ' 通过反射访问 HttpServer 库的私有字段 _context / Stream.Connected,
     ' 因为该库未公开 "客户端是否仍连接" 的检查接口。成员查找结果静态缓存；
@@ -355,10 +400,12 @@ Public Class StreamingModule
                 response.Body.Write(bytes, 0, bytes.Length)
             End Using
         Else
-            Dim writer As New StreamWriter(response.Body)
-            writer.Write(ResponseBody)
-            writer.Flush()
-            ' No tenemos que cerrar el stream sino da error al ejecutar
+            ' leaveOpen 保证响应流不被关闭(框架负责其生命周期),同时确定性释放 writer;
+            ' UTF8Encoding(False) 明确不写 BOM
+            Using writer As New StreamWriter(response.Body, New System.Text.UTF8Encoding(False), 1024, leaveOpen:=True)
+                writer.Write(ResponseBody)
+                writer.Flush()
+            End Using
         End If
     End Sub
 
@@ -381,21 +428,20 @@ Public Class StreamingModule
     End Sub
 
 
-    Public Shared Function ExtraerStreamingFileKey(ByVal URL As String) As String
-        If String.IsNullOrEmpty(URL) Then Return ""
-        If Not URL.ToLower.Contains("?mega=") Then Return ""
-        URL = URL.Substring(URL.IndexOf("?") + 6)
-        If URL.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(URL.Split("!"c)(0)) Then Return ""
+    ''' <summary>从 streaming 链接的 mega 参数值(形如 !FileID!FileKey)提取 FileKey</summary>
+    Public Shared Function ExtraerStreamingFileKey(ByVal megaValue As String) As String
+        If String.IsNullOrEmpty(megaValue) Then Return ""
+        If megaValue.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(megaValue.Split("!"c)(0)) Then Return ""
 
-        Return URL.Split("!"c)(2)
+        Return megaValue.Split("!"c)(2)
     End Function
-    Public Shared Function ExtraerStreamingFileID(ByVal URL As String) As String
-        If String.IsNullOrEmpty(URL) Then Return ""
-        If Not URL.ToLower.Contains("?mega=") Then Return ""
-        URL = URL.Substring(URL.IndexOf("?") + 6)
-        If URL.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(URL.Split("!"c)(0)) Then Return ""
 
-        Return URL.Split("!"c)(1)
+    ''' <summary>从 streaming 链接的 mega 参数值(形如 !FileID!FileKey)提取 FileID</summary>
+    Public Shared Function ExtraerStreamingFileID(ByVal megaValue As String) As String
+        If String.IsNullOrEmpty(megaValue) Then Return ""
+        If megaValue.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(megaValue.Split("!"c)(0)) Then Return ""
+
+        Return megaValue.Split("!"c)(1)
     End Function
 
 

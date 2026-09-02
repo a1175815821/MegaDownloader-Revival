@@ -102,7 +102,7 @@ Public Class PropiedadesDescarga
     End Function
 
     Private Sub LinkLabel1_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel1.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
         t.SetToolTip(LinkLabel1, If(TypeOf (_Descarga) Is Fichero, MsgRutaFic, MsgRutaPaq))
     End Sub
 
@@ -118,7 +118,7 @@ Public Class PropiedadesDescarga
 
 
     Private Sub LinkLabel2_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel2.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
         t.SetToolTip(LinkLabel2, MsgPasswordZip)
     End Sub
 

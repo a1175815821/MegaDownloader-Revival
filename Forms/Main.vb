@@ -860,8 +860,10 @@ Public Class Main
                                                  Return "---"
                                          End Select
                                      Catch ex As Exception
-                                         MsgBox("Error displaying download status: " & ex.ToString, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                                         Throw
+                                         ' AspectGetter 在列表每次重绘时高频执行:只记日志并返回安全占位值。
+                                         ' 此处弹窗/重新抛出会让每一行重绘都弹一次错误框并最终闪退。
+                                         Log.WriteError("Error displaying download status: " & ex.ToString)
+                                         Return "---"
                                      End Try
                                  End Function
 
@@ -871,8 +873,7 @@ Public Class Main
                                              Return ele.DescargaPorcentaje
                                          Catch ex As Exception
                                              Log.WriteError("Error displaying download %: " & ex.ToString)
-                                             MsgBox("Error displaying download %: " & ex.ToString, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                                             Throw
+                                             Return 0
                                          End Try
                                      End Function
         progressBarRenderer = New BrightIdeasSoftware.BarRenderer
@@ -894,8 +895,7 @@ Public Class Main
                                       Return ele.DescargaTiempoEstimadoDescarga
                                   Catch ex As Exception
                                       Log.WriteError("Error displaying download time: " & ex.ToString)
-                                      MsgBox("Error displaying download time: " & ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                                      Throw
+                                      Return "---"
                                   End Try
                               End Function
         ListaDescargas.AllColumns(IndiceColumnaEDT).TextAlign = HorizontalAlignment.Right
@@ -906,8 +906,7 @@ Public Class Main
                                                   Return ele.DescargaPorcentaje.ToString("F2") & "%"
                                               Catch ex As Exception
                                                   Log.WriteError("Error displaying download % (text): " & ex.ToString)
-                                                  MsgBox("Error displaying download % (text): " & ex.ToString, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                                                  Throw
+                                                  Return ""
                                               End Try
                                           End Function
         ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).TextAlign = HorizontalAlignment.Right
@@ -1171,7 +1170,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwComprobarMaxConexiones")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwComprobarMaxConexiones: " & ex.ToString)
-            SafeShowError(ex.ToString)
+            SafeShowError(ex.Message) ' 完整堆栈已写入上一行日志,给用户只看消息
         Finally
             bgwComprobarMaxConexionesCompleted = True
         End Try
@@ -1233,9 +1232,11 @@ Public Class Main
 		                            		End If
 		                            	Next
 		                            Catch ex As Exception
-		                            	Log.WriteError("Error while creating directory for package " & PaqueteDelFicheroActualizar.Nombre & ": " & ex.ToString)
-		                            	MessageBox.Show("Error creating directory: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-		                            End Try			                            	
+	                            	Log.WriteError("Error while creating directory for package " & PaqueteDelFicheroActualizar.Nombre & ": " & ex.ToString)
+	                            	' 后台线程(DoWork)不能直接弹窗:无属主窗体会藏到主窗体后面,用户会以为卡死。
+	                            	' 走 SafeShowError 编组回 UI 线程显示
+	                            	SafeShowError("Error creating directory: " & ex.Message)
+	                            End Try			                            	
                             	End if
                             End If                            
                         Else
@@ -1272,7 +1273,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwActualizadorDatosDisco")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwActualizadorDatosDisco: " & ex.ToString)
-            SafeShowError(ex.ToString)
+            SafeShowError(ex.Message) ' 完整堆栈已写入上一行日志,给用户只看消息
         Finally
             bgwActualizadorDatosDiscoCompleted = True
         End Try
@@ -1403,7 +1404,7 @@ Public Class Main
             Log.WriteWarning("Stopping worker bgwActualizadorListaDescargas")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwActualizadorListaDescargas: " & ex.ToString)
-            SafeShowError(ex.ToString)
+            SafeShowError(ex.Message) ' 完整堆栈已写入上一行日志,给用户只看消息
         Finally
             If sw.ElapsedMilliseconds > 5000 Then
                 Log.WriteError("bgwActualizadorListaDescargas was too slow (" & sw.ElapsedMilliseconds & " ms): " & vbNewLine & Flujo)
@@ -2051,6 +2052,11 @@ Public Class Main
             Next
         Finally
         End Try
+        If ficheroAEliminar Is Nothing AndAlso paqueteAEliminar Is Nothing Then
+            ' 选中"包及其子文件"时子项会走到这里:它已随包被一并移除,
+            ' 跳过后续 Stop/Dispose,避免 CancellationComplete 双挂导致 BorrarFicheroLocal/Dispose 执行两遍
+            Exit Sub
+        End If
         If ficheroAEliminar IsNot Nothing Then
             paqueteAEliminar.ListaFicheros.Remove(ficheroAEliminar)
             ThrottledStreamController.GetController.RemoveId(ficheroAEliminar.FileID)
@@ -2424,6 +2430,9 @@ Public Class Main
                         Exit Sub
                     End If
                 Next
+
+                ' 拖入的是其它类型文件:给出提示而不是静默丢弃
+                MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
         End If
     End Sub
@@ -2789,6 +2798,8 @@ Public Class Main
                 Ruta = CType(selobject, Paquete).RutaLocal
             End If
         Next
+        ' 未选中任何条目(或条目尚无本地路径)时直接退出,避免弹出误导性的空目录错误
+        If String.IsNullOrEmpty(Ruta) Then Exit Sub
         If System.IO.Directory.Exists(Ruta) Then
             System.Diagnostics.Process.Start(Ruta)
         Else
@@ -2811,6 +2822,9 @@ Public Class Main
                 Dim fic As Fichero = CType(obj, Fichero)
                 If fic.DescargaEstado = Estado.Erroneo Then
                     Log.WriteDebug("Reseting file " & fic.NombreFichero)
+                    ' 与包分支保持一致:单文件也必须 ResetearDescarga 清理分块/已下字节/错误描述,
+                    ' 否则只改回 EnCola,残留的 .part 与错误状态会让它很快又变回 Erroneo
+                    fic.ResetearDescarga()
                     fic.SetDescargaEstado = Estado.EnCola
                 End If
             End If
@@ -3114,6 +3128,8 @@ Public Class Main
 
     Private Sub AddDLC(ByVal DLCFilePath As String)
         If DLCProcessing Then Exit Sub
+        ' 用户在文件对话框点了"取消"时传空串:静默退出,不弹"The path is not valid"假错误
+        If String.IsNullOrWhiteSpace(DLCFilePath) Then Exit Sub
 
         DLCProcessing = True
         Dim Thread As New System.Threading.Thread(AddressOf StartProcessDLC)
@@ -3186,13 +3202,13 @@ Public Class Main
                     ELC.Append(t.ReadToEnd())
                 End Using
                 If ELC.Length = 0 Then
-                    Throw New ApplicationException("ELC file is empty")
+                    Throw New ApplicationException(Language.GetText("ELC file is empty"))
                 End If
                 DLCResults = New Generic.List(Of String)
                 DLCResults.Add("mega://" & URLExtractor.SERVERENCODEDPREFIX & ELC.ToString())
             Else
                 ' DLC decryption service (dcrypt.it) has been discontinued.
-                Throw New ApplicationException("DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead.")
+                Throw New ApplicationException(Language.GetText("DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."))
             End If
 
         Catch ex As Exception

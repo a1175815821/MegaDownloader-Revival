@@ -140,7 +140,8 @@ Public Class Configuration
         txtServidorWebTemplate.Text = Config.ServidorWebRutaPlantilla
         txtServidorWebTimeout.Text = Config.ServidorWebTimeout.ToString
         If Config.ServidorWebPuerto = 0 Then txtServidorWebPort.Text = ""
-        If Config.ServidorWebTimeout < 0 Or Config.ServidorWebTimeout > 60 Then txtServidorWebTimeout.Text = ""
+        ' 与保存逻辑(0-99)保持同一边界:此前载入侧 >60 就清空,导致保存 61-99 后重开被静默改回 5
+        If Config.ServidorWebTimeout < 0 Or Config.ServidorWebTimeout > 99 Then txtServidorWebTimeout.Text = ""
 
         comboPrioridad.Enabled = chkUnZip.Checked
 
@@ -256,7 +257,10 @@ Public Class Configuration
 
 
     Private Sub btnCancel_Click(sender As System.Object, e As System.EventArgs) Handles btnCancel.Click
-        If RequiereConfiguracion And String.IsNullOrEmpty(txtUsuario.Text) And String.IsNullOrEmpty(txtPassword.Text) Then
+        ' 密码框在 Load 时被填成占位符 PASSWORDDEFECTO("*****"),恒非空:
+        ' 必须把占位符视为"未设置",否则首次运行的强制配置可被"取消"直接绕过
+        Dim PasswordNoConfigurada As Boolean = String.IsNullOrEmpty(txtPassword.Text) OrElse txtPassword.Text = PASSWORDDEFECTO
+        If RequiereConfiguracion And String.IsNullOrEmpty(txtUsuario.Text) And PasswordNoConfigurada Then
             MessageBox.Show(Language.GetText("You must configure user and password"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
         Else
             Me.Close()
@@ -546,7 +550,7 @@ Public Class Configuration
                         
 
     Private Sub LinkLabel1_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel1.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
         t.SetToolTip(LinkLabel1, MsgMaxConexiones)
     End Sub
 
@@ -599,7 +603,7 @@ Public Class Configuration
 
 
     Private Sub linkApagarPC_MouseHover(sender As Object, e As System.EventArgs) Handles linkApagarPC.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
         t.SetToolTip(linkApagarPC, MsgApagarPC)
     End Sub
 
@@ -634,7 +638,7 @@ Public Class Configuration
     End Function
 
     Private Sub linkUltConfig_MouseHover(sender As Object, e As System.EventArgs) Handles linkUltConfig.MouseHover
-        t = New ToolTip
+        If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
         t.SetToolTip(linkUltConfig, MsgUltConfig)
     End Sub
 

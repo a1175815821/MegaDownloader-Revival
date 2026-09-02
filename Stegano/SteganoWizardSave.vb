@@ -94,8 +94,13 @@ Namespace Stegano
         End Sub
 
         Public Function IsValidUri(url As String) As Boolean
+            ' RelativeOrAbsolute 对 "hello world" 这类字符串也返回 True,校验形同虚设;
+            ' 必须限定 Absolute 且只允许 http/https/file(本地图片路径)
             Dim validatedUri As Uri = Nothing
-            Return Uri.TryCreate(url, UriKind.RelativeOrAbsolute, validatedUri)
+            If Not Uri.TryCreate(url, UriKind.Absolute, validatedUri) Then Return False
+            Return validatedUri.Scheme = Uri.UriSchemeHttp OrElse _
+                   validatedUri.Scheme = Uri.UriSchemeHttps OrElse _
+                   validatedUri.Scheme = Uri.UriSchemeFile
         End Function
 
         Private Sub btCancel_Click(sender As Object, e As EventArgs) Handles btCancel.Click

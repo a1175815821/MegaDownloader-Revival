@@ -394,7 +394,6 @@
     <EmbeddedResource Include="Resources\play.png" />
     <None Include="Resources\Installer MSD\make_installer.bat" />
     <EmbeddedResource Include="Resources\Language\hu-HU-Language.xml" />
-    <None Include="Resources\plantilla botones.psd" />
     <EmbeddedResource Include="Resources\stop.png" />
   </ItemGroup>
   <ItemGroup>
@@ -424,9 +423,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Tools\mpress.exe" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Resources\Tools\postbuildevent.xml" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\mega.png" />

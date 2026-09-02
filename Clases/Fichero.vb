@@ -847,7 +847,13 @@ Public Class Fichero
         Integer.TryParse(LeerNodo(XML, "NumeroChunksAsignados", "0"), NumeroChunksAsignados)
         Dim strFecha As String = LeerNodo(XML, "FechaUltimoError", "")
         If Not String.IsNullOrEmpty(strFecha) Then
-            FechaUltimoError = CDate(strFecha)
+            ' CDate 区域性相关且会抛异常:单个损坏的队列文件不应导致整个下载列表加载失败(启动即崩)
+            Dim fecha As Date
+            If Date.TryParse(strFecha, fecha) OrElse Date.TryParse(strFecha, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.None, fecha) Then
+                FechaUltimoError = fecha
+            Else
+                Log.WriteWarning("Invalid FechaUltimoError in queue XML, ignored: " & strFecha)
+            End If
         End If
         Decimal.TryParse(LeerNodo(XML, "Porcentaje", "0"), Porcentaje)
         Boolean.TryParse(LeerNodo(XML, "DescargaComenzada", "false"), DescargaComenzada)

@@ -21,6 +21,15 @@ Public Class Conexion
         Return (seq And Integer.MaxValue).ToString
     End Function
 
+    ''' <summary>
+    ''' 防御性 JSON 字符串转义:FileID 来自链接解析,正常应为 base64url 字符集,
+    ''' 但畸形输入直接拼进 JSON 会产生非法请求,这里转义引号与反斜杠。
+    ''' </summary>
+    Private Shared Function JsonEscapeString(s As String) As String
+        If String.IsNullOrEmpty(s) Then Return ""
+        Return s.Replace("\", "\\").Replace("""", "\""")
+    End Function
+
 
     Public Enum TipoError
         SinErrores
@@ -321,18 +330,18 @@ Public Class Conexion
 
         Dim json As String
         If FileID.StartsWith("megafolder?") AndAlso FileID.Split("?"c).Length = 3 Then ' Private file from folder: old system (just for compatibility)
-            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""n"":""{1}""}}]", useSSL, FileID.Split("?"c)(2))
-            URL &= "&n=" & FileID.Split("?"c)(1)
+            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""n"":""{1}""}}]", useSSL, JsonEscapeString(FileID.Split("?"c)(2)))
+            URL &= "&n=" & Uri.EscapeDataString(FileID.Split("?"c)(1))
         ElseIf FileID.StartsWith("N?") AndAlso FileID.Split("?"c).Length = 2 Then ' Private file from folder: new system
             If Info.FileKey.Contains("=###n=") Then
-                URL &= "&n=" & Info.FileKey.Substring(Info.FileKey.IndexOf("=###n=") + 6)
+                URL &= "&n=" & Uri.EscapeDataString(Info.FileKey.Substring(Info.FileKey.IndexOf("=###n=") + 6))
             End If
-            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""n"":""{1}""}}]", useSSL, FileID.Split("?"c)(1))
+            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""n"":""{1}""}}]", useSSL, JsonEscapeString(FileID.Split("?"c)(1)))
         Else
             If Info.FileKey.Contains("=###n=") Then
-                URL &= "&n=" & Info.FileKey.Substring(Info.FileKey.IndexOf("=###n=") + 6)
+                URL &= "&n=" & Uri.EscapeDataString(Info.FileKey.Substring(Info.FileKey.IndexOf("=###n=") + 6))
             End If
-            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""p"":""{1}""}}]", useSSL, FileID)
+            json = String.Format("[{{""a"":""g"",""g"":""1"",""ssl"":{0},""p"":""{1}""}}]", useSSL, JsonEscapeString(FileID))
         End If
 
         Dim data As Byte() = System.Text.Encoding.UTF8.GetBytes(json)

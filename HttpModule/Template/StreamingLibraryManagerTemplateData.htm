@@ -1,4 +1,4 @@
-﻿<!DOCTYPE HTML>
+<!DOCTYPE HTML>
 <html>
 <head>
 <title>Multimedia Library Manager</title>
@@ -86,7 +86,7 @@
 
 	$(document).ready(function () {
 
-	    $.ajaxSetup({ cache: false })
+	    $.ajaxSetup({ cache: false, data: { csrf: '%CSRF_TOKEN%' } })
 
 	    oTable = $('#LibraryResults');
 	    oTable.dataTable({

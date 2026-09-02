@@ -461,9 +461,13 @@ Public Class Criptografia
             Dim Buffer As Byte() = IntArrayToBytesArrayREVERSE(Data)
 
             Dim buffer2(Buffer.Length - 1) As Byte
-            For i As Integer = 0 To Buffer.Length - 1 Step aesAlg.CreateDecryptor.InputBlockSize
-                Dim dec = aesAlg.CreateDecryptor
-                dec.TransformBlock(Buffer, i, dec.InputBlockSize, buffer2, i)
+            ' AES 块大小固定 128 位;循环内创建的 ICryptoTransform 必须 Using 释放
+            ' (此前每次迭代 New 一个 decryptor 从不 Dispose,累计泄漏)
+            Const AES_BLOCK As Integer = 16
+            For i As Integer = 0 To Buffer.Length - 1 Step AES_BLOCK
+                Using dec As Security.Cryptography.ICryptoTransform = aesAlg.CreateDecryptor()
+                    dec.TransformBlock(Buffer, i, AES_BLOCK, buffer2, i)
+                End Using
             Next
             Dim l() As Integer = ByteArrayToIntArrayREVERSE(buffer2)
             Return l

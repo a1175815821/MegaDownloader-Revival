@@ -45,6 +45,31 @@ Public Class WebInterfaceModule
         End Using
     End Function
 
+    ' 登录限速:每次登录尝试都在请求线程上同步执行 PBKDF2(100k 次),
+    ' 无限速的 POST 轰炸会打满线程池使整个 Web 服务不可用。
+    ' 两道闸:并发上限 + 滑动窗口内的失败锁定
+    Private Shared ReadOnly _LoginRateLock As New Object
+    Private Shared ReadOnly _LoginFailures As New List(Of Date)
+    Private Shared _ActiveLogins As Integer = 0
+    Private Const MaxConcurrentLogins As Integer = 4
+    Private Const MaxLoginFailuresPerWindow As Integer = 10
+    Private Const LoginFailureWindowSeconds As Integer = 60
+
+    ''' <summary>失败锁定窗口检查:窗口内失败次数达到上限则拒绝服务</summary>
+    Private Shared Function LoginLockedOut() As Boolean
+        SyncLock _LoginRateLock
+            Dim cutoff As Date = Now.AddSeconds(-LoginFailureWindowSeconds)
+            _LoginFailures.RemoveAll(Function(d) d < cutoff)
+            Return _LoginFailures.Count >= MaxLoginFailuresPerWindow
+        End SyncLock
+    End Function
+
+    Private Shared Sub RecordLoginFailure()
+        SyncLock _LoginRateLock
+            _LoginFailures.Add(Now)
+        End SyncLock
+    End Sub
+
     Private Shared Function FixedTimeEquals(ByVal a As Byte(), ByVal b As Byte()) As Boolean
         If a Is Nothing OrElse b Is Nothing OrElse a.Length <> b.Length Then Return False
         Dim diff As Byte = 0
@@ -413,16 +438,31 @@ Public Class WebInterfaceModule
     Private Function ProcesoLogin(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If request.Param IsNot Nothing Then
             If request.Param.Item("Password") IsNot Nothing And IsPostBack(request) Then
-                Dim submittedPassword As String = If(request.Param.Item("Password").Value, "")
-                If FixedTimeEquals(DeriveLoginHash(submittedPassword, Me._PasswordSalt), Me._PasswordHash) Then
-                    session("Logueado") = "1"
-                    session("LoginDate") = Now
-                    EnsureCsrf(session)
-                    response.Redirect(PaginaMain)
-                    Return False
-                Else
-                    SetError(Language.GetText("Invalid password"))
+                ' 登录限速:失败锁定或并发超限时直接拒绝,不执行 PBKDF2
+                If LoginLockedOut() Then
+                    SetError(Language.GetText("Too many login attempts, please try again later"))
+                    Return True
                 End If
+                If System.Threading.Interlocked.Increment(_ActiveLogins) > MaxConcurrentLogins Then
+                    System.Threading.Interlocked.Decrement(_ActiveLogins)
+                    SetError(Language.GetText("Too many login attempts, please try again later"))
+                    Return True
+                End If
+                Try
+                    Dim submittedPassword As String = If(request.Param.Item("Password").Value, "")
+                    If FixedTimeEquals(DeriveLoginHash(submittedPassword, Me._PasswordSalt), Me._PasswordHash) Then
+                        session("Logueado") = "1"
+                        session("LoginDate") = Now
+                        EnsureCsrf(session)
+                        response.Redirect(PaginaMain)
+                        Return False
+                    Else
+                        RecordLoginFailure()
+                        SetError(Language.GetText("Invalid password"))
+                    End If
+                Finally
+                    System.Threading.Interlocked.Decrement(_ActiveLogins)
+                End Try
             End If
         End If
         Return True

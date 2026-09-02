@@ -22,11 +22,17 @@ Public Class StreamingHelper
         If Not System.IO.File.Exists(System.IO.Path.Combine(VLCPath, exe)) Then exe = "vlcportable.exe"
         If Not System.IO.File.Exists(System.IO.Path.Combine(VLCPath, exe)) Then Return False
 
-        Dim p As New Process
-        p.StartInfo.FileName = System.IO.Path.Combine(VLCPath, exe)
-        p.StartInfo.Arguments = """" & URLStreamning.Replace("""", "") & """"
-        p.Start()
-        Return True
+        Try
+            Dim p As New Process
+            p.StartInfo.FileName = System.IO.Path.Combine(VLCPath, exe)
+            p.StartInfo.Arguments = """" & URLStreamning.Replace("""", "") & """"
+            p.Start()
+            Return True
+        Catch ex As Exception
+            ' 启动失败(权限/文件损坏等)不让异常裸抛到 UI 造成闪退,调用方据返回值提示用户
+            Log.WriteError("Failed to start VLC: " & ex.ToString)
+            Return False
+        End Try
     End Function
 
     Public Shared Function GetFileDataFromTempID(TempID As String, ByRef FileID As String, ByRef FileKey As String) As Boolean

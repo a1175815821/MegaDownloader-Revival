@@ -353,4 +353,12 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Searc&amp;h"><![CDATA[寻找(&S)]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
   <Text key="Check for updates"><![CDATA[检查更新]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：数据校验失败，输出文件未创建。可能图片太小，请换一张更大的图片。]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[拖放功能仅支持 .elc 和 .dlc 文件。]]></Text>
+  <Text key="ELC file is empty"><![CDATA[ELC 文件为空。]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[DLC 格式已不再受支持（dcrypt.it 服务已停止）。请改用 .elc 文件。]]></Text>
+  <Text key="Invalid input data"><![CDATA[输入数据无效。]]></Text>
+  <Text key="VLC could not be started"><![CDATA[无法启动 VLC。请检查 VLC 已安装且路径已配置。]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[压缩包不完整：缺少一个或多个分卷。]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[登录尝试过于频繁，请稍后再试。]]></Text>
 </Language>

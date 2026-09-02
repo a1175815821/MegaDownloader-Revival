@@ -406,6 +406,9 @@ Public Class Configuracion
 				ServidorWebPassword = Criptografia.AES_DecryptString(ServidorWebPassword, KeyPassword)
 			End If
 		Catch ex As Exception
+			' 解密失败必须记录并回退:保留密文原值当密码用会导致登录永远失败且日志无线索
+			Log.WriteError("ServidorWebPassword decrypt failed; resetting to empty: " & ex.Message)
+			ServidorWebPassword = ""
 		End Try
 		ServidorWebTimeout = 5
 		Integer.TryParse(LeerNodo(Xml, "ServidorWebTimeout", "5"), ServidorWebTimeout)
