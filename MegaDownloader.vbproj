@@ -469,7 +469,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Language\ro-RO-Language.xml" />
     <EmbeddedResource Include="Resources\Language\zh-CN-Language.xml" />
-    <Content Include="TODO\TODO.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>
