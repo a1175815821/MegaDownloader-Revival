@@ -245,11 +245,13 @@ Public Class Paquete
             For Each Paquete As Paquete In ListaPaquetes
                 For Each Fichero As Fichero In Paquete.ListaFicheros
                     If Fichero.DescargaEstado = Estado.Descargando Or _
-                       Fichero.DescargaEstado = Estado.Pausado Then
+                       Fichero.DescargaEstado = Estado.Pausado Or _
+                       Fichero.DescargaEstado = Estado.Verificando Or _
+                       Fichero.DescargaEstado = Estado.Descomprimiendo Then
+                        ' Verificando 是下载前的瞬态(EstadoAnterior 已丢失),Descomprimiendo 是下载完成但解压未完成:
+                        ' 两者都不能标 Completado,否则“一字节没解也报成功”。统一回 EnCola,靠断点续传继续,
+                        ' 已完整的文件只会做快速校验,不会从零重下。
                         Fichero.SetDescargaEstado = Estado.EnCola
-                    ElseIf Fichero.DescargaEstado = Estado.Descomprimiendo Or _
-                           Fichero.DescargaEstado = Estado.Verificando Then
-                        Fichero.SetDescargaEstado = Estado.Completado
                     End If
                     ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, Fichero.LimiteVelocidad)
                 Next

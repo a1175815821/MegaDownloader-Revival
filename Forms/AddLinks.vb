@@ -72,6 +72,8 @@ Public Class AddLinks
                         h.FileID = URLExtractor.ExtraerFileID(url)
                         h.FileKey = URLExtractor.ExtraerFileKey(url)
                         h.MegaFolder = URLExtractor.IsMegaFolder(url)
+                        h.SubFolderID = URLExtractor.ExtraerSubFolderID(url)
+                        h.SubFileID = URLExtractor.ExtraerSubFileID(url)
                         lHidden.Add(h)
 
                     Next

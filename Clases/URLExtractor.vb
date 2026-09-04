@@ -68,19 +68,19 @@ Public Class URLExtractor
 
         If Not Result Then ' Enlaces mega sin codificar
             For Each pattern As String In patternGetInfoURL()
-                Dim regex = New System.Text.RegularExpressions.Regex(pattern)
+                Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                 If regex.IsMatch(URI) Then
                     Dim match = regex.Match(URI)
 
                     If Not String.IsNullOrEmpty(match.Groups("MODE2").Value) Then
-                        ' Enlace mega: sin codificar
-                        Select Case match.Groups("MODE2").Value
+                        ' Enlace mega: sin codificar (comparación insensible a mayúsculas: #f/#F)
+                        Select Case match.Groups("MODE2").Value.ToUpperInvariant()
                             Case "#F", "F"
                                 Result = True
                                 Exit For
                         End Select
 
-                    ElseIf Not String.IsNullOrEmpty(match.Groups("BASIC_ENCODE").Value) AndAlso match.Groups("BASIC_ENCODE").Value.StartsWith("fenc") Then
+                    ElseIf Not String.IsNullOrEmpty(match.Groups("BASIC_ENCODE").Value) AndAlso match.Groups("BASIC_ENCODE").Value.StartsWith("fenc", StringComparison.OrdinalIgnoreCase) Then
                         ' Enlace codificado fenc
                         Result = True
                         Exit For
@@ -100,7 +100,7 @@ Public Class URLExtractor
     ''' <returns></returns>
     Friend Shared Function IsELC(ByVal URI As String) As Boolean
         For Each pattern As String In patternELCUri
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern)
+            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             If regex.IsMatch(URI) Then Return True
         Next
         Return False
@@ -264,11 +264,11 @@ Public Class URLExtractor
 
         If Not String.IsNullOrEmpty(FileID) Then FileID = FileID.Replace("/?", "?") ' A veces firefox mete un /? en vez de un ? :/
 
-        ' Mega-search ID
-        If String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) AndAlso FileID.StartsWith(MEGASEARCHPREFIX) Then
+        ' Mega-search ID (prefijo insensible a mayúsculas: MEGA-SEARCH? / mega-search?)
+        If String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) AndAlso FileID.StartsWith(MEGASEARCHPREFIX, StringComparison.OrdinalIgnoreCase) Then
             Dim URL As String = Conexion.ObtenerUrlDesdeAcortador( _
                 InternalConfiguration.ObtenerValueFromInternalConfig("MEGA_SEARCH_CURL") & _
-                FileID.Substring(FileID.IndexOf(MEGASEARCHPREFIX) + MEGASEARCHPREFIX.Length))
+                FileID.Substring(FileID.IndexOf(MEGASEARCHPREFIX, StringComparison.OrdinalIgnoreCase) + MEGASEARCHPREFIX.Length))
 
             Dim F As String = ExtraerFileID(URL)
             Dim K As String = ExtraerFileKey(URL)
@@ -277,26 +277,31 @@ Public Class URLExtractor
                 FileKey = K
             End If
         ElseIf String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) _
-                AndAlso (FileID.StartsWith(ENCODEDPREFIX) Or FileID.StartsWith(FOLDERENCODEDPREFIX) Or FileID.StartsWith(ENCODEDPREFIX2) Or FileID.StartsWith(FOLDERENCODEDPREFIX2)) Then
+                AndAlso (FileID.StartsWith(ENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(ENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase)) Then
 
 
             ' Encoded string
             ' Generate it: GenerateEncodedURILink
             Dim encodedStr As String
-            If FileID.StartsWith(FOLDERENCODEDPREFIX2) Then
-                encodedStr = FileID.Substring(FileID.IndexOf(FOLDERENCODEDPREFIX2) + FOLDERENCODEDPREFIX2.Length)
-            ElseIf FileID.StartsWith(FOLDERENCODEDPREFIX) Then
-                encodedStr = FileID.Substring(FileID.IndexOf(FOLDERENCODEDPREFIX) + FOLDERENCODEDPREFIX.Length)
-            ElseIf FileID.StartsWith(ENCODEDPREFIX2) Then
-                encodedStr = FileID.Substring(FileID.IndexOf(ENCODEDPREFIX2) + ENCODEDPREFIX2.Length)
+            If FileID.StartsWith(FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) Then
+                encodedStr = FileID.Substring(FileID.IndexOf(FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) + FOLDERENCODEDPREFIX2.Length)
+            ElseIf FileID.StartsWith(FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Then
+                encodedStr = FileID.Substring(FileID.IndexOf(FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) + FOLDERENCODEDPREFIX.Length)
+            ElseIf FileID.StartsWith(ENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) Then
+                encodedStr = FileID.Substring(FileID.IndexOf(ENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) + ENCODEDPREFIX2.Length)
             Else
-                encodedStr = FileID.Substring(FileID.IndexOf(ENCODEDPREFIX) + ENCODEDPREFIX.Length)
+                encodedStr = FileID.Substring(FileID.IndexOf(ENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) + ENCODEDPREFIX.Length)
             End If
 
+            ' base64url sin padding: longitud % 4 == 1 es inválida (nunca la genera un encoder real).
+            ' Antes: "==".Substring(3) lanzaba ArgumentOutOfRangeException. Ahora: error amistoso.
+            If (encodedStr.Length Mod 4) = 1 Then
+                Throw New ApplicationException("Invalid encoded link.")
+            End If
             encodedStr &= "==".Substring((2 - encodedStr.Length * 3) And 3)
             encodedStr = encodedStr.Replace("-", "+").Replace("_", "/").Replace(",", "")
 
-            Dim isFolder As Boolean = FileID.StartsWith(FOLDERENCODEDPREFIX) Or FileID.StartsWith(FOLDERENCODEDPREFIX2)
+            Dim isFolder As Boolean = FileID.StartsWith(FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase)
 
             Dim link As String = If(isFolder, "F", "") & Criptografia.AES_DecryptString(encodedStr, ENCODE_PASSWORD)
             If Not link.StartsWith("mega:") Then
@@ -395,7 +400,7 @@ Public Class URLExtractor
 
         Dim m As System.Text.RegularExpressions.Match = Nothing
         For Each pattern As String In patternHTTPURI
-            Dim regex As New System.Text.RegularExpressions.Regex(pattern)
+            Dim regex As New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             If regex.IsMatch(URL) Then
                 m = regex.Match(URL)
                 Exit For
@@ -404,6 +409,12 @@ Public Class URLExtractor
 
         If m Is Nothing OrElse Not m.Success Then Return ""
         Dim subFolderID As String = m.Groups("SubFolderID").Value & ""
+        If String.IsNullOrEmpty(subFolderID) Then
+            ' 回退:旧式 token (mega://#F!根!key/folder/子ID,ELC 解码产物)后缀解析
+            Dim suffix As System.Text.RegularExpressions.Match = _
+                New System.Text.RegularExpressions.Regex("/folder/(?<SubFolderID>[\w\-]+)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Match(URL)
+            If suffix.Success Then subFolderID = suffix.Groups("SubFolderID").Value
+        End If
         Return subFolderID.Trim()
     End Function
 
@@ -416,7 +427,7 @@ Public Class URLExtractor
 
         Dim m As System.Text.RegularExpressions.Match = Nothing
         For Each pattern As String In patternHTTPURI
-            Dim regex As New System.Text.RegularExpressions.Regex(pattern)
+            Dim regex As New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             If regex.IsMatch(URL) Then
                 m = regex.Match(URL)
                 Exit For
@@ -425,6 +436,12 @@ Public Class URLExtractor
 
         If m Is Nothing OrElse Not m.Success Then Return ""
         Dim subFileID As String = m.Groups("SubFileID").Value & ""
+        If String.IsNullOrEmpty(subFileID) Then
+            ' 回退:旧式 token (mega://#F!根!key/file/文件ID,ELC 解码产物)后缀解析
+            Dim suffix As System.Text.RegularExpressions.Match = _
+                New System.Text.RegularExpressions.Regex("/file/(?<SubFileID>[\w\-]+)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Match(URL)
+            If suffix.Success Then subFileID = suffix.Groups("SubFileID").Value
+        End If
         Return subFileID.Trim()
     End Function
 
@@ -435,7 +452,7 @@ Public Class URLExtractor
         URL = URL.Replace("%20", "") ' Algunos links tienen espacios en medio :/
 
         For Each pattern As String In patternGetInfoURL()
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern)
+            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             If regex.IsMatch(URL) Then
                 Dim match = regex.Match(URL)
 
@@ -447,7 +464,7 @@ Public Class URLExtractor
                     Dim fileID = match.Groups("FileID").Value & ""
 
                     If Not String.IsNullOrEmpty(match.Groups("MODE2").Value) Then ' private file from folder
-                        Select Case match.Groups("MODE2").Value
+                        Select Case match.Groups("MODE2").Value.ToUpperInvariant()
                             Case "#N", "N"
                                 fileID = "N?" & fileID
                         End Select
@@ -469,7 +486,7 @@ Public Class URLExtractor
 
 
         For Each pattern As String In patternGetInfoURL()
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern)
+            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             If regex.IsMatch(URL) Then
                 Dim match = regex.Match(URL)
 

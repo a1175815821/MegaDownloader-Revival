@@ -479,4 +479,9 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="VLC could not be started"><![CDATA[VLC could not be started. Please check that VLC is installed and its path is configured.]]></Text>
   <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[The archive is incomplete: one or more volumes are missing.]]></Text>
   <Text key="Too many login attempts, please try again later"><![CDATA[Too many login attempts, please try again later.]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC created successfully.]]></Text>
+  <Text key="URL is mandatory"><![CDATA[URL is mandatory.]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[VLC path is not valid.]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[Open &ELC]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[Configuration could not be saved. Check disk space and permissions.]]></Text>
 </Language>

@@ -89,6 +89,11 @@ Public Class EncodeLinksForm
 					Dim FileID As String = URLExtractor.ExtraerFileID(Url)
 					Dim FileKey As String = URLExtractor.ExtraerFileKey(Url)
 					If Not String.IsNullOrEmpty(FileID) Then
+                        ' enc/enc2 密文内无子范围字段:子文件夹/单文件链接保持原文,避免静默扩大为整文件夹
+                        If Not String.IsNullOrEmpty(URLExtractor.ExtraerSubFolderID(Url)) OrElse _
+                           Not String.IsNullOrEmpty(URLExtractor.ExtraerSubFileID(Url)) Then
+                            Continue For
+                        End If
                         Dim NewUrl As String = URLExtractor.GenerateEncodedURILink(FileID, FileKey, URLExtractor.IsMegaFolder(Url), False)
 						text = text.Replace(Url, NewUrl)
 					End If

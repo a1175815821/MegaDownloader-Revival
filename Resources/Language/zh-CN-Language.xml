@@ -361,4 +361,9 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="VLC could not be started"><![CDATA[无法启动 VLC。请检查 VLC 已安装且路径已配置。]]></Text>
   <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[压缩包不完整：缺少一个或多个分卷。]]></Text>
   <Text key="Too many login attempts, please try again later"><![CDATA[登录尝试过于频繁，请稍后再试。]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC 已创建成功。]]></Text>
+  <Text key="URL is mandatory"><![CDATA[URL 为必填项。]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[VLC 路径无效。]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[打开 ELC(&E)]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[配置保存失败，请检查磁盘空间和权限。]]></Text>
 </Language>

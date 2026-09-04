@@ -489,6 +489,12 @@ Public Class Configuration
         Config.ListaPreSharedKeys = ListaSharedKeys
 
         Config.GuardarXML(True)
+        If Config.ErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
+            MessageBox.Show(Language.GetText("Configuration could not be saved. Check disk space and permissions.") & _
+                vbNewLine & " * " & Config.ErrorConfig.ToString(), _
+                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Exit Sub
+        End If
 
         Conexion.SetProxy(Config)
         Configuracion.RegisterInStartup(Config.IniciarConWindows)

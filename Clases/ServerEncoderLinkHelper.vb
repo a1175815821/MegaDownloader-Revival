@@ -10,6 +10,10 @@ Public Class ServerEncoderLinkHelper
 		Public FileID As String
 		Public FileKey As String
         Public MegaFolder As Boolean
+        ' v2.4.4 子文件夹链接范围: mega.nz/folder/根#key/folder/子ID 或 /file/文件ID。
+        ' 旧版解码器忽略 token 尾部的 /folder/... 后缀(退化为整文件夹=历史行为),新版解码器据此恢复子范围。
+        Public SubFolderID As String
+        Public SubFileID As String
 	End Class
 	
 	
@@ -25,6 +29,13 @@ Public Class ServerEncoderLinkHelper
 				For Each Link As MegaLink In LinkList
 					If strBuilderLinks.Length > 0 Then strBuilderLinks.Append("|")
 					strBuilderLinks.Append("#" & If(Link.MegaFolder, "F", "") & "!" & Link.FileID & "!" & Link.FileKey)
+                    If Link.MegaFolder Then
+                        If Not String.IsNullOrEmpty(Link.SubFileID) Then
+                            strBuilderLinks.Append("/file/" & Link.SubFileID)
+                        ElseIf Not String.IsNullOrEmpty(Link.SubFolderID) Then
+                            strBuilderLinks.Append("/folder/" & Link.SubFolderID)
+                        End If
+                    End If
 				Next
 			End if
 			
@@ -136,6 +147,9 @@ Public Class ServerEncoderLinkHelper
             End If
 			
 			
+			If (link.Length Mod 4) = 1 Then
+				Throw New ApplicationException(Language.GetText("Invalid input data"))
+			End If
 			link &= "==".Substring((2 - link.Length * 3) And 3)
 			link = link.Replace("-", "+").Replace("_", "/").Replace(",", "")
 			

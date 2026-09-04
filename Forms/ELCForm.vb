@@ -131,6 +131,8 @@ Public Partial Class ELCForm
                             l.FileID = URLExtractor.ExtraerFileID(Link)
                             l.FileKey = URLExtractor.ExtraerFileKey(Link)
                             l.MegaFolder = URLExtractor.IsMegaFolder(Link)
+                            l.SubFolderID = URLExtractor.ExtraerSubFolderID(Link)
+                            l.SubFileID = URLExtractor.ExtraerSubFileID(Link)
                             Mlist.Add(l)
                             modifiedText.AppendLine("{" & linkIndex & "}")
                             linkIndex += 1
@@ -174,6 +176,8 @@ Public Partial Class ELCForm
                     l.FileID = URLExtractor.ExtraerFileID(Link)
                     l.FileKey = URLExtractor.ExtraerFileKey(Link)
                     l.MegaFolder = URLExtractor.IsMegaFolder(Link)
+                    l.SubFolderID = URLExtractor.ExtraerSubFolderID(Link)
+                    l.SubFileID = URLExtractor.ExtraerSubFileID(Link)
                     Mlist.Add(l)
                 Next
                 Me.MegaLinkList = Mlist

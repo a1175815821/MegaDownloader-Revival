@@ -37,7 +37,7 @@ Public Class MegaFolderHelper
         Dim jsonRQ As String
         Dim res As Conexion.Respuesta
 
-        Dim FromENCLink As Boolean = FolderID.StartsWith(URLExtractor.FOLDERENCODEDPREFIX) Or FolderID.StartsWith(URLExtractor.FOLDERENCODEDPREFIX2)
+        Dim FromENCLink As Boolean = FolderID.StartsWith(URLExtractor.FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FolderID.StartsWith(URLExtractor.FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase)
 
         URLExtractor.CheckFileIDAndFileKey(FolderID, FolderKey)
 
@@ -53,10 +53,18 @@ Public Class MegaFolderHelper
         End If
 
         Dim FileList As FileListResponse
-        FileList = CType(Newtonsoft.Json.JsonConvert.DeserializeObject(res.Mensaje.Trim("["c, "]"c), _
-                                                      GetType(FileListResponse)),  _
-                                                      FileListResponse)
-        FileList = FileList
+        Try
+            FileList = CType(Newtonsoft.Json.JsonConvert.DeserializeObject(res.Mensaje.Trim("["c, "]"c), _
+                                                          GetType(FileListResponse)),  _
+                                                          FileListResponse)
+        Catch ex As Exception
+            Log.WriteError("RetrieveLinksFromFolder: invalid folder response: " & Log.SafeException(ex))
+            Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
+        End Try
+        If FileList Is Nothing OrElse FileList.f Is Nothing Then
+            Log.WriteError("RetrieveLinksFromFolder: empty file list in server response.")
+            Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
+        End If
 
         Dim Results As New Generic.List(Of URLProcessor.FileURL)
 

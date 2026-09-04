@@ -134,7 +134,7 @@ MegaDownloader 是一款由西班牙开发者 **Andres Soliño \[andres\_age]** 
 
 - **流媒体播放**:集成 VLC,边下边播 (Streaming)
 
-- **Web 界面**:内置 HttpServer,可通过浏览器远程管理下载任务(仅绑定到 `127.0.0.1`)
+- **Web 界面**:内置 HttpServer,可通过浏览器远程管理下载任务(默认仅绑定 `127.0.0.1`;设置 → Web 服务器可开启「允许局域网访问」并指定绑定 IP)
 
 - **流媒体库**:可视化管理流媒体资源 (StreamingLibrary)
 
@@ -222,7 +222,6 @@ MegaDownloader/
 │   └── PropiedadesDescarga.vb      #   下载属性窗体
 ├── docs/                           # 项目文档
 │   ├── CHANGELOG.md                #   变更日志
-│   ├── BUGFIX-CHECKLIST.md        #   修复清单
 │   └── CONTRIBUTING.md             #   贡献指南
 ├── MegaDownloader.sln              # VS 解决方案
 ├── MegaDownloader.vbproj           # VS 工程
@@ -349,8 +348,6 @@ mega://enc2?abcDEFgh-IjklMNop
   - [SharpCompress](https://github.com/adamhathcock/sharpcompress)
 
   - [ObjectListView](http://objectlistview.sourceforge.net/)
-
-  - [xUnit.net](https://xunit.net/)
 
   - [mpress](https://www.matcode.com/mpress.htm)
 
