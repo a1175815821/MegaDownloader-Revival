@@ -6,6 +6,47 @@
 
 ***
 
+## \[2.4.6] - 2026-09-04
+
+7 项假成功/静默失败修复 + 1 项维护清理。核心主题:**让失败以失败的样子呈现出来**。
+
+### 🐛 修复:重启后假成功(P1)
+
+([Paquete.vb](../Clases/Paquete.vb)) `MarcarFicherosComoParados` 原来把 `Verificando`/`Descomprimiendo` 状态的文件标成 `Completado`——但 `Verificando` 是下载前的瞬态(重启后 `EstadoAnterior` 已丢失),`Descomprimiendo` 是下载完成但解压未完成,**两者都可能是"一个字节都没落盘"却报成功**。现统一回 `EnCola`:靠断点续传继续,已完整的文件只做快速校验,不会从零重下。
+
+### 🐛 修复:设置保存假成功
+
+([Configuration.vb](../Forms/Configuration.vb)) `Config.GuardarXML` 失败时只在底层记日志+置 `ErrorConfig`,UI 照样弹"保存成功"并关闭窗口。现在保存后检查 `ErrorConfig <> SinErrores` 则弹错并停留,不再显示成功。新增错误文案语言键。
+
+### 🐛 修复:大写链接被静默丢弃
+
+([URLExtractor.vb](../Clases/URLExtractor.vb)) `ExtraerURLs` 用 `IgnoreCase` 匹配到 `HTTPS://MEGA.NZ/...`,随即调用大小写敏感的 `ExtraerFileID` 校验失败直接丢弃——用户粘贴大写链接毫无反应。6 处 `New Regex(pattern)` 全部补齐 `IgnoreCase`;附带把 `#F`/`#N` 模式比较改 `ToUpperInvariant`、`fenc`/`enc`/`mega-search` 前缀匹配全部改 `OrdinalIgnoreCase`。捕获组保留原始大小写,FileID/FileKey 的区分大小写不受影响。
+
+### 🐛 修复:畸形 enc 链接崩溃
+
+([URLExtractor.vb](../Clases/URLExtractor.vb) / [ServerEncoderLinkHelper.vb](../Clases/ServerEncoderLinkHelper.vb)) base64url 长度 `%4==1` 是非法值,原 `"==".Substring(3)` 抛 `ArgumentOutOfRangeException` 裸崩。现提前判定抛友好错误,统一弹"链接无效"类提示。
+
+### 🐛 修复:文件夹 API 空响应 NRE
+
+([MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb)) `DeserializeObject` 无 Try、`FileList.f` 直接遍历——畸形响应(空串/代理 HTML)抛 NRE。现加 Try/Catch + 空检查,统一抛"无效服务器响应",记日志不泄露 HTML 内容。
+
+### ✨ 改进:子文件夹链接转 ELC 不再丢范围
+
+([ServerEncoderLinkHelper.vb](../Clases/ServerEncoderLinkHelper.vb)) `MegaLink` 增加 `SubFolderID`/`SubFileID`;`ServerEncode` 在 MegaFolder 时追加 `/folder/子ID` 或 `/file/文件ID` 后缀。旧版解码器忽略后缀(退化为整文件夹=历史行为),新版解码器恢复子范围,**双向兼容**。`ExtraerSubFolderID`/`ExtraerSubFileID` 补旧式 token(`mega://#F!...!/folder/...`,ELC 解码产物)后缀回退解析。`enc`/`enc2` 密文无处存子范围,`EncodeLinksForm` 对含子范围的链接跳过编码保留原文,避免静默扩大为整文件夹。
+
+### 🌐 语言缺键补齐
+
+`en-US`/`zh-CN` 各 +5:`ELC created successfully`、`URL is mandatory`、`VLC path is not valid`、`Open &ELC`、`Configuration could not be saved...`。此前缺键经 `Language.GetText` 的 en-US 回退显示英文原文,非崩溃,但中文界面漏翻。
+
+### 🧹 维护性清理
+
+- 删除 `docs/BUGFIX-CHECKLIST.md`(2026-07-13 的审查清单已严重过期,至少 8 处 ⬜ 实际已修)
+- 删除 `Resources\DLLs\xunit.dll`(vbproj 无引用,Fadd.dll 的 xunit 1.0.3 依赖本就无法解析,磁盘上的 1.9.1 版本从未被使用)
+- vbproj 删除死引用 `TODO\TODO.txt`
+- README:Web 界面描述更正为"默认仅绑 127.0.0.1,可开局域网访问并指定绑定 IP"(与实现一致);移除 xUnit 相关条目
+
+***
+
 ## \[2.4.5] - 2026-09-02
 
 本版本为全面代码审查后的系统性修复:36 项确认问题全部处理,涵盖崩溃修复、功能正确性、HTTP 协议合规、资源泄漏与安全加固。
