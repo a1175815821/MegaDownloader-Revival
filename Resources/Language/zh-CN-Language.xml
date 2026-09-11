@@ -21,6 +21,7 @@
   <Text key="Stop"><![CDATA[停止]]></Text>
   <Text key="Add"><![CDATA[添加]]></Text>
   <Text key="Update"><![CDATA[更新]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[已添加：%N%]]></Text>
   <Text key="Delete from list"><![CDATA[从列表删除]]></Text>
   <Text key="Delete from list and disk"><![CDATA[从列表和磁盘删除]]></Text>
   <Text key="Add link"><![CDATA[添加连接]]></Text>

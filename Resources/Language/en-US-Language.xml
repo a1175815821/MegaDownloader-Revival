@@ -21,6 +21,7 @@
   <Text key="Stop"><![CDATA[Stop]]></Text>
   <Text key="Add"><![CDATA[Add]]></Text>
   <Text key="Update"><![CDATA[Update]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[Package added: %N%]]></Text>
   <Text key="Delete from list"><![CDATA[Delete from list]]></Text>
   <Text key="Delete from list and disk"><![CDATA[Delete from list and disk]]></Text>
   <Text key="Add link"><![CDATA[Add link]]></Text>

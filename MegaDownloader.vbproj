@@ -309,6 +309,9 @@
     <Compile Include="Forms\StreamingForm.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\ToastForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Forms\AddLinks.resx">

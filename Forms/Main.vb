@@ -1305,6 +1305,8 @@ Public Class Main
         ReordenarPrioridadPaquetes(True)
 
         GuardarFicheroDescargas()
+        ' P0-4 UI:任务入库后给一次非打断确认(之前只有日志,用户不知道"加上没")
+        ToastForm.ShowToast(Me, Language.GetText("Toast_PackageAdded").Replace("%N%", Paquete.Nombre))
         If Not AgregadoDesdeServidorWeb Then RestaurarVentana()
    
     End Sub
@@ -3291,6 +3293,7 @@ Public Class Main
             ' Si tenemos abierta la pantalla de "ver links", seguramente copiemos los links así que no queremos que salte
             Dim formsDiscarded As New Generic.List(Of Type)
             formsDiscarded.Add(GetType(PantallaMsg))
+            formsDiscarded.Add(GetType(ToastForm))
             formsDiscarded.Add(GetType(ELCForm))
             formsDiscarded.Add(GetType(EncodeLinksForm))
             For Each t As Type In formsDiscarded
