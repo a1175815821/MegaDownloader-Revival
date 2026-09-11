@@ -59,6 +59,9 @@ Public Class Configuracion
 	''' <summary>v2.5 beta 一次性迁移:老配置的 ResetearErrores=False 翻为 True(15min)。True=已迁移,不再重复覆盖用户后续手动选择。</summary>
 	Public ResetearErroresMigratedV25 As Boolean
 	
+	''' <summary>P0-1 UI 一次性列默认集:开 Progreso%、藏 Descargado、Estado 加宽。True=已迁移,不再覆盖用户后续手动调整。</summary>
+	Public ColumnUIDefaultsMigratedV26 As Boolean
+	
 	Public UsarProxy As Boolean
 	
     Public ApagarPC As Boolean
@@ -193,6 +196,7 @@ Public Class Configuracion
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresMigratedV25")).InnerText = ResetearErroresMigratedV25.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV26")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
 		
@@ -363,6 +367,7 @@ Public Class Configuracion
 		'Boolean.TryParse(LeerNodo(Xml, "PermitirSkins", "true"), PermitirSkins)
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "true"), ResetearErrores)
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErroresMigratedV25", "false"), ResetearErroresMigratedV25)
+		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV26", "false"), ColumnUIDefaultsMigratedV26)
 		Dim needV25Migration As Boolean = Not ResetearErroresMigratedV25
 		Boolean.TryParse(LeerNodo(Xml, "UsarProxy", "false"), UsarProxy)
 		Boolean.TryParse(LeerNodo(Xml, "IniciarConWindows", "false"), IniciarConWindows)

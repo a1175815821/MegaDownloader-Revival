@@ -136,12 +136,12 @@ Partial Class Main
         'OlvColumnEstado
         '
         Me.OlvColumnEstado.Text = "Estado"
-        Me.OlvColumnEstado.Width = 50
+        Me.OlvColumnEstado.Width = 90
         '
         'OlvColumnProgresoPorc
         '
-        Me.OlvColumnProgresoPorc.IsVisible = False
         Me.OlvColumnProgresoPorc.Text = "Progreso %"
+        Me.OlvColumnProgresoPorc.Width = 55
         '
         'OlvColumnProgreso
         '

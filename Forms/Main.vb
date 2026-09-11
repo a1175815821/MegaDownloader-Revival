@@ -333,6 +333,14 @@ Public Class Main
             ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista)
         End If
 
+        ' P0-1 UI:一次性列默认集(开 Progreso%、藏 Descargado、Estado 加宽)。只跑一次,不覆盖用户之后的手动调整。
+        If Not Config.ColumnUIDefaultsMigratedV26 Then
+            ApplyColumnUIDefaultsV26()
+            Config.ColumnUIDefaultsMigratedV26 = True
+            Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
+            Config.GuardarXML(False)
+        End If
+
         If Not CheckMEGAConditions() Then Exit Sub
         CheckVersionStatistics()
 
@@ -1246,6 +1254,28 @@ Public Class Main
 
     Protected Overridable Sub InitializeColumnWidths()
         ' Al final no hacemos nada aquí...
+    End Sub
+
+    ''' <summary>
+    ''' P0-1 UI:应用一次性列默认集。AllColumns 顺序固定 = Designer Add 顺序:
+    ''' 0 # / 1 Nombre / 2 Descargado / 3 Tamaño / 4 Estado / 5 Progreso% / 6 Progreso / 7 Velocidad / 8 EDT / 9 Restante。
+    ''' </summary>
+    Private Sub ApplyColumnUIDefaultsV26()
+        Try
+            If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
+            If ListaDescargas.AllColumns.Count < 10 Then Return
+            Dim colPorc As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(5)
+            colPorc.IsVisible = True
+            If colPorc.Width < 40 Then colPorc.Width = 55
+            ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复)
+            ListaDescargas.AllColumns(2).IsVisible = False
+            Dim colEstado As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(4)
+            If colEstado.Width < 80 Then colEstado.Width = 90
+            ListaDescargas.RebuildColumns()
+            Log.WriteWarning("Applied v2.6 column defaults (show Progreso%, hide Descargado, widen Estado).")
+        Catch ex As Exception
+            Log.WriteError("ApplyColumnUIDefaultsV26 failed: " & ex.ToString)
+        End Try
     End Sub
 #End Region
 
