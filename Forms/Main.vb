@@ -457,18 +457,6 @@ Public Class Main
 
         Dim Opciones As MenuItem = Menu.MenuItems.Add(Language.GetText("&Options"))
 
-
-        Dim searcherList = InternalConfiguration.ObtenerValuesFromInternalConfig("SEARCH_LIST/ELEMENT")
-        If searcherList.Count > 0 Then
-            Dim Buscadores As MenuItem = Opciones.MenuItems.Add(Language.GetText("Searc&h"))
-            Opciones.MenuItems.Add("-")
-            For Each searcher In searcherList
-                Dim Buscador As MenuItem = New MenuItem(searcher.Key)
-                AddHandler (Buscador.Click), AddressOf Buscador_Click
-                Buscadores.MenuItems.Add(Buscador)
-            Next
-        End If
-
         Opciones.MenuItems.Add(CodificarEnlaces)
         Opciones.MenuItems.Add(GenerateELC)
         Opciones.MenuItems.Add(Stegano)
@@ -1135,7 +1123,10 @@ Public Class Main
                         End Try
                         If Not String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) Then
                             ActivarUpdateButton()
-                            ProximoAvisoActualizacion = Now.AddSeconds(15)
+                            ' "永不提醒"只针对特定版本:已跳过的版本不再弹窗,新版本仍会提醒
+                            If String.IsNullOrEmpty(Config.UpdateSkipVersion) OrElse Config.UpdateSkipVersion <> VersionNuevaVersionMegadownloader Then
+                                ProximoAvisoActualizacion = Now.AddSeconds(15)
+                            End If
                         End If
 
 
@@ -2486,12 +2477,25 @@ Public Class Main
         Else
             If Form.ActiveForm IsNot Nothing AndAlso Form.ActiveForm.Equals(Me) Then
                 ProximoAvisoActualizacion = Date.MaxValue  ' Evitamos que si el usuario no cierra el mensaje vuelva a salir
-                If MessageBox.Show(Language.GetText("New version do you want to download it? Recommended!"), _
-                                   Language.GetText("New version available"), MessageBoxButtons.YesNo) = Windows.Forms.DialogResult.Yes Then
+                ' 三选:是=现在更新 / 否=稍后提醒(3小时) / 取消=此版本永不提醒
+                Dim Mensaje As String = Language.GetText("New version do you want to download it? Recommended!") & _
+                    vbNewLine & vbNewLine & "Version: " & VersionNuevaVersionMegadownloader & vbNewLine & _
+                    Language.GetText("Update prompt hint")
+                Dim Respuesta As Windows.Forms.DialogResult = MessageBox.Show(Mensaje, _
+                                   Language.GetText("New version available"), MessageBoxButtons.YesNoCancel)
+                If Respuesta = Windows.Forms.DialogResult.Yes Then
                     btnUpdate_Click(Nothing, Nothing)
-                    ' Ya no avisamos más al usuario y dejamos Date.MaxValue  
-                Else
+                    ' Ya no avisamos más al usuario y dejamos Date.MaxValue
+                ElseIf Respuesta = Windows.Forms.DialogResult.No Then
                     ProximoAvisoActualizacion = Now.AddHours(3) ' Cada 3 horas se lo recordamos
+                ElseIf Respuesta = Windows.Forms.DialogResult.Cancel Then
+                    ' 此版本永不提醒:记录跳过的版本号并保存,新版本仍会正常提醒
+                    Config.UpdateSkipVersion = VersionNuevaVersionMegadownloader
+                    Config.GuardarXML(False)
+                    Log.WriteInfo("User skipped version reminder: " & VersionNuevaVersionMegadownloader)
+                    ' 保持 Date.MaxValue,本版本不再弹窗
+                Else
+                    ProximoAvisoActualizacion = Now.AddHours(3)
                 End If
             End If
         End If
@@ -2641,14 +2645,6 @@ Public Class Main
             System.Diagnostics.Process.Start(InternalConfiguration.ObtenerValueFromInternalConfig("COLLABORATE_LINK_EN"))
         End If
     End Sub
-
-    Private Sub Buscador_Click(sender As System.Object, e As System.EventArgs)
-        Dim tag = CType(sender, System.Windows.Forms.MenuItem).Text
-
-        Dim element = (From n In InternalConfiguration.ObtenerValuesFromInternalConfig("SEARCH_LIST/ELEMENT") Where n.Key = tag).FirstOrDefault
-        System.Diagnostics.Process.Start(element.Value)
-    End Sub
-
 
     ''' <summary>
     ''' Botón de "Configuración"

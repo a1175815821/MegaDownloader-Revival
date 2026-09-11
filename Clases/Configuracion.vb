@@ -61,6 +61,12 @@ Public Class Configuracion
     Public ApagarPC As Boolean
 
     Public CheckUpdates As Boolean
+
+    ''' <summary>
+    ''' Versión que el usuario descartó con "no volver a avisar".
+    ''' Vacío (por defecto) = ninguna versión descartada.
+    ''' </summary>
+    Public UpdateSkipVersion As String
 	
 	Public ComenzarDescargando As Boolean
 	
@@ -189,6 +195,7 @@ Public Class Configuracion
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ComenzarDescargando")).InnerText = ComenzarDescargando.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("CheckUpdates")).InnerText = CheckUpdates.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("UpdateSkipVersion")).InnerText = UpdateSkipVersion
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("MantenerUltimaConfiguracion")).InnerText = MantenerUltimaConfiguracion.ToString
 		
@@ -343,6 +350,7 @@ Public Class Configuracion
         HideCollaborateButton = False
         CheckUpdates = True
         Boolean.TryParse(LeerNodo(Xml, "CheckUpdates", "true"), CheckUpdates)
+        UpdateSkipVersion = LeerNodo(Xml, "UpdateSkipVersion", "")
 		Boolean.TryParse(LeerNodo(Xml, "HideCollaborateButton", "false"), HideCollaborateButton)
 		Boolean.TryParse(LeerNodo(Xml, "ExtraerAutomaticamente", "false"), ExtraerAutomaticamente)
 		Boolean.TryParse(LeerNodo(Xml, "CondicionesAceptadas", "false"), CondicionesAceptadas)
@@ -463,6 +471,7 @@ Public Class Configuracion
 		Me.UsarProxy = False
         Me.ComenzarDescargando = True
         Me.CheckUpdates = True
+        Me.UpdateSkipVersion = ""
 		Me.ProxyPort = 0
 		Me.VersionConfig = "0"
 		Me.DescargasSimultaneas = 3

@@ -52,6 +52,7 @@ It is recommended to update.
 
 Do you want to download it?]]>
   </Text>
+  <Text key="Update prompt hint"><![CDATA[Yes = Update now / No = Remind me later / Cancel = Never remind for this version]]></Text>
   <Text key="New version do you want to download it?"><![CDATA[There is a new version of MegaDownloader. Click here to download it.]]></Text>
   <Text key="Do you want to exit?"><![CDATA[Are you sure you want to exit?]]></Text>
   <Text key="Files extracting, corruption danger">
@@ -411,7 +412,6 @@ If you mark another account as default, the previous default account will be unm
   <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
   <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
-  <Text key="Searc&amp;h"><![CDATA[Searc&h]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
 

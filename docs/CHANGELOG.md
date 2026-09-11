@@ -6,6 +6,30 @@
 
 ***
 
+## \[2.4.7] - 2026-09-12
+
+更新提醒升级为三选项 + 移除已废弃的搜索引擎集成。核心主题:**把"提醒频率"的选择权交给用户,把死域名扫地出门**。
+
+### ✨ 改进:更新提醒三选项
+
+([Main.vb](../Forms/Main.vb) / [Configuracion.vb](../Clases/Configuracion.vb)) 新版本弹窗由"是/否"升级为三选项:**是**=立即更新;**否**=3 小时后再提醒;**取消**=不再提醒当前版本。`UpdateSkipVersion` 配置项持久化"不再提醒"的选择(按版本记录,只屏蔽该版本;未来更新的版本发布后自动恢复提醒),选择后立即写盘。设置中的"检查更新"勾选框仍是总开关(取消即完全停止检测)。
+
+### 🧹 维护性清理:移除废弃的搜索引擎集成
+
+原版"选项 → 寻找"菜单聚合的 4 个 MEGA 搜索引擎域名(megafiles.me / megafindr.com / megasearch.co / megasearch.co.nz)已全部下线,整套功能不可用:
+
+- ([URLExtractor.vb](../Clases/URLExtractor.vb)) 删除 `mega://mega-search?...` 链接解析(`MEGASEARCHPREFIX` 常量、正则模式、`CheckFileIDAndFileKey` 的 mega-search 解析分支)
+- ([Main.vb](../Forms/Main.vb)) 删除"寻找"菜单构建与 `Buscador_Click`
+- ([InternalConfig.xml](../Resources/InternalConfig.xml)) 删除 `SEARCH_LIST`(4 个死域名)与 `MEGA_SEARCH_CURL`
+- ([InternalConfiguration.vb](../Clases/InternalConfiguration.vb)) 删除无调用者的 `ObtenerValuesFromInternalConfig`
+- 10 个语言文件删除 `Searc&h` 死键
+
+### 🌐 语言新增
+
+`en-US`/`zh-CN`/`zh-TW`/`es-ES` 新增 `Update prompt hint`(三选项弹窗的按钮含义说明,其他语言经 en-US 回退)。
+
+***
+
 ## \[2.4.6] - 2026-09-04
 
 7 项假成功/静默失败修复 + 1 项维护清理。核心主题:**让失败以失败的样子呈现出来**。

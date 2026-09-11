@@ -336,7 +336,6 @@ Si vous marqué n autre compte par defaut le precedent sera automiquement retir�
   <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
   <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
-  <Text key="Searc&amp;h"><![CDATA[Cherc&her]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Vérifier mise à &jour]]></Text>
   <Text key="Check for updates"><![CDATA[Vérifier mise à jour]]></Text>
 </Language>

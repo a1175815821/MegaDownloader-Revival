@@ -1,4 +1,4 @@
-﻿Imports System.Xml
+Imports System.Xml
 
 Public Class InternalConfiguration
 
@@ -18,32 +18,6 @@ Public Class InternalConfiguration
             Dim Nodo As XmlNode = XmlConfig.DocumentElement.SelectSingleNode(Key)
             If Nodo Is Nothing Then Return ""
             Return Nodo.InnerText
-
-        Catch ex As Exception
-            Throw
-        End Try
-    End Function
-
-    Public Shared Function ObtenerValuesFromInternalConfig(Key As String) As Generic.List(Of KeyValuePair(Of String, String))
-        Try
-            Dim XmlConfig As XmlDocument = XML_CONFIG
-
-            If XmlConfig Is Nothing Then
-
-                XmlConfig = GetXmlConfig()
-                XML_CONFIG = XmlConfig
-
-            End If
-
-
-            Dim l As New Generic.List(Of KeyValuePair(Of String, String))
-            For Each n As XmlNode In XmlConfig.DocumentElement.SelectNodes(Key)
-                If n IsNot Nothing AndAlso n.Attributes("key") IsNot Nothing Then
-                    Dim k As New KeyValuePair(Of String, String)(n.Attributes("key").Value, n.InnerText)
-                    l.Add(k)
-                End If
-            Next
-            Return l
 
         Catch ex As Exception
             Throw

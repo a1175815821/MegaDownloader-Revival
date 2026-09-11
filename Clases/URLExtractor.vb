@@ -10,7 +10,6 @@ Public Class URLExtractor
     Public Const ENCODE_PASSWORD As String = "k1o6Al-1kz¿!z05y"
     Public Const ENCODE_PASSWORD2 As String = "nYrXa@9Q¿1&hCWM\9(731Bp?t42=!k3."
 
-    Public Const MEGASEARCHPREFIX As String = "mega-search?"
     Public Const ENCODEDPREFIX As String = "enc?"
     Public Const ENCODEDPREFIX2 As String = "enc2?"
     Public Const FOLDERENCODEDPREFIX As String = "fenc?"
@@ -35,7 +34,6 @@ Public Class URLExtractor
 
     Private Shared ReadOnly patternMEGAURI() As String = _
         {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<MEGASEARCH>mega-search(\?|/\?))(?<MEGASEARCH_FILEID>[\w-#=]+)", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc2(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
@@ -211,7 +209,6 @@ Public Class URLExtractor
         ' mega://#!123!456789ABC
         ' mega://#F!123!456789ABC
         ' mega://https://mega.co.nz/#!abcdef!ghijklmnopqr
-        ' mega://mega-search?tn
         ' mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
         ' mega://senc?_xlPqemSILarh5VBKbhSTFyQQQ0
         regx = New Regex("(?<TAG>mega)(?<MODE>://|:///|:)(?<DATA>[\w-/#!:.?]+)", RegexOptions.IgnoreCase)
@@ -224,8 +221,7 @@ Public Class URLExtractor
 
             If Not String.IsNullOrEmpty(data) AndAlso data.Length > 5 Then
 
-                If data.ToLower.StartsWith(MEGASEARCHPREFIX) Or _
-                    data.ToLower.StartsWith(ENCODEDPREFIX) Or _
+                If data.ToLower.StartsWith(ENCODEDPREFIX) Or _
                     data.ToLower.StartsWith(FOLDERENCODEDPREFIX) Or _
                     data.ToLower.StartsWith(ENCODEDPREFIX2) Or _
                     data.ToLower.StartsWith(FOLDERENCODEDPREFIX2) Or _
@@ -264,19 +260,8 @@ Public Class URLExtractor
 
         If Not String.IsNullOrEmpty(FileID) Then FileID = FileID.Replace("/?", "?") ' A veces firefox mete un /? en vez de un ? :/
 
-        ' Mega-search ID (prefijo insensible a mayúsculas: MEGA-SEARCH? / mega-search?)
-        If String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) AndAlso FileID.StartsWith(MEGASEARCHPREFIX, StringComparison.OrdinalIgnoreCase) Then
-            Dim URL As String = Conexion.ObtenerUrlDesdeAcortador( _
-                InternalConfiguration.ObtenerValueFromInternalConfig("MEGA_SEARCH_CURL") & _
-                FileID.Substring(FileID.IndexOf(MEGASEARCHPREFIX, StringComparison.OrdinalIgnoreCase) + MEGASEARCHPREFIX.Length))
-
-            Dim F As String = ExtraerFileID(URL)
-            Dim K As String = ExtraerFileKey(URL)
-            If Not String.IsNullOrEmpty(F) Then
-                FileID = F
-                FileKey = K
-            End If
-        ElseIf String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) _
+        ' Encoded links (enc?/fenc?/enc2?/fenc2?): el FileID trae el prefijo y el payload cifrado
+        If String.IsNullOrEmpty(FileKey) And Not String.IsNullOrEmpty(FileID) _
                 AndAlso (FileID.StartsWith(ENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(FOLDERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(ENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase) Or FileID.StartsWith(FOLDERENCODEDPREFIX2, StringComparison.OrdinalIgnoreCase)) Then
 
 
@@ -456,9 +441,7 @@ Public Class URLExtractor
             If regex.IsMatch(URL) Then
                 Dim match = regex.Match(URL)
 
-                If Not String.IsNullOrEmpty(match.Groups("MEGASEARCH_FILEID").Value) Then
-                    Return match.Groups("MEGASEARCH").Value & match.Groups("MEGASEARCH_FILEID").Value.Trim("/"c)
-                ElseIf Not String.IsNullOrEmpty(match.Groups("ENCODED_FILEID").Value) Then
+                If Not String.IsNullOrEmpty(match.Groups("ENCODED_FILEID").Value) Then
                     Return match.Groups("BASIC_ENCODE").Value & match.Groups("ENCODED_FILEID").Value.Trim("/"c)
                 Else
                     Dim fileID = match.Groups("FileID").Value & ""

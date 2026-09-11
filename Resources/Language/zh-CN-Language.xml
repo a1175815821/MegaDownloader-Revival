@@ -47,6 +47,7 @@
   <Text key="New version available"><![CDATA[新版本可用]]></Text>
   <Text key="New version do you want to download it? Recommended!"><![CDATA[有 MegaDownloader 的新版本。建议你更新它。
 你是否要下载它？]]></Text>
+  <Text key="Update prompt hint"><![CDATA[是 = 现在更新 / 否 = 稍后提醒 / 取消 = 此版本不再提醒]]></Text>
   <Text key="New version do you want to download it?"><![CDATA[有 MegaDownloader 的新版本。按一下此处下载它。]]></Text>
   <Text key="Do you want to exit?"><![CDATA[确定退出?]]></Text>
   <Text key="Files extracting, corruption danger"><![CDATA[文件已开始解压。 
@@ -350,7 +351,6 @@ B 是同行下载数。]]></Text>
     <![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]>
   </Text>
-  <Text key="Searc&amp;h"><![CDATA[寻找(&S)]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
   <Text key="Check for updates"><![CDATA[检查更新]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：数据校验失败，输出文件未创建。可能图片太小，请换一张更大的图片。]]></Text>

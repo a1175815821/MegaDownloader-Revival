@@ -342,7 +342,6 @@ Dacă marcați un alt cont ca implicit, contul implicit anterior va fi nemarcat.
   <Text key="optional"><![CDATA[opțional]]></Text>
   <Text key="Multiple ELC"><![CDATA[Multiplu ELC]]></Text>
   <Text key="MsgPasswordZip"><![CDATA[Dacă fișierul este protejat prin parolă, poți introduce parola de aici și va fi folosită la extragerea fișierului. Dacă nu, doar lăsă-l gol. Vă rugăm să reții că doar suportul de bază pentru ZIP și fișierele RAR sunt prevăzute în prezent. Fișierele RAR nu sunt acceptate încă.]]></Text>
-  <Text key="Searc&amp;h"><![CDATA[Cău&ta]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
 </Language>

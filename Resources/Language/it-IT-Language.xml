@@ -314,7 +314,6 @@ If you mark another account as default, the previous default account will be unm
   <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
   <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
-  <Text key="Searc&amp;h"><![CDATA[Cercar&e]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
 </Language>

@@ -50,6 +50,7 @@
 Se recomienda su actualización.
  
 ¿Desea descargarla?]]></Text>
+  <Text key="Update prompt hint"><![CDATA[Sí = Actualizar ahora / No = Recordar más tarde / Cancelar = No volver a avisar de esta versión]]></Text>
   <Text key="New version do you want to download it?"><![CDATA[Existe una versión nueva de Megadownloader, haga click aquí para descargarla]]></Text>
   <Text key="Do you want to exit?"><![CDATA[¿Desea salir de la aplicación?]]></Text>
   <Text key="Files extracting, corruption danger">
@@ -82,7 +83,6 @@ Si sale ahora, los ficheros extraídos pueden quedar inservibles y tendrá que d
   <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>
   <Text key="Watch &amp;Online"><![CDATA[Ver &online]]></Text>
   <Text key="Encode lin&amp;ks"><![CDATA[Codi&ficar enlaces]]></Text>
-  <Text key="Searc&amp;h"><![CDATA[B&uscar]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Comproba&r actualizaciones]]></Text>
 
   <Text key="Collaborate"><![CDATA[Colaborar]]></Text>
