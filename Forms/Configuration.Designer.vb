@@ -122,6 +122,7 @@ Partial Class Configuration
         Me.chkStreamingServer = New System.Windows.Forms.CheckBox()
         Me.TabPage5 = New System.Windows.Forms.TabPage()
         Me.ElcAccountControl = New MegaDownloader.ELCAccountControl()
+        Me.txtSearchConfig = New System.Windows.Forms.TextBox()
         Me.GroupBox1.SuspendLayout()
         Me.GroupBox3.SuspendLayout()
         Me.ConexionGroup.SuspendLayout()
@@ -731,6 +732,13 @@ Partial Class Configuration
         Me.chkStartWindows.Text = "Iniciar con Windows"
         Me.chkStartWindows.UseVisualStyleBackColor = True
         '
+        'txtSearchConfig
+        '
+        Me.txtSearchConfig.Location = New System.Drawing.Point(10, 12)
+        Me.txtSearchConfig.Name = "txtSearchConfig"
+        Me.txtSearchConfig.Size = New System.Drawing.Size(621, 20)
+        Me.txtSearchConfig.TabIndex = 2
+        '
         'TabControl1
         '
         Me.TabControl1.Controls.Add(Me.TabPage1)
@@ -738,7 +746,7 @@ Partial Class Configuration
         Me.TabControl1.Controls.Add(Me.TabPage3)
         Me.TabControl1.Controls.Add(Me.TabPage4)
         Me.TabControl1.Controls.Add(Me.TabPage5)
-        Me.TabControl1.Location = New System.Drawing.Point(10, 12)
+        Me.TabControl1.Location = New System.Drawing.Point(10, 38)
         Me.TabControl1.Name = "TabControl1"
         Me.TabControl1.SelectedIndex = 0
         Me.TabControl1.Size = New System.Drawing.Size(621, 408)
@@ -1229,7 +1237,8 @@ Partial Class Configuration
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.CancelButton = Me.btnCancel
-        Me.ClientSize = New System.Drawing.Size(643, 467)
+        Me.ClientSize = New System.Drawing.Size(643, 493)
+        Me.Controls.Add(Me.txtSearchConfig)
         Me.Controls.Add(Me.TabControl1)
         Me.Controls.Add(Me.btnGuardar)
         Me.Controls.Add(Me.btnCancel)
@@ -1371,4 +1380,5 @@ Partial Class Configuration
     Friend WithEvents txtStreamingPassword As System.Windows.Forms.TextBox
     Friend WithEvents lblStreamingPassword As System.Windows.Forms.Label
     Friend WithEvents chkCheckUpdates As System.Windows.Forms.CheckBox
+    Friend WithEvents txtSearchConfig As System.Windows.Forms.TextBox
 End Class

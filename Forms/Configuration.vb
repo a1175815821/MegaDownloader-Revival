@@ -8,14 +8,71 @@ Public Class Configuration
 
     Public Const PASSWORDDEFECTO As String = "*****"
 
+	' P1-9:设置搜索框。回车按当前语言文本定位 Tab(控件 Text 已翻译,10 语言零额外工作)。
+	Private Const EM_SETCUEBANNER As Integer = &H1501
+	<System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
+	Private Shared Function SendMessage(hWnd As IntPtr, msg As Integer, wParam As Integer, lParam As String) As IntPtr
+	End Function
+
+	Private Sub TrySetSearchCue()
+		Try
+			Dim h As IntPtr = txtSearchConfig.Handle
+			SendMessage(h, EM_SETCUEBANNER, 0, Language.GetText("Config_SearchHint"))
+		Catch ex As Exception
+			Log.WriteError("TrySetSearchCue failed: " & ex.ToString)
+		End Try
+	End Sub
+
+	Private Sub txtSearchConfig_KeyDown(sender As Object, e As KeyEventArgs) Handles txtSearchConfig.KeyDown
+		If e.KeyCode = Keys.Enter Then
+			e.SuppressKeyPress = True
+			LocateConfigText(txtSearchConfig.Text)
+		End If
+	End Sub
+
+	Private Sub LocateConfigText(raw As String)
+		Try
+			Dim q As String = raw.Trim().ToLowerInvariant()
+			If q.Length < 2 Then Return
+			For Each tp As TabPage In TabControl1.TabPages
+				If tp.Text.ToLowerInvariant().Contains(q) Then
+					TabControl1.SelectedTab = tp
+					Return
+				End If
+				Dim hit As Control = FindConfigControl(tp, q)
+				If hit IsNot Nothing Then
+					TabControl1.SelectedTab = tp
+					If hit.CanSelect Then hit.Focus()
+					Return
+				End If
+			Next
+		Catch ex As Exception
+			Log.WriteError("LocateConfigText failed: " & ex.ToString)
+		End Try
+	End Sub
+
+	Private Shared Function FindConfigControl(parent As Control, q As String) As Control
+		For Each c As Control In parent.Controls
+			If TypeOf c Is TextBox OrElse TypeOf c Is ComboBox OrElse TypeOf c Is CheckBox _
+					OrElse TypeOf c Is Button OrElse TypeOf c Is LinkLabel OrElse TypeOf c Is Label _
+					OrElse TypeOf c Is GroupBox Then
+				If c.Text IsNot Nothing AndAlso c.Text.ToLowerInvariant().Contains(q) Then Return c
+			End If
+			Dim inner As Control = FindConfigControl(c, q)
+			If inner IsNot Nothing Then Return inner
+		Next
+		Return Nothing
+	End Function
+
     Private ListaPreSharedKey As List(Of String)
 
     Private Sub Configuration_Load(sender As Object, e As System.EventArgs) Handles Me.Load
 
-        ElcAccountControl.Config = Config
-        ElcAccountControl.CargarDatos()
+	ElcAccountControl.Config = Config
+	ElcAccountControl.CargarDatos()
 
         Translate()
+	TrySetSearchCue()
 
         Dim ListaLogs As New Generic.Dictionary(Of String, String)
         ListaLogs(Log.LevelLogType.Minimal.ToString) = Language.GetText("Log_Minimum")
