@@ -22,6 +22,7 @@
   <Text key="Add"><![CDATA[Añadir]]></Text>
   <Text key="Update"><![CDATA[Actualizar]]></Text>
   <Text key="Toast_PackageAdded"><![CDATA[Paquete añadido: %N%]]></Text>
+  <Text key="OLV_EmptyList"><![CDATA[Arrastra enlaces MEGA aquí o cópialos: el monitor del portapapeles los detecta]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% enlace(s)]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[Pega aquí los enlaces MEGA, uno por línea...]]></Text>
   <Text key="Delete from list"><![CDATA[Eliminar de la lista]]></Text>

@@ -384,6 +384,7 @@ Public Class Main
         Me.OlvColumnDescargado.Text = Language.GetText("Downloaded")
         Me.OlvColumnNombre.Text = Language.GetText("Name")
         Me.OlvColumnRestante.Text = Language.GetText("Remaining")
+        Me.ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
         Me.AbrirEnCarpetaToolStripMenuItem.Text = Language.GetText("Open directory")
         Me.SubirPrioridadMenuItem.Text = Language.GetText("Increase priority")
         Me.BajarPrioridadMenuItem.Text = Language.GetText("Decrease priority")
@@ -952,6 +953,10 @@ Public Class Main
 
 
         InitializeColumnWidths()
+
+        ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
+        ListaDescargas.RowHeight = 26
+        ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
     End Sub
     Private Sub ListaDescargas_FormatRow(sender As Object, e As BrightIdeasSoftware.FormatRowEventArgs) Handles ListaDescargas.FormatRow
         If e.DisplayIndex Mod 2 = 0 Then
