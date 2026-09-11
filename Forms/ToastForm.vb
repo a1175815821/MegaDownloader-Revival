@@ -31,6 +31,8 @@ Public Class ToastForm
         _label.ForeColor = Me.ForeColor
         _label.TextAlign = ContentAlignment.MiddleLeft
         _label.Padding = New Padding(12, 6, 12, 6)
+        _label.UseMnemonic = False
+        _label.AutoEllipsis = True
         _label.Text = text
         AddHandler _label.Click, AddressOf ToastForm_Click
         Me.Controls.Add(_label)
@@ -105,7 +107,12 @@ Public Class ToastForm
             Else
                 _current.Location = New Point(area.Right - _current.Width - 16, area.Bottom - _current.Height - 16)
             End If
-            _current.Show()
+            ' 有主窗时做 owned 显示:主窗最小化/关闭时 Toast 跟着走,不留孤儿窗体挡关机流程
+            If owner IsNot Nothing AndAlso owner.Visible Then
+                _current.Show(owner)
+            Else
+                _current.Show()
+            End If
         Catch ex As Exception
             Log.WriteError("ShowToast failed: " & ex.ToString)
         End Try

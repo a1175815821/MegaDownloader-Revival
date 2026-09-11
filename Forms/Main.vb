@@ -1384,8 +1384,11 @@ Public Class Main
         ReordenarPrioridadPaquetes(True)
 
         GuardarFicheroDescargas()
-        ' P0-4 UI:任务入库后给一次非打断确认(之前只有日志,用户不知道"加上没")
-        ToastForm.ShowToast(Me, Language.GetText("Toast_PackageAdded").Replace("%N%", Paquete.Nombre))
+        ' P0-4 UI:任务入库后给一次非打断确认(之前只有日志,用户不知道"加上没")。
+        ' Web 推送且主窗最小化时不弹(用户不在跟前,状态栏/托盘已有其它反馈位)。
+        If Not (AgregadoDesdeServidorWeb AndAlso Me.WindowState = FormWindowState.Minimized) Then
+            ToastForm.ShowToast(Me, Language.GetText("Toast_PackageAdded").Replace("%N%", Paquete.Nombre))
+        End If
         If Not AgregadoDesdeServidorWeb Then RestaurarVentana()
    
     End Sub

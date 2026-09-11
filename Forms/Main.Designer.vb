@@ -427,7 +427,7 @@ Partial Class Main
         Me.btnUpdate.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.btnUpdate.Location = New System.Drawing.Point(187, 3)
         Me.btnUpdate.Name = "btnUpdate"
-        Me.btnUpdate.Size = New System.Drawing.Size(88, 34)
+        Me.btnUpdate.Size = New System.Drawing.Size(104, 34)
         Me.btnUpdate.TabIndex = 6
         Me.btnUpdate.Text = "Actualizar"
         Me.btnUpdate.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
