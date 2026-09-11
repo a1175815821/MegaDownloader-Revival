@@ -24,6 +24,13 @@
   <Text key="Toast_PackageAdded"><![CDATA[已添加：%N%]]></Text>
   <Text key="OLV_EmptyList"><![CDATA[把 MEGA 链接拖到这里，或直接复制——剪贴板监控会自动识别]]></Text>
   <Text key="Config_SearchHint"><![CDATA[搜索设置（代理、主题、VLC…）]]></Text>
+  <Text key="Nav_All"><![CDATA[全部]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[下载中]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[等待中]]></Text>
+  <Text key="Nav_Failed"><![CDATA[失败]]></Text>
+  <Text key="Nav_Completed"><![CDATA[已完成]]></Text>
+  <Text key="Detail_Title"><![CDATA[详情]]></Text>
+  <Text key="Detail_Empty"><![CDATA[选择一个任务查看详情]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% 个链接]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[在此粘贴 MEGA 链接，每行一个…]]></Text>
   <Text key="Delete from list"><![CDATA[从列表删除]]></Text>

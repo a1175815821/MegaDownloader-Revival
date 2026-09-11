@@ -385,6 +385,10 @@ Public Class Main
         Me.OlvColumnNombre.Text = Language.GetText("Name")
         Me.OlvColumnRestante.Text = Language.GetText("Remaining")
         Me.ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
+        Me.detailGroup.Text = Language.GetText("Detail_Title")
+        ApplyNavListColors()
+        UpdateNavCounts()
+        UpdateDetailPanel()
         Me.AbrirEnCarpetaToolStripMenuItem.Text = Language.GetText("Open directory")
         Me.SubirPrioridadMenuItem.Text = Language.GetText("Increase priority")
         Me.BajarPrioridadMenuItem.Text = Language.GetText("Decrease priority")
@@ -960,6 +964,10 @@ Public Class Main
         ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
         ListaDescargas.RowHeight = 26
         ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
+        ' P2-11:状态过滤开(数据源/ChildrenGetter 不动)+导航初始化
+        ListaDescargas.UseFiltering = True
+        ListaDescargas.ModelFilter = New DownloadEstadoFilter(DownloadEstadoFilter.NavScope.All)
+        InitNavList()
     End Sub
     Private Sub ListaDescargas_FormatRow(sender As Object, e As BrightIdeasSoftware.FormatRowEventArgs) Handles ListaDescargas.FormatRow
         If e.DisplayIndex Mod 2 = 0 Then
@@ -989,6 +997,7 @@ Public Class Main
         ApplyProgressBarThemeColors()
         ApplyQuotaBannerTheme()
         ApplyToolbarIconTheme()
+        ApplyNavListColors()
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -1165,6 +1174,7 @@ Public Class Main
                 If quotaBannerPanel.Tag Is Nothing OrElse Not CBool(quotaBannerPanel.Tag) Then
                     ListaDescargas.Top += quotaBannerPanel.Height
                     ListaDescargas.Height = Math.Max(50, ListaDescargas.Height - quotaBannerPanel.Height)
+                    ShiftSidePanels(True)
                     quotaBannerPanel.Tag = True
                 End If
                 quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
@@ -1182,6 +1192,7 @@ Public Class Main
                     If quotaBannerPanel.Tag IsNot Nothing AndAlso CBool(quotaBannerPanel.Tag) Then
                         ListaDescargas.Top -= quotaBannerPanel.Height
                         ListaDescargas.Height += quotaBannerPanel.Height
+                        ShiftSidePanels(False)
                         quotaBannerPanel.Tag = False
                     End If
                 End If
@@ -1378,6 +1389,174 @@ Public Class Main
         If msg.Length = 0 Then Return Nothing
         Return msg
     End Function
+
+    ' P2-11:左导航分组 + 右详情。计数与过滤共用 DownloadEstadoFilter.MatchesScope,所见即所数。
+    Private _navScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.NavScope.All
+    Private _updatingNav As Boolean = False
+
+    Private Sub InitNavList()
+        UpdateNavCounts()
+        If navListBox.SelectedIndex < 0 Then navListBox.SelectedIndex = 0
+        ApplyNavListColors()
+    End Sub
+
+    Private Sub ApplyNavListColors()
+        Try
+            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+            ' ListBox 不在 ThemeManager 递归覆盖范围,手动同步
+            navListBox.BackColor = ThemeManager.GetColor("Back")
+            navListBox.ForeColor = ThemeManager.GetColor("Fore")
+        Catch ex As Exception
+            Log.WriteDebug("ApplyNavListColors failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub navListBox_SelectedIndexChanged(sender As Object, e As EventArgs) Handles navListBox.SelectedIndexChanged
+        If _updatingNav Then Return
+        Try
+            Dim scope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.NavScope.All
+            Select Case navListBox.SelectedIndex
+                Case 1
+                    scope = DownloadEstadoFilter.NavScope.Downloading
+                Case 2
+                    scope = DownloadEstadoFilter.NavScope.Waiting
+                Case 3
+                    scope = DownloadEstadoFilter.NavScope.Failed
+                Case 4
+                    scope = DownloadEstadoFilter.NavScope.Completed
+            End Select
+            If scope = _navScope Then Return
+            _navScope = scope
+            ListaDescargas.ModelFilter = New DownloadEstadoFilter(_navScope)
+            ListaDescargas.BuildList()
+        Catch ex As Exception
+            Log.WriteError("navListBox_SelectedIndexChanged failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Sub UpdateNavCounts()
+        Try
+            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+            _updatingNav = True
+            Try
+                While navListBox.Items.Count < 5
+                    navListBox.Items.Add("")
+                End While
+                Dim totals(4) As Integer
+                If ListaPaquetes IsNot Nothing Then
+                    For Each p As Paquete In ListaPaquetes
+                        CountNavObject(p, totals)
+                    Next
+                End If
+                Dim keys() As String = {"Nav_All", "Nav_Downloading", "Nav_Waiting", "Nav_Failed", "Nav_Completed"}
+                For i As Integer = 0 To 4
+                    Dim t As String = Language.GetText(keys(i)) & " (" & totals(i).ToString() & ")"
+                    If Not Object.Equals(navListBox.Items(i), t) Then navListBox.Items(i) = t
+                Next
+                If navListBox.SelectedIndex < 0 OrElse navListBox.SelectedIndex > 4 Then navListBox.SelectedIndex = 0
+            Finally
+                _updatingNav = False
+            End Try
+        Catch ex As Exception
+            Log.WriteDebug("UpdateNavCounts failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Shared Sub CountNavObject(obj As Object, totals() As Integer)
+        totals(0) += 1
+        For s As Integer = 1 To 4
+            If DownloadEstadoFilter.MatchesScope(obj, CType(s, DownloadEstadoFilter.NavScope)) Then totals(s) += 1
+        Next
+        Dim p As Paquete = TryCast(obj, Paquete)
+        If p IsNot Nothing AndAlso p.ListaFicheros IsNot Nothing Then
+            For Each f As Fichero In p.ListaFicheros
+                CountNavObject(f, totals)
+            Next
+        End If
+    End Sub
+
+    Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
+        UpdateDetailPanel()
+    End Sub
+
+    Private Sub UpdateDetailPanel()
+        Try
+            If detailLabel Is Nothing OrElse detailLabel.IsDisposed Then Return
+            Dim text As String = Language.GetText("Detail_Empty")
+            If ListaDescargas.SelectedObjects IsNot Nothing AndAlso ListaDescargas.SelectedObjects.Count > 0 Then
+                Dim ele As IDescarga = TryCast(ListaDescargas.SelectedObjects(0), IDescarga)
+                If ele IsNot Nothing Then text = BuildDetailText(ele)
+            End If
+            If detailLabel.Text <> text Then detailLabel.Text = text
+        Catch ex As Exception
+            Log.WriteDebug("UpdateDetailPanel failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Function BuildDetailText(ele As IDescarga) As String
+        Dim sb As New System.Text.StringBuilder()
+        sb.AppendLine(Language.GetText("Name") & ": " & ele.DescargaNombre)
+        sb.AppendLine(Language.GetText("Status") & ": " & EstadoDisplayText(ele.DescargaEstado()))
+        Dim tamano As Decimal = ele.DescargaTamanoBytes
+        Dim pct As Decimal = ele.DescargaPorcentaje
+        Dim done As String = "-"
+        If tamano > 0 Then
+            done = PintarTamano(Math.Ceiling(pct * tamano / 100)) & " / " & PintarTamano(tamano)
+        End If
+        sb.AppendLine(Language.GetText("Progress") & ": " & pct.ToString("F2") & "% (" & done & ")")
+        sb.AppendLine(Language.GetText("Speed") & ": " & PintarVelocidadDescarga(ele))
+        sb.AppendLine(Language.GetText("Remaining") & ": " & ele.DescargaTiempoEstimadoDescarga)
+        Dim fic As Fichero = TryCast(ele, Fichero)
+        If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.RutaRelativa) Then
+            sb.AppendLine(Language.GetText("Path") & ": " & fic.RutaRelativa)
+        End If
+        Return sb.ToString().TrimEnd()
+    End Function
+
+    ''' <summary>状态本地化文本(ColEstado AspectGetter 的只读镜像,供详情面板复用;改键时两处同步,热路径本身不动)。</summary>
+    Private Shared Function EstadoDisplayText(st As Estado) As String
+        Select Case st
+            Case Estado.EnCola
+                Return Language.GetText("In queue")
+            Case Estado.CreandoLocal
+                Return Language.GetText("Creating files")
+            Case Estado.Verificando
+                Return Language.GetText("Verifying")
+            Case Estado.Erroneo
+                Return Language.GetText("Error capital leters")
+            Case Estado.Pausado
+                Return Language.GetText("Paused")
+            Case Estado.Descomprimiendo
+                Return Language.GetText("Extracting")
+            Case Estado.Descargando
+                Return Language.GetText("Downloading")
+            Case Estado.ComprobandoMD5
+                Return Language.GetText("Hashing MD5")
+            Case Estado.Completado
+                Return Language.GetText("Completed")
+            Case Else
+                Return "---"
+        End Select
+    End Function
+
+    Private Sub ShiftSidePanels(shrink As Boolean)
+        Try
+            If quotaBannerPanel Is Nothing Then Return
+            Dim dy As Integer = quotaBannerPanel.Height
+            For Each pnl As Control In New Control() {navPanel, detailPanel}
+                If pnl Is Nothing OrElse pnl.IsDisposed Then Continue For
+                If shrink Then
+                    pnl.Top += dy
+                    pnl.Height = Math.Max(50, pnl.Height - dy)
+                Else
+                    pnl.Top -= dy
+                    pnl.Height += dy
+                End If
+            Next
+        Catch ex As Exception
+            Log.WriteDebug("ShiftSidePanels failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
 #End Region
 
 #Region "Gestion lista paquetes y descargas"
@@ -2737,6 +2916,8 @@ Public Class Main
                 End If
 
                 ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                UpdateNavCounts()
+                UpdateDetailPanel()
             Finally
                 Mutex.ListaDescargas.ReleaseMutex()
             End Try

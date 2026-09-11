@@ -81,6 +81,9 @@ Partial Class Main
         Me.MenuMinimizado.SuspendLayout()
         Me.TableLayoutPanel1.SuspendLayout()
         Me.StatusStrip1.SuspendLayout()
+        Me.navPanel.SuspendLayout()
+        Me.detailPanel.SuspendLayout()
+        Me.detailGroup.SuspendLayout()
         Me.SuspendLayout()
         '
         'ListaDescargas
@@ -99,15 +102,67 @@ Partial Class Main
             Or System.Windows.Forms.AnchorStyles.Left) _
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.ListaDescargas.Columns.AddRange(New System.Windows.Forms.ColumnHeader() {Me.OlvColumnPrioridad, Me.OlvColumnNombre, Me.OlvColumnDescargado, Me.OlvColumnTamano, Me.OlvColumnEstado, Me.OlvColumnProgreso, Me.OlvColumnVelocidad, Me.OlvColumnEDT})
-        Me.ListaDescargas.Location = New System.Drawing.Point(12, 46)
+        Me.ListaDescargas.Location = New System.Drawing.Point(148, 46)
         Me.ListaDescargas.Name = "ListaDescargas"
         Me.ListaDescargas.OwnerDraw = True
         Me.ListaDescargas.ShowGroups = False
-        Me.ListaDescargas.Size = New System.Drawing.Size(580, 311)
+        Me.ListaDescargas.Size = New System.Drawing.Size(534, 429)
         Me.ListaDescargas.TabIndex = 0
         Me.ListaDescargas.UseCompatibleStateImageBehavior = False
         Me.ListaDescargas.View = System.Windows.Forms.View.Details
         Me.ListaDescargas.VirtualMode = True
+        '
+        'navPanel
+        '
+        Me.navPanel.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+            Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.navPanel.Controls.Add(Me.navListBox)
+        Me.navPanel.Location = New System.Drawing.Point(12, 46)
+        Me.navPanel.Name = "navPanel"
+        Me.navPanel.Size = New System.Drawing.Size(130, 429)
+        Me.navPanel.TabIndex = 8
+        '
+        'navListBox
+        '
+        Me.navListBox.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.navListBox.FormattingEnabled = True
+        Me.navListBox.ItemHeight = 20
+        Me.navListBox.Location = New System.Drawing.Point(0, 0)
+        Me.navListBox.Name = "navListBox"
+        Me.navListBox.SelectionMode = System.Windows.Forms.SelectionMode.One
+        Me.navListBox.Size = New System.Drawing.Size(130, 429)
+        Me.navListBox.TabIndex = 0
+        '
+        'detailPanel
+        '
+        Me.detailPanel.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+            Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.detailPanel.Controls.Add(Me.detailGroup)
+        Me.detailPanel.Location = New System.Drawing.Point(688, 46)
+        Me.detailPanel.Name = "detailPanel"
+        Me.detailPanel.Size = New System.Drawing.Size(180, 429)
+        Me.detailPanel.TabIndex = 9
+        '
+        'detailGroup
+        '
+        Me.detailGroup.Controls.Add(Me.detailLabel)
+        Me.detailGroup.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.detailGroup.Location = New System.Drawing.Point(0, 0)
+        Me.detailGroup.Name = "detailGroup"
+        Me.detailGroup.Size = New System.Drawing.Size(180, 429)
+        Me.detailGroup.TabIndex = 0
+        Me.detailGroup.TabStop = False
+        Me.detailGroup.Text = "Detalle"
+        '
+        'detailLabel
+        '
+        Me.detailLabel.AutoSize = False
+        Me.detailLabel.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.detailLabel.Location = New System.Drawing.Point(3, 16)
+        Me.detailLabel.Name = "detailLabel"
+        Me.detailLabel.Padding = New System.Windows.Forms.Padding(4)
+        Me.detailLabel.Size = New System.Drawing.Size(174, 410)
+        Me.detailLabel.TabIndex = 0
         '
         'OlvColumnPrioridad
         '
@@ -466,12 +521,14 @@ Partial Class Main
         Me.AllowDrop = True
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(604, 382)
+        Me.ClientSize = New System.Drawing.Size(880, 500)
         Me.Controls.Add(Me.StatusStrip1)
         Me.Controls.Add(Me.TableLayoutPanel1)
+        Me.Controls.Add(Me.detailPanel)
+        Me.Controls.Add(Me.navPanel)
         Me.Controls.Add(Me.ListaDescargas)
         Me.Icon = Global.MegaDownloader.My.Resources.Resources.icono
-        Me.MinimumSize = New System.Drawing.Size(560, 250)
+        Me.MinimumSize = New System.Drawing.Size(640, 280)
         Me.Name = "Main"
         Me.StartPosition = System.Windows.Forms.FormStartPosition.Manual
         Me.Text = "MegaDownloader"
@@ -483,11 +540,21 @@ Partial Class Main
         Me.TableLayoutPanel1.ResumeLayout(False)
         Me.StatusStrip1.ResumeLayout(False)
         Me.StatusStrip1.PerformLayout()
+        Me.navPanel.ResumeLayout(False)
+        Me.detailPanel.ResumeLayout(False)
+        Me.detailPanel.PerformLayout()
+        Me.detailGroup.ResumeLayout(False)
+        Me.detailGroup.PerformLayout()
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
     End Sub
     Friend WithEvents ListaDescargas As BrightIdeasSoftware.TreeListView
+    Friend WithEvents navPanel As System.Windows.Forms.Panel
+    Friend WithEvents navListBox As System.Windows.Forms.ListBox
+    Friend WithEvents detailPanel As System.Windows.Forms.Panel
+    Friend WithEvents detailGroup As System.Windows.Forms.GroupBox
+    Friend WithEvents detailLabel As System.Windows.Forms.Label
     Friend WithEvents OlvColumnNombre As BrightIdeasSoftware.OLVColumn
     Friend WithEvents OlvColumnTamano As BrightIdeasSoftware.OLVColumn
     Friend WithEvents OlvColumnProgreso As BrightIdeasSoftware.OLVColumn
