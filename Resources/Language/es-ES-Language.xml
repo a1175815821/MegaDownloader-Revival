@@ -17,6 +17,10 @@
   <Text key="Decrease priority"><![CDATA[Bajar prioridad]]></Text>
   <Text key="Close"><![CDATA[Cerrar]]></Text>
   <Text key="Pause"><![CDATA[Pausar]]></Text>
+  <Text key="Start"><![CDATA[Iniciar]]></Text>
+  <Text key="Stop"><![CDATA[Detener]]></Text>
+  <Text key="Add"><![CDATA[Añadir]]></Text>
+  <Text key="Update"><![CDATA[Actualizar]]></Text>
   <Text key="Delete from list"><![CDATA[Eliminar de la lista]]></Text>
   <Text key="Delete from list and disk"><![CDATA[Eliminar de la lista y borrar de disco]]></Text>
   <Text key="Add link"><![CDATA[Agregar enlace]]></Text>
