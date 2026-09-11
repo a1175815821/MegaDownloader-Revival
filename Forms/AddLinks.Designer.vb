@@ -40,6 +40,7 @@ Partial Class AddLinks
         Me.btnWatchOnline = New System.Windows.Forms.Button()
         Me.txtLinks = New System.Windows.Forms.RichTextBox()
         Me.linkStegano = New System.Windows.Forms.LinkLabel()
+        Me.lblLinkCount = New System.Windows.Forms.Label()
         Me.OpcionesPaquete.SuspendLayout()
         Me.SuspendLayout()
         '
@@ -232,12 +233,23 @@ Partial Class AddLinks
         Me.linkStegano.Text = "Recuperar enlaces de una imagen"
         Me.linkStegano.TextAlign = System.Drawing.ContentAlignment.TopRight
         '
+        'lblLinkCount
+        '
+        Me.lblLinkCount.AutoSize = True
+        Me.lblLinkCount.Location = New System.Drawing.Point(333, 191)
+        Me.lblLinkCount.Name = "lblLinkCount"
+        Me.lblLinkCount.Size = New System.Drawing.Size(70, 13)
+        Me.lblLinkCount.TabIndex = 14
+        Me.lblLinkCount.Text = ""
+        Me.lblLinkCount.TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        '
         'AddLinks
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(675, 338)
         Me.Controls.Add(Me.linkStegano)
+        Me.Controls.Add(Me.lblLinkCount)
         Me.Controls.Add(Me.txtLinks)
         Me.Controls.Add(Me.LinkLabel1)
         Me.Controls.Add(Me.btnWatchOnline)
@@ -276,4 +288,5 @@ Partial Class AddLinks
     Friend WithEvents txtPassword As System.Windows.Forms.TextBox
     Friend WithEvents txtLinks As System.Windows.Forms.RichTextBox
     Friend WithEvents linkStegano As System.Windows.Forms.LinkLabel
+    Friend WithEvents lblLinkCount As System.Windows.Forms.Label
 End Class

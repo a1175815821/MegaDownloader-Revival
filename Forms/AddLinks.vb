@@ -2,9 +2,18 @@ Imports System.Text.RegularExpressions
 
 Public Class AddLinks
 	
-    Public Main As Main
-    Public Config As Configuracion
-    Public HiddenLinks As String = String.Empty
+	Public Main As Main
+	Public Config As Configuracion
+	Public HiddenLinks As String = String.Empty
+
+	' P0-6 UI:链接计数 debounce(300ms,避免大文本每次击键跑正则)+输入框水印
+	Private WithEvents _linkCountTimer As Timer
+	Private _cueFallbackLabel As Label = Nothing
+
+	Private Const EM_SETCUEBANNER As Integer = &H1501
+	<System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
+	Private Shared Function SendMessage(hWnd As IntPtr, msg As Integer, wParam As Integer, lParam As String) As IntPtr
+	End Function
 	
 	Private Sub AddLinks_Load(sender As Object, e As System.EventArgs) Handles Me.Load
 		ThemeManager.ApplyTheme(Me)
@@ -28,6 +37,14 @@ Public Class AddLinks
         End If
 
         chkUnZip_CheckedChanged(Nothing, Nothing)
+
+		' P0-6:计数 Timer 挂 components,随窗体释放(本窗体每次打开新建,防泄漏)
+		If Me.components IsNot Nothing Then
+			_linkCountTimer = New Timer(Me.components)
+		Else
+			_linkCountTimer = New Timer()
+		End If
+		_linkCountTimer.Interval = 300
 		
 		' Centramos la pantalla
 		' http://stackoverflow.com/questions/7892090/how-to-set-winform-start-position-at-top-right
@@ -108,6 +125,8 @@ Public Class AddLinks
     End Sub
 
     Private Sub AddLinks_Shown(sender As Object, e As System.EventArgs) Handles Me.Shown
+        TrySetCueBanner()
+        UpdateLinkCount()
         PonerFoco()
         If Not String.IsNullOrEmpty(txtLinks.Text) Then
             btnAgregar.Focus()
@@ -127,6 +146,75 @@ Public Class AddLinks
     Private Sub ToggleOpciones_Click(sender As System.Object, e As System.EventArgs)
         OpcionesPaquete.Visible = Not OpcionesPaquete.Visible
     End Sub
+
+	''' <summary>P0-6:输入变化只重启 debounce 计时,真正的正则解析在 Tick 里跑一次。</summary>
+	Private Sub txtLinks_TextChanged(sender As Object, e As System.EventArgs) Handles txtLinks.TextChanged
+		If _linkCountTimer IsNot Nothing Then
+			_linkCountTimer.Stop()
+			_linkCountTimer.Start()
+		End If
+	End Sub
+
+	Private Sub _linkCountTimer_Tick(sender As Object, e As System.EventArgs) Handles _linkCountTimer.Tick
+		_linkCountTimer.Stop()
+		UpdateLinkCount()
+	End Sub
+
+	Private Sub AddLinks_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
+		Try
+			If _linkCountTimer IsNot Nothing Then _linkCountTimer.Dispose()
+		Catch
+		End Try
+	End Sub
+
+	Private Sub UpdateLinkCount()
+		Try
+			Dim n As Integer = 0
+			If Not String.IsNullOrEmpty(txtLinks.Text) Then
+				Dim urls As Generic.List(Of String) = ExtraerURLs()
+				If urls IsNot Nothing Then n = urls.Count
+			End If
+			If n > 0 Then
+				lblLinkCount.Text = Language.GetText("AddLinks_LinkCount").Replace("%N%", n.ToString())
+			Else
+				lblLinkCount.Text = ""
+			End If
+			If _cueFallbackLabel IsNot Nothing AndAlso Not _cueFallbackLabel.IsDisposed Then
+				_cueFallbackLabel.Visible = (txtLinks.TextLength = 0)
+			End If
+		Catch ex As Exception
+			Log.WriteError("UpdateLinkCount failed: " & ex.ToString)
+		End Try
+	End Sub
+
+	''' <summary>
+	''' P0-6:RichTextBox 水印。EM_SETCUEBANNER 在部分 RichEdit 版本上返回 0,
+	''' 此时 fallback 为覆盖式灰 Label(Disabled 穿透点击),随 Shown 只建一次。
+	''' </summary>
+	Private Sub TrySetCueBanner()
+		Try
+			Dim cue As String = Language.GetText("AddLinks_CueBanner")
+			Dim ok As Boolean = False
+			If txtLinks.IsHandleCreated AndAlso Not String.IsNullOrEmpty(cue) Then
+				ok = (SendMessage(txtLinks.Handle, EM_SETCUEBANNER, 0, cue) <> IntPtr.Zero)
+			End If
+			If Not ok Then
+				If _cueFallbackLabel Is Nothing OrElse _cueFallbackLabel.IsDisposed Then
+					_cueFallbackLabel = New Label()
+					_cueFallbackLabel.AutoSize = True
+					_cueFallbackLabel.Enabled = False
+					_cueFallbackLabel.BackColor = txtLinks.BackColor
+					_cueFallbackLabel.Location = New Point(txtLinks.Left + 4, txtLinks.Top + 3)
+					_cueFallbackLabel.Text = cue
+					Me.Controls.Add(_cueFallbackLabel)
+					_cueFallbackLabel.BringToFront()
+				End If
+				_cueFallbackLabel.Visible = (txtLinks.TextLength = 0)
+			End If
+		Catch ex As Exception
+			Log.WriteError("TrySetCueBanner failed: " & ex.ToString)
+		End Try
+	End Sub
 
 
     Private Sub btnExaminar_Click(sender As System.Object, e As System.EventArgs) Handles btnExaminar.Click

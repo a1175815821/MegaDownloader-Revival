@@ -22,6 +22,8 @@
   <Text key="Add"><![CDATA[添加]]></Text>
   <Text key="Update"><![CDATA[更新]]></Text>
   <Text key="Toast_PackageAdded"><![CDATA[已添加：%N%]]></Text>
+  <Text key="AddLinks_LinkCount"><![CDATA[%N% 个链接]]></Text>
+  <Text key="AddLinks_CueBanner"><![CDATA[在此粘贴 MEGA 链接，每行一个…]]></Text>
   <Text key="Delete from list"><![CDATA[从列表删除]]></Text>
   <Text key="Delete from list and disk"><![CDATA[从列表和磁盘删除]]></Text>
   <Text key="Add link"><![CDATA[添加连接]]></Text>
