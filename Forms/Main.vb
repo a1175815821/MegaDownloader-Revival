@@ -980,6 +980,7 @@ Public Class Main
         End If
         ApplyProgressBarThemeColors()
         ApplyQuotaBannerTheme()
+        ApplyToolbarIconTheme()
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -992,6 +993,63 @@ Public Class Main
         progressBarRenderer.GradientStartColor = ThemeManager.GetColor("ProgressGradientStart")
         progressBarRenderer.GradientEndColor = ThemeManager.GetColor("ProgressGradientEnd")
     End Sub
+
+    ''' <summary>
+    ''' P0-5 UI:工具栏图标跟随主题。原图(40x40)首次调用时存入 Button.Tag,深色按 ColorMatrix
+    ''' 提亮,浅色用回原图;每次替换后 Dispose 上一张着色图,原图与窗体同寿命(与此前行为一致)。
+    ''' </summary>
+    Private Sub ApplyToolbarIconTheme()
+        Try
+            Dim dark As Boolean = (ThemeManager.Current = ThemeManager.ResolvedTheme.Dark)
+            ApplyIconThemeToButton(btnPlay, dark)
+            ApplyIconThemeToButton(btnPause, dark)
+            ApplyIconThemeToButton(btnStop, dark)
+            ApplyIconThemeToButton(btnAddLink, dark)
+            ApplyIconThemeToButton(btnUpdate, dark)
+            ApplyIconThemeToButton(btnConfig, dark)
+            ApplyIconThemeToButton(btnCollaborate, dark)
+        Catch ex As Exception
+            Log.WriteError("ApplyToolbarIconTheme failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Shared Sub ApplyIconThemeToButton(btn As Button, dark As Boolean)
+        If btn Is Nothing OrElse btn.IsDisposed Then Return
+        Dim original As Image = TryCast(btn.Tag, Image)
+        If original Is Nothing Then
+            If btn.Image Is Nothing Then Return
+            original = btn.Image
+            btn.Tag = original
+        End If
+        Dim previous As Image = btn.Image
+        If dark Then
+            btn.Image = RecolorImageForDark(original)
+        Else
+            btn.Image = original
+        End If
+        If previous IsNot Nothing AndAlso Not Object.ReferenceEquals(previous, btn.Image) _
+                AndAlso Not Object.ReferenceEquals(previous, original) Then
+            previous.Dispose()
+        End If
+    End Sub
+
+    Private Shared Function RecolorImageForDark(original As Image) As Image
+        Dim bmp As New Bitmap(original.Width, original.Height)
+        Using g As Graphics = Graphics.FromImage(bmp)
+            Dim m As New System.Drawing.Imaging.ColorMatrix(New Single()() {
+                New Single() {1.35F, 0.0F, 0.0F, 0.0F, 0.0F},
+                New Single() {0.0F, 1.35F, 0.0F, 0.0F, 0.0F},
+                New Single() {0.0F, 0.0F, 1.35F, 0.0F, 0.0F},
+                New Single() {0.0F, 0.0F, 0.0F, 1.0F, 0.0F},
+                New Single() {0.08F, 0.08F, 0.08F, 0.0F, 1.0F}})
+            Using attrs As New System.Drawing.Imaging.ImageAttributes()
+                attrs.SetColorMatrix(m)
+                g.DrawImage(original, New Rectangle(0, 0, bmp.Width, bmp.Height),
+                            0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attrs)
+            End Using
+        End Using
+        Return bmp
+    End Function
 
 #Region "v2.5 beta: 配额横幅 + 批量失败操作"
 
