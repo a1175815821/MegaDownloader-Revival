@@ -853,8 +853,11 @@ Public Class Main
                                                  Return Language.GetText("Creating files")
                                              Case MegaDownloader.Estado.Verificando
                                                  Return Language.GetText("Verifying")
-                                             Case MegaDownloader.Estado.Erroneo
-                                                 Return Language.GetText("Error capital leters")
+                                              Case MegaDownloader.Estado.Erroneo
+                                                  Dim errBase As String = Language.GetText("Error capital leters")
+                                                  Dim errReason As String = ShortErrorReason(ele)
+                                                  If String.IsNullOrEmpty(errReason) Then Return errBase
+                                                  Return errBase & ": " & errReason
                                              Case MegaDownloader.Estado.Pausado
                                                  Return Language.GetText("Paused")
                                              Case MegaDownloader.Estado.Descomprimiendo
@@ -1358,6 +1361,23 @@ Public Class Main
             Log.WriteError("ApplyColumnUIDefaultsV26 failed: " & ex.ToString)
         End Try
     End Sub
+
+    ''' <summary>
+    ''' P1-10 UI:错误行内联原因首行(截断 40 字)。只读 Fichero.DescripcionError 字段,O(1),
+    ''' 可安全跑在 2.3Hz 列表刷新热路径;包级别不扫子文件(展开看各文件原因),外层 Try 已兜底。
+    ''' </summary>
+    Private Shared Function ShortErrorReason(ele As IDescarga) As String
+        Dim fic As Fichero = TryCast(ele, Fichero)
+        If fic Is Nothing Then Return Nothing
+        Dim msg As String = fic.DescripcionError
+        If String.IsNullOrEmpty(msg) Then Return Nothing
+        Dim cut As Integer = msg.IndexOf(vbLf)
+        If cut >= 0 Then msg = msg.Substring(0, cut)
+        msg = msg.Trim().Replace(vbCr, " ").Replace(vbTab, " ")
+        If msg.Length > 40 Then msg = msg.Substring(0, 40) & "..."
+        If msg.Length = 0 Then Return Nothing
+        Return msg
+    End Function
 #End Region
 
 #Region "Gestion lista paquetes y descargas"
