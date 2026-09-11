@@ -52,7 +52,6 @@ Partial Class Main
         Me.VerLinksToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.VerLinksDescToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.OcultarEnlacesImagenMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.ToolStripSeparator4 = New System.Windows.Forms.ToolStripSeparator()
         Me.VerProgresoDescompresionToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ResetToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.LimpiarCompletados2ToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
@@ -195,7 +194,7 @@ Partial Class Main
         '
         'MenuDescarga
         '
-        Me.MenuDescarga.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.AbrirEnCarpetaToolStripMenuItem, Me.ToolStripSeparator2, Me.SubirPrioridadMenuItem, Me.BajarPrioridadMenuItem, Me.ToolStripSeparator3, Me.ForceDownloadStripMenuItem, Me.PausarStripMenuItem, Me.EliminarMenuItem, Me.EliminarYBorrarMenuItem, Me.ToolStripSeparator1, Me.VerErrorToolStripMenuItem, Me.VerLinksToolStripMenuItem, Me.VerLinksDescToolStripMenuItem, Me.OcultarEnlacesImagenMenuItem, Me.ToolStripSeparator4, Me.VerProgresoDescompresionToolStripMenuItem, Me.ResetToolStripMenuItem, Me.LimpiarCompletados2ToolStripMenuItem, Me.PropiedadesToolStripMenuItem})
+        Me.MenuDescarga.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.AbrirEnCarpetaToolStripMenuItem, Me.PropiedadesToolStripMenuItem, Me.ToolStripSeparator2, Me.ForceDownloadStripMenuItem, Me.PausarStripMenuItem, Me.SubirPrioridadMenuItem, Me.BajarPrioridadMenuItem, Me.ToolStripSeparator3, Me.EliminarMenuItem, Me.EliminarYBorrarMenuItem, Me.ResetToolStripMenuItem, Me.LimpiarCompletados2ToolStripMenuItem, Me.ToolStripSeparator1, Me.VerErrorToolStripMenuItem, Me.VerLinksToolStripMenuItem, Me.VerLinksDescToolStripMenuItem, Me.OcultarEnlacesImagenMenuItem, Me.VerProgresoDescompresionToolStripMenuItem})
         Me.MenuDescarga.Name = "MenuDescarga"
         Me.MenuDescarga.Size = New System.Drawing.Size(226, 336)
         '
@@ -279,11 +278,6 @@ Partial Class Main
         Me.OcultarEnlacesImagenMenuItem.Name = "OcultarEnlacesImagenMenuItem"
         Me.OcultarEnlacesImagenMenuItem.Size = New System.Drawing.Size(225, 22)
         Me.OcultarEnlacesImagenMenuItem.Text = "Ocultar en imagen"
-        '
-        'ToolStripSeparator4
-        '
-        Me.ToolStripSeparator4.Name = "ToolStripSeparator4"
-        Me.ToolStripSeparator4.Size = New System.Drawing.Size(222, 6)
         '
         'VerProgresoDescompresionToolStripMenuItem
         '
@@ -537,7 +531,6 @@ Partial Class Main
     'Friend WithEvents SkinEngine As Sunisoft.IrisSkin.SkinEngine
     Friend WithEvents LimpiarCompletadosToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents LimpiarCompletados2ToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents ToolStripSeparator4 As System.Windows.Forms.ToolStripSeparator
     Friend WithEvents btnAddLink As System.Windows.Forms.Button
     Friend WithEvents PausarStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents ToolTipBotones As System.Windows.Forms.ToolTip
