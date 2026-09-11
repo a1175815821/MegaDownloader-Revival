@@ -1047,14 +1047,10 @@ Public Class Main
     End Sub
 
     Private Sub ApplyQuotaBannerTheme()
-        If quotaBannerPanel Is Nothing Then Return
-        Try
-            quotaBannerPanel.BackColor = ThemeManager.GetColor("ErrorFore")
-            quotaBannerLabel.ForeColor = System.Drawing.Color.White
-        Catch
-            quotaBannerPanel.BackColor = System.Drawing.Color.FromArgb(178, 34, 34)
-            quotaBannerLabel.ForeColor = System.Drawing.Color.White
-        End Try
+        If quotaBannerPanel Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
+        ' P0-3 UI:固定深红底+白字。此前用 ErrorFore,深色下是粉底(#F48771)+白字,对比度不足。
+        quotaBannerPanel.BackColor = System.Drawing.Color.FromArgb(178, 34, 34)
+        quotaBannerLabel.ForeColor = System.Drawing.Color.White
     End Sub
 
     Private Sub UpdateQuotaBannerTexts()

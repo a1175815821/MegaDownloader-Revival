@@ -38,7 +38,7 @@ Public NotInheritable Class ThemeManager
         {"ToolBorder", Color.FromArgb(204, 206, 209)},
         {"ErrorFore", Color.FromArgb(192, 0, 0)},
         {"SuccessFore", Color.FromArgb(0, 128, 0)},
-        {"ProgressBack", Color.Azure},
+        {"ProgressBack", Color.FromArgb(228, 230, 235)},
         {"ProgressFill", Color.MediumTurquoise},
         {"ProgressGradientStart", Color.SpringGreen},
         {"ProgressGradientEnd", Color.MediumTurquoise},
