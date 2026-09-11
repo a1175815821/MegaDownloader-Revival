@@ -32,8 +32,9 @@ Public Class MegaFolderHelper
     ''' (mega.nz/folder/&lt;id&gt;#&lt;key&gt;/file/&lt;fileID&gt;). When set, only that file
     ''' is returned.</param>
     Public Shared Function RetrieveLinksFromFolder(ByVal FolderID As String, ByVal FolderKey As String, _
-                                                    Optional ByVal SubFolderID As String = "", _
-                                                    Optional ByVal SubFileID As String = "") As Generic.List(Of URLProcessor.FileURL)
+                                                     Optional ByVal SubFolderID As String = "", _
+                                                     Optional ByVal SubFileID As String = "", _
+                                                     Optional ByVal progress As IProgress(Of Integer) = Nothing) As Generic.List(Of URLProcessor.FileURL)
         Dim jsonRQ As String
         Dim res As Conexion.Respuesta
 
@@ -45,10 +46,20 @@ Public Class MegaFolderHelper
         res = Conexion.SendJSON(Conexion.Get_MEGA_API_Url("") & "&n=" & FolderID, jsonRQ)
 
         If res.Excepcion IsNot Nothing Then
+            Dim wex As System.Net.WebException = TryCast(res.Excepcion, System.Net.WebException)
+            If wex IsNot Nothing AndAlso MegaQuotaManager.IsQuotaWebException(wex) Then
+                Dim hint As Long? = MegaQuotaManager.TryGetRetryAfterSeconds(wex)
+                MegaQuotaManager.ReportQuota(If(hint.HasValue, hint.Value, 0))
+                Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (HTTP 509) while reading folder.")
+            End If
             Throw New ApplicationException("Error getting file list from shared folder - " & res.Excepcion.ToString)
         End If
 
         If IsNumeric(res.Mensaje) Then
+            If Conexion.IsQuotaErrorText(CStr(res.Mensaje)) Then
+                MegaQuotaManager.ReportQuota()
+                Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA) while reading folder.")
+            End If
             Throw MEGA_ErrorHandler.GetErrorFromMegaResponse(res.Mensaje, "getting file list from shared folder")
         End If
 
@@ -62,6 +73,10 @@ Public Class MegaFolderHelper
             Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
         End Try
         If FileList Is Nothing OrElse FileList.f Is Nothing Then
+            If FileList IsNot Nothing AndAlso Conexion.IsQuotaErrorText(FileList.e) Then
+                MegaQuotaManager.ReportQuota()
+                Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA) while reading folder.")
+            End If
             Log.WriteError("RetrieveLinksFromFolder: empty file list in server response.")
             Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
         End If
@@ -114,8 +129,12 @@ Public Class MegaFolderHelper
 
         ' Get folder structure
         Dim htFolderEstructure As New Generic.Dictionary(Of String, KeyValuePair(Of String, String))
+        Dim folderCounter As Integer = 0
+        If progress IsNot Nothing Then progress.Report(0)
         For Each fileN As FileNode In FileList.f
             If fileN.t = 1 Then
+                folderCounter += 1
+                If progress IsNot Nothing AndAlso folderCounter Mod 100 = 0 Then progress.Report(folderCounter)
                 Dim FileID As String = fileN.h
 
                 ' 从 k 字段提取与 root handle 匹配的 key (用于用 FolderKey 解密)
@@ -165,9 +184,12 @@ Public Class MegaFolderHelper
 
 
         ' Get files
+        Dim fileCounter As Integer = 0
         For Each fileN As FileNode In FileList.f
 
             If fileN.t = 0 Then
+                fileCounter += 1
+                If progress IsNot Nothing AndAlso fileCounter Mod 100 = 0 Then progress.Report(folderCounter + fileCounter)
                 ' 单文件链接: 只保留链接指向的那个文件
                 If Not String.IsNullOrEmpty(SubFileID) AndAlso Not fileN.h = SubFileID Then
                     Continue For
@@ -229,6 +251,7 @@ Public Class MegaFolderHelper
 
         Next
 
+        If progress IsNot Nothing Then progress.Report(folderCounter + fileCounter)
         Return Results
     End Function
 

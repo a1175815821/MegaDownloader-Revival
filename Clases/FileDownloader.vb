@@ -447,6 +447,25 @@ Public Class FileDownloader
     Private m_localDirectory As String
     Private m_file As FileInfo
     Private m_totalSize As Int64
+
+    ''' <summary>v2.5 beta: 配额异常归一上报。返回 True 表示已按配额处理(调用方不再普通重试)。</summary>
+    Friend Shared Function ReportQuotaIfMatch(ex As Exception) As Boolean
+        If TypeOf ex Is MegaQuotaExceededException Then
+            MegaQuotaManager.ReportQuota()
+            Return True
+        End If
+        Dim wex As System.Net.WebException = TryCast(ex, System.Net.WebException)
+        If wex IsNot Nothing AndAlso MegaQuotaManager.IsQuotaWebException(wex) Then
+            Dim hint As Long? = MegaQuotaManager.TryGetRetryAfterSeconds(wex)
+            MegaQuotaManager.ReportQuota(If(hint.HasValue, hint.Value, 0))
+            Return True
+        End If
+        If ex IsNot Nothing AndAlso Conexion.IsQuotaErrorText(ex.Message) Then
+            MegaQuotaManager.ReportQuota()
+            Return True
+        End If
+        Return False
+    End Function
 #End Region
 
 #Region "Constructors"
@@ -645,8 +664,10 @@ Public Class FileDownloader
                     m_currentFileSize = TotalSize
                     Log.WriteInfo("File size " & file.Name & ": " & TotalSize)
                 Catch ex As WebException
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 Catch ex As Exception
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 End Try
             End If
@@ -1082,7 +1103,12 @@ Public Class FileDownloader
 
                     ' Require Partial Content for ranged requests
                     If webResp.StatusCode <> HttpStatusCode.PartialContent AndAlso webResp.StatusCode <> HttpStatusCode.OK Then
-                        exc = New ApplicationException("Unexpected HTTP status for ranged download: " & CInt(webResp.StatusCode).ToString())
+                        If MegaQuotaManager.IsQuotaStatusCode(webResp.StatusCode) Then
+                            MegaQuotaManager.ReportQuota()
+                            exc = New MegaQuotaExceededException("MEGA transfer quota exceeded (HTTP 509) during download.")
+                        Else
+                            exc = New ApplicationException("Unexpected HTTP status for ranged download: " & CInt(webResp.StatusCode).ToString())
+                        End If
                     Else
                         Dim contentRangeHeader As String = webResp.Headers.Item("Content-Range")
                         ' Content-Range: bytes 1769472-2147111/2147112
@@ -1136,8 +1162,10 @@ Public Class FileDownloader
                     End If
 
                 Catch ex As WebException
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 Catch ex As Exception
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 End Try
 
@@ -1242,8 +1270,10 @@ Public Class FileDownloader
                             Next
 
                         Catch ex As WebException
+                            ReportQuotaIfMatch(ex)
                             exc = ex
                         Catch ex As Exception
+                            ReportQuotaIfMatch(ex)
                             exc = ex
                         End Try
 
@@ -1416,6 +1446,11 @@ Public Class FileDownloader
         If Not HasBeenCanceled Then
 
             If worker.ChunkDownloadFailed Then
+                ' v2.5 beta: 配额期内不再空转重试,等待全局熔断解除后由调度器统一唤醒。
+                If MegaQuotaManager.IsQuarantined() Then
+                    Log.WriteInfo("Chunk failed during MEGA quota quarantine; worker will NOT restart until quota clears.")
+                    Return
+                End If
                 ' Exponential backoff with jitter (cap ~30s).
                 ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
                 ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
@@ -1510,6 +1545,7 @@ Public Class FileDownloader
             If size < 0 Then Throw New ApplicationException("Could not determine remote file size.")
             m_totalSize = size
         Catch ex As Exception
+            ReportQuotaIfMatch(ex)
             Throw New ApplicationException("Connection error: " & ex.Message)
         End Try
 

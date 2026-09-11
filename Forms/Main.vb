@@ -227,6 +227,8 @@ Public Class Main
         btnCollaborate.Image = LoadEmbeddedImage(thisExe, "collaborate.png")
 
         CrearMenus()
+        InitBatchMenu()
+        InitQuotaBanner()
 
         'btnCollaborate.Visible = Not Config.HideCollaborateButton
         btnCollaborate.Visible = False ' Lo quitamos... nadie lo usa... 
@@ -403,6 +405,9 @@ Public Class Main
         Me.ToolTipBotones.SetToolTip(Me.btnUpdate, Language.GetText("New version do you want to download it?"))
         Me.StatusToolStripStatusLabel.Text = Language.GetText("Status: -")
         Me.RAMProcToolStripStatusLabel.Text = Language.GetText("RAM Proc Empty")
+        UpdateBatchMenuTexts()
+        UpdateQuotaBannerTexts()
+        ApplyQuotaBannerTheme()
     End Sub
 
     ''' <summary>
@@ -720,6 +725,7 @@ Public Class Main
             Me.IconoMinimizado.Visible = False
             Me.Visible = True
         End If
+        LayoutQuotaBanner()
     End Sub
 
     Private Sub RestaurarVentana()
@@ -959,6 +965,7 @@ Public Class Main
             ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
         End If
         ApplyProgressBarThemeColors()
+        ApplyQuotaBannerTheme()
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -971,6 +978,232 @@ Public Class Main
         progressBarRenderer.GradientStartColor = ThemeManager.GetColor("ProgressGradientStart")
         progressBarRenderer.GradientEndColor = ThemeManager.GetColor("ProgressGradientEnd")
     End Sub
+
+#Region "v2.5 beta: 配额横幅 + 批量失败操作"
+
+    Private quotaBannerPanel As Panel = Nothing
+    Private quotaBannerLabel As Label = Nothing
+    Private quotaRetryNowButton As Button = Nothing
+    Private quotaNotified As Boolean = False
+    Private WithEvents RetryAllFailedMenuItem As New ToolStripMenuItem()
+    Private WithEvents RemoveAllFailedMenuItem As New ToolStripMenuItem()
+
+    ''' <summary>配额横幅:Anchor 布局,显示/隐藏时整体下移下载列表,无 Dock 冲突。</summary>
+    Private Sub InitQuotaBanner()
+        quotaBannerPanel = New Panel()
+        quotaBannerPanel.Name = "quotaBannerPanel"
+        quotaBannerPanel.Height = 30
+        quotaBannerPanel.Left = 0
+        quotaBannerPanel.Top = 40
+        quotaBannerPanel.Width = Me.ClientSize.Width
+        quotaBannerPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        quotaBannerPanel.Visible = False
+
+        quotaBannerLabel = New Label()
+        quotaBannerLabel.Name = "quotaBannerLabel"
+        quotaBannerLabel.AutoSize = False
+        quotaBannerLabel.Left = 12
+        quotaBannerLabel.Top = 0
+        quotaBannerLabel.Height = 30
+        quotaBannerLabel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        quotaBannerLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+
+        quotaRetryNowButton = New Button()
+        quotaRetryNowButton.Name = "quotaRetryNowButton"
+        quotaRetryNowButton.Height = 23
+        quotaRetryNowButton.Width = 110
+        quotaRetryNowButton.Top = 3
+        quotaRetryNowButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        AddHandler quotaRetryNowButton.Click, AddressOf QuotaRetryNow_Click
+
+        quotaBannerPanel.Controls.Add(quotaBannerLabel)
+        quotaBannerPanel.Controls.Add(quotaRetryNowButton)
+        Me.Controls.Add(quotaBannerPanel)
+        quotaBannerPanel.BringToFront()
+        LayoutQuotaBanner()
+        ApplyQuotaBannerTheme()
+        UpdateQuotaBannerTexts()
+    End Sub
+
+    Private Sub LayoutQuotaBanner()
+        If quotaBannerPanel Is Nothing OrElse quotaRetryNowButton Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
+        quotaBannerPanel.Width = Me.ClientSize.Width
+        quotaRetryNowButton.Left = quotaBannerPanel.Width - quotaRetryNowButton.Width - 12
+        quotaBannerLabel.Width = Math.Max(50, quotaRetryNowButton.Left - 18)
+    End Sub
+
+    Private Sub ApplyQuotaBannerTheme()
+        If quotaBannerPanel Is Nothing Then Return
+        Try
+            quotaBannerPanel.BackColor = ThemeManager.GetColor("ErrorFore")
+            quotaBannerLabel.ForeColor = System.Drawing.Color.White
+        Catch
+            quotaBannerPanel.BackColor = System.Drawing.Color.FromArgb(178, 34, 34)
+            quotaBannerLabel.ForeColor = System.Drawing.Color.White
+        End Try
+    End Sub
+
+    Private Sub UpdateQuotaBannerTexts()
+        If quotaBannerLabel Is Nothing OrElse quotaRetryNowButton Is Nothing Then Return
+        quotaRetryNowButton.Text = Language.GetText("Quota_RetryNow")
+        If String.IsNullOrEmpty(quotaRetryNowButton.Text) Then quotaRetryNowButton.Text = "Retry now"
+    End Sub
+
+    Private Shared Function FormatQuotaRemaining(span As TimeSpan) As String
+        Dim totalMin As Integer = Math.Max(1, CInt(Math.Ceiling(span.TotalMinutes)))
+        Dim h As Integer = totalMin \ 60
+        Dim m As Integer = totalMin Mod 60
+        If h > 0 Then Return h.ToString() & " h " & m.ToString() & " min"
+        Return m.ToString() & " min"
+    End Function
+
+    ''' <summary>后台线程每 430ms 调用,内部编组回 UI。配额进入/解除时各弹一次气泡。</summary>
+    Private Sub UpdateQuotaUI()
+        Try
+            If Me.IsDisposed OrElse Not Me.IsHandleCreated Then Return
+            If Me.InvokeRequired Then
+                Me.BeginInvoke(New Action(AddressOf UpdateQuotaUI))
+                Return
+            End If
+            If quotaBannerPanel Is Nothing Then Return
+            Dim quotaRem As TimeSpan? = MegaQuotaManager.GetRemaining()
+            If quotaRem.HasValue Then
+                quotaBannerPanel.Visible = True
+                LayoutQuotaBanner()
+                If quotaBannerPanel.Tag Is Nothing OrElse Not CBool(quotaBannerPanel.Tag) Then
+                    ListaDescargas.Top += quotaBannerPanel.Height
+                    ListaDescargas.Height = Math.Max(50, ListaDescargas.Height - quotaBannerPanel.Height)
+                    quotaBannerPanel.Tag = True
+                End If
+                quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
+                If Not quotaNotified Then
+                    quotaNotified = True
+                    Log.WriteWarning("Showing MEGA quota banner, remaining " & quotaRem.Value.ToString())
+                    Try
+                        IconoMinimizado.ShowBalloonTip(5000, "MegaDownloader", quotaBannerLabel.Text, ToolTipIcon.Warning)
+                    Catch
+                    End Try
+                End If
+            Else
+                If quotaBannerPanel.Visible Then
+                    quotaBannerPanel.Visible = False
+                    If quotaBannerPanel.Tag IsNot Nothing AndAlso CBool(quotaBannerPanel.Tag) Then
+                        ListaDescargas.Top -= quotaBannerPanel.Height
+                        ListaDescargas.Height += quotaBannerPanel.Height
+                        quotaBannerPanel.Tag = False
+                    End If
+                End If
+                If quotaNotified Then
+                    quotaNotified = False
+                    Log.WriteWarning("MEGA quota cleared; queue auto-resumes.")
+                    Try
+                        IconoMinimizado.ShowBalloonTip(5000, "MegaDownloader", Language.GetText("Quota_Recovered"), ToolTipIcon.Info)
+                    Catch
+                    End Try
+                End If
+            End If
+        Catch
+        End Try
+    End Sub
+
+    Private Sub QuotaRetryNow_Click(sender As Object, e As EventArgs)
+        Try
+            MegaQuotaManager.ClearQuota()
+            WakeQuotaFailedItems()
+            UpdateQuotaUI()
+            RefreshListaDescargas(True)
+        Catch ex As Exception
+            Log.WriteError("QuotaRetryNow failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>把配额失败项全部唤回 EnCola(手动出口与到期自动恢复共用)。</summary>
+    Private Sub WakeQuotaFailedItems()
+        Dim woken As Integer = 0
+        Mutex.ListaDescargas.WaitOne()
+        Try
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
+                        ColaReseteoLocal.Add(fic)
+                    End If
+                Next
+            Next
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
+        For Each fic As Fichero In ColaReseteoLocal
+            fic.ResetearDescarga()
+            fic.SetDescargaEstado = Estado.EnCola
+            woken += 1
+        Next
+        ColaReseteoLocal.Clear()
+        If woken > 0 Then Log.WriteWarning("Woke " & woken & " quota-failed files back to queue.")
+    End Sub
+    Private ColaReseteoLocal As New Generic.List(Of Fichero)
+
+    Private Sub InitBatchMenu()
+        RetryAllFailedMenuItem.Name = "RetryAllFailedMenuItem"
+        RemoveAllFailedMenuItem.Name = "RemoveAllFailedMenuItem"
+        MenuDescarga.Items.Add(New ToolStripSeparator())
+        MenuDescarga.Items.Add(RetryAllFailedMenuItem)
+        MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
+        UpdateBatchMenuTexts()
+    End Sub
+
+    Private Sub UpdateBatchMenuTexts()
+        RetryAllFailedMenuItem.Text = Language.GetText("Retry all failed")
+        If String.IsNullOrEmpty(RetryAllFailedMenuItem.Text) Then RetryAllFailedMenuItem.Text = "Retry all failed"
+        RemoveAllFailedMenuItem.Text = Language.GetText("Remove all failed")
+        If String.IsNullOrEmpty(RemoveAllFailedMenuItem.Text) Then RemoveAllFailedMenuItem.Text = "Remove all failed"
+    End Sub
+
+    Private Function CollectErroneoFiles() As Generic.List(Of Fichero)
+        Dim res As New Generic.List(Of Fichero)
+        Mutex.ListaDescargas.WaitOne()
+        Try
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.DescargaEstado = Estado.Erroneo Then res.Add(fic)
+                Next
+            Next
+        Finally
+            Mutex.ListaDescargas.ReleaseMutex()
+        End Try
+        Return res
+    End Function
+
+    Private Sub RetryAllFailedMenuItem_Click(sender As Object, e As EventArgs) Handles RetryAllFailedMenuItem.Click
+        Try
+            Dim lista As Generic.List(Of Fichero) = CollectErroneoFiles()
+            For Each fic As Fichero In lista
+                fic.ResetearDescarga()
+                fic.SetDescargaEstado = Estado.EnCola
+            Next
+            Log.WriteWarning("Retrying all failed files: " & lista.Count)
+            RefreshListaDescargas(True)
+        Catch ex As Exception
+            Log.WriteError("RetryAllFailed failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub RemoveAllFailedMenuItem_Click(sender As Object, e As EventArgs) Handles RemoveAllFailedMenuItem.Click
+        Try
+            Dim lista As Generic.List(Of Fichero) = CollectErroneoFiles()
+            If lista.Count = 0 Then Return
+            Dim confirm As String = Language.GetText("Remove all failed confirm").Replace("%N%", lista.Count.ToString())
+            If MessageBox.Show(confirm, Language.GetText("Confirmation"), MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) <> DialogResult.OK Then Return
+            Dim deletePart As Boolean = MessageBox.Show(Language.GetText("Remove all failed delete part"), Language.GetText("Confirmation"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes
+            For Each fic As Fichero In lista
+                Eliminar(fic, deletePart, False)
+            Next
+            RefreshListaDescargas(True)
+        Catch ex As Exception
+            Log.WriteError("RemoveAllFailed failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+#End Region
     Private Function PintarVelocidadDescarga(ele As IDescarga) As String
         If ele.DescargaEstado = Estado.Descargando Then
             Return PintarVelocidadDescarga(ele.DescargaVelocidadKBs)
@@ -1179,7 +1412,11 @@ Public Class Main
 				Dim PaqueteDelFicheroActualizar As Paquete = Nothing
                 Dim TiempoDormir As Integer = 250
 
-                If Not NecesitaCambiarUsuarioYPassword Then
+                ' v2.5 beta: 配额期内不做新文件信息校验(每次校验=一次 API 调用,会延长惩罚窗口)。
+                Dim quotaHoldVerify As Boolean = MegaQuotaManager.IsQuarantined()
+                If quotaHoldVerify Then TiempoDormir = 5000
+
+                If Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify Then
 
                     Mutex.ListaDescargas.WaitOne()
                     Try
@@ -1376,6 +1613,8 @@ Public Class Main
 
                 SetStatusBar(RAMStr & "MB", ProcesadorStr & "%", EstadoTxt, VelocidadTxt, Config.ConexionesPorFichero & "/" & Config.DescargasSimultaneas)
 
+                UpdateQuotaUI()
+
                 If worker.CancellationPending Then Exit While
 
                 ' Dirty trick!!
@@ -1431,15 +1670,20 @@ Public Class Main
         Dim configConexionesPorFichero As Integer = Config.ConexionesPorFichero
         Dim ResetearErrores As Boolean = Config.ResetearErrores
         Dim ResetearErroresPeriodo As Integer = Config.ResetearErroresPeriodoMinutos
+        ' v2.5 beta: 配额熔断状态。配额期内不唤醒配额失败项、不开新任务；到期后配额失败项立即唤醒。
+        Dim quotaHold As Boolean = MegaQuotaManager.IsQuarantined()
 
         ' Reset de descargas erroneas
         If ResetearErrores Then
             Mutex.ListaDescargas.WaitOne()
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
-                    If Fichero.DescargaEstado = Estado.Erroneo AndAlso _
-                       (Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now) Then
-                        ColaReseteo.Add(Fichero)
+                    If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
+                        If Fichero.FailedByQuota Then
+                            If Not quotaHold Then ColaReseteo.Add(Fichero)
+                        ElseIf Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then
+                            ColaReseteo.Add(Fichero)
+                        End If
                     End If
                 Next
             Next
@@ -1456,7 +1700,7 @@ Public Class Main
         For Each paq As Paquete In Me.ListaPaquetes
             For Each Fichero As Fichero In paq.ListaFicheros
 
-                If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada Then
+                If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not quotaHold Then
                     ColaDescarga.Add(Fichero)
                 ElseIf Fichero.DescargaEstado = Estado.Pausado And Not Fichero.PausaIndividual Then
                     ColaDescargaPausa.Add(Fichero)
@@ -2323,7 +2567,15 @@ Public Class Main
                 Me.Invoke(d, New Object() {RAM, Proc, Estado, velocidad, configuracionConexiones})
             Else
                 Me.RAMProcToolStripStatusLabel.Text = Language.GetText("RAM") & ": " & RAM & " / " & Language.GetText("Proc") & ": " & Proc
-                Me.StatusToolStripStatusLabel.Text = Language.GetText("Status") & ": " & Estado & velocidad & "    " & Language.GetText("Connection conf") & ": " & configuracionConexiones
+                Dim quotaSuffix As String = ""
+                Try
+                    Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
+                    If qrem.HasValue Then
+                        quotaSuffix = "    " & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value))
+                    End If
+                Catch
+                End Try
+                Me.StatusToolStripStatusLabel.Text = Language.GetText("Status") & ": " & Estado & velocidad & "    " & Language.GetText("Connection conf") & ": " & configuracionConexiones & quotaSuffix
             End If
         Catch ex As Exception
             ' No hacemos nada
@@ -2539,6 +2791,12 @@ Public Class Main
             PropiedadesToolStripMenuItem.Enabled = False
             PausarStripMenuItem.Visible = False
             ForceDownloadStripMenuItem.Visible = False
+            RetryAllFailedMenuItem.Visible = False
+            RemoveAllFailedMenuItem.Visible = False
+            If CollectErroneoFiles().Count > 0 Then
+                RetryAllFailedMenuItem.Visible = True
+                RemoveAllFailedMenuItem.Visible = True
+            End If
             If ListaDescargas.SelectedObjects.Count = 1 Then
                 PropiedadesToolStripMenuItem.Enabled = True
             End If

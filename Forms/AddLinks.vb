@@ -161,8 +161,6 @@ Public Class AddLinks
                     Throw New ApplicationException(Language.GetText("Invalid directory"))
                 End Try
 
-                'ElseIf chkCrearDirectorio.Checked And String.IsNullOrEmpty(txtNombre.Text) Then
-                '	Throw New ApplicationException(Language.GetText("Invalid package name"))
             Else
 
                 btnAgregar.Text = Language.GetText("Loading...")
@@ -176,63 +174,9 @@ Public Class AddLinks
                 UltimaConfiguracionUsada.RutaDescarga = txtRuta.Text
                 UltimaConfiguracionUsada.IniciarDescarga = chkStartDownload.Checked
 
-                Dim URLs2 = URLProcessor.ProcessURLs(URLs, Me.Config)
-
-
-                If URLs2.Count = 0 Then
-                    Throw New ApplicationException(Language.GetText("Links not valid"))
-                End If
-
-                ' Creamos el paquete
-                Dim oPaquete As New Paquete
-                With oPaquete
-                    .Nombre = txtNombre.Text
-                    .RutaLocal = txtRuta.Text
-                    .CrearSubdirectorio = chkCrearDirectorio.Checked
-                    .PendienteNombrePaquete = String.IsNullOrEmpty(txtNombre.Text)
-
-                    ' Creamos el directorio
-                    If .CrearSubdirectorio And Not String.IsNullOrEmpty(txtNombre.Text) Then
-                        Dim packageSegment As String = PathGuard.SanitizeFileName(txtNombre.Text, "package")
-                        .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
-                        System.IO.Directory.CreateDirectory(.RutaLocal)
-                    End If
-
-                    Log.WriteWarning("Adding package in " & .RutaLocal)
-
-                    .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
-                    For Each URL In URLs2
-
-                        Dim ruta As String = PathGuard.GetSafePathUnderRoot(oPaquete.RutaLocal, If(URL.Path, String.Empty), allowRoot:=True)
-                        System.IO.Directory.CreateDirectory(ruta)
-
-                        Dim URLFile As String = URL.URL
-                        Dim Visible As Boolean = True
-                        If Not String.IsNullOrEmpty(URLFile) AndAlso URLFile.Contains(Fichero.HIDDEN_LINK) Then
-                            Visible = False
-                            URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
-                        End If
-
-                        Dim oFichero As New Fichero(URLFile)
-                        With oFichero
-                            .LinkVisible = Visible
-                            .RutaLocal = ruta
-                            .RutaRelativa = URL.Path
-                            .NombreFichero = If(Visible, URLFile, Fichero.HIDDEN_LINK_DESC)
-                            .FileID = Fichero.ExtraerFileID(URLFile)
-                            .FileKey = Fichero.ExtraerFileKey(URLFile)
-                            .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
-                            Log.WriteWarning("Adding file to the new package: " & .FileID)
-                        End With
-                        .AgregarFichero(oFichero)
-
-                    Next
-                End With
-
-                Main.AgregarPaquete(oPaquete, False)
-                If chkStartDownload.Checked Then Main.StartDownload()
-                Me.Close()
-
+                ' v2.5 beta: 文件夹解析可能很慢(API + 逐节点解密),放线程池并显示实时计数,避免 UI 假死。
+                ResolveUrlsAsync(URLs, AddressOf OnResolveForAdd)
+                Return
 
             End If
         Catch ex As Exception
@@ -242,6 +186,174 @@ Public Class AddLinks
             btnAgregar.Text = Language.GetText("Add links")
         End Try
 
+    End Sub
+
+    ''' <summary>v2.5 beta: 文件夹读取进度窗(常亮计数 + 取消=丢弃结果)。</summary>
+    Private Class FolderResolveProgressForm
+        Inherits Form
+
+        Public Cancelled As Boolean = False
+        Private ReadOnly lbl As New Label()
+        Private ReadOnly bar As New ProgressBar()
+
+        Public Sub New()
+            Me.Text = Language.GetText("Add links")
+            Me.FormBorderStyle = FormBorderStyle.FixedDialog
+            Me.MaximizeBox = False
+            Me.MinimizeBox = False
+            Me.ShowInTaskbar = False
+            Me.StartPosition = FormStartPosition.CenterParent
+            Me.Size = New System.Drawing.Size(380, 130)
+            lbl.Left = 12
+            lbl.Top = 12
+            lbl.Width = 340
+            lbl.Height = 40
+            bar.Left = 12
+            bar.Top = 58
+            bar.Width = 250
+            bar.Height = 23
+            bar.Style = ProgressBarStyle.Marquee
+            Dim btn As New Button()
+            btn.Text = Language.GetText("Cancel")
+            If String.IsNullOrEmpty(btn.Text) Then btn.Text = "Cancel"
+            btn.Left = 270
+            btn.Top = 56
+            btn.Width = 82
+            btn.Height = 25
+            AddHandler btn.Click, AddressOf OnCancel
+            Me.Controls.Add(lbl)
+            Me.Controls.Add(bar)
+            Me.Controls.Add(btn)
+            ThemeManager.ApplyTheme(Me)
+            SetCount(0)
+        End Sub
+
+        Private Sub OnCancel(sender As Object, e As EventArgs)
+            Cancelled = True
+            Me.Close()
+        End Sub
+
+        Public Sub SetCount(n As Integer)
+            If Me.InvokeRequired Then
+                Me.BeginInvoke(New Action(Of Integer)(AddressOf SetCount), n)
+                Return
+            End If
+            If n <= 0 Then
+                lbl.Text = Language.GetText("Folder_Reading")
+            Else
+                lbl.Text = Language.GetText("Folder_Reading_Count").Replace("%N%", n.ToString())
+            End If
+        End Sub
+    End Class
+
+    Private Sub ResolveUrlsAsync(URLs As Generic.List(Of String), onDone As Action(Of Generic.List(Of URLProcessor.FileURL), Exception, FolderResolveProgressForm))
+        Dim dlg As New FolderResolveProgressForm()
+        dlg.Show(Me)
+        Dim prog As New Progress(Of Integer)(Sub(n) dlg.SetCount(n))
+        Dim cfg As Configuracion = Me.Config
+        Dim ui As System.Threading.Tasks.TaskScheduler = System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext()
+        System.Threading.Tasks.Task.Run(Function() URLProcessor.ProcessURLs(URLs, cfg, prog)).ContinueWith(
+            Sub(t)
+                Dim wasCancelled As Boolean = dlg.Cancelled
+                Try
+                    dlg.Close()
+                Catch
+                End Try
+                dlg.Dispose()
+                If Me.IsDisposed Then Return
+                If wasCancelled Then
+                    btnAgregar.Enabled = True
+                    btnAgregar.Text = Language.GetText("Add links")
+                    Return
+                End If
+                If t.IsFaulted Then
+                    Dim inner As Exception = If(t.Exception IsNot Nothing AndAlso t.Exception.InnerException IsNot Nothing, t.Exception.InnerException, DirectCast(t.Exception, Exception))
+                    onDone(Nothing, inner, Nothing)
+                ElseIf t.IsCanceled Then
+                    btnAgregar.Enabled = True
+                    btnAgregar.Text = Language.GetText("Add links")
+                Else
+                    onDone(t.Result, Nothing, Nothing)
+                End If
+            End Sub, ui)
+    End Sub
+
+    Private Sub OnResolveForAdd(URLs2 As Generic.List(Of URLProcessor.FileURL), err As Exception, unused As FolderResolveProgressForm)
+        Try
+            If err IsNot Nothing Then
+                If TypeOf err Is MegaQuotaExceededException Then
+                    Log.WriteWarning("Quota hit while reading folder: " & Log.SafeException(err))
+                    MessageBox.Show(Language.GetText("Quota_Error"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Else
+                    Log.WriteError("Error while adding the link: " & err.ToString)
+                    MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                End If
+                btnAgregar.Enabled = True
+                btnAgregar.Text = Language.GetText("Add links")
+                Return
+            End If
+            If URLs2 Is Nothing OrElse URLs2.Count = 0 Then
+                Throw New ApplicationException(Language.GetText("Links not valid"))
+            End If
+            FinishAddPackage(URLs2)
+        Catch ex As Exception
+            Log.WriteError("Error while adding the link: " & ex.ToString)
+            MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            btnAgregar.Enabled = True
+            btnAgregar.Text = Language.GetText("Add links")
+        End Try
+    End Sub
+
+    Private Sub FinishAddPackage(URLs2 As Generic.List(Of URLProcessor.FileURL))
+        ' Creamos el paquete
+        Dim oPaquete As New Paquete
+        With oPaquete
+            .Nombre = txtNombre.Text
+            .RutaLocal = txtRuta.Text
+            .CrearSubdirectorio = chkCrearDirectorio.Checked
+            .PendienteNombrePaquete = String.IsNullOrEmpty(txtNombre.Text)
+
+            ' Creamos el directorio
+            If .CrearSubdirectorio And Not String.IsNullOrEmpty(txtNombre.Text) Then
+                Dim packageSegment As String = PathGuard.SanitizeFileName(txtNombre.Text, "package")
+                .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
+                System.IO.Directory.CreateDirectory(.RutaLocal)
+            End If
+
+            Log.WriteWarning("Adding package in " & .RutaLocal)
+
+            .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
+            For Each URL In URLs2
+
+                Dim ruta As String = PathGuard.GetSafePathUnderRoot(oPaquete.RutaLocal, If(URL.Path, String.Empty), allowRoot:=True)
+                System.IO.Directory.CreateDirectory(ruta)
+
+                Dim URLFile As String = URL.URL
+                Dim Visible As Boolean = True
+                If Not String.IsNullOrEmpty(URLFile) AndAlso URLFile.Contains(Fichero.HIDDEN_LINK) Then
+                    Visible = False
+                    URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
+                End If
+
+                Dim oFichero As New Fichero(URLFile)
+                With oFichero
+                    .LinkVisible = Visible
+                    .RutaLocal = ruta
+                    .RutaRelativa = URL.Path
+                    .NombreFichero = If(Visible, URLFile, Fichero.HIDDEN_LINK_DESC)
+                    .FileID = Fichero.ExtraerFileID(URLFile)
+                    .FileKey = Fichero.ExtraerFileKey(URLFile)
+                    .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
+                    Log.WriteWarning("Adding file to the new package: " & .FileID)
+                End With
+                .AgregarFichero(oFichero)
+
+            Next
+        End With
+
+        Main.AgregarPaquete(oPaquete, False)
+        If chkStartDownload.Checked Then Main.StartDownload()
+        Me.Close()
     End Sub
 
 
@@ -262,34 +374,38 @@ Public Class AddLinks
         End If
 
 
-        Dim URLs2 = URLProcessor.ProcessURLs(URLs, Me.Config)
+        ResolveUrlsAsync(URLs, AddressOf OnResolveForWatch)
+    End Sub
 
-        ' Contenedores de links
-        'Dim URLs2 As New Generic.List(Of String)
-        'For Each URL As String In URLs
-        '    If LinkProtectors.IsLinkProtector(URL) Then
-        '        URLs2.AddRange(LinkProtectors.ExtraerURLs(URL))
-        '    Else
-        '        URLs2.Add(URL)
-        '    End If
-        'Next
-
-        If URLs2.Count = 0 Then
-            MessageBox.Show(Language.GetText("Links not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Exit Sub
-        End If
-
-
-        Dim link As String = StreamingHelper.CreateStreamingLink(URLs2(0).URL, Config.ServidorStreamingPuerto, Config)
-        If String.IsNullOrEmpty(link) Then
-            MessageBox.Show(Language.GetText("Links not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Exit Sub
-        End If
-
-        If Not StreamingHelper.WatchOnline(Config.VLCPath, link) Then
-            MessageBox.Show(Language.GetText("VLC could not be started"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End If
-        Me.Close()
+    Private Sub OnResolveForWatch(URLs2 As Generic.List(Of URLProcessor.FileURL), err As Exception, unused As FolderResolveProgressForm)
+        Try
+            If err IsNot Nothing Then
+                If TypeOf err Is MegaQuotaExceededException Then
+                    MessageBox.Show(Language.GetText("Quota_Error"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Else
+                    Log.WriteError("Error resolving links for streaming: " & err.ToString)
+                    MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                End If
+                Return
+            End If
+            If URLs2 Is Nothing OrElse URLs2.Count = 0 Then
+                MessageBox.Show(Language.GetText("Links not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+            Dim link As String = StreamingHelper.CreateStreamingLink(URLs2(0).URL, Config.ServidorStreamingPuerto, Config)
+            If String.IsNullOrEmpty(link) Then
+                MessageBox.Show(Language.GetText("Links not valid"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+            If Not StreamingHelper.WatchOnline(Config.VLCPath, link) Then
+                MessageBox.Show(Language.GetText("VLC could not be started"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+            Me.Close()
+        Catch ex As Exception
+            Log.WriteError("Error resolving links for streaming: " & ex.ToString)
+            MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
 

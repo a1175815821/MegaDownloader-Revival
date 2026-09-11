@@ -55,6 +55,9 @@ Public Class Configuracion
 	Public DescargasSimultaneas As Integer
 	
 	Public ResetearErrores As Boolean
+
+	''' <summary>v2.5 beta 一次性迁移:老配置的 ResetearErrores=False 翻为 True(15min)。True=已迁移,不再重复覆盖用户后续手动选择。</summary>
+	Public ResetearErroresMigratedV25 As Boolean
 	
 	Public UsarProxy As Boolean
 	
@@ -189,6 +192,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ConexionesPorFichero")).InnerText = ConexionesPorFichero.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresMigratedV25")).InnerText = ResetearErroresMigratedV25.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
 		
@@ -357,7 +361,9 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "CrearDirectorioPaquete", "false"), CrearDirectorioPaquete)
 		Boolean.TryParse(LeerNodo(Xml, "AnalizarPortapapeles", "false"), AnalizarPortapapeles)
 		'Boolean.TryParse(LeerNodo(Xml, "PermitirSkins", "true"), PermitirSkins)
-		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "false"), ResetearErrores)
+		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "true"), ResetearErrores)
+		Boolean.TryParse(LeerNodo(Xml, "ResetearErroresMigratedV25", "false"), ResetearErroresMigratedV25)
+		Dim needV25Migration As Boolean = Not ResetearErroresMigratedV25
 		Boolean.TryParse(LeerNodo(Xml, "UsarProxy", "false"), UsarProxy)
 		Boolean.TryParse(LeerNodo(Xml, "IniciarConWindows", "false"), IniciarConWindows)
 		Boolean.TryParse(LeerNodo(Xml, "MantenerUltimaConfiguracion", "true"), MantenerUltimaConfiguracion)
@@ -378,6 +384,12 @@ Public Class Configuracion
         If ResetearErroresPeriodoMinutos < 1 Or ResetearErroresPeriodoMinutos > 999 Then
             ResetearErroresPeriodoMinutos = 15
         End If
+		If needV25Migration Then
+			' v2.5 beta:存量配置一次性迁移到默认开(15min)。新装直接缺省 True,不走这里。
+			ResetearErrores = True
+			ResetearErroresMigratedV25 = True
+			Log.WriteWarning("Migrated ResetearErrores to True (v2.5 default-on self-heal).")
+		End If
 		ApplyConfigLimits()
 		
 		NivelLog = Log.LevelLogType.Normal
@@ -461,6 +473,9 @@ Public Class Configuracion
 	
 	Public Sub ConfiguracionDefectoVacia()
 		Me.RutaDefecto = ""
+		Me.ResetearErrores = True
+		Me.ResetearErroresMigratedV25 = True
+		Me.ResetearErroresPeriodoMinutos = 15
 		Me.Idioma = System.Threading.Thread.CurrentThread.CurrentUICulture.Name
 		Me.ExtraerAutomaticamente = False
 		Me.CondicionesAceptadas = False

@@ -6,6 +6,43 @@
 
 ***
 
+## \[2.5 beta] - 未发布
+
+匿名下载 MEGA 配额(HTTP 509 / API -17)专项。核心主题:**配额可预期——自动暂停、诚实倒计时、到点自动恢复**。
+
+### ✨ 新功能:配额全局熔断 + 倒计时横幅
+
+([MegaQuotaManager.vb](../Clases/MegaQuotaManager.vb) 新增 / [Conexion.vb](../Clases/Conexion.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [FileDownloader.vb](../Clases/FileDownloader.vb) / [Main.vb](../Forms/Main.vb))
+
+- 509 与 -17 归一识别:判定只用 `HttpStatusCode = 509`(状态码)与 `-17 / EOVERQUOTA`(API 语义),不做响应体文本匹配。覆盖文件信息(:429 异常路 + :364 数字路)与文件夹读取(:47 异常路 + :51 数字路)两个落点
+- 递进熔断:首次命中暂停 60 分钟,配额期内重复命中升级到 2 小时、6 小时封顶;`Retry-After` 有则取大值(大概率没有,不依赖)
+- 熔断期间:不再开新任务、不做新文件信息校验(每次校验=一次 API 调用,会延长惩罚窗口)、分块失败不再 16 秒空转重试,由调度器统一等待
+- 主界面横幅:`MEGA 配额已用尽(未给出确切恢复时间)。已自动暂停,将在 X 小时 Y 分后自动重试` + **[立即重试]**按钮(换 IP / 代理 / 重启路由后可手动解除,不被锁死)+ 状态栏倒计时 + 进入/解除各一次托盘气泡
+
+### ✨ 改进:失败自愈默认开启(带一次性迁移)
+
+([Configuracion.vb](../Clases/Configuracion.vb)) `ResetearErrores` 缺省改为开(15 分钟);存量配置经 `ResetearErroresMigratedV25` 一次性迁移到开,后续手动选择不再被覆盖;新装直接为开。
+
+### ✨ 改进:永久失败不参与自愈 + 批量操作
+
+([Fichero.vb](../Clases/Fichero.vb) / [Main.vb](../Forms/Main.vb)) `-9 ENOENT / -11 EACCESS / -14 EKEY / -16 EBLOCKED` 标 `EsErrorPermanente`,自愈跳过(不再每 15 分钟诈尸刷日志耗配额);右键新增**重试全部失败**与**移除全部失败**(确认框显示数量,可选同时删除本地 `.part`)。
+
+### ✨ 改进:大文件夹读取进度反馈
+
+([MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [URLProcessor.vb](../Clases/URLProcessor.vb) / [AddLinks.vb](../Forms/AddLinks.vb)) 文件夹解析搬出 UI 线程,进度窗实时显示`正在读取文件夹…已解析 N 项`,支持取消(丢弃结果不加包);在线观看同样走异步解析。
+
+### 🌐 语言新增
+
+`en-US` / `zh-CN` 新增 `Quota_Banner / Quota_Status / Quota_RetryNow / Quota_Recovered / Quota_Error / Retry all failed / Remove all failed(+confirm/delete part) / Folder_Reading(+Count)`(其他语言经 en-US 回退)。
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.0.0`
+
+- InternalConfig `VERSION_MEGADOWNLOADER` → `2.5 beta` / `VERSION_UPDATE` → `2.5`
+
+***
+
 ## \[2.4.7] - 2026-09-12
 
 更新提醒升级为三选项 + 移除已废弃的搜索引擎集成。核心主题:**把"提醒频率"的选择权交给用户,把死域名扫地出门**。

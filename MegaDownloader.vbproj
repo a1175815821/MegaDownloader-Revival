@@ -197,6 +197,7 @@
     <Compile Include="Clases\MD5Utils.vb" />
     <Compile Include="Clases\Mutex.vb" />
     <Compile Include="Clases\Paquete.vb" />
+    <Compile Include="Clases\MegaQuotaManager.vb" />
     <Compile Include="Clases\PathGuard.vb" />
     <Compile Include="Clases\AtomicFile.vb" />
     <Compile Include="Clases\PreSharedKeyManager.vb" />

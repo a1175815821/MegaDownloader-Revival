@@ -36,7 +36,13 @@ Public Class Fichero
 	Public LinkVisible As Boolean
 	
 	Public DescripcionError As String
-	
+
+	''' <summary>v2.5 beta: 永久失败(链接失效/key错/无权限/被封),自愈跳过,需手动处理。</summary>
+	Public EsErrorPermanente As Boolean = False
+
+	''' <summary>v2.5 beta: 配额失败,配额期内自愈跳过,到期由配额恢复统一唤醒。内存态,不持久化。</summary>
+	Public FailedByQuota As Boolean = False
+
 	Public FechaUltimoError As Date?
 	
 	Public Porcentaje As Decimal
@@ -292,10 +298,16 @@ Public Class Fichero
 					Me.FileID = Info.FileID
 				ElseIf Info IsNot Nothing AndAlso Info.Err <> Conexion.TipoError.SinErrores Then
 					ErrorObtenido = Info.Err
-					Me.EstablecerError("The file could not be verified." & vbNewLine & _
-						" * File code: " & Me.FileID & vbNewLine & _
-						" * Error type: " & Info.Err.ToString & vbNewLine & _
-						" * Internal info: " & Info.Errtxt)
+					If Info.Err = Conexion.TipoError.QuotaExceeded Then
+						Me.EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." & vbNewLine & _
+							" * File code: " & Me.FileID & vbNewLine & _
+							" * Internal info: " & Info.Errtxt, False, True)
+					Else
+						Me.EstablecerError("The file could not be verified." & vbNewLine & _
+							" * File code: " & Me.FileID & vbNewLine & _
+							" * Error type: " & Info.Err.ToString & vbNewLine & _
+							" * Internal info: " & Info.Errtxt)
+					End If
 				End If
 			Finally
 				_Actualizando = False
@@ -523,11 +535,19 @@ Public Class Fichero
 		Catch ex As Exception
 			Log.WriteError("downloader_FileDownloadFailed: could not read server error response: " & Log.SafeException(ex))
 		End Try
-		Me.EstablecerError("File download failed." & vbNewLine & _
-			" * File code: " & Me.FileID & vbNewLine & _
-			" * Error type: An error occurred while trying to download the file." & vbNewLine & _
-			" * Server response: " & Mensaje & vbNewLine & _
-			" * Internal info: " & e.ToString)
+		Dim esQuota As Boolean = (TypeOf e Is MegaQuotaExceededException) OrElse FileDownloader.ReportQuotaIfMatch(e)
+		If esQuota Then
+			Me.EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." & vbNewLine & _
+				" * File code: " & Me.FileID & vbNewLine & _
+				" * Server response: " & Mensaje & vbNewLine & _
+				" * Internal info: " & e.ToString, False, True)
+		Else
+			Me.EstablecerError("File download failed." & vbNewLine & _
+				" * File code: " & Me.FileID & vbNewLine & _
+				" * Error type: An error occurred while trying to download the file." & vbNewLine & _
+				" * Server response: " & Mensaje & vbNewLine & _
+				" * Internal info: " & e.ToString)
+		End If
 		Log.WriteError(Me.DescripcionError)
 	End Sub
 	
@@ -645,12 +665,14 @@ Public Class Fichero
 		End If
 		
 		If Me.NumErroresChunk > Fichero.NUM_MAX_ERRORES_CHUNK Then
+			Dim lastIsQuota As Boolean = (TypeOf Me.UltimoErrorChunk Is MegaQuotaExceededException) OrElse IsQuotaErrorText(If(Me.UltimoErrorChunk Is Nothing, "", Me.UltimoErrorChunk.ToString))
+			If lastIsQuota Then FileDownloader.ReportQuotaIfMatch(Me.UltimoErrorChunk)
 			Dim descError As String = "Download stopped because there were too many connection errors (" & Me.NumErroresChunk & "). " & vbNewLine & _
 				"Last error: " & vbNewLine & _
 				" * File code: " & Me.FileID & vbNewLine & _
 				" * Error type: Connection error." & vbNewLine & _
 				" * Internal info: " & Me.UltimoErrorChunk.ToString
-			Me.EstablecerError(descError)
+			Me.EstablecerError(descError, False, lastIsQuota)
 			Log.WriteError(descError)
 		End If
 		
@@ -727,10 +749,35 @@ Public Class Fichero
 	End Sub
 	
 	Private Sub EstablecerError(ByVal msj As String)
+		EstablecerError(msj, IsPermanentErrorText(msj), IsQuotaErrorText(msj))
+	End Sub
+
+	Private Sub EstablecerError(ByVal msj As String, ByVal esPermanente As Boolean, ByVal esQuota As Boolean)
 		Me.EstadoDescarga = Estado.Erroneo
 		Me.DescripcionError = msj
 		Me.FechaUltimoError = Now
+		Me.EsErrorPermanente = esPermanente
+		Me.FailedByQuota = esQuota
+		If esQuota Then Me.EsErrorPermanente = False
 	End Sub
+
+	''' <summary>v2.5 beta: 永久失败码 -9 ENOENT / -11 EACCESS / -14 EKEY / -16 EBLOCKED。仅匹配错误码语义,不做泛文本匹配。</summary>
+	Friend Shared Function IsPermanentErrorText(s As String) As Boolean
+		If String.IsNullOrEmpty(s) Then Return False
+		If s.IndexOf("-9", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("ENOENT", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-11", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EACCESS", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-14", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EKEY", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-16", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EBLOCKED", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		Return False
+	End Function
+
+	Friend Shared Function IsQuotaErrorText(s As String) As Boolean
+		If String.IsNullOrEmpty(s) Then Return False
+		If s.IndexOf("EOVERQUOTA", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("MegaQuotaExceededException", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("transfer quota exceeded", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		Return False
+	End Function
 
 	''' <summary>
 	''' 重设下载状态：清理 DatosPartes/BytesDescargados/Porcentaje 并删除残留的 .part 文件。
@@ -753,6 +800,8 @@ Public Class Fichero
 		Me.UltimoErrorChunk = Nothing
 		Me.DescripcionError = Nothing
 		Me.FechaUltimoError = Nothing
+		Me.EsErrorPermanente = False
+		Me.FailedByQuota = False
 		Me.TiempoEstimadoDescarga = ""
 
 		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）

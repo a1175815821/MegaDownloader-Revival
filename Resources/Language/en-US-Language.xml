@@ -410,8 +410,8 @@ If you mark another account as default, the previous default account will be unm
   <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[Do you want to import the configuration for the following ELC accounts?]]></Text>
   <Text key="optional"><![CDATA[optional]]></Text>
   <Text key="Multiple ELC"><![CDATA[Multiple ELC]]></Text>
-  <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
-Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[If the archive is password protected, you can insert the password here and it will be used when extracting. If not, just leave it empty.
+ZIP, RAR (including multipart volumes) and 7z are supported.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
 
@@ -484,4 +484,15 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="VLC path is not valid"><![CDATA[VLC path is not valid.]]></Text>
   <Text key="Open &amp;ELC"><![CDATA[Open &ELC]]></Text>
   <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[Configuration could not be saved. Check disk space and permissions.]]></Text>
+  <Text key="Quota_Banner"><![CDATA[MEGA transfer quota exceeded (no exact recovery time given). Auto-paused, will retry automatically in %T%.]]></Text>
+  <Text key="Quota_Status"><![CDATA[Quota: retry in %T%]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[Retry now]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[MEGA quota recovered, downloads resumed automatically.]]></Text>
+  <Text key="Quota_Error"><![CDATA[MEGA transfer quota exceeded. Downloads are paused and will resume automatically. If you already changed IP or proxy, use "Retry now".]]></Text>
+  <Text key="Retry all failed"><![CDATA[Retry all failed]]></Text>
+  <Text key="Remove all failed"><![CDATA[Remove all failed]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[Remove %N% failed item(s) from the list?]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[Also delete the local .part files of these failed items?]]></Text>
+  <Text key="Folder_Reading"><![CDATA[Reading folder, please wait...]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[Reading folder... %N% items parsed]]></Text>
 </Language>
