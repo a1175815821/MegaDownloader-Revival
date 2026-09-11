@@ -1000,8 +1000,9 @@ Public Class Main
     End Sub
 
     ''' <summary>
-    ''' P0-5 UI:工具栏图标跟随主题。原图(40x40)首次调用时存入 Button.Tag,深色按 ColorMatrix
-    ''' 提亮,浅色用回原图;每次替换后 Dispose 上一张着色图,原图与窗体同寿命(与此前行为一致)。
+    ''' P0-5 UI:工具栏图标跟随主题。原图(40x40)首次调用时存入 Button.Tag,显示图统一缩到
+    ''' 20px(88x34 文字钮放不下 40px 原图),深色再按 ColorMatrix 提亮;显示图每次重建,
+    ''' 替换后 Dispose 上一张,原图与窗体同寿命,切换过程无句柄增长。
     ''' </summary>
     Private Sub ApplyToolbarIconTheme()
         Try
@@ -1027,16 +1028,31 @@ Public Class Main
             btn.Tag = original
         End If
         Dim previous As Image = btn.Image
-        If dark Then
-            btn.Image = RecolorImageForDark(original)
-        Else
-            btn.Image = original
-        End If
-        If previous IsNot Nothing AndAlso Not Object.ReferenceEquals(previous, btn.Image) _
-                AndAlso Not Object.ReferenceEquals(previous, original) Then
+        Dim scaled As Image = ScaleToolbarIcon(original, 20)
+        Try
+            If dark Then
+                Dim tinted As Image = RecolorImageForDark(scaled)
+                scaled.Dispose()
+                scaled = tinted
+            End If
+            btn.Image = scaled
+            scaled = Nothing
+        Finally
+            If scaled IsNot Nothing Then scaled.Dispose()
+        End Try
+        If previous IsNot Nothing AndAlso Not Object.ReferenceEquals(previous, original) Then
             previous.Dispose()
         End If
     End Sub
+
+    Private Shared Function ScaleToolbarIcon(original As Image, size As Integer) As Image
+        Dim bmp As New Bitmap(size, size)
+        Using g As Graphics = Graphics.FromImage(bmp)
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic
+            g.DrawImage(original, 0, 0, size, size)
+        End Using
+        Return bmp
+    End Function
 
     Private Shared Function RecolorImageForDark(original As Image) As Image
         Dim bmp As New Bitmap(original.Width, original.Height)
