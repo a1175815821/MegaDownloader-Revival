@@ -168,6 +168,7 @@ Partial Class Main
         Me.detailLabel.Padding = New System.Windows.Forms.Padding(4)
         Me.detailLabel.Size = New System.Drawing.Size(174, 410)
         Me.detailLabel.TabIndex = 0
+        Me.detailLabel.UseMnemonic = False
         '
         'OlvColumnPrioridad
         '

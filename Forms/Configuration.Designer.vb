@@ -388,7 +388,7 @@ Partial Class Configuration
         Me.btnCancel.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
         Me.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel
         Me.btnCancel.ImeMode = System.Windows.Forms.ImeMode.NoControl
-        Me.btnCancel.Location = New System.Drawing.Point(556, 432)
+        Me.btnCancel.Location = New System.Drawing.Point(556, 458)
         Me.btnCancel.Name = "btnCancel"
         Me.btnCancel.Size = New System.Drawing.Size(75, 23)
         Me.btnCancel.TabIndex = 1
@@ -399,7 +399,7 @@ Partial Class Configuration
         '
         Me.btnGuardar.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
         Me.btnGuardar.ImeMode = System.Windows.Forms.ImeMode.NoControl
-        Me.btnGuardar.Location = New System.Drawing.Point(9, 432)
+        Me.btnGuardar.Location = New System.Drawing.Point(9, 458)
         Me.btnGuardar.Name = "btnGuardar"
         Me.btnGuardar.Size = New System.Drawing.Size(75, 23)
         Me.btnGuardar.TabIndex = 0
