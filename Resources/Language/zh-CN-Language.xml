@@ -30,6 +30,7 @@
   <Text key="Nav_Failed"><![CDATA[失败]]></Text>
   <Text key="Nav_Completed"><![CDATA[已完成]]></Text>
   <Text key="Detail_Title"><![CDATA[详情]]></Text>
+  <Text key="Detail_Empty"><![CDATA[选择一个任务查看详情]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% 个链接]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[在此粘贴 MEGA 链接，每行一个…]]></Text>
   <Text key="Delete from list"><![CDATA[从列表删除]]></Text>

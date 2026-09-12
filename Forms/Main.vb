@@ -388,6 +388,7 @@ Public Class Main
         Me.detailGroup.Text = Language.GetText("Detail_Title")
         ApplyNavListColors()
         UpdateNavCounts()
+        UpdateDetailPanel()
         Me.AbrirEnCarpetaToolStripMenuItem.Text = Language.GetText("Open directory")
         Me.SubirPrioridadMenuItem.Text = Language.GetText("Increase priority")
         Me.BajarPrioridadMenuItem.Text = Language.GetText("Decrease priority")
@@ -1526,6 +1527,70 @@ Public Class Main
             Log.WriteDebug("ShiftSidePanels failed: " & Log.SafeException(ex))
         End Try
     End Sub
+
+    Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
+        UpdateDetailPanel()
+    End Sub
+
+    Private Sub UpdateDetailPanel()
+        Try
+            If detailLabel Is Nothing OrElse detailLabel.IsDisposed Then Return
+            Dim text As String = Language.GetText("Detail_Empty")
+            If ListaDescargas.SelectedObjects IsNot Nothing AndAlso ListaDescargas.SelectedObjects.Count > 0 Then
+                Dim ele As IDescarga = TryCast(ListaDescargas.SelectedObjects(0), IDescarga)
+                If ele IsNot Nothing Then text = BuildDetailText(ele)
+            End If
+            If detailLabel.Text <> text Then detailLabel.Text = text
+        Catch ex As Exception
+            Log.WriteDebug("UpdateDetailPanel failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Function BuildDetailText(ele As IDescarga) As String
+        Dim sb As New System.Text.StringBuilder()
+        sb.AppendLine(Language.GetText("Name") & ": " & ele.DescargaNombre)
+        sb.AppendLine(Language.GetText("Status") & ": " & EstadoDisplayText(ele.DescargaEstado()))
+        Dim tamano As Decimal = ele.DescargaTamanoBytes
+        Dim pct As Decimal = ele.DescargaPorcentaje
+        Dim done As String = "-"
+        If tamano > 0 Then
+            done = PintarTamano(Math.Ceiling(pct * tamano / 100)) & " / " & PintarTamano(tamano)
+        End If
+        sb.AppendLine(Language.GetText("Progress") & ": " & pct.ToString("F2") & "% (" & done & ")")
+        sb.AppendLine(Language.GetText("Speed") & ": " & PintarVelocidadDescarga(ele))
+        sb.AppendLine(Language.GetText("Remaining") & ": " & ele.DescargaTiempoEstimadoDescarga)
+        Dim fic As Fichero = TryCast(ele, Fichero)
+        If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.RutaRelativa) Then
+            sb.AppendLine(Language.GetText("Path") & ": " & fic.RutaRelativa)
+        End If
+        Return sb.ToString().TrimEnd()
+    End Function
+
+    ''' <summary>状态本地化文本(ColEstado AspectGetter 的只读镜像,供详情面板复用;改键时两处同步,热路径本身不动)。</summary>
+    Private Shared Function EstadoDisplayText(st As Estado) As String
+        Select Case st
+            Case Estado.EnCola
+                Return Language.GetText("In queue")
+            Case Estado.CreandoLocal
+                Return Language.GetText("Creating files")
+            Case Estado.Verificando
+                Return Language.GetText("Verifying")
+            Case Estado.Erroneo
+                Return Language.GetText("Error capital leters")
+            Case Estado.Pausado
+                Return Language.GetText("Paused")
+            Case Estado.Descomprimiendo
+                Return Language.GetText("Extracting")
+            Case Estado.Descargando
+                Return Language.GetText("Downloading")
+            Case Estado.ComprobandoMD5
+                Return Language.GetText("Hashing MD5")
+            Case Estado.Completado
+                Return Language.GetText("Completed")
+            Case Else
+                Return "---"
+        End Select
+    End Function
 #End Region
 
 #Region "Gestion lista paquetes y descargas"
@@ -2887,6 +2952,7 @@ Public Class Main
 
                 ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
                 UpdateNavCounts()
+                UpdateDetailPanel()
             Finally
                 Mutex.ListaDescargas.ReleaseMutex()
             End Try

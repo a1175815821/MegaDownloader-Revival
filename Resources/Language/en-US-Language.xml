@@ -30,6 +30,7 @@
   <Text key="Nav_Failed"><![CDATA[Failed]]></Text>
   <Text key="Nav_Completed"><![CDATA[Completed]]></Text>
   <Text key="Detail_Title"><![CDATA[Details]]></Text>
+  <Text key="Detail_Empty"><![CDATA[Select a task to see details]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% link(s)]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[Paste MEGA links here, one per line...]]></Text>
   <Text key="Delete from list"><![CDATA[Delete from list]]></Text>

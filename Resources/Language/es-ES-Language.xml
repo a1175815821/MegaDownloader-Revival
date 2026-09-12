@@ -30,6 +30,7 @@
   <Text key="Nav_Failed"><![CDATA[Fallidas]]></Text>
   <Text key="Nav_Completed"><![CDATA[Completadas]]></Text>
   <Text key="Detail_Title"><![CDATA[Detalles]]></Text>
+  <Text key="Detail_Empty"><![CDATA[Selecciona una tarea para ver detalles]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% enlace(s)]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[Pega aquí los enlaces MEGA, uno por línea...]]></Text>
   <Text key="Delete from list"><![CDATA[Eliminar de la lista]]></Text>
