@@ -40,7 +40,7 @@ Public Class Fichero
 	''' <summary>v2.5 beta: 永久失败(链接失效/key错/无权限/被封),自愈跳过,需手动处理。</summary>
 	Public EsErrorPermanente As Boolean = False
 
-	''' <summary>v2.5 beta: 配额失败,配额期内自愈跳过,到期由配额恢复统一唤醒。内存态,不持久化。</summary>
+	''' <summary>v2.5 RC: 配额失败,配额期内自愈跳过,到期由配额恢复统一唤醒。RC起持久化,重启后立即重试仍可捞回。</summary>
 	Public FailedByQuota As Boolean = False
 
 	Public FechaUltimoError As Date?
@@ -939,6 +939,17 @@ Public Class Fichero
         If [Enum].IsDefined(GetType(Estado), LeerNodo(XML, "EstadoDescarga", "")) Then
             EstadoDescarga = CType([Enum].Parse(GetType(Estado), LeerNodo(XML, "EstadoDescarga", "")), Estado)
         End If
+        ' RC:重启后查看错误空白/永久失败诈尸的根因——此前只存 Estado,不存描述与标记。
+        Me.DescripcionError = LeerNodo(XML, "DescripcionError", "")
+        If String.IsNullOrEmpty(Me.DescripcionError) Then Me.DescripcionError = Nothing
+        Boolean.TryParse(LeerNodo(XML, "EsErrorPermanente", "false"), EsErrorPermanente)
+        Boolean.TryParse(LeerNodo(XML, "FailedByQuota", "false"), FailedByQuota)
+        ' 兼容旧版派生标记:老队列无标记时按描述文本回推,避免重启后永久失败被自愈捞起。
+        If Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
+            EsErrorPermanente = IsPermanentErrorText(Me.DescripcionError)
+            If Not EsErrorPermanente Then FailedByQuota = IsQuotaErrorText(Me.DescripcionError)
+            If FailedByQuota Then EsErrorPermanente = False
+        End If
         Boolean.TryParse(LeerNodo(XML, "MarcadoParaBorrarFicheroLocal", "false"), MarcadoParaBorrarFicheroLocal)
         Boolean.TryParse(LeerNodo(XML, "DescargaIndividual", "false"), DescargaIndividual)
         Boolean.TryParse(LeerNodo(XML, "PausaIndividual", "false"), PausaIndividual)
@@ -992,9 +1003,6 @@ Public Class Fichero
             NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = CacheSecureData.URLFichero
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
-            'NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = Criptografia.ToInsecureString(_FileKey)
-            'NodoFic.AppendChild(XML.CreateElement("URL")).InnerText = If(LinkVisible, "", HIDDEN_LINK) & Criptografia.ToInsecureString(Me._URL)
-            'NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = Criptografia.ToInsecureString(_URLFichero)
         End If
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
@@ -1019,6 +1027,13 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("BytesDescargados")).InnerText = BytesDescargados.ToString
 
         NodoFic.AppendChild(XML.CreateElement("EstadoDescarga")).InnerText = [Enum].GetName(GetType(Estado), EstadoDescarga)
+        ' RC:持久化错误描述与标记(重启后查看错误不再空白,永久/配额标记不再丢失)。
+        ' 描述含内部堆栈,截断到 4000 字防队列文件膨胀;标记缺省 false 兼容旧版。
+        Dim descToSave As String = If(DescripcionError, "")
+        If descToSave.Length > 4000 Then descToSave = descToSave.Substring(0, 4000)
+        NodoFic.AppendChild(XML.CreateElement("DescripcionError")).InnerText = descToSave
+        NodoFic.AppendChild(XML.CreateElement("EsErrorPermanente")).InnerText = EsErrorPermanente.ToString
+        NodoFic.AppendChild(XML.CreateElement("FailedByQuota")).InnerText = FailedByQuota.ToString
         NodoFic.AppendChild(XML.CreateElement("MarcadoParaBorrarFicheroLocal")).InnerText = MarcadoParaBorrarFicheroLocal.ToString
         NodoFic.AppendChild(XML.CreateElement("TiempoEstimadoDescarga")).InnerText = TiempoEstimadoDescarga
         NodoFic.AppendChild(XML.CreateElement("PausaIndividual")).InnerText = PausaIndividual.ToString

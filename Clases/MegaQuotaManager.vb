@@ -25,6 +25,11 @@ Public NotInheritable Class MegaQuotaManager
     Private Shared ReadOnly _lock As New Object
     Private Shared _quotaUntilUtc As DateTime? = Nothing
     Private Shared _level As Integer = 0
+    Private Shared _lastHitUtc As DateTime = DateTime.MinValue
+
+    ' 档位自然衰减窗口:24 小时内无命中才回 0 档。到期/手动清除都不再归零档位——
+    ' 否则熔断期内本就不发请求,60min→2h→6h 永远走不到;手动重试还会把档位打回 60min
+    ' 又立刻发新请求,正好和"避免延长惩罚窗口"相反。
 
     ' 递进等待:60min -> 2h -> 6h 封顶
     Private Shared ReadOnly _durations As TimeSpan() = {
@@ -32,13 +37,13 @@ Public NotInheritable Class MegaQuotaManager
         TimeSpan.FromHours(2),
         TimeSpan.FromHours(6)
     }
+    Private Shared ReadOnly _levelDecay As TimeSpan = TimeSpan.FromHours(24)
 
     Public Shared Function IsQuarantined() As Boolean
         SyncLock _lock
             If Not _quotaUntilUtc.HasValue Then Return False
             If DateTime.UtcNow >= _quotaUntilUtc.Value Then
                 _quotaUntilUtc = Nothing
-                _level = 0
                 Return False
             End If
             Return True
@@ -51,23 +56,24 @@ Public NotInheritable Class MegaQuotaManager
             Dim remaining As TimeSpan = _quotaUntilUtc.Value - DateTime.UtcNow
             If remaining.TotalSeconds <= 0 Then
                 _quotaUntilUtc = Nothing
-                _level = 0
                 Return Nothing
             End If
             Return remaining
         End SyncLock
     End Function
 
-    ''' <summary>命中配额:首次 60min,配额期内重复命中升级到 2h/6h 封顶。</summary>
+    ''' <summary>命中配额:首次 60min,24h 内重复命中升级到 2h/6h 封顶。</summary>
     Public Shared Sub ReportQuota(Optional hintSeconds As Long = 0)
         SyncLock _lock
             Dim nowUtc As DateTime = DateTime.UtcNow
-            Dim stillQuarantined As Boolean = _quotaUntilUtc.HasValue AndAlso nowUtc < _quotaUntilUtc.Value
-            If stillQuarantined Then
-                _level = Math.Min(_durations.Length - 1, _level + 1)
-            Else
+            If _lastHitUtc = DateTime.MinValue OrElse nowUtc - _lastHitUtc > _levelDecay Then
                 _level = 0
+            Else
+                ' 24h 内任何再次命中都升级:熔断期内重复、自然到期后、手动清除后——
+                ' 不给"到期即洗白"也不给"手动即洗白",否则递进形同虚设。
+                _level = Math.Min(_durations.Length - 1, _level + 1)
             End If
+            _lastHitUtc = nowUtc
             Dim duration As TimeSpan = _durations(_level)
             If hintSeconds > 0 Then
                 Dim hinted As TimeSpan = TimeSpan.FromSeconds(Math.Min(hintSeconds, CLng(_durations(_durations.Length - 1).TotalSeconds)))
@@ -81,7 +87,6 @@ Public NotInheritable Class MegaQuotaManager
     Public Shared Sub ClearQuota()
         SyncLock _lock
             _quotaUntilUtc = Nothing
-            _level = 0
         End SyncLock
         Log.WriteWarning("MEGA quota cleared manually by user; queue will resume.")
     End Sub
@@ -101,7 +106,7 @@ Public NotInheritable Class MegaQuotaManager
         Return False
     End Function
 
-    ''' <summary>从 WebException 响应中尝试读取 Retry-After 秒数(大概率没有,返回 Nothing)。</summary>
+    ''' <summary>从 WebException 响应中尝试读取 Retry-After:秒数或 HTTP-date(大概率没有,返回 Nothing)。</summary>
     Public Shared Function TryGetRetryAfterSeconds(ex As WebException) As Long?
         Try
             If ex Is Nothing OrElse ex.Response Is Nothing Then Return Nothing
@@ -111,6 +116,14 @@ Public NotInheritable Class MegaQuotaManager
             If String.IsNullOrEmpty(v) Then Return Nothing
             Dim secs As Long
             If Long.TryParse(v.Trim(), secs) AndAlso secs > 0 Then Return secs
+            ' RFC 7231 允许 HTTP-date 格式,此前只认秒数直接丢弃。先按 invariant "r" 精确匹配,
+            ' 再回退宽松解析(非英文 locale 下英文日期名可能失败,失败即无 hint,安全回退)。
+            Dim dto As DateTimeOffset
+            If DateTimeOffset.TryParseExact(v.Trim(), "r", Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.None, dto) _
+                OrElse DateTimeOffset.TryParse(v.Trim(), dto) Then
+                Dim wait As Long = CLng(Math.Ceiling((dto.UtcDateTime - DateTime.UtcNow).TotalSeconds))
+                If wait > 0 Then Return wait
+            End If
         Catch
         End Try
         Return Nothing

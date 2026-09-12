@@ -6,7 +6,7 @@
 
 ***
 
-## \[2.5 beta] - 未发布
+## \[2.5 RC1] - 2026-09-12
 
 匿名下载 MEGA 配额(HTTP 509 / API -17)专项。核心主题:**配额可预期——自动暂停、诚实倒计时、到点自动恢复**。
 
@@ -31,15 +31,39 @@
 
 ([MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [URLProcessor.vb](../Clases/URLProcessor.vb) / [AddLinks.vb](../Forms/AddLinks.vb)) 文件夹解析搬出 UI 线程,进度窗实时显示`正在读取文件夹…已解析 N 项`,支持取消(丢弃结果不加包);在线观看同样走异步解析。
 
+### 🐛 RC1 修复:配额误报 + 重启丢错误 + 进度条发灰(P1)
+
+- 配额熔断期内超时改报 `MegaQuotaExceededException`(此前 120 秒兜底报通用超时,`FailedByQuota=False`,「立即重试」捞不回);非配额 120 秒文案去“链接过期”误导,明确为总时长看门狗(非空闲超时),进度保留断点续传
+- `DescripcionError / EsErrorPermanente / FailedByQuota` 持久化到队列 XML(4000 字截断),重启后「查看错误」不再空白,永久失败不再被自愈反复捞起;老队列按描述文本回推标记兼容;空描述弹可操作 fallback 不再空白窗
+- 进度条自定义绘制:背景透明露出行底色(浅色整条发灰消除,0% 行不再纯灰);清空渐变走 `FillColor` 实色;边框随主题 `Border`;条高 18;小进度保底 2px
+- 下载列表列宽防 corruption:10 列加 `Minimum/MaximumWidth`(# 20–40/文件名 150–700/其余见代码),`ColumnWidthChanging` 拖动时夹取(OLV 不拦截表头拖拽);启动时坏状态(`#`/文件名被压 0、单列 >800、可见总宽 >2000)自动重置落盘;右键新增"恢复默认列宽"(此前 `#` 列 `Hideable=False` + 迁移已跑过,程序内无回到默认入口)
+
+### 🐛 RC1 补丁:横幅布局/配额语义/构建可用性
+
+- 构建可用性:现代 MSBuild 把 resx 编为 preserialized 格式,启动即崩(`My.Resources.icono` 处 `FileLoadException`,被全局异常兜底吞成静默 exit 0)。`Resources\DLLs` 新增 `System.Resources.Extensions/Memory/Buffers/Unsafe/Numerics.Vectors`,vbproj 加引用,`app.config` 加版本重定向,CI 产物清单同步
+- 配额横幅改绝对布局:列表+两侧栏 Top/Height 永远由工具栏底+横幅显隐重算,去掉相对位移与 Bottom 锚点(此前 resize/最大化/DPI 变化后隐藏会多出一个横幅高度压住状态栏)
+- 配额到期唤醒脱离自愈开关:熔断解除边沿直接调 `WakeQuotaFailedItems`(此前藏在 `If ResetearErrores` 里,关掉自愈的用户横幅消失但失败项永不恢复)
+- 惩罚递进修复:档位 24h 衰减,到期/手动清除不再归零(此前递进永远走不到,手动重试还打回 60min 又立刻发请求);`Retry-After` 支持 HTTP-date
+- 倒计时文案:120 秒内读秒,以上向下取整(此前末 60 秒卡"1 min",1h59m30s 显示"2 h 0 min");横幅颜色进主题系统(`QuotaBack/QuotaFore`)
+- Toast 新建/复用共用四边夹取(此前首弹贴边时一半在屏外);文件夹进度窗进度条去视觉样式跟主题,取消真取消(传 `CancellationToken` 进解析循环)
+- 调度循环单点故障:迭代级 Try/Catch + `RunWorkerCompleted` 看门狗 3 秒自救重启(此前一次异常=刷新+横幅+恢复全停摆);熔断期点开始给 Toast 提示(此前点了没反应)
+
+### 🐛 RC1 修复:UI 可感知缺陷(12 项)
+
+- `ThemeManager` 新增 `ListBox / CheckedListBox / ToolTip` 分支(此前深色漏刷,靠各窗体手写补丁);顶层 `MainMenu` 仍为系统菜单列为已知限制
+- Toast 复用重算位置防跨屏过期坐标;配额横幅 Top 跟随工具栏+DPI 缩放;工具栏图标/导航行高跟随 DPI;状态栏 RAM/Proc 改自动宽度(Designer 90→150);默认窗宽 880→1024 释放 Nombre 列
+- 设置搜索支持 `NumericUpDown / ListBox / DataGridView` 与 ComboBox 候选项,Label 不可聚焦时退化聚焦父容器,无命中蜂鸣反馈;设置 Cancel 改 `Bottom|Right` 锚点;ELC 表格换肤后重绘防首帧旧色
+- AddLinks:清空文本同步清 `HiddenLinks`,占位符行数纳入计数;水印灰字深色可见;解压密码 `MaxLength` 6→128(两处);ELC 两 Label 复用已有键翻译;Streaming 红字改主题 `ErrorFore`+无效链接给提示;`btnLanzarVLC.DialogResult` 改 None 防误关窗;Credits 去 `AcceptButton=lblTitle`+空译文裸 key 保护
+
 ### 🌐 语言新增
 
-`en-US` / `zh-CN` 新增 `Quota_Banner / Quota_Status / Quota_RetryNow / Quota_Recovered / Quota_Error / Retry all failed / Remove all failed(+confirm/delete part) / Folder_Reading(+Count)`(其他语言经 en-US 回退)。
+`en-US` / `zh-CN` 新增 `Quota_Banner / Quota_Status / Quota_RetryNow / Quota_Recovered / Quota_Error / Retry all failed / Remove all failed(+confirm/delete part) / Folder_Reading(+Count)`;RC1 补 `es-ES` 同 11 键(其他语言经 en-US 回退)。
 
 ### 📦 版本号
 
-- Assembly / FileVersion → `2.5.0.0`
+- Assembly / FileVersion → `2.5.0.0`(RC 不动)
 
-- InternalConfig `VERSION_MEGADOWNLOADER` → `2.5 beta` / `VERSION_UPDATE` → `2.5`
+- InternalConfig `VERSION_MEGADOWNLOADER` → `2.5 RC1` / `VERSION_UPDATE` → `2.5`(数字不动,beta/RC 期间不提示更新;`docs/version.xml` 保持 `2.4.7.0`,正式版才抬)
 
 ***
 

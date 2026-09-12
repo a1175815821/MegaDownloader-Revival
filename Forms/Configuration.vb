@@ -42,10 +42,21 @@ Public Class Configuration
 				Dim hit As Control = FindConfigControl(tp, q)
 				If hit IsNot Nothing Then
 					TabControl1.SelectedTab = tp
-					If hit.CanSelect Then hit.Focus()
+					If hit.CanSelect Then
+						hit.Focus()
+					ElseIf hit.Parent IsNot Nothing AndAlso hit.Parent.CanSelect Then
+						hit.Parent.Focus()
+					Else
+						TabControl1.Focus()
+					End If
 					Return
 				End If
 			Next
+			' RC:无命中给声音反馈,此前零反馈以为按钮死了。
+			Try
+				System.Media.SystemSounds.Beep.Play()
+			Catch
+			End Try
 		Catch ex As Exception
 			Log.WriteError("LocateConfigText failed: " & ex.ToString)
 		End Try
@@ -55,8 +66,33 @@ Public Class Configuration
 		For Each c As Control In parent.Controls
 			If TypeOf c Is TextBox OrElse TypeOf c Is ComboBox OrElse TypeOf c Is CheckBox _
 					OrElse TypeOf c Is Button OrElse TypeOf c Is LinkLabel OrElse TypeOf c Is Label _
-					OrElse TypeOf c Is GroupBox Then
+					OrElse TypeOf c Is GroupBox OrElse TypeOf c Is NumericUpDown _
+					OrElse TypeOf c Is ListBox OrElse TypeOf c Is CheckedListBox _
+					OrElse TypeOf c Is DataGridView Then
 				If c.Text IsNot Nothing AndAlso c.Text.ToLowerInvariant().Contains(q) Then Return c
+				' ComboBox 下拉候选项存在 DataSource/Items,当前 Text 搜不到时继续搜候选项。
+				If TypeOf c Is ComboBox Then
+					Try
+						Dim cb As ComboBox = CType(c, ComboBox)
+						If TypeOf cb.DataSource Is System.Windows.Forms.BindingSource Then
+							For Each v As Object In CType(cb.DataSource, System.Windows.Forms.BindingSource)
+								Dim s As String = ""
+								If TypeOf v Is Generic.KeyValuePair(Of String, String) Then
+									s = CType(v, Generic.KeyValuePair(Of String, String)).Value
+								Else
+									s = If(v Is Nothing, "", v.ToString())
+								End If
+								If Not String.IsNullOrEmpty(s) AndAlso s.ToLowerInvariant().Contains(q) Then Return c
+							Next
+						Else
+							For Each it As Object In cb.Items
+								Dim s As String = If(it Is Nothing, "", it.ToString())
+								If Not String.IsNullOrEmpty(s) AndAlso s.ToLowerInvariant().Contains(q) Then Return c
+							Next
+						End If
+					Catch
+					End Try
+				End If
 			End If
 			Dim inner As Control = FindConfigControl(c, q)
 			If inner IsNot Nothing Then Return inner
@@ -124,7 +160,6 @@ Public Class Configuration
         chkAnalisisPortapapeles.Checked = Config.AnalizarPortapapeles
         chkCrearDirectorio.Checked = Config.CrearDirectorioPaquete
         chkUnZip.Checked = Config.ExtraerAutomaticamente
-        'chkSkins.Checked = Config.PermitirSkins
         chkApagarPC.Checked = Config.ApagarPC
         chkCheckUpdates.Checked = Config.CheckUpdates
         chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
@@ -220,6 +255,12 @@ Public Class Configuration
             ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
         Catch ex As Exception
             Log.WriteError("Failed to apply theme to Configuration form: " & ex.ToString)
+        End Try
+        ' RC:ELC 表格首绘取色早于换肤会闪旧主题色,换肤后重绘一次。
+        Try
+            ElcAccountControl.CargarDatos()
+        Catch ex As Exception
+            Log.WriteError("Failed to refresh ELC grid after theme apply: " & ex.ToString)
         End Try
 
     End Sub
@@ -328,8 +369,6 @@ Public Class Configuration
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
 
         If String.IsNullOrEmpty(Config.Password) And txtPassword.Text = PASSWORDDEFECTO Then
-            'MessageBox.Show("Debe configurar un usuario y contraseña", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            'Exit Sub
             txtPassword.Text = ""
         End If
 
@@ -458,10 +497,6 @@ Public Class Configuration
 
 
         If txtPassword.Text <> PASSWORDDEFECTO Then
-            'If txtPassword.Text.Length <> 35 Then
-            '    MessageBox.Show("API Key no válida. Haga click en [?] para ver la página donde obtener la API Key.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            '    Exit Sub
-            'End If
             Config.Password = txtPassword.Text
         End If
 
@@ -614,6 +649,7 @@ Public Class Configuration
 
     Private Sub LinkLabel1_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel1.MouseHover
         If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
+        ThemeManager.ApplyThemeToToolTip(t)
         t.SetToolTip(LinkLabel1, MsgMaxConexiones)
     End Sub
 
@@ -667,6 +703,7 @@ Public Class Configuration
 
     Private Sub linkApagarPC_MouseHover(sender As Object, e As System.EventArgs) Handles linkApagarPC.MouseHover
         If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
+        ThemeManager.ApplyThemeToToolTip(t)
         t.SetToolTip(linkApagarPC, MsgApagarPC)
     End Sub
 
@@ -702,6 +739,7 @@ Public Class Configuration
 
     Private Sub linkUltConfig_MouseHover(sender As Object, e As System.EventArgs) Handles linkUltConfig.MouseHover
         If t Is Nothing Then t = New ToolTip ' 复用同一实例,避免每次悬停泄漏一个 ToolTip
+        ThemeManager.ApplyThemeToToolTip(t)
         t.SetToolTip(linkUltConfig, MsgUltConfig)
     End Sub
 

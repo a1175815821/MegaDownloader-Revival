@@ -121,7 +121,7 @@ Partial Class AddLinks
         'txtPassword
         '
         Me.txtPassword.Location = New System.Drawing.Point(532, 83)
-        Me.txtPassword.MaxLength = 6
+        Me.txtPassword.MaxLength = 128
         Me.txtPassword.Name = "txtPassword"
         Me.txtPassword.Size = New System.Drawing.Size(102, 20)
         Me.txtPassword.TabIndex = 30

@@ -443,4 +443,5 @@ B 是同行下载数。]]></Text>
   <Text key="Remove all failed delete part"><![CDATA[是否同时删除这些失败项的本地 .part 文件？]]></Text>
   <Text key="Folder_Reading"><![CDATA[正在读取文件夹，请稍候…]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[正在读取文件夹…已解析 %N% 项]]></Text>
+  <Text key="Reset column widths"><![CDATA[恢复默认列宽]]></Text>
 </Language>

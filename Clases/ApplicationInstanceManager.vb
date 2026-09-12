@@ -179,23 +179,6 @@ Public NotInheritable Class ApplicationInstanceManager
         Finally
             Mutex.MEGAUriParameters.ReleaseMutex()
         End Try
-
-        '' register net-pipe channel
-        'Dim clientChannel = New IpcClientChannel()
-        'ChannelServices.RegisterChannel(clientChannel, True)
-
-        '' get shared object from other process
-        'Dim proxy As InstanceProxy = TryCast(Activator.GetObject(GetType(InstanceProxy), String.Format("ipc://{0}_{1}/{1}", Environment.MachineName, uri)), InstanceProxy)
-
-        '' pass current command line args to proxy
-        'If proxy IsNot Nothing Then
-
-        '   proxy.SetCommandLineArgs(InstanceProxy.IsFirstInstance, InstanceProxy.CommandLineArgs)
-
-        'End If
-
-        '' close current client channel
-        'ChannelServices.UnregisterChannel(clientChannel)
     End Sub
 
 
@@ -280,20 +263,7 @@ Public NotInheritable Class ApplicationInstanceManager
     ''' </summary>
     ''' <param name="uri">The URI.</param>
     Private Shared Sub RegisterRemoteType(uri As String)
-        ' register remote channel (net-pipes)
-        'Dim serverChannel = New IpcServerChannel(Environment.MachineName & "_" & uri)
-
-        'ChannelServices.RegisterChannel(serverChannel, True)
-
-        ' register shared type
-        'RemotingConfiguration.RegisterWellKnownServiceType(GetType(InstanceProxy), uri, WellKnownObjectMode.Singleton)
-
-        ' close channel, on process exit
-        'Dim process As Process = process.GetCurrentProcess()
-
-        'AddHandler process.Exited, Sub()
-        '                               ChannelServices.UnregisterChannel(serverChannel)
-        '                           End Sub
+        ' No-op: IPC Remoting 已下线,单实例改走 Buffer.dat 文件投递(GetParameters 轮询)。
     End Sub
 
 

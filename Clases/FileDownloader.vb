@@ -812,11 +812,17 @@ Public Class FileDownloader
                     End If
                 Loop
 
-                ' Report the timeout as a download failure (e.g. persistent 403 from an
-                ' expired URL). Chunk state is intentionally preserved for resumption.
+                ' Report the timeout as a download failure. Chunk state is intentionally
+                ' preserved for resumption. RC:配额熔断期内超时必须报配额异常(否则 FailedByQuota=False,
+                ' 立即重试捞不回);非配额超时文案去“过期”误导,明确 120s 是总时长上限。
                 If timedOut AndAlso Not bgwDownloader.CancellationPending Then
-                    bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
-                        New ApplicationException("Download timed out: chunks did not finish within 120 seconds (the MEGA URL may have expired). Please retry to resume."))
+                    If MegaQuotaManager.IsQuarantined() Then
+                        bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
+                            New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509). Download paused during quota quarantine; use Retry now after changing IP/proxy or wait for auto-resume. Progress preserved."))
+                    Else
+                        bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
+                            New ApplicationException("Download did not finish within the 120-second total watchdog (total window, not idle; quota pause can also trigger this - check the quota banner). Progress preserved, retry resumes from the .part file."))
+                    End If
                 End If
 
                 ' Wait until chunk workers finish before rename

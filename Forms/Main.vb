@@ -38,9 +38,53 @@ Public Class Main
     Private WithEvents dropSink As SimpleDropSink
 
     ''' <summary>
-    ''' 进度条渲染器(主题切换时需同步颜色)
+    ''' 进度条渲染器(主题切换时需同步颜色)。自定义绘制解决 OLV BarRenderer 三个固有问题:
+    ''' 背景底色整条灰、渐变分支忽略 FillColor、小进度整型截断无填充。
     ''' </summary>
-    Private progressBarRenderer As BrightIdeasSoftware.BarRenderer
+    Private progressBarRenderer As ThemeBarRenderer
+
+    ''' <summary>RC:主题感知进度条。背景透明露出行底色,边框随主题,小进度保底 2px。</summary>
+    Private Class ThemeBarRenderer
+        Inherits BrightIdeasSoftware.BarRenderer
+
+        Public Overrides Sub Render(g As Drawing.Graphics, r As Drawing.Rectangle)
+            Try
+                Dim minV As Double = Me.MinimumValue
+                Dim maxV As Double = Me.MaximumValue
+                Dim cur As Double = 0.0
+                If Me.Aspect IsNot Nothing AndAlso IsNumeric(Me.Aspect) Then
+                    cur = CDbl(Me.Aspect)
+                End If
+                Dim frac As Double = 0.0
+                If maxV > minV Then
+                    frac = (cur - minV) / (maxV - minV)
+                End If
+                If frac < 0.0 Then frac = 0.0
+                If frac > 1.0 Then frac = 1.0
+                Dim wantH As Integer = If(Me.MaximumHeight > 0, Me.MaximumHeight, 18)
+                Dim barH As Integer = Math.Min(r.Height - 4, wantH)
+                If barH < 6 Then barH = Math.Max(2, r.Height - 4)
+                Dim barY As Integer = r.Y + (r.Height - barH) \ 2
+                Dim barR As New Drawing.Rectangle(r.X + 2, barY, Math.Max(0, r.Width - 4), barH)
+                If barR.Width <= 0 OrElse barR.Height <= 0 Then Return
+                Dim fw As Single = If(Me.FrameWidth > 0, Me.FrameWidth, 1.0F)
+                Using pen As New Drawing.Pen(Me.FrameColor, fw)
+                    g.DrawRectangle(pen, barR)
+                End Using
+                Dim inner As Drawing.Rectangle = Drawing.Rectangle.Inflate(barR, -1, -1)
+                If inner.Width > 0 AndAlso inner.Height > 0 AndAlso frac > 0.0 Then
+                    Dim fillW As Integer = CInt(Math.Floor(inner.Width * frac))
+                    If fillW < 2 Then fillW = 2
+                    If fillW > inner.Width Then fillW = inner.Width
+                    Using br As New Drawing.SolidBrush(Me.FillColor)
+                        g.FillRectangle(br, New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
+                    End Using
+                End If
+            Catch ex As Exception
+                MyBase.Render(g, r)
+            End Try
+        End Sub
+    End Class
 
 
     ' WORKERS
@@ -229,10 +273,22 @@ Public Class Main
         CrearMenus()
         InitBatchMenu()
         InitQuotaBanner()
+        InitDownloadAreaLayout()
 
         'btnCollaborate.Visible = Not Config.HideCollaborateButton
-        btnCollaborate.Visible = False ' Lo quitamos... nadie lo usa... 
+        btnCollaborate.Visible = False ' Lo quitamos... nadie lo usa...
         btnUpdate.Visible = False
+        ' RC:右上协作按钮隐藏后回收 Panel 宽度+修正齿轮 1px 裁剪(80->45,46->11)。
+        Try
+            PanelButtonsRight.Width = 45
+            btnConfig.Location = New Drawing.Point(10, 0)
+        Catch
+        End Try
+        ' RC:状态栏 RAM/Proc 固定 90px 运行时必截断,改自动宽度。
+        Try
+            RAMProcToolStripStatusLabel.AutoSize = True
+        Catch
+        End Try
 
         If Me.WindowState <> FormWindowState.Minimized Then
             Me.IconoMinimizado.Visible = False
@@ -335,8 +391,13 @@ Public Class Main
 
         ' P0-1 UI:一次性列默认集(开 Progreso%、藏 Descargado、Estado 加宽)。只跑一次,不覆盖用户之后的手动调整。
         If Not Config.ColumnUIDefaultsMigratedV26 Then
-            ApplyColumnUIDefaultsV26()
+            ApplyColumnDefaults()
             Config.ColumnUIDefaultsMigratedV26 = True
+            Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
+            Config.GuardarXML(False)
+        ElseIf RepairColumnStateIfCorrupted() Then
+            ' 坏列状态自愈:持久化曾被拖成 0/上千像素(# 0 + 文件名 0 + 横向滚动条),
+            ' 迁移已跑过不会重跑,此处按宽度 sanity 修一次并落盘,用户重启即恢复。
             Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
             Config.GuardarXML(False)
         End If
@@ -745,6 +806,7 @@ Public Class Main
             Me.Visible = True
         End If
         LayoutQuotaBanner()
+        LayoutDownloadArea()
     End Sub
 
     Private Sub RestaurarVentana()
@@ -892,9 +954,11 @@ Public Class Main
                                              Return 0
                                          End Try
                                      End Function
-        progressBarRenderer = New BrightIdeasSoftware.BarRenderer
+        progressBarRenderer = New ThemeBarRenderer
         progressBarRenderer.UseStandardBar = False
         progressBarRenderer.MaximumWidth = 9999
+        progressBarRenderer.MinimumValue = 0
+        progressBarRenderer.MaximumValue = 100
         ApplyProgressBarThemeColors()
         ListaDescargas.AllColumns(IndiceColumnaPorcentaje).Renderer = progressBarRenderer
 
@@ -974,7 +1038,9 @@ Public Class Main
         dropSink.CanDropOnSubItem = False
 
 
-        InitializeColumnWidths()
+        ' 列宽上下限:WinForms 表头分栏线无最大宽度,OLV Minimum/MaximumWidth 只在代码赋值时生效,
+        ' 拖动时靠 ColumnWidthChanging 事件手动夹取(见下方 handler)。
+        ApplyColumnWidthLimits()
 
         ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
         ListaDescargas.RowHeight = 26
@@ -1018,10 +1084,15 @@ Public Class Main
 
     Private Sub ApplyProgressBarThemeColors()
         If progressBarRenderer Is Nothing Then Return
-        progressBarRenderer.BackgroundColor = ThemeManager.GetColor("ProgressBack")
+        ' RC:背景透明露出行底色(解决浅色整条发灰,0%行纯灰);边框随主题不再纯黑;
+        ' 清空渐变走 FillColor 实色(解决 FillColor 死赋值);条高跟随行高。
+        progressBarRenderer.BackgroundColor = Drawing.Color.Transparent
         progressBarRenderer.FillColor = ThemeManager.GetColor("ProgressFill")
-        progressBarRenderer.GradientStartColor = ThemeManager.GetColor("ProgressGradientStart")
-        progressBarRenderer.GradientEndColor = ThemeManager.GetColor("ProgressGradientEnd")
+        progressBarRenderer.GradientStartColor = Drawing.Color.Empty
+        progressBarRenderer.GradientEndColor = Drawing.Color.Empty
+        progressBarRenderer.FrameColor = ThemeManager.GetColor("Border")
+        progressBarRenderer.FrameWidth = 1.0F
+        progressBarRenderer.MaximumHeight = 18
     End Sub
 
     ''' <summary>
@@ -1044,6 +1115,20 @@ Public Class Main
         End Try
     End Sub
 
+    Private Shared Function GetToolbarIconSize() As Integer
+        ' RC:高 DPI 下图标跟随放大(此前写死 20,150% 下显小)。
+        Try
+            Using g As Graphics = Graphics.FromHwnd(IntPtr.Zero)
+                Dim s As Single = g.DpiX / 96.0F
+                If s < 1.0F Then s = 1.0F
+                If s > 2.5F Then s = 2.5F
+                Return CInt(20 * s)
+            End Using
+        Catch
+            Return 20
+        End Try
+    End Function
+
     Private Shared Sub ApplyIconThemeToButton(btn As Button, dark As Boolean)
         If btn Is Nothing OrElse btn.IsDisposed Then Return
         Dim original As Image = TryCast(btn.Tag, Image)
@@ -1053,7 +1138,7 @@ Public Class Main
             btn.Tag = original
         End If
         Dim previous As Image = btn.Image
-        Dim scaled As Image = ScaleToolbarIcon(original, 20)
+        Dim scaled As Image = ScaleToolbarIcon(original, GetToolbarIconSize())
         Try
             If dark Then
                 Dim tinted As Image = RecolorImageForDark(scaled)
@@ -1105,14 +1190,31 @@ Public Class Main
     Private quotaNotified As Boolean = False
     Private WithEvents RetryAllFailedMenuItem As New ToolStripMenuItem()
     Private WithEvents RemoveAllFailedMenuItem As New ToolStripMenuItem()
+    Private WithEvents ResetColumnsMenuItem As New ToolStripMenuItem()
+    Private ReadOnly sepBatchMenuItem As New ToolStripSeparator()
+    Private ReadOnly sepColumnsMenuItem As New ToolStripSeparator()
 
-    ''' <summary>配额横幅:Anchor 布局,显示/隐藏时整体下移下载列表,无 Dock 冲突。</summary>
+    ''' <summary>配额横幅:Anchor 布局,显示/隐藏时整体下移下载列表,无 Dock 冲突。
+    ''' RC:Top 跟随工具栏底部(不再写死 40),高度按 DPI 缩放,防 125%/150% 下压住工具栏。</summary>
     Private Sub InitQuotaBanner()
+        Dim sc As Single = 1.0F
+        Try
+            Using g As Drawing.Graphics = Me.CreateGraphics()
+                sc = g.DpiY / 96.0F
+            End Using
+        Catch
+        End Try
+        If sc < 1.0F Then sc = 1.0F
+        Dim bannerH As Integer = CInt(30 * sc)
         quotaBannerPanel = New Panel()
         quotaBannerPanel.Name = "quotaBannerPanel"
-        quotaBannerPanel.Height = 30
+        quotaBannerPanel.Height = bannerH
         quotaBannerPanel.Left = 0
-        quotaBannerPanel.Top = 40
+        Try
+            quotaBannerPanel.Top = TableLayoutPanel1.Bottom
+        Catch
+            quotaBannerPanel.Top = 40
+        End Try
         quotaBannerPanel.Width = Me.ClientSize.Width
         quotaBannerPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         quotaBannerPanel.Visible = False
@@ -1122,15 +1224,15 @@ Public Class Main
         quotaBannerLabel.AutoSize = False
         quotaBannerLabel.Left = 12
         quotaBannerLabel.Top = 0
-        quotaBannerLabel.Height = 30
+        quotaBannerLabel.Height = bannerH
         quotaBannerLabel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         quotaBannerLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft
 
         quotaRetryNowButton = New Button()
         quotaRetryNowButton.Name = "quotaRetryNowButton"
-        quotaRetryNowButton.Height = 23
-        quotaRetryNowButton.Width = 110
-        quotaRetryNowButton.Top = 3
+        quotaRetryNowButton.Height = CInt(23 * sc)
+        quotaRetryNowButton.Width = CInt(110 * sc)
+        quotaRetryNowButton.Top = (bannerH - quotaRetryNowButton.Height) \ 2
         quotaRetryNowButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         AddHandler quotaRetryNowButton.Click, AddressOf QuotaRetryNow_Click
 
@@ -1145,6 +1247,10 @@ Public Class Main
 
     Private Sub LayoutQuotaBanner()
         If quotaBannerPanel Is Nothing OrElse quotaRetryNowButton Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
+        Try
+            quotaBannerPanel.Top = TableLayoutPanel1.Bottom
+        Catch
+        End Try
         quotaBannerPanel.Width = Me.ClientSize.Width
         quotaRetryNowButton.Left = quotaBannerPanel.Width - quotaRetryNowButton.Width - 12
         quotaBannerLabel.Width = Math.Max(50, quotaRetryNowButton.Left - 18)
@@ -1152,9 +1258,15 @@ Public Class Main
 
     Private Sub ApplyQuotaBannerTheme()
         If quotaBannerPanel Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
-        ' P0-3 UI:固定深红底+白字。此前用 ErrorFore,深色下是粉底(#F48771)+白字,对比度不足。
-        quotaBannerPanel.BackColor = System.Drawing.Color.FromArgb(178, 34, 34)
-        quotaBannerLabel.ForeColor = System.Drawing.Color.White
+        quotaBannerPanel.BackColor = ThemeManager.GetColor("QuotaBack")
+        quotaBannerLabel.ForeColor = ThemeManager.GetColor("QuotaFore")
+        Try
+            quotaRetryNowButton.BackColor = ThemeManager.GetColor("QuotaBack")
+            quotaRetryNowButton.ForeColor = ThemeManager.GetColor("QuotaFore")
+            quotaRetryNowButton.FlatStyle = FlatStyle.Flat
+            quotaRetryNowButton.FlatAppearance.BorderColor = ThemeManager.GetColor("QuotaFore")
+        Catch
+        End Try
     End Sub
 
     Private Sub UpdateQuotaBannerTexts()
@@ -1163,8 +1275,15 @@ Public Class Main
         If String.IsNullOrEmpty(quotaRetryNowButton.Text) Then quotaRetryNowButton.Text = "Retry now"
     End Sub
 
+    ''' <summary>配额倒计时文案。Ceiling 分钟在最后 60 秒会卡住"1 min"不动,
+    ''' 且 1h59m30s 会进位成"2 h 0 min":120 秒内直接读秒,以上向下取整。</summary>
     Private Shared Function FormatQuotaRemaining(span As TimeSpan) As String
-        Dim totalMin As Integer = Math.Max(1, CInt(Math.Ceiling(span.TotalMinutes)))
+        Dim totalSec As Integer = Math.Max(1, CInt(Math.Ceiling(span.TotalSeconds)))
+        If totalSec < 120 Then
+            If totalSec < 60 Then Return totalSec.ToString() & " s"
+            Return "1 min " & (totalSec - 60).ToString() & " s"
+        End If
+        Dim totalMin As Integer = totalSec \ 60
         Dim h As Integer = totalMin \ 60
         Dim m As Integer = totalMin Mod 60
         If h > 0 Then Return h.ToString() & " h " & m.ToString() & " min"
@@ -1184,12 +1303,7 @@ Public Class Main
             If quotaRem.HasValue Then
                 quotaBannerPanel.Visible = True
                 LayoutQuotaBanner()
-                If quotaBannerPanel.Tag Is Nothing OrElse Not CBool(quotaBannerPanel.Tag) Then
-                    ListaDescargas.Top += quotaBannerPanel.Height
-                    ListaDescargas.Height = Math.Max(50, ListaDescargas.Height - quotaBannerPanel.Height)
-                    ShiftSidePanels(True)
-                    quotaBannerPanel.Tag = True
-                End If
+                LayoutDownloadArea()
                 quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
                 If Not quotaNotified Then
                     quotaNotified = True
@@ -1202,12 +1316,7 @@ Public Class Main
             Else
                 If quotaBannerPanel.Visible Then
                     quotaBannerPanel.Visible = False
-                    If quotaBannerPanel.Tag IsNot Nothing AndAlso CBool(quotaBannerPanel.Tag) Then
-                        ListaDescargas.Top -= quotaBannerPanel.Height
-                        ListaDescargas.Height += quotaBannerPanel.Height
-                        ShiftSidePanels(False)
-                        quotaBannerPanel.Tag = False
-                    End If
+                    LayoutDownloadArea()
                 End If
                 If quotaNotified Then
                     quotaNotified = False
@@ -1233,37 +1342,42 @@ Public Class Main
         End Try
     End Sub
 
-    ''' <summary>把配额失败项全部唤回 EnCola(手动出口与到期自动恢复共用)。</summary>
+    ''' <summary>把配额失败项全部唤回 EnCola(手动出口与到期自动恢复共用)。
+    ''' 收集用局部表:调用方横跨 UI 线程(立即重试)与调度线程(到期边沿),共享字段会竞态重复唤醒。</summary>
     Private Sub WakeQuotaFailedItems()
         Dim woken As Integer = 0
+        Dim pend As New Generic.List(Of Fichero)
         Mutex.ListaDescargas.WaitOne()
         Try
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
                     If fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
-                        ColaReseteoLocal.Add(fic)
+                        pend.Add(fic)
                     End If
                 Next
             Next
         Finally
             Mutex.ListaDescargas.ReleaseMutex()
         End Try
-        For Each fic As Fichero In ColaReseteoLocal
+        For Each fic As Fichero In pend
             fic.ResetearDescarga()
             fic.SetDescargaEstado = Estado.EnCola
             woken += 1
         Next
-        ColaReseteoLocal.Clear()
         If woken > 0 Then Log.WriteWarning("Woke " & woken & " quota-failed files back to queue.")
     End Sub
-    Private ColaReseteoLocal As New Generic.List(Of Fichero)
 
     Private Sub InitBatchMenu()
         RetryAllFailedMenuItem.Name = "RetryAllFailedMenuItem"
         RemoveAllFailedMenuItem.Name = "RemoveAllFailedMenuItem"
-        MenuDescarga.Items.Add(New ToolStripSeparator())
+        ResetColumnsMenuItem.Name = "ResetColumnsMenuItem"
+        sepBatchMenuItem.Name = "sepBatchMenuItem"
+        sepColumnsMenuItem.Name = "sepColumnsMenuItem"
+        MenuDescarga.Items.Add(sepBatchMenuItem)
         MenuDescarga.Items.Add(RetryAllFailedMenuItem)
         MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
+        MenuDescarga.Items.Add(sepColumnsMenuItem)
+        MenuDescarga.Items.Add(ResetColumnsMenuItem)
         UpdateBatchMenuTexts()
     End Sub
 
@@ -1272,6 +1386,25 @@ Public Class Main
         If String.IsNullOrEmpty(RetryAllFailedMenuItem.Text) Then RetryAllFailedMenuItem.Text = "Retry all failed"
         RemoveAllFailedMenuItem.Text = Language.GetText("Remove all failed")
         If String.IsNullOrEmpty(RemoveAllFailedMenuItem.Text) Then RemoveAllFailedMenuItem.Text = "Remove all failed"
+        ResetColumnsMenuItem.Text = Language.GetText("Reset column widths")
+        If String.IsNullOrEmpty(ResetColumnsMenuItem.Text) Then ResetColumnsMenuItem.Text = "Reset column widths"
+    End Sub
+
+    Private Sub ResetColumnsMenuItem_Click(sender As Object, e As EventArgs) Handles ResetColumnsMenuItem.Click
+        ' 程序内回到默认的入口:此前 # 列 Hideable=False + 迁移已跑过,坏状态只能手改配置。
+        Try
+            ApplyColumnDefaults()
+            Try
+                Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
+                Config.GuardarXML(False)
+            Catch ex As Exception
+                Log.WriteError("ResetColumns persist failed: " & ex.ToString)
+            End Try
+            RefreshListaDescargas(True)
+            ToastForm.ShowToast(Me, ResetColumnsMenuItem.Text)
+        Catch ex As Exception
+            Log.WriteError("ResetColumns failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Function CollectErroneoFiles() As Generic.List(Of Fichero)
@@ -1360,29 +1493,137 @@ Public Class Main
     End Function
 
 
-    Protected Overridable Sub InitializeColumnWidths()
-        ' Al final no hacemos nada aquí...
-    End Sub
-
     ''' <summary>
     ''' P0-1 UI:应用一次性列默认集。AllColumns 顺序固定 = Designer Add 顺序:
     ''' 0 # / 1 Nombre / 2 Descargado / 3 Tamaño / 4 Estado / 5 Progreso% / 6 Progreso / 7 Velocidad / 8 EDT / 9 Restante。
+    ''' RC:升级为全量默认(含顺序/显隐/宽度),复用为右键"恢复默认列宽"与坏状态自愈的唯一入口。
     ''' </summary>
     Private Sub ApplyColumnUIDefaultsV26()
+        ApplyColumnDefaults()
+    End Sub
+
+    ''' <summary>列宽上下限(拖拽"无限长"的根因:此前所有列都无 Minimum/MaximumWidth)。</summary>
+    Private Sub ApplyColumnWidthLimits()
         Try
             If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
             If ListaDescargas.AllColumns.Count < 10 Then Return
-            Dim colPorc As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(5)
-            colPorc.IsVisible = True
-            If colPorc.Width < 40 Then colPorc.Width = 55
-            ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复)
-            ListaDescargas.AllColumns(2).IsVisible = False
-            Dim colEstado As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(4)
-            If colEstado.Width < 80 Then colEstado.Width = 90
-            ListaDescargas.RebuildColumns()
-            Log.WriteWarning("Applied v2.6 column defaults (show Progreso%, hide Descargado, widen Estado).")
+            SetColumnWidthLimit(0, 20, 40)
+            SetColumnWidthLimit(1, 150, 700)
+            SetColumnWidthLimit(2, 60, 120)
+            SetColumnWidthLimit(3, 60, 120)
+            SetColumnWidthLimit(4, 90, 320)
+            SetColumnWidthLimit(5, 45, 80)
+            SetColumnWidthLimit(6, 60, 200)
+            SetColumnWidthLimit(7, 55, 120)
+            SetColumnWidthLimit(8, 55, 120)
+            SetColumnWidthLimit(9, 55, 120)
+            ' 文件名列保持自动吃剩余空间(窗口拉宽不留白);"反向"手感由上下限兜底:它永远不会被压成 0。
+            ListaDescargas.AllColumns(1).FillsFreeSpace = True
         Catch ex As Exception
-            Log.WriteError("ApplyColumnUIDefaultsV26 failed: " & ex.ToString)
+            Log.WriteError("ApplyColumnWidthLimits failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Sub SetColumnWidthLimit(idx As Integer, minW As Integer, maxW As Integer)
+        Try
+            Dim col As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(idx)
+            If col Is Nothing Then Return
+            col.MinimumWidth = minW
+            col.MaximumWidth = maxW
+        Catch ex As Exception
+            Log.WriteError("SetColumnWidthLimit failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    ''' <summary>全量列默认:顺序/显隐/宽度。右键恢复与自愈共用,保持行为一致。</summary>
+    Private Sub ApplyColumnDefaults()
+        Try
+            If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
+            If ListaDescargas.AllColumns.Count < 10 Then Return
+            ApplyColumnWidthLimits()
+            Dim widths() As Integer = {20, 185, 70, 70, 90, 55, 80, 77, 70, 60}
+            For i As Integer = 0 To 9
+                Dim col As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(i)
+                col.Width = widths(i)
+                Try
+                    col.DisplayIndex = i
+                Catch
+                End Try
+            Next
+            ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复);Restante 默认隐藏
+            ListaDescargas.AllColumns(2).IsVisible = False
+            ListaDescargas.AllColumns(5).IsVisible = True
+            ListaDescargas.AllColumns(9).IsVisible = False
+            ListaDescargas.AllColumns(1).FillsFreeSpace = True
+            For i As Integer = 0 To 9
+                If i <> 1 Then
+                    Try
+                        ListaDescargas.AllColumns(i).FillsFreeSpace = False
+                    Catch
+                    End Try
+                End If
+            Next
+            ListaDescargas.RebuildColumns()
+            Log.WriteWarning("Applied column defaults (widths/order/visibility).")
+        Catch ex As Exception
+            Log.WriteError("ApplyColumnDefaults failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 坏列状态自愈:RestoreState 读回的持久化宽度若出现关键列被压 0 / 单列上千像素 /
+    ''' 可见列总宽远超窗口,即判 corruption。返回 True 表示已重置,调用方负责落盘。
+    ''' </summary>
+    Private Function RepairColumnStateIfCorrupted() As Boolean
+        Try
+            If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return False
+            If ListaDescargas.AllColumns.Count < 10 Then Return False
+            Dim hashCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(0)
+            Dim nameCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(1)
+            If hashCol.Width < 20 OrElse nameCol.Width < 50 Then
+                Log.WriteWarning("Column state corrupted (#=" & hashCol.Width & ", Nombre=" & nameCol.Width & "); resetting to defaults.")
+                ApplyColumnDefaults()
+                Return True
+            End If
+            Dim total As Integer = 0
+            For Each c As BrightIdeasSoftware.OLVColumn In ListaDescargas.AllColumns
+                If c.Width < 0 OrElse c.Width > 800 Then
+                    Log.WriteWarning("Column state corrupted (col '" & c.Text & "' width=" & c.Width & "); resetting to defaults.")
+                    ApplyColumnDefaults()
+                    Return True
+                End If
+                Try
+                    If c.IsVisible Then total += c.Width
+                Catch
+                    total += c.Width
+                End Try
+            Next
+            ' 总宽阈值跟窗口走:上限夹取后合法最大约 2120,固定 2000 会误伤宽屏手动布局。
+            Dim totalLimit As Integer = Math.Max(2000, Me.ClientSize.Width * 2)
+            If total > totalLimit Then
+                Log.WriteWarning("Column state corrupted (visible total=" & total & "); resetting to defaults.")
+                ApplyColumnDefaults()
+                Return True
+            End If
+            Return False
+        Catch ex As Exception
+            Log.WriteError("RepairColumnStateIfCorrupted failed: " & ex.ToString)
+            Return False
+        End Try
+    End Function
+
+    Private Sub ListaDescargas_ColumnWidthChanging(sender As Object, e As ColumnWidthChangingEventArgs) Handles ListaDescargas.ColumnWidthChanging
+        ' OLV Minimum/MaximumWidth 不拦截表头拖拽,此处手动夹取,防止再次拖出 0 / 上千像素。
+        Try
+            Dim olv As BrightIdeasSoftware.ObjectListView = TryCast(sender, BrightIdeasSoftware.ObjectListView)
+            If olv Is Nothing OrElse olv.Columns Is Nothing Then Return
+            If e.ColumnIndex < 0 OrElse e.ColumnIndex >= olv.Columns.Count Then Return
+            Dim col As BrightIdeasSoftware.OLVColumn = TryCast(olv.Columns(e.ColumnIndex), BrightIdeasSoftware.OLVColumn)
+            If col Is Nothing Then Return
+            If col.MinimumWidth > 0 AndAlso e.NewWidth < col.MinimumWidth Then e.NewWidth = col.MinimumWidth
+            If col.MaximumWidth > 0 AndAlso e.NewWidth > col.MaximumWidth Then e.NewWidth = col.MaximumWidth
+        Catch ex As Exception
+            Log.WriteError("ColumnWidthChanging clamp failed: " & ex.ToString)
         End Try
     End Sub
 
@@ -1404,10 +1645,22 @@ Public Class Main
     End Function
 
     ' P2-11b:左导航分组 + 计数。计数与过滤共用 DownloadEstadoFilter.MatchesScope,所见即所数。
+    ' 计数单位是包(列表顶层行),不是文件:此前连包带文件各算一遍,一个 12 文件的完成包
+    ' 就贡献 13,导航"已完成(25)"而列表只有 2 个包——口径与所见不一致,现只数包。
     Private _navScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.NavScope.All
     Private _updatingNav As Boolean = False
 
     Private Sub InitNavList()
+        ' RC:ItemHeight 跟随 DPI/字体(此前写死 20,大字体下截断)。
+        Try
+            Dim sc As Single = 1.0F
+            Using g As Drawing.Graphics = Me.CreateGraphics()
+                sc = g.DpiY / 96.0F
+            End Using
+            If sc < 1.0F Then sc = 1.0F
+            navListBox.ItemHeight = Math.Max(20, CInt((navListBox.Font.Height + 6) * sc))
+        Catch
+        End Try
         UpdateNavCounts()
         If navListBox.SelectedIndex < 0 Then navListBox.SelectedIndex = 0
         ApplyNavListColors()
@@ -1475,17 +1728,13 @@ Public Class Main
         End Try
     End Sub
 
+    ''' <summary>顶层包计数。包命中判定本身已含子文件穿透(MatchesScope),此处不再递归进文件,
+    ''' 否则包与文件重复累加,计数与列表行数对不上。</summary>
     Private Shared Sub CountNavObject(obj As Object, totals() As Integer)
         totals(0) += 1
         For s As Integer = 1 To 4
             If DownloadEstadoFilter.MatchesScope(obj, CType(s, DownloadEstadoFilter.NavScope)) Then totals(s) += 1
         Next
-        Dim p As Paquete = TryCast(obj, Paquete)
-        If p IsNot Nothing AndAlso p.ListaFicheros IsNot Nothing Then
-            For Each f As Fichero In p.ListaFicheros
-                CountNavObject(f, totals)
-            Next
-        End If
     End Sub
 
     ''' <summary>
@@ -1509,23 +1758,41 @@ Public Class Main
         End Try
     End Sub
 
-    Private Sub ShiftSidePanels(shrink As Boolean)
+    ''' <summary>下载区绝对布局:列表+两侧栏 Top/Height 永远由工具栏底+横幅显隐重算。
+    ''' 此前相对位移(Top+=h)叠加 Anchor Top|Bottom,在 resize/最大化/DPI 变化时漂移累积,
+    ''' 横幅解除后底部压住状态栏直到下次 resize。现所有几何一次算死,不再累加。</summary>
+    Private Sub LayoutDownloadArea()
         Try
-            If quotaBannerPanel Is Nothing Then Return
-            Dim dy As Integer = quotaBannerPanel.Height
-            For Each pnl As Control In New Control() {navPanel, detailPanel}
-                If pnl Is Nothing OrElse pnl.IsDisposed Then Continue For
-                If shrink Then
-                    pnl.Top += dy
-                    pnl.Height = Math.Max(50, pnl.Height - dy)
-                Else
-                    pnl.Top -= dy
-                    pnl.Height += dy
-                End If
-            Next
+            If ListaDescargas Is Nothing OrElse ListaDescargas.IsDisposed Then Return
+            If navPanel Is Nothing OrElse detailPanel Is Nothing Then Return
+            If TableLayoutPanel1 Is Nothing OrElse StatusStrip1 Is Nothing Then Return
+            Dim top As Integer = TableLayoutPanel1.Bottom + 2
+            If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then
+                top += quotaBannerPanel.Height
+            End If
+            Dim bottom As Integer = StatusStrip1.Top - 4
+            Dim h As Integer = Math.Max(50, bottom - top)
+            ListaDescargas.Top = top
+            ListaDescargas.Height = h
+            navPanel.Top = top
+            navPanel.Height = h
+            detailPanel.Top = top
+            detailPanel.Height = h
         Catch ex As Exception
-            Log.WriteDebug("ShiftSidePanels failed: " & Log.SafeException(ex))
+            Log.WriteDebug("LayoutDownloadArea failed: " & Log.SafeException(ex))
         End Try
+    End Sub
+
+    Private Sub InitDownloadAreaLayout()
+        Try
+            ' 去掉 Bottom 锚点:高度只由 LayoutDownloadArea 决定,Anchor 不再插手 Height,从根上杜绝漂移。
+            ListaDescargas.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+            navPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+            detailPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        Catch ex As Exception
+            Log.WriteDebug("InitDownloadAreaLayout anchor failed: " & Log.SafeException(ex))
+        End Try
+        LayoutDownloadArea()
     End Sub
 
     Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
@@ -1864,6 +2131,9 @@ Public Class Main
         Try
             Log.WriteWarning("Starting worker bgwActualizadorListaDescargas")
             While Not worker.CancellationPending
+                ' 单点故障防护:单次迭代异常只记日志继续循环,不再整条 worker 死亡
+                ' (此前 Try 包在 While 外面,一次异常=列表刷新+状态栏+横幅+倒计时+自动恢复全停摆,且无重启)。
+                Try
 
                 sw.Start()
                 Flujo = "Checking status" & vbNewLine
@@ -1979,6 +2249,14 @@ Public Class Main
                 sw.Stop()
                 sw.Reset()
 
+                Catch exIter As Exception
+                    Log.WriteError("bgwActualizadorListaDescargas iteration failed, continuing (" & Flujo.Replace(vbNewLine, " ").Trim() & "): " & Log.SafeException(exIter))
+                    Try
+                        System.Threading.Thread.Sleep(1000)
+                    Catch
+                    End Try
+                End Try
+
             End While
             Log.WriteWarning("Stopping worker bgwActualizadorListaDescargas")
         Catch ex As Exception
@@ -1997,6 +2275,26 @@ Public Class Main
 
     Private Sub bgwActualizadorListaDescargas_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwActualizadorListaDescargas.RunWorkerCompleted
         bgwActualizadorListaDescargasCompleted = True
+        ' 看门狗:非关闭流程中的 worker 结束=异常穿透(内层已尽力自保),3 秒后自救重启。
+        ' 关闭时 Cerrando/_ForzarCierre/Disposed 必有一真,不重启,不卡退出流程。
+        Try
+            If e.Cancelled Then Return
+            If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
+            Log.WriteError("bgwActualizadorListaDescargas ended unexpectedly; restarting in 3s.")
+            System.Threading.Tasks.Task.Run(Sub()
+                                                System.Threading.Thread.Sleep(3000)
+                                                Try
+                                                    If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
+                                                    If bgwActualizadorListaDescargas.IsBusy Then Return
+                                                    bgwActualizadorListaDescargasCompleted = False
+                                                    bgwActualizadorListaDescargas.RunWorkerAsync()
+                                                Catch ex As Exception
+                                                    Log.WriteError("bgwActualizadorListaDescargas restart failed: " & Log.SafeException(ex))
+                                                End Try
+                                            End Sub)
+        Catch ex As Exception
+            Log.WriteError("bgwActualizadorListaDescargas watchdog failed: " & Log.SafeException(ex))
+        End Try
     End Sub
     Private Sub bgwActualizadorDatosDisco_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwActualizadorDatosDisco.RunWorkerCompleted
         bgwActualizadorDatosDiscoCompleted = True
@@ -2021,6 +2319,16 @@ Public Class Main
         Dim ResetearErroresPeriodo As Integer = Config.ResetearErroresPeriodoMinutos
         ' v2.5 beta: 配额熔断状态。配额期内不唤醒配额失败项、不开新任务；到期后配额失败项立即唤醒。
         Dim quotaHold As Boolean = MegaQuotaManager.IsQuarantined()
+        ' P1:配额到期唤醒必须独立于自愈开关。WakeQuotaFailedItems 的唯一旧出口藏在下面
+        ' If ResetearErrores 分支里,用户关掉"失败自愈"后横幅消失、倒计时归零,失败项却永久停在
+        ' Erroneo——发布说明承诺的行为静默失效。此处熔断解除边沿直接复用 WakeQuotaFailedItems。
+        Static quotaHoldPrev As Boolean = False
+        Try
+            If quotaHoldPrev AndAlso Not quotaHold Then WakeQuotaFailedItems()
+        Catch ex As Exception
+            Log.WriteError("Quota auto-wake failed: " & Log.SafeException(ex))
+        End Try
+        quotaHoldPrev = quotaHold
 
         ' Reset de descargas erroneas
         If ResetearErrores Then
@@ -3149,6 +3457,8 @@ Public Class Main
                 RetryAllFailedMenuItem.Visible = True
                 RemoveAllFailedMenuItem.Visible = True
             End If
+            ' 批量组隐藏时连带藏起它的分隔线,避免"恢复列宽"上方出现双线。
+            sepBatchMenuItem.Visible = RetryAllFailedMenuItem.Visible
             If ListaDescargas.SelectedObjects.Count = 1 Then
                 PropiedadesToolStripMenuItem.Enabled = True
             End If
@@ -3365,6 +3675,16 @@ Public Class Main
     End Sub
 
     Private Sub btnPlay_Click(sender As System.Object, e As System.EventArgs) Handles btnPlay.Click
+        ' 熔断期点开始此前零反馈(调度器静默不开新任务)。给明确提示,不改状态。
+        If MegaQuotaManager.IsQuarantined() Then
+            Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
+            Dim msg As String = Language.GetText("Quota_Error")
+            If qrem.HasValue Then
+                msg &= " (" & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value)) & ")"
+            End If
+            ToastForm.ShowToast(Me, msg)
+            Return
+        End If
         StartDownload()
     End Sub
 
@@ -3452,13 +3772,13 @@ Public Class Main
         For Each obj As Object In ListaDescargas.SelectedObjects
             If TypeOf (obj) Is Paquete Then
                 For Each fic As Fichero In CType(obj, Paquete).ListaFicheros
-                    If fic.DescargaEstado = Estado.Erroneo Then
+                    If fic.DescargaEstado = Estado.Erroneo AndAlso Not String.IsNullOrWhiteSpace(fic.DescripcionError) Then
                         ht.Add(fic.DescripcionError)
                     End If
                 Next
             ElseIf TypeOf (obj) Is Fichero Then
                 Dim fic As Fichero = CType(obj, Fichero)
-                If fic.DescargaEstado = Estado.Erroneo Then
+                If fic.DescargaEstado = Estado.Erroneo AndAlso Not String.IsNullOrWhiteSpace(fic.DescripcionError) Then
                     ht.Add(fic.DescripcionError)
                 End If
 
@@ -3469,6 +3789,13 @@ Public Class Main
             msg &= Str & vbNewLine & vbNewLine
         Next
         msg = msg.Trim
+        ' RC:老队列重启后描述为空时不再弹空白窗,给可操作 fallback。
+        If String.IsNullOrWhiteSpace(msg) Then
+            msg = Language.GetText("Quota_Error")
+            If String.IsNullOrWhiteSpace(msg) OrElse msg = "Quota_Error" Then
+                msg = "No error details available (e.g. queue saved by an older version). Please retry the download; a fresh error will include details."
+            End If
+        End If
 
 
         Dim ventanaError As New PantallaMsg

@@ -43,7 +43,10 @@ Friend Class DownloadEstadoFilter
                 Return NavScope.Waiting
             Case Estado.Erroneo
                 Return NavScope.Failed
+            Case Estado.Completado
+                Return NavScope.Completed
             Case Else
+                ' 未知状态宁可落在已完成,也不在各分组里消失。
                 Return NavScope.Completed
         End Select
     End Function

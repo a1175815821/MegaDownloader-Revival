@@ -115,7 +115,7 @@ Partial Class StreamingForm
         'btnLanzarVLC
         '
         Me.btnLanzarVLC.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
-        Me.btnLanzarVLC.DialogResult = System.Windows.Forms.DialogResult.Cancel
+        Me.btnLanzarVLC.DialogResult = System.Windows.Forms.DialogResult.None
         Me.btnLanzarVLC.Location = New System.Drawing.Point(12, 314)
         Me.btnLanzarVLC.Name = "btnLanzarVLC"
         Me.btnLanzarVLC.Size = New System.Drawing.Size(101, 23)

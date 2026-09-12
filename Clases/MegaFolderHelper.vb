@@ -34,7 +34,8 @@ Public Class MegaFolderHelper
     Public Shared Function RetrieveLinksFromFolder(ByVal FolderID As String, ByVal FolderKey As String, _
                                                      Optional ByVal SubFolderID As String = "", _
                                                      Optional ByVal SubFileID As String = "", _
-                                                     Optional ByVal progress As IProgress(Of Integer) = Nothing) As Generic.List(Of URLProcessor.FileURL)
+                                                     Optional ByVal progress As IProgress(Of Integer) = Nothing, _
+                                                     Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Generic.List(Of URLProcessor.FileURL)
         Dim jsonRQ As String
         Dim res As Conexion.Respuesta
 
@@ -82,6 +83,8 @@ Public Class MegaFolderHelper
         End If
 
         Dim Results As New Generic.List(Of URLProcessor.FileURL)
+        ' 取消点:解析是大文件夹逐节点解密,CPU 密集,取消必须停掉循环不再耗 API/CPU。
+        If ct.IsCancellationRequested Then ct.ThrowIfCancellationRequested()
 
         ' 找到文件夹本身的内部 handle (root)
         ' root 节点的特征: t=1, 且 fileN.h 出现在自己的 k 字段的 handle 部分
@@ -132,9 +135,12 @@ Public Class MegaFolderHelper
         Dim folderCounter As Integer = 0
         If progress IsNot Nothing Then progress.Report(0)
         For Each fileN As FileNode In FileList.f
+            ct.ThrowIfCancellationRequested()
             If fileN.t = 1 Then
                 folderCounter += 1
-                If progress IsNot Nothing AndAlso folderCounter Mod 100 = 0 Then progress.Report(folderCounter)
+                If folderCounter Mod 100 = 0 Then
+                    If progress IsNot Nothing Then progress.Report(folderCounter)
+                End If
                 Dim FileID As String = fileN.h
 
                 ' 从 k 字段提取与 root handle 匹配的 key (用于用 FolderKey 解密)
@@ -187,9 +193,12 @@ Public Class MegaFolderHelper
         Dim fileCounter As Integer = 0
         For Each fileN As FileNode In FileList.f
 
+            ct.ThrowIfCancellationRequested()
             If fileN.t = 0 Then
                 fileCounter += 1
-                If progress IsNot Nothing AndAlso fileCounter Mod 100 = 0 Then progress.Report(folderCounter + fileCounter)
+                If fileCounter Mod 100 = 0 Then
+                    If progress IsNot Nothing Then progress.Report(folderCounter + fileCounter)
+                End If
                 ' 单文件链接: 只保留链接指向的那个文件
                 If Not String.IsNullOrEmpty(SubFileID) AndAlso Not fileN.h = SubFileID Then
                     Continue For

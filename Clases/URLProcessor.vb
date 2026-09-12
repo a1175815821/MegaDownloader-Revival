@@ -13,17 +13,19 @@ Public Class URLProcessor
     End Class
 
     Public Shared Function ProcessURLs(ByVal URLs As Generic.List(Of String), ByRef Config As Configuracion, _
-                                       Optional ByVal progress As IProgress(Of Integer) = Nothing) As Generic.List(Of FileURL)
+                                       Optional ByVal progress As IProgress(Of Integer) = Nothing, _
+                                       Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Generic.List(Of FileURL)
 
         ' Convertimos los links de MegaFolder a links individuales
         Dim URLs3 As New Generic.List(Of FileURL)
         For Each URL As String In URLs
+            If ct.IsCancellationRequested Then ct.ThrowIfCancellationRequested()
             If URLExtractor.IsMegaFolder(URL) Then
                 Dim FolderID As String = URLExtractor.ExtraerFileID(URL)
                 Dim FolderKey As String = URLExtractor.ExtraerFileKey(URL)
                 Dim SubFolderID As String = URLExtractor.ExtraerSubFolderID(URL)
                 Dim SubFileID As String = URLExtractor.ExtraerSubFileID(URL)
-                For Each FileURL In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress)
+                For Each FileURL In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress, ct)
                     URLs3.Add(FileURL)
                 Next
             ElseIf URLExtractor.IsELC(URL) Then
@@ -34,7 +36,7 @@ Public Class URLProcessor
                         Dim FolderKey As String = URLExtractor.ExtraerFileKey(FileURL)
                         Dim SubFolderID As String = URLExtractor.ExtraerSubFolderID(FileURL)
                         Dim SubFileID As String = URLExtractor.ExtraerSubFileID(FileURL)
-                        For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress)
+                        For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress, ct)
                             URLs3.Add(New FileURL(Fichero.HIDDEN_LINK & FileURL2.URL, FileURL2.Path))
                         Next
                     Else

@@ -18,16 +18,14 @@ Public Class AddLinks
 	Private Sub AddLinks_Load(sender As Object, e As System.EventArgs) Handles Me.Load
 		ThemeManager.ApplyTheme(Me)
 		Translate()
-		'OpcionesPaquete.Visible = False
 		
 		txtRuta.Text = Config.RutaDefecto
 		chkCrearDirectorio.Checked = Config.CrearDirectorioPaquete
         chkUnZip.Checked = Config.ExtraerAutomaticamente
         chkStartDownload.Checked = True
 		
-		'If Config.CrearDirectorioPaquete Then
+		'OpcionesPaquete 常显(历史条件已废弃,见 git)。
 		OpcionesPaquete.Visible = True
-		'End If
 		
 		If Config.MantenerUltimaConfiguracion And UltimaConfiguracionUsada.ExisteUltimaConfiguracion Then
 			chkCrearDirectorio.Checked = UltimaConfiguracionUsada.CrearDirectorioPaquete
@@ -149,6 +147,8 @@ Public Class AddLinks
 
 	''' <summary>P0-6:输入变化只重启 debounce 计时,真正的正则解析在 Tick 里跑一次。</summary>
 	Private Sub txtLinks_TextChanged(sender As Object, e As System.EventArgs) Handles txtLinks.TextChanged
+		' RC:清空与 HiddenLinks 同步,不等 300ms debounce,否则窗口期内点添加仍用残留建包。
+		If String.IsNullOrWhiteSpace(txtLinks.Text) Then HiddenLinks = String.Empty
 		If _linkCountTimer IsNot Nothing Then
 			_linkCountTimer.Stop()
 			_linkCountTimer.Start()
@@ -169,10 +169,27 @@ Public Class AddLinks
 
 	Private Sub UpdateLinkCount()
 		Try
+			' RC:文本框清空时同步清 HiddenLinks,否则计数残留且点添加仍建包。
+			If String.IsNullOrWhiteSpace(txtLinks.Text) Then
+				HiddenLinks = String.Empty
+			End If
 			Dim n As Integer = 0
 			If Not String.IsNullOrEmpty(txtLinks.Text) Then
 				Dim urls As Generic.List(Of String) = ExtraerURLs()
 				If urls IsNot Nothing Then n = urls.Count
+				' 隐身链路:N 行占位符对应 1 个 elc,计数至少反映可见行数,避免“5 行显示 1 个”困惑。
+				If Not String.IsNullOrEmpty(HiddenLinks) Then
+					Try
+						Dim placeholder As Integer = 0
+						For Each ln As String In txtLinks.Text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.None)
+							If ln.Trim() = Fichero.HIDDEN_LINK_DESC Then placeholder += 1
+						Next
+						If placeholder > n Then n = placeholder
+					Catch
+					End Try
+				End If
+			Else
+				n = 0
 			End If
 			If n > 0 Then
 				lblLinkCount.Text = Language.GetText("AddLinks_LinkCount").Replace("%N%", n.ToString())
@@ -204,6 +221,8 @@ Public Class AddLinks
 					_cueFallbackLabel.AutoSize = True
 					_cueFallbackLabel.Enabled = False
 					_cueFallbackLabel.BackColor = txtLinks.BackColor
+					' RC:深色下水印此前默认黑字不可见,固定灰字。
+					_cueFallbackLabel.ForeColor = Drawing.SystemColors.GrayText
 					_cueFallbackLabel.Location = New Point(txtLinks.Left + 4, txtLinks.Top + 3)
 					_cueFallbackLabel.Text = cue
 					Me.Controls.Add(_cueFallbackLabel)
@@ -236,7 +255,8 @@ Public Class AddLinks
 
     Private Sub btnAgregar_Click(sender As System.Object, e As System.EventArgs) Handles btnAgregar.Click
         Try
-
+            ' RC:与 TextChanged 同步语义——空文本=无操作,残留 HiddenLinks 不得建包。
+            If String.IsNullOrWhiteSpace(txtLinks.Text) Then HiddenLinks = String.Empty
             Dim URLs As Generic.List(Of String) = ExtraerURLs()
             If URLs.Count = 0 Then
                 Throw New ApplicationException(Language.GetText("Links not valid"))
@@ -281,8 +301,13 @@ Public Class AddLinks
         Inherits Form
 
         Public Cancelled As Boolean = False
+        Public ReadOnly CancelSource As New System.Threading.CancellationTokenSource()
         Private ReadOnly lbl As New Label()
         Private ReadOnly bar As New ProgressBar()
+
+        <System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
+        Private Shared Sub SetWindowTheme(hWnd As IntPtr, appName As String, idList As String)
+        End Sub
 
         Public Sub New()
             Me.Text = Language.GetText("Add links")
@@ -313,11 +338,49 @@ Public Class AddLinks
             Me.Controls.Add(bar)
             Me.Controls.Add(btn)
             ThemeManager.ApplyTheme(Me)
+            ApplyProgressTheme()
             SetCount(0)
+        End Sub
+
+        Protected Overrides Sub Dispose(disposing As Boolean)
+            Try
+                If disposing Then
+                    Try
+                        CancelSource.Cancel()
+                    Catch
+                    End Try
+                    CancelSource.Dispose()
+                End If
+            Finally
+                MyBase.Dispose(disposing)
+            End Try
+        End Sub
+
+        ''' <summary>原生 ProgressBar 在视觉样式下忽略 Back/ForeColor(主列表靠 OLV 自绘才解决)。
+        ''' 此处去视觉样式走经典绘制,颜色跟主题,Marquee 照常滚动。</summary>
+        Private Sub ApplyProgressTheme()
+            Try
+                If bar.IsHandleCreated Then
+                    SetWindowTheme(bar.Handle, "", "")
+                End If
+                bar.BackColor = ThemeManager.GetColor("ControlBack")
+                bar.ForeColor = ThemeManager.GetColor("Selection")
+            Catch
+            End Try
+        End Sub
+
+        Protected Overrides Sub OnHandleCreated(e As EventArgs)
+            MyBase.OnHandleCreated(e)
+            ApplyProgressTheme()
         End Sub
 
         Private Sub OnCancel(sender As Object, e As EventArgs)
             Cancelled = True
+            ' 真取消:此前只关窗丢结果,后台把整个文件夹解析跑完,熔断期也在耗 API。
+            Try
+                CancelSource.Cancel()
+            Catch
+            End Try
             Me.Close()
         End Sub
 
@@ -339,8 +402,9 @@ Public Class AddLinks
         dlg.Show(Me)
         Dim prog As New Progress(Of Integer)(Sub(n) dlg.SetCount(n))
         Dim cfg As Configuracion = Me.Config
+        Dim ct As System.Threading.CancellationToken = dlg.CancelSource.Token
         Dim ui As System.Threading.Tasks.TaskScheduler = System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext()
-        System.Threading.Tasks.Task.Run(Function() URLProcessor.ProcessURLs(URLs, cfg, prog)).ContinueWith(
+        System.Threading.Tasks.Task.Run(Function() URLProcessor.ProcessURLs(URLs, cfg, prog, ct), ct).ContinueWith(
             Sub(t)
                 Dim wasCancelled As Boolean = dlg.Cancelled
                 Try
@@ -508,6 +572,7 @@ Public Class AddLinks
 
     Private Sub LinkLabel1_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel1.MouseHover
         If t Is Nothing Then t = New ToolTip
+        ThemeManager.ApplyThemeToToolTip(t)
         t.SetToolTip(LinkLabel1, MsgVerOnline)
     End Sub
 
@@ -527,6 +592,7 @@ Public Class AddLinks
 
     Private Sub LinkLabel2_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel2.MouseHover
         If t Is Nothing Then t = New ToolTip
+        ThemeManager.ApplyThemeToToolTip(t)
         t.SetToolTip(LinkLabel2, MsgPasswordZip)
     End Sub
 

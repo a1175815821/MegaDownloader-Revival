@@ -482,7 +482,19 @@ Sino, podrá descargarlos pero no verlos.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Aviso: la imagen es demasiado pequeña, los datos pueden no haberse guardado correctamente.]]></Text>
   <Text key="Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image"><![CDATA[Aviso: Se ha creado la imagen pero falló la verificación. 
 Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen más grande.]]></Text>
-  
-  
+  <Text key="Quota_Banner"><![CDATA[Cuota de transferencia de MEGA agotada (sin tiempo exacto de recuperación). Pausado automáticamente, se reintentará en %T%.]]></Text>
+  <Text key="Quota_Status"><![CDATA[Cuota: reintentar en %T%]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[Reintentar ahora]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[Cuota de MEGA recuperada, las descargas se han reanudado automáticamente.]]></Text>
+  <Text key="Quota_Error"><![CDATA[Cuota de transferencia de MEGA agotada. Las descargas están en pausa y se reanudarán automáticamente. Si ya cambió de IP o proxy, use "Reintentar ahora".]]></Text>
+  <Text key="Retry all failed"><![CDATA[Reintentar todos los fallidos]]></Text>
+  <Text key="Remove all failed"><![CDATA[Eliminar todos los fallidos]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[¿Eliminar %N% elemento(s) fallido(s) de la lista?]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[¿Eliminar también los ficheros .part locales de estos elementos fallidos?]]></Text>
+  <Text key="Folder_Reading"><![CDATA[Leyendo la carpeta, por favor espere...]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[Leyendo la carpeta... %N% elementos procesados]]></Text>
+  <Text key="Reset column widths"><![CDATA[Restablecer columnas]]></Text>
+
+
 </Language>
 

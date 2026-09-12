@@ -111,7 +111,7 @@ Partial Class Main
         Me.ListaDescargas.Name = "ListaDescargas"
         Me.ListaDescargas.OwnerDraw = True
         Me.ListaDescargas.ShowGroups = False
-        Me.ListaDescargas.Size = New System.Drawing.Size(534, 429)
+        Me.ListaDescargas.Size = New System.Drawing.Size(678, 429)
         Me.ListaDescargas.TabIndex = 0
         Me.ListaDescargas.UseCompatibleStateImageBehavior = False
         Me.ListaDescargas.View = System.Windows.Forms.View.Details
@@ -143,7 +143,7 @@ Partial Class Main
         Me.detailPanel.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.detailPanel.Controls.Add(Me.detailGroup)
-        Me.detailPanel.Location = New System.Drawing.Point(688, 46)
+        Me.detailPanel.Location = New System.Drawing.Point(832, 46)
         Me.detailPanel.Name = "detailPanel"
         Me.detailPanel.Size = New System.Drawing.Size(180, 429)
         Me.detailPanel.TabIndex = 9
@@ -519,7 +519,7 @@ Partial Class Main
         Me.RAMProcToolStripStatusLabel.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text
         Me.RAMProcToolStripStatusLabel.Name = "RAMProcToolStripStatusLabel"
         Me.RAMProcToolStripStatusLabel.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.RAMProcToolStripStatusLabel.Size = New System.Drawing.Size(90, 17)
+        Me.RAMProcToolStripStatusLabel.Size = New System.Drawing.Size(150, 17)
         Me.RAMProcToolStripStatusLabel.Text = "RAM: - / Proc: -"
         '
         'Main
@@ -527,7 +527,7 @@ Partial Class Main
         Me.AllowDrop = True
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(880, 500)
+        Me.ClientSize = New System.Drawing.Size(1024, 500)
         Me.Controls.Add(Me.StatusStrip1)
         Me.Controls.Add(Me.TableLayoutPanel1)
         Me.Controls.Add(Me.detailPanel)

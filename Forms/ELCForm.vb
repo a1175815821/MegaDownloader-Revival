@@ -91,6 +91,9 @@ Public Partial Class ELCForm
 		Me.gbMEGAUrl.Text = Language.GetText("MEGA Url") 
 		Me.btnExaminar.Text = Language.GetText("Browse")
 		Me.gbELCLink.Text = Language.GetText("ELC") 
+		' RC:此前两 Label 漏翻译,永远西班牙语。复用已有键,不新增键。
+		Me.label3.Text = Language.GetText("ELC Accounts") & ":"
+		Me.lblSaveAsELC.Text = Language.GetText("Save file") & ":"
 		Me.lblExplanation.Text = Language.GetText("Paste your MEGA Url(s), select your ELC account, and click on Generate ELC")
 		Me.lblExplanation2.Text = Language.GetText("This is your ELC link. You can also create an ELC file clicking on Save file") 
 		Me.btnCrearELC.Text = Language.GetText("Generate ELC") 

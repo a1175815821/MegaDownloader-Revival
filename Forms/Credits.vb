@@ -21,8 +21,10 @@ Public Class Credits
             .Text &= "* " & Language.GetText("%NAME for helping with MEGA criptographic system").Replace("%NAME", "Bernardo Vadell") & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
             .Text &= "* Yingxue - Revival maintainer (v2.0+)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
             .Text &= "* " & Language.GetText("All users that have collaborated") & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
-            If Not String.IsNullOrEmpty(Language.GetText("Translator credits")) Then
-                .Text &= "* " & Language.GetText("Translator credits")
+            ' RC:GetText 缺键/空译文回退返回 key 本身,必须排除,否则 About 多一行裸 key。
+            Dim tc As String = Language.GetText("Translator credits")
+            If Not String.IsNullOrEmpty(tc) AndAlso tc <> "Translator credits" Then
+                .Text &= "* " & tc
             End If
         End With
         Me.Label1.Text = Language.GetText("Thanks for using this app")

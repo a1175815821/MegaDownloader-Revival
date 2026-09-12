@@ -511,4 +511,5 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Remove all failed delete part"><![CDATA[Also delete the local .part files of these failed items?]]></Text>
   <Text key="Folder_Reading"><![CDATA[Reading folder, please wait...]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[Reading folder... %N% items parsed]]></Text>
+  <Text key="Reset column widths"><![CDATA[Reset column widths]]></Text>
 </Language>

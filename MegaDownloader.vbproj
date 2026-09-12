@@ -76,6 +76,11 @@
   <PropertyGroup>
     <ApplicationIcon>Resources\icono.ico</ApplicationIcon>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- 现代 MSBuild 把含非字符串资源的 resx 编译为 preserialized 格式,运行时需 System.Resources.Extensions。
+         旧版 MSBuild 不认识此属性会自动忽略,仍走 legacy BinaryFormatter 路径,双向兼容。 -->
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug_MSD|x86'">
     <DebugSymbols>true</DebugSymbols>
     <DefineDebug>true</DefineDebug>
@@ -122,6 +127,23 @@
     </Reference>
     <Reference Include="ObjectListView">
       <HintPath>Resources\DLLs\ObjectListView.dll</HintPath>
+    </Reference>
+    <!-- preserialized resx 运行时依赖链(GenerateResourceUsePreserializedResources)。随第三方 DLL 一样入库,
+         CopyLocal 到输出目录;app.config 含版本重定向(SRE 4.0.0.0->6.0.0.0, Unsafe 4.0.4.1->6.0.0.0)。 -->
+    <Reference Include="System.Resources.Extensions">
+      <HintPath>Resources\DLLs\System.Resources.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>Resources\DLLs\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>Resources\DLLs\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>Resources\DLLs\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>Resources\DLLs\System.Numerics.Vectors.dll</HintPath>
     </Reference>
     <Reference Include="SharpCompress">
       <HintPath>Resources\DLLs\SharpCompress.dll</HintPath>
@@ -427,9 +449,6 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\Tools\mpress.exe" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="Resources\mega.png" />
   </ItemGroup>
   <ItemGroup>
@@ -452,7 +471,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\collaborate.png" />
-    <None Include="Resources\plantilla.png" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="HttpModule\Template\StreamingLibraryTemplateLogin.htm">

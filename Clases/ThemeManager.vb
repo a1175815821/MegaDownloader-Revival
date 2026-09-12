@@ -37,8 +37,10 @@ Public NotInheritable Class ThemeManager
         {"ToolBack", Color.FromArgb(240, 240, 240)},
         {"ToolBorder", Color.FromArgb(204, 206, 209)},
         {"ErrorFore", Color.FromArgb(192, 0, 0)},
+        {"QuotaBack", Color.FromArgb(178, 34, 34)},
+        {"QuotaFore", Color.White},
         {"SuccessFore", Color.FromArgb(0, 128, 0)},
-        {"ProgressBack", Color.FromArgb(228, 230, 235)},
+        {"ProgressBack", Color.White},
         {"ProgressFill", Color.MediumTurquoise},
         {"ProgressGradientStart", Color.SpringGreen},
         {"ProgressGradientEnd", Color.MediumTurquoise},
@@ -60,6 +62,8 @@ Public NotInheritable Class ThemeManager
         {"ToolBack", Color.FromArgb(45, 45, 48)},
         {"ToolBorder", Color.FromArgb(90, 90, 90)},
         {"ErrorFore", Color.FromArgb(244, 135, 113)},
+        {"QuotaBack", Color.FromArgb(122, 28, 28)},
+        {"QuotaFore", Color.White},
         {"SuccessFore", Color.FromArgb(78, 201, 176)},
         {"ProgressBack", Color.FromArgb(45, 45, 48)},
         {"ProgressFill", Color.FromArgb(38, 79, 120)},
@@ -130,8 +134,10 @@ Public NotInheritable Class ThemeManager
 
         ApplyThemeRecursive(form, colors, resolved)
 
-        ' ContextMenuStrip 不在 Controls 树中,需从 components / 字段显式处理
         ApplyThemeToFormContextMenus(form, colors)
+
+        ' ToolTip 不在 Controls 树中,需从字段显式处理(RC:此前深色下仍浅黄底)
+        ApplyThemeToFormToolTips(form, colors)
 
         RegisterFormForSystemThemeWatch(form)
         EnsureSystemThemeWatch()
@@ -227,6 +233,91 @@ Public NotInheritable Class ThemeManager
             Next
         Catch ex As Exception
             Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Shared ReadOnly _themedToolTips As New Generic.HashSet(Of ToolTip)
+
+    ''' <summary>主题化单个 ToolTip(含懒创建)。字段扫描扫不到的调用此方法。</summary>
+    Public Shared Sub ApplyThemeToToolTip(tt As ToolTip)
+        If tt Is Nothing Then Return
+        ApplyThemeToToolTip(tt, CurrentColors())
+    End Sub
+
+    Private Shared Sub ApplyThemeToToolTip(tt As ToolTip, colors As Dictionary(Of String, Color))
+        If tt Is Nothing Then Return
+        Try
+            tt.BackColor = colors("ControlBack")
+            tt.ForeColor = colors("Fore")
+            ' RC:非 OwnerDraw 下 Back/Fore 不生效,必须自绘才可见深色 tooltip。
+            tt.OwnerDraw = True
+            SyncLock _themedToolTips
+                If Not _themedToolTips.Contains(tt) Then
+                    AddHandler tt.Draw, AddressOf ThemedToolTip_Draw
+                    AddHandler tt.Disposed, AddressOf ThemedToolTip_Disposed
+                    _themedToolTips.Add(tt)
+                End If
+            End SyncLock
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Sub ThemedToolTip_Disposed(sender As Object, e As EventArgs)
+        Try
+            Dim tt As ToolTip = TryCast(sender, ToolTip)
+            If tt Is Nothing Then Return
+            SyncLock _themedToolTips
+                If _themedToolTips.Contains(tt) Then
+                    RemoveHandler tt.Draw, AddressOf ThemedToolTip_Draw
+                    RemoveHandler tt.Disposed, AddressOf ThemedToolTip_Disposed
+                    _themedToolTips.Remove(tt)
+                End If
+            End SyncLock
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Sub ApplyThemeToFormToolTips(form As Form, colors As Dictionary(Of String, Color))
+        If form Is Nothing Then Return
+        Try
+            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public Or Reflection.BindingFlags.NonPublic
+            For Each fi As Reflection.FieldInfo In form.GetType().GetFields(flags)
+                If GetType(ToolTip).IsAssignableFrom(fi.FieldType) Then
+                    ApplyThemeToToolTip(TryCast(fi.GetValue(form), ToolTip), colors)
+                End If
+            Next
+        Catch ex As Exception
+            Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Shared Sub ThemedToolTip_Draw(sender As Object, e As DrawToolTipEventArgs)
+        Try
+            Dim tt As ToolTip = TryCast(sender, ToolTip)
+            Dim back As Color = CurrentColors()("ControlBack")
+            Dim fore As Color = CurrentColors()("Fore")
+            If tt IsNot Nothing Then
+                Try
+                    back = tt.BackColor
+                    fore = tt.ForeColor
+                Catch
+                End Try
+            End If
+            Using br As New SolidBrush(back)
+                e.Graphics.FillRectangle(br, e.Bounds)
+            End Using
+            TextRenderer.DrawText(e.Graphics, e.ToolTipText, e.Font, e.Bounds, fore,
+                TextFormatFlags.VerticalCenter Or TextFormatFlags.Left Or TextFormatFlags.WordBreak)
+            Using pen As New Pen(CurrentColors()("Border"))
+                e.Graphics.DrawRectangle(pen, New Rectangle(e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1))
+            End Using
+        Catch
+            Try
+                e.DrawBackground()
+                e.DrawText()
+                e.DrawBorder()
+            Catch
+            End Try
         End Try
     End Sub
 
@@ -365,6 +456,20 @@ Public NotInheritable Class ThemeManager
             Dim tv As TreeView = CType(control, TreeView)
             tv.BackColor = colors("Back")
             tv.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+
+        ' ListBox / CheckedListBox (RC:此前漏分支,靠各窗体手写补丁)
+        If TypeOf control Is ListBox Then
+            Dim lb As ListBox = CType(control, ListBox)
+            lb.BackColor = colors("Back")
+            lb.ForeColor = colors("Fore")
+            GoTo RecurseChildren
+        End If
+        If TypeOf control Is CheckedListBox Then
+            Dim clb As CheckedListBox = CType(control, CheckedListBox)
+            clb.BackColor = colors("Back")
+            clb.ForeColor = colors("Fore")
             GoTo RecurseChildren
         End If
 

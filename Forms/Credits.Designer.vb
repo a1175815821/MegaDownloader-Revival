@@ -123,7 +123,6 @@ Partial Class Credits
         '
         'Credits
         '
-        Me.AcceptButton = Me.lblTitle
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.AutoSize = True

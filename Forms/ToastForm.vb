@@ -83,6 +83,24 @@ Public Class ToastForm
         _current = Nothing
     End Sub
 
+    ' 定位 Toast:主窗右下,四边夹取在工作区内。新建/复用共用,行为一致。
+    ' 此前新建分支只夹左/上,主窗贴屏幕右/下边缘时首弹一半在屏外,复用反而对的。
+    Private Shared Sub PlaceToast(f As ToastForm, owner As Form)
+        Try
+            Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
+            If owner IsNot Nothing AndAlso owner.Visible Then
+                area = Screen.FromControl(owner).WorkingArea
+                f.Location = New Point(owner.Right - f.Width - 16, owner.Bottom - f.Height - 48)
+            Else
+                f.Location = New Point(area.Right - f.Width - 16, area.Bottom - f.Height - 16)
+            End If
+            If f.Left < area.Left Then f.Left = area.Left + 16
+            If f.Top < area.Top Then f.Top = area.Top + 16
+            If f.Right > area.Right Then f.Left = area.Right - f.Width - 16
+            If f.Bottom > area.Bottom Then f.Top = area.Bottom - f.Height - 16
+        Catch
+        End Try
+    End Sub
     ''' <summary>显示 Toast。若已有 Toast 打开则刷新文本并重计时,不会堆叠。</summary>
     Public Shared Sub ShowToast(owner As Form, text As String)
         Try
@@ -93,20 +111,20 @@ Public Class ToastForm
             End If
             If _current IsNot Nothing AndAlso Not _current.IsDisposed Then
                 _current.SetText(text)
-                If Not _current.Visible Then _current.Show()
+                ' RC:复用也必须重算位置(主窗跨屏移动/尺寸变化后旧坐标过期)。
+                PlaceToast(_current, owner)
+                If Not _current.Visible Then
+                    If owner IsNot Nothing AndAlso owner.Visible Then
+                        _current.Show(owner)
+                    Else
+                        _current.Show()
+                    End If
+                End If
                 Return
             End If
             _current = New ToastForm(text)
             AddHandler _current.FormClosed, AddressOf Current_FormClosed
-            Dim area As Rectangle = Screen.PrimaryScreen.WorkingArea
-            If owner IsNot Nothing AndAlso owner.Visible Then
-                area = Screen.FromControl(owner).WorkingArea
-                _current.Location = New Point(owner.Right - _current.Width - 16, owner.Bottom - _current.Height - 48)
-                If _current.Left < area.Left Then _current.Left = area.Left + 16
-                If _current.Top < area.Top Then _current.Top = area.Top + 16
-            Else
-                _current.Location = New Point(area.Right - _current.Width - 16, area.Bottom - _current.Height - 16)
-            End If
+            PlaceToast(_current, owner)
             ' 有主窗时做 owned 显示:主窗最小化/关闭时 Toast 跟着走,不留孤儿窗体挡关机流程
             If owner IsNot Nothing AndAlso owner.Visible Then
                 _current.Show(owner)
