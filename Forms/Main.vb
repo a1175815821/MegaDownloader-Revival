@@ -385,6 +385,9 @@ Public Class Main
         Me.OlvColumnNombre.Text = Language.GetText("Name")
         Me.OlvColumnRestante.Text = Language.GetText("Remaining")
         Me.ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
+        Me.detailGroup.Text = Language.GetText("Detail_Title")
+        ApplyNavListColors()
+        UpdateNavCounts()
         Me.AbrirEnCarpetaToolStripMenuItem.Text = Language.GetText("Open directory")
         Me.SubirPrioridadMenuItem.Text = Language.GetText("Increase priority")
         Me.BajarPrioridadMenuItem.Text = Language.GetText("Decrease priority")
@@ -934,11 +937,26 @@ Public Class Main
                                          End Function
 
         ListaDescargas.ChildrenGetter = Function(ele As Object)
-                                            If Not TypeOf (ele) Is Paquete Then
-                                                Return Nothing
-                                            Else
-                                                Return CType(ele, Paquete).ListaFicheros
-                                            End If
+                                            ' P2-11b:非 All 分组下只展开命中文件(包穿透规则与计数共用同一谓词)。
+                                            ' 注意:不可用 OLV UseFiltering(启动期静默退出),此处包裹是唯一的过滤点。
+                                            Try
+                                                If Not TypeOf ele Is Paquete Then
+                                                    Return Nothing
+                                                End If
+                                                Dim files As Generic.List(Of Fichero) = CType(ele, Paquete).ListaFicheros
+                                                If files Is Nothing Then Return Nothing
+                                                If _navScope = DownloadEstadoFilter.NavScope.All Then Return files
+                                                Dim shown As New Generic.List(Of Fichero)()
+                                                For Each f As Fichero In files
+                                                    If DownloadEstadoFilter.MatchesScope(f, _navScope) Then shown.Add(f)
+                                                Next
+                                                Return shown
+                                            Catch ex As Exception
+                                                Log.WriteError("FilteredChildrenGetter failed: " & ex.ToString)
+                                                Dim p0 As Paquete = TryCast(ele, Paquete)
+                                                If p0 Is Nothing Then Return Nothing
+                                                Return p0.ListaFicheros
+                                            End Try
                                         End Function
 
 
@@ -960,6 +978,8 @@ Public Class Main
         ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
         ListaDescargas.RowHeight = 26
         ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
+        ' P2-11b:导航初始化(计数+分组;过滤走 Roots 子集,禁用 OLV UseFiltering/ModelFilter)
+        InitNavList()
     End Sub
     Private Sub ListaDescargas_FormatRow(sender As Object, e As BrightIdeasSoftware.FormatRowEventArgs) Handles ListaDescargas.FormatRow
         If e.DisplayIndex Mod 2 = 0 Then
@@ -989,6 +1009,7 @@ Public Class Main
         ApplyProgressBarThemeColors()
         ApplyQuotaBannerTheme()
         ApplyToolbarIconTheme()
+        ApplyNavListColors()
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -1165,6 +1186,7 @@ Public Class Main
                 If quotaBannerPanel.Tag Is Nothing OrElse Not CBool(quotaBannerPanel.Tag) Then
                     ListaDescargas.Top += quotaBannerPanel.Height
                     ListaDescargas.Height = Math.Max(50, ListaDescargas.Height - quotaBannerPanel.Height)
+                    ShiftSidePanels(True)
                     quotaBannerPanel.Tag = True
                 End If
                 quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
@@ -1182,6 +1204,7 @@ Public Class Main
                     If quotaBannerPanel.Tag IsNot Nothing AndAlso CBool(quotaBannerPanel.Tag) Then
                         ListaDescargas.Top -= quotaBannerPanel.Height
                         ListaDescargas.Height += quotaBannerPanel.Height
+                        ShiftSidePanels(False)
                         quotaBannerPanel.Tag = False
                     End If
                 End If
@@ -1378,6 +1401,131 @@ Public Class Main
         If msg.Length = 0 Then Return Nothing
         Return msg
     End Function
+
+    ' P2-11b:左导航分组 + 计数。计数与过滤共用 DownloadEstadoFilter.MatchesScope,所见即所数。
+    Private _navScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.NavScope.All
+    Private _updatingNav As Boolean = False
+
+    Private Sub InitNavList()
+        UpdateNavCounts()
+        If navListBox.SelectedIndex < 0 Then navListBox.SelectedIndex = 0
+        ApplyNavListColors()
+    End Sub
+
+    Private Sub ApplyNavListColors()
+        Try
+            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+            ' ListBox 不在 ThemeManager 递归覆盖范围,手动同步
+            navListBox.BackColor = ThemeManager.GetColor("Back")
+            navListBox.ForeColor = ThemeManager.GetColor("Fore")
+        Catch ex As Exception
+            Log.WriteDebug("ApplyNavListColors failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub navListBox_SelectedIndexChanged(sender As Object, e As EventArgs) Handles navListBox.SelectedIndexChanged
+        If _updatingNav Then Return
+        Try
+            Dim scope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.NavScope.All
+            Select Case navListBox.SelectedIndex
+                Case 1
+                    scope = DownloadEstadoFilter.NavScope.Downloading
+                Case 2
+                    scope = DownloadEstadoFilter.NavScope.Waiting
+                Case 3
+                    scope = DownloadEstadoFilter.NavScope.Failed
+                Case 4
+                    scope = DownloadEstadoFilter.NavScope.Completed
+            End Select
+            If scope = _navScope Then Return
+            _navScope = scope
+            ApplyNavRoots()
+            ListaDescargas.BuildList()
+        Catch ex As Exception
+            Log.WriteError("navListBox_SelectedIndexChanged failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Sub UpdateNavCounts()
+        Try
+            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+            _updatingNav = True
+            Try
+                While navListBox.Items.Count < 5
+                    navListBox.Items.Add("")
+                End While
+                Dim totals(4) As Integer
+                If ListaPaquetes IsNot Nothing Then
+                    For Each p As Paquete In ListaPaquetes
+                        CountNavObject(p, totals)
+                    Next
+                End If
+                Dim keys() As String = {"Nav_All", "Nav_Downloading", "Nav_Waiting", "Nav_Failed", "Nav_Completed"}
+                For i As Integer = 0 To 4
+                    Dim t As String = Language.GetText(keys(i)) & " (" & totals(i).ToString() & ")"
+                    If Not Object.Equals(navListBox.Items(i), t) Then navListBox.Items(i) = t
+                Next
+                If navListBox.SelectedIndex < 0 OrElse navListBox.SelectedIndex > 4 Then navListBox.SelectedIndex = 0
+            Finally
+                _updatingNav = False
+            End Try
+        Catch ex As Exception
+            Log.WriteDebug("UpdateNavCounts failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Shared Sub CountNavObject(obj As Object, totals() As Integer)
+        totals(0) += 1
+        For s As Integer = 1 To 4
+            If DownloadEstadoFilter.MatchesScope(obj, CType(s, DownloadEstadoFilter.NavScope)) Then totals(s) += 1
+        Next
+        Dim p As Paquete = TryCast(obj, Paquete)
+        If p IsNot Nothing AndAlso p.ListaFicheros IsNot Nothing Then
+            For Each f As Fichero In p.ListaFicheros
+                CountNavObject(f, totals)
+            Next
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' P2-11b:按当前分组重设 Roots(包命中或子文件穿透才留)。SetObjects 会重置 Roots
+    ''' 为全量,故每次重建后调用;False 刷新沿用当前 Roots。禁用 OLV UseFiltering。
+    ''' </summary>
+    Private Sub ApplyNavRoots()
+        Try
+            If ListaDescargas Is Nothing OrElse ListaPaquetes Is Nothing Then Return
+            If _navScope = DownloadEstadoFilter.NavScope.All Then
+                ListaDescargas.Roots = Me.ListaPaquetes
+            Else
+                Dim shown As New Generic.List(Of Paquete)()
+                For Each p As Paquete In ListaPaquetes
+                    If DownloadEstadoFilter.MatchesScope(p, _navScope) Then shown.Add(p)
+                Next
+                ListaDescargas.Roots = shown
+            End If
+        Catch ex As Exception
+            Log.WriteError("ApplyNavRoots failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Sub ShiftSidePanels(shrink As Boolean)
+        Try
+            If quotaBannerPanel Is Nothing Then Return
+            Dim dy As Integer = quotaBannerPanel.Height
+            For Each pnl As Control In New Control() {navPanel, detailPanel}
+                If pnl Is Nothing OrElse pnl.IsDisposed Then Continue For
+                If shrink Then
+                    pnl.Top += dy
+                    pnl.Height = Math.Max(50, pnl.Height - dy)
+                Else
+                    pnl.Top -= dy
+                    pnl.Height += dy
+                End If
+            Next
+        Catch ex As Exception
+            Log.WriteDebug("ShiftSidePanels failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
 #End Region
 
 #Region "Gestion lista paquetes y descargas"
@@ -2733,10 +2881,12 @@ Public Class Main
             Try
                 If SetObjects Then
                     ListaDescargas.SetObjects(Me.ListaPaquetes)
+                    ApplyNavRoots()
                     ListaDescargas.BuildList()
                 End If
 
                 ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                UpdateNavCounts()
             Finally
                 Mutex.ListaDescargas.ReleaseMutex()
             End Try

@@ -24,6 +24,12 @@
   <Text key="Toast_PackageAdded"><![CDATA[Paquete añadido: %N%]]></Text>
   <Text key="OLV_EmptyList"><![CDATA[Arrastra enlaces MEGA aquí o cópialos: el monitor del portapapeles los detecta]]></Text>
   <Text key="Config_SearchHint"><![CDATA[Buscar ajustes (proxy, tema, VLC...)]]></Text>
+  <Text key="Nav_All"><![CDATA[Todas]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[Descargando]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[En cola]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Fallidas]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Completadas]]></Text>
+  <Text key="Detail_Title"><![CDATA[Detalles]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% enlace(s)]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[Pega aquí los enlaces MEGA, uno por línea...]]></Text>
   <Text key="Delete from list"><![CDATA[Eliminar de la lista]]></Text>

@@ -184,6 +184,7 @@
     <Compile Include="Clases\StreamingLibrary\StreamingLibraryManager.vb" />
     <Compile Include="Clases\Criptografia.vb" />
     <Compile Include="Clases\DescompresorController.vb" />
+    <Compile Include="Clases\DownloadEstadoFilter.vb" />
     <Compile Include="Clases\Fichero.vb">
       <SubType>Component</SubType>
     </Compile>
