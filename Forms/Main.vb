@@ -938,11 +938,19 @@ Public Class Main
                                          End Function
 
         ListaDescargas.ChildrenGetter = Function(ele As Object)
-                                            If Not TypeOf (ele) Is Paquete Then
+                                            ' P2-11:非 All 分组下只展开命中文件(包穿透规则与计数共用同一谓词)。
+                                            ' 注意:不可用 OLV UseFiltering(启动崩),此处包裹是唯一的过滤点。
+                                            If Not TypeOf ele Is Paquete Then
                                                 Return Nothing
-                                            Else
-                                                Return CType(ele, Paquete).ListaFicheros
                                             End If
+                                            Dim files As Generic.List(Of Fichero) = CType(ele, Paquete).ListaFicheros
+                                            If files Is Nothing Then Return Nothing
+                                            If _navScope = DownloadEstadoFilter.NavScope.All Then Return files
+                                            Dim shown As New Generic.List(Of Fichero)()
+                                            For Each f As Fichero In files
+                                                If DownloadEstadoFilter.MatchesScope(f, _navScope) Then shown.Add(f)
+                                            Next
+                                            Return shown
                                         End Function
 
 
@@ -964,9 +972,8 @@ Public Class Main
         ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
         ListaDescargas.RowHeight = 26
         ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
-        ' P2-11:状态过滤开(数据源/ChildrenGetter 不动)+导航初始化
-        ListaDescargas.UseFiltering = True
-        ListaDescargas.ModelFilter = New DownloadEstadoFilter(DownloadEstadoFilter.NavScope.All)
+        ' P2-11:导航初始化。注意:OLV 自带 UseFiltering/ModelFilter 在本工程 VirtualMode
+        ' TreeListView 上会导致启动期静默退出(已二分验证),过滤改用 Roots 子集+ChildrenGetter 包裹实现。
         InitNavList()
     End Sub
     Private Sub ListaDescargas_FormatRow(sender As Object, e As BrightIdeasSoftware.FormatRowEventArgs) Handles ListaDescargas.FormatRow
@@ -1427,7 +1434,7 @@ Public Class Main
             End Select
             If scope = _navScope Then Return
             _navScope = scope
-            ListaDescargas.ModelFilter = New DownloadEstadoFilter(_navScope)
+            ApplyNavRoots()
             ListaDescargas.BuildList()
         Catch ex As Exception
             Log.WriteError("navListBox_SelectedIndexChanged failed: " & ex.ToString)
@@ -1477,6 +1484,27 @@ Public Class Main
 
     Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
         UpdateDetailPanel()
+    End Sub
+
+    ''' <summary>
+    ''' P2-11:按当前分组重设 Roots(包命中或子文件穿透才留)。SetObjects 会重置 Roots
+    ''' 为全量,故每次重建后调用;False 刷新沿用当前 Roots,不过滤逻辑。
+    ''' </summary>
+    Private Sub ApplyNavRoots()
+        Try
+            If ListaDescargas Is Nothing OrElse ListaPaquetes Is Nothing Then Return
+            If _navScope = DownloadEstadoFilter.NavScope.All Then
+                ListaDescargas.Roots = Me.ListaPaquetes
+            Else
+                Dim shown As New Generic.List(Of Paquete)()
+                For Each p As Paquete In ListaPaquetes
+                    If DownloadEstadoFilter.MatchesScope(p, _navScope) Then shown.Add(p)
+                Next
+                ListaDescargas.Roots = shown
+            End If
+        Catch ex As Exception
+            Log.WriteError("ApplyNavRoots failed: " & ex.ToString)
+        End Try
     End Sub
 
     Private Sub UpdateDetailPanel()
@@ -2912,6 +2940,7 @@ Public Class Main
             Try
                 If SetObjects Then
                     ListaDescargas.SetObjects(Me.ListaPaquetes)
+                    ApplyNavRoots()
                     ListaDescargas.BuildList()
                 End If
 
