@@ -1,12 +1,12 @@
 ''' <summary>
-''' P2-11 UI:左导航状态分组判定。纯谓词工具类:计数、Roots 子集、ChildrenGetter 包裹
-''' 三处共用同一规则(包自身命中,或任一子文件命中;树只有包->文件两层),所见即所数。
-''' 注意:最初用 OLV 自带 UseFiltering/ModelFilter 实现,但在本工程 VirtualMode
-''' TreeListView 上会导致启动期静默退出(反射仅证明属性存在,不证明可用,已二分验证),
-''' 故改用 Roots 子集 + ChildrenGetter 包裹,本类不再实现 IModelFilter。
-''' 过滤在列表重建时生效(切换分组/增删/启停等);导航计数一侧永远实时。
+''' P2-11 UI:左导航状态过滤。IModelFilter 实现,只读 DescargaEstado 做判定,
+''' 不碰数据源(SetObjects)/ChildrenGetter/刷新节拍。包节点规则:自身命中,
+''' 或任一子文件命中(树只有包->文件两层),与导航计数共用同一谓词,所见即所数。
+''' 注意:过滤在 OLV 重建列表时生效(切换分组/增删/启停等),后台状态流转
+''' (如下载中->完成)在下次重建前仍停留在原分组,导航计数一侧永远实时。
 ''' </summary>
 Friend Class DownloadEstadoFilter
+    Implements BrightIdeasSoftware.IModelFilter
 
     Public Enum NavScope
         All = 0
@@ -16,8 +16,20 @@ Friend Class DownloadEstadoFilter
         Completed = 4
     End Enum
 
-    Private Sub New()
+    Private ReadOnly _scope As NavScope
+
+    Public Sub New(scope As NavScope)
+        _scope = scope
     End Sub
+
+    Public Function Filter(modelObject As Object) As Boolean Implements BrightIdeasSoftware.IModelFilter.Filter
+        Try
+            Return MatchesScope(modelObject, _scope)
+        Catch ex As Exception
+            Log.WriteDebug("DownloadEstadoFilter failed: " & Log.SafeException(ex))
+            Return True
+        End Try
+    End Function
 
     ''' <summary>对象是否属于分组(含包的子文件穿透)。计数与过滤共用,保证一致。</summary>
     Public Shared Function MatchesScope(modelObject As Object, scope As NavScope) As Boolean
