@@ -24,13 +24,6 @@
   <Text key="Toast_PackageAdded"><![CDATA[Package added: %N%]]></Text>
   <Text key="OLV_EmptyList"><![CDATA[Drag MEGA links here, or copy one - clipboard monitoring picks it up]]></Text>
   <Text key="Config_SearchHint"><![CDATA[Search settings (proxy, theme, VLC...)]]></Text>
-  <Text key="Nav_All"><![CDATA[All]]></Text>
-  <Text key="Nav_Downloading"><![CDATA[Downloading]]></Text>
-  <Text key="Nav_Waiting"><![CDATA[Queued]]></Text>
-  <Text key="Nav_Failed"><![CDATA[Failed]]></Text>
-  <Text key="Nav_Completed"><![CDATA[Completed]]></Text>
-  <Text key="Detail_Title"><![CDATA[Details]]></Text>
-  <Text key="Detail_Empty"><![CDATA[Select a task to see details]]></Text>
   <Text key="AddLinks_LinkCount"><![CDATA[%N% link(s)]]></Text>
   <Text key="AddLinks_CueBanner"><![CDATA[Paste MEGA links here, one per line...]]></Text>
   <Text key="Delete from list"><![CDATA[Delete from list]]></Text>
