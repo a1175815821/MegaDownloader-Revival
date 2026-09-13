@@ -509,6 +509,10 @@ Public Class AddLinks
     End Sub
 
 
+    ' 在线观看解析进行中标记：ResolveUrlsAsync 是异步的，连点/双击会并发跑两次
+    ' 解析，同样的链接被解析两次还可能弹两个 VLC。进行中直接忽略新的点击。
+    Private _watchResolving As Boolean = False
+
     Private Sub btnWatchOnline_Click(sender As System.Object, e As System.EventArgs) Handles btnWatchOnline.Click
         If Not Config.ServidorStreamingActivo Then
             MessageBox.Show(Language.GetText("Streaming server not activated"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -525,6 +529,9 @@ Public Class AddLinks
             Exit Sub
         End If
 
+        If _watchResolving Then Return
+        _watchResolving = True
+        btnWatchOnline.Enabled = False
 
         ResolveUrlsAsync(URLs, AddressOf OnResolveForWatch)
     End Sub
@@ -557,6 +564,9 @@ Public Class AddLinks
         Catch ex As Exception
             Log.WriteError("Error resolving links for streaming: " & ex.ToString)
             MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            _watchResolving = False
+            If btnWatchOnline IsNot Nothing AndAlso Not btnWatchOnline.IsDisposed Then btnWatchOnline.Enabled = True
         End Try
     End Sub
 

@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.0 | 2026-09-14 | 正式版：在线观看并发修复 + 版本号转正进更新通道 + 4 语言文档补齐 |
 | 2.5 RC2 | 2026-09-13 | 生产审计三批修复：发布阻塞 / 可靠性 / 体验与纵深 |
 | 2.5 RC1 | 2026-09-12 | MEGA 配额熔断 + 倒计时横幅；失败自愈默认开启 |
 | 2.4.7 | 2026-09-12 | 更新提醒三选项；移除废弃搜索引擎集成 |
@@ -102,6 +103,27 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.0] - 2026-09-14
+
+正式版。相对 RC2 的增量很小：修一个并发 bug、版本号转正并进入更新通道、文档补齐 4 语言。核心主题:**RC 验证通过，直接转正**。
+
+### 🐛 修复:在线观看重复点击并发解析
+
+([AddLinks.vb](../Forms/AddLinks.vb))"在线观看"按钮连点/双击会并发跑两次 `ResolveUrlsAsync`，同一批链接被解析两次，严重时拉起两个 VLC。现加 `_watchResolving` 进行中标记 + 解析期间禁用按钮，回调 `Finally` 里恢复(此前无任何防护)。
+
+### 📦 版本号转正，进入更新通道
+
+- InternalConfig `VERSION_MEGADOWNLOADER` → `2.5`(标题栏/关于/日志里的显示版本不再带 RC 后缀)
+- `VERSION_UPDATE` 保持 `2.5`(刻意不动：`Main.CheckVersionStatistics` 用 `Double` 解析，`2.5.0` 会解析失败导致新版统计 ping 丢失)
+- `docs/version.xml` → `2.5.0.0`：2.4.7 及更早版本从此刻起会收到更新提示；2.5.0 与远端相等，不再提示
+
+### 🌐 文档：4 语言全量补齐(手动维护)
+
+- 新增 `README.zh-TW.md / README.ko-KR.md`、`docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`、`docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md`，英文 CHANGELOG 重写为真正的英文
+- 自动翻译流水线已整体下线(`i18n/` 脚本 + Docs i18n 工作流删除)，以后所有语言版本手动同步更新，改一处请同步其他语言
 
 ---
 
