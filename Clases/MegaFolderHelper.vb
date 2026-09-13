@@ -1,5 +1,8 @@
 Public Class MegaFolderHelper
 
+    ' B3-⑧:文件名正则单例。大文件夹逐节点 New Regex(数千次),改共享 Compiled 实例。
+    ' Regex 实例读方法线程安全;原构造无 IgnoreCase,此处保持大小写敏感以保行为一致。
+    Private Shared ReadOnly rxFileName As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName, System.Text.RegularExpressions.RegexOptions.Compiled)
 
     Public Class FileListResponse
         Public e As String
@@ -83,6 +86,12 @@ Public Class MegaFolderHelper
         End If
 
         Dim Results As New Generic.List(Of URLProcessor.FileURL)
+        ' B1-②:静默跳过计数。单个节点解密失败不再无声消失:部分跳过记 Warning(含示例 handle),
+        ' 全部失败抛错(调用方按失败处理,不再把"一个文件都没读出来"当成功)。
+        Dim totalFiles As Integer = 0
+        Dim skippedFiles As Integer = 0
+        Dim skippedFolders As Integer = 0
+        Dim firstSkipped As New Generic.List(Of String)
         ' 取消点:解析是大文件夹逐节点解密,CPU 密集,取消必须停掉循环不再耗 API/CPU。
         If ct.IsCancellationRequested Then ct.ThrowIfCancellationRequested()
 
@@ -146,22 +155,26 @@ Public Class MegaFolderHelper
                 ' 从 k 字段提取与 root handle 匹配的 key (用于用 FolderKey 解密)
                 ' 如果没有 root,则回退到第一个 key
                 Dim FileKey As String = ExtractKeyFromK(fileN.k, root)
-                If String.IsNullOrEmpty(FileKey) Then Continue For
+                If String.IsNullOrEmpty(FileKey) Then
+                    NoteSkipped(fileN.h, True, skippedFiles, skippedFolders, firstSkipped)
+                    Continue For
+                End If
 
                 Try
                     FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
                 Catch exCrypt As Exception
                     ' 解密失败,跳过此节点 (可能是 k 字段格式不兼容)
+                    NoteSkipped(fileN.h, True, skippedFiles, skippedFolders, firstSkipped)
                     Continue For
                 End Try
 
                 Dim FolderName As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
 
-                Dim rx As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
-                If Not String.IsNullOrEmpty(FolderName) AndAlso rx.IsMatch(FolderName) Then
-                    Dim m As System.Text.RegularExpressions.Match = rx.Match(FolderName)
+                If Not String.IsNullOrEmpty(FolderName) AndAlso rxFileName.IsMatch(FolderName) Then
+                    Dim m As System.Text.RegularExpressions.Match = rxFileName.Match(FolderName)
                     FolderName = m.Groups("FileName").Value
                 Else
+                    NoteSkipped(fileN.h, True, skippedFiles, skippedFolders, firstSkipped)
                     Continue For
                 End If
 
@@ -205,13 +218,18 @@ Public Class MegaFolderHelper
                 End If
 
                 ' 子文件夹链接: 只保留父级祖先链包含目标子文件夹的文件
+                ' (作用域过滤,非失败,不计入 totalFiles/skipped)
                 If Not String.IsNullOrEmpty(SubFolderID) AndAlso Not IsUnderFolder(fileN.p, SubFolderID, parentMap) Then
                     Continue For
                 End If
+                totalFiles += 1
 
                 ' 从 k 字段提取与 root handle 匹配的 key
                 Dim FileKey As String = ExtractKeyFromK(fileN.k, root)
-                If String.IsNullOrEmpty(FileKey) Then Continue For
+                If String.IsNullOrEmpty(FileKey) Then
+                    NoteSkipped(fileN.h, False, skippedFiles, skippedFolders, firstSkipped)
+                    Continue For
+                End If
 
                 Dim path As String = String.Empty
                 If pathMap.ContainsKey(fileN.p) Then
@@ -222,14 +240,14 @@ Public Class MegaFolderHelper
                     FileKey = Criptografia.a32_to_base64(Criptografia.decrypt_key(Criptografia.base64_to_a32(FileKey), Criptografia.base64_to_a32(FolderKey)))
                 Catch exCrypt As Exception
                     ' 解密失败,跳过此文件 (可能无法用 FolderKey 解密)
+                    NoteSkipped(fileN.h, False, skippedFiles, skippedFolders, firstSkipped)
                     Continue For
                 End Try
 
                 Dim FileInfoDec As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
                 Try
-                    Dim rx As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName)
-                    If Not String.IsNullOrEmpty(FileInfoDec) AndAlso rx.IsMatch(FileInfoDec) Then
-                        Dim m As System.Text.RegularExpressions.Match = rx.Match(FileInfoDec)
+                    If Not String.IsNullOrEmpty(FileInfoDec) AndAlso rxFileName.IsMatch(FileInfoDec) Then
+                        Dim m As System.Text.RegularExpressions.Match = rxFileName.Match(FileInfoDec)
                         FileInfoDec = m.Groups("FileName").Value
 
 
@@ -249,6 +267,7 @@ Public Class MegaFolderHelper
                         End If
 
                     Else
+                        NoteSkipped(fileN.h, False, skippedFiles, skippedFolders, firstSkipped)
                         Continue For
                     End If
 
@@ -259,6 +278,13 @@ Public Class MegaFolderHelper
             End If
 
         Next
+
+        ' B1-②:全灭抛错(调用方按失败处理,不再"零文件报成功");部分跳过 Warning 留痕。
+        If Results.Count = 0 AndAlso totalFiles > 0 Then
+            Throw New ApplicationException("Could not read any of the " & totalFiles & " file(s) in the shared folder (keys could not be decrypted or names could not be read). The folder may have been deleted or the link key is wrong.")
+        ElseIf skippedFiles + skippedFolders > 0 Then
+            Log.WriteWarning("RetrieveLinksFromFolder: skipped " & skippedFiles & " file(s) and " & skippedFolders & " folder(s) that could not be decrypted (e.g. " & String.Join(",", firstSkipped.ToArray()) & "). The download will be incomplete.")
+        End If
 
         If progress IsNot Nothing Then progress.Report(folderCounter + fileCounter)
         Return Results
@@ -315,6 +341,20 @@ Public Class MegaFolderHelper
 
         Return paths
     End Function
+
+    ' B1-②:跳过记账 helper(只记前 5 个 handle,大文件夹不刷屏;key 材料绝不进日志)。
+    Private Shared Sub NoteSkipped(ByVal handle As String, ByVal isFolder As Boolean, _
+                                   ByRef skippedFiles As Integer, ByRef skippedFolders As Integer, _
+                                   ByVal firstSkipped As Generic.List(Of String))
+        If isFolder Then
+            skippedFolders += 1
+        Else
+            skippedFiles += 1
+        End If
+        If firstSkipped.Count < 5 AndAlso Not String.IsNullOrEmpty(handle) Then
+            firstSkipped.Add(handle)
+        End If
+    End Sub
 
     ' 从 MEGA API 的 k 字段中提取指定 handle 对应的 key
     ' k 字段格式: "handle1:key1" 或 "handle1:key1/handle2:key2/handle3:key3"

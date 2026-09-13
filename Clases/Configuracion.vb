@@ -173,6 +173,9 @@ Public Class Configuracion
 	
 	
 	Private Shared _LastSavedXML As String = Nothing
+	' B2-⑦:ServidorWebPassword 明文快照,用于去重比对。密文每次随机 IV 必变,
+	' 不得参与 OuterXml 比对(否则有 Web 密码时配置每 5s 必重写)。
+	Private Shared _LastSavedWebPasswordPlain As String = Nothing
 	Public Sub GuardarXML(ByVal ForzarGuardado As Boolean)
 		ApplyConfigLimits()
 		Dim Xml As New XmlDocument
@@ -235,11 +238,8 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebActivo")).InnerText = ServidorWebActivo.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebNombre")).InnerText = ServidorWebNombre
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebRutaPlantilla")).InnerText = ServidorWebRutaPlantilla
-		' 加密失败返回 Nothing：跳过写入该节点，保留磁盘上的旧密文而非存入空值
-		Dim encryptedWebPassword As String = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
-		If encryptedWebPassword IsNot Nothing Then
-			Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
-		End If
+		' B2-⑦:ServidorWebPassword 密文(随机 IV,每次不同)不得参与去重比对,
+		' 否则 OuterXml 恒变、后台每 5s 必落盘。此处先不写该节点,比对通过后再补(见下)。
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebTimeout")).InnerText = ServidorWebTimeout.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPermitirLAN")).InnerText = ServidorWebPermitirLAN.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebBindIP")).InnerText = ServidorWebBindIP
@@ -254,10 +254,19 @@ Public Class Configuracion
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
 		
-		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml Or ForzarGuardado Then
+		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
+		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain Or ForzarGuardado Then
 
 			_LastSavedXML = Xml.DocumentElement.OuterXml
-			
+			_LastSavedWebPasswordPlain = curWebPasswordPlain
+
+			' B2-⑦:随机 IV 密文只写盘、不比对。加密失败返回 Nothing 时跳过该节点,
+			' 保留磁盘旧密文而非存入空值(与旧逻辑一致,只是位置后移)。
+			Dim encryptedWebPassword As String = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
+			If encryptedWebPassword IsNot Nothing Then
+				Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
+			End If
+
 			' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
 			Xml.DocumentElement.AppendChild(Xml.CreateElement("Usuario")).InnerText = Criptografia.EncryptString_DPAPI(_Usuario)
 			Xml.DocumentElement.AppendChild(Xml.CreateElement("Password")).InnerText = Criptografia.EncryptString_DPAPI(_Password)
@@ -283,6 +292,7 @@ Public Class Configuracion
 				Log.WriteError("Error saving configuration XML: " & Log.SafeException(ex))
 				ErrorConfig = ErrorConfigClass.Fichero_No_Creado
 				_LastSavedXML = Nothing
+				_LastSavedWebPasswordPlain = Nothing
 			Finally
 				Mutex.GuardarConfig.ReleaseMutex()
 			End Try

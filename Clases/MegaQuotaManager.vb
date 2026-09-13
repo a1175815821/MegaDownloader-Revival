@@ -62,14 +62,31 @@ Public NotInheritable Class MegaQuotaManager
         End SyncLock
     End Function
 
-    ''' <summary>命中配额:首次 60min,24h 内重复命中升级到 2h/6h 封顶。</summary>
+    ''' <summary>命中配额:首次 60min,24h 内重复命中升级到 2h/6h 封顶。
+    ''' 熔断期内的重复上报视为同一事件(多连接并发命中、120s 看门狗合成的配额超时、
+    ''' chunk 失败汇总再次上报),直接忽略不升级不延长,避免一次真实配额瞬间跳到 6h、
+    ''' 也避免熔断期内自激延长导致"明明换 IP 能下却一直被中止"。</summary>
     Public Shared Sub ReportQuota(Optional hintSeconds As Long = 0)
         SyncLock _lock
             Dim nowUtc As DateTime = DateTime.UtcNow
+            ' 同一配额事件去重:已在熔断期内,不升级档位、不刷新 _lastHitUtc、不延长等待
+            ' (hint 明确要求更久才延长)。_lastHitUtc 不刷新很关键,否则并发命中会把
+            ' "24h 衰减窗口"不断续上,档位永远下不来。
+            If _quotaUntilUtc.HasValue AndAlso nowUtc < _quotaUntilUtc.Value Then
+                If hintSeconds > 0 Then
+                    Dim maxSecs As Long = CLng(_durations(_durations.Length - 1).TotalSeconds)
+                    Dim hintedUntil As DateTime = nowUtc.AddSeconds(Math.Min(hintSeconds, maxSecs))
+                    If hintedUntil > _quotaUntilUtc.Value Then
+                        _quotaUntilUtc = hintedUntil
+                        Log.WriteWarning(String.Format("MEGA quota re-hit during quarantine; extending wait to {0} (level {1} unchanged).", (_quotaUntilUtc.Value - nowUtc).ToString(), _level))
+                    End If
+                End If
+                Return
+            End If
             If _lastHitUtc = DateTime.MinValue OrElse nowUtc - _lastHitUtc > _levelDecay Then
                 _level = 0
             Else
-                ' 24h 内任何再次命中都升级:熔断期内重复、自然到期后、手动清除后——
+                ' 仅熔断期外(自然到期后、手动清除后)的再次命中才升级:
                 ' 不给"到期即洗白"也不给"手动即洗白",否则递进形同虚设。
                 _level = Math.Min(_durations.Length - 1, _level + 1)
             End If

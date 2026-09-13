@@ -171,6 +171,7 @@ Public Class StreamingLibraryManager
 		' Convertimos los links de MegaFolder a links individuales
 		Dim URLs2 As New Generic.List(Of String)
 		For Each URL As String In URLs
+			Try
 			If URLExtractor.IsMegaFolder(URL) Then
 				Dim FolderID As String = URLExtractor.ExtraerFileID(URL)
 				Dim FolderKey As String = URLExtractor.ExtraerFileKey(URL)
@@ -197,6 +198,13 @@ Public Class StreamingLibraryManager
 			Else
 				URLs2.Add(URL)
 			End If
+			Catch ex As Exception
+				' 单条坏链(过期 ELC、读不出文件的文件夹)只跳过该条,不中断整批:
+				' 与 URLProcessor.ProcessURLs 的按条隔离一致。否则一条坏文件夹链接
+				' 抛出的异常会穿过无 Try/Catch 的 ProcesoAjax,导致整个导入请求无响应
+				' (此前 RetrieveLinksFromFolder 永不抛,此处也从不抛)。
+				Log.WriteWarning("ImportLinks: skipping failed link, keeping the rest of the batch: " & Log.Redact(URL) & " - " & Log.SafeException(ex))
+			End Try
 		Next
 		URLs = URLs2
 		

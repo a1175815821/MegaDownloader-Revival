@@ -728,7 +728,9 @@ Public Class Criptografia
             ' 4-word public link key: no MetaMAC is embedded in the key, so there is
             ' nothing to verify against. Skipping must NOT be treated as a failure —
             ' treating it as one wrongly errored every completed public-link download.
-            Log.WriteInfo("VerifyMegaMetaMac: key has " & intKey.Length & " words (public link key); no MetaMAC available, skipping verification for " & filePath)
+            ' B3:跳过即无端到端校验(仅剩长度匹配,而 .part 预分配使长度恒真),
+            ' 必须 Warning 留痕,不能让用户误以为"已校验"。Info 级会被正常日志淹没。
+            Log.WriteWarning("VerifyMegaMetaMac: key has " & intKey.Length & " words (public link key); no MetaMAC available, skipping end-to-end verification for " & filePath)
             Return True
         End If
 

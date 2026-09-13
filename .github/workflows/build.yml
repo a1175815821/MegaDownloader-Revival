@@ -86,6 +86,37 @@ jobs:
           Write-Host "--- Artifacts ---"
           Get-ChildItem $staging | Select-Object Name, Length
 
+      # 6b. 单文件版回归检查：主 exe 靠 ApplicationEvents.LoadDLLFromStream 从内嵌资源按需加载 DLL，
+      # 12 个 CopyLocal 引用必须全部内嵌，否则裸 exe 在新目录启动即崩（v2.2 漏嵌 5 个 System.*.dll
+      # 就是这么坏的）。这里逐一核对，有缺失直接让构建失败，而不是发出去让用户“双击没反应”。
+      - name: Verify embedded DLLs for single-file exe
+        # 必须用 Windows PowerShell 5.1：ReflectionOnlyLoad* 在 pwsh(.NET Core) 上抛
+        # PlatformNotSupportedException，用 pwsh 跑此步每次构建必红。
+        shell: powershell
+        run: |
+          $exe = 'bin\Release\MegaDownloader.exe'
+          if (-not (Test-Path $exe)) { throw "Missing build output: $exe" }
+          $asm = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom((Resolve-Path $exe).Path)
+          $res = $asm.GetManifestResourceNames()
+          $need = @(
+            'BouncyCastle.Crypto.dll',
+            'F5Lib.dll',
+            'Fadd.dll',
+            'HttpServer.dll',
+            'Newtonsoft.Json.dll',
+            'ObjectListView.dll',
+            'SharpCompress.dll',
+            'System.Resources.Extensions.dll',
+            'System.Memory.dll',
+            'System.Buffers.dll',
+            'System.Runtime.CompilerServices.Unsafe.dll',
+            'System.Numerics.Vectors.dll'
+          )
+          $missing = @($need | Where-Object { $n = $_; -not ($res | Where-Object { $_ -like "*$n" }) })
+          if ($missing.Count -gt 0) { throw ("Single-file exe missing embedded DLLs: " + ($missing -join ', ')) }
+          Write-Host "All 12 dependency DLLs embedded; bare exe can run standalone."
+          Get-Item $exe | Select-Object Name, Length
+
       # 7. 上传构建产物 (任一触发都执行)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -117,7 +148,10 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
-      # 创建 Release 并上传 zip
+      # 创建 Release 并上传双版本：zip（解压用，exe + DLL + config）+
+      # 裸 MegaDownloader.exe（直接打开用，12 个 DLL 已内嵌为资源，缺 DLL 时自动从自身加载）。
+      # 注意：新增 CopyLocal 引用必须同步在 vbproj 里加 EmbeddedResource，否则单文件版会坏，
+      # 上一步 Verify embedded DLLs 会先拦住。
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

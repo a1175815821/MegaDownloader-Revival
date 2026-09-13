@@ -301,6 +301,11 @@ Public Class Main
         DefinirColumnas()
         ListaDescargas.SetObjects(Me.ListaPaquetes)
 
+        ' 左栏总览/快捷入口:必须在 DefinirColumnas→InitNavList 建好 5 个过滤器项之后再建,
+        ' 否则 navListBox.Items.Count 还是 0,拿不到正确高度,总览会压在列表上。
+        InitNavRail()
+        UpdateNavRailOverview()
+
         SharpCompress.PriorityExtension.Priority.DecompressionPriority = Config.PrioridadDescompresion
 
         Conexion.PingMega()
@@ -448,6 +453,7 @@ Public Class Main
         Me.ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
         Me.detailGroup.Text = Language.GetText("Detail_Title")
         ApplyNavListColors()
+        UpdateNavRailTexts()
         UpdateNavCounts()
         UpdateDetailPanel()
         Me.AbrirEnCarpetaToolStripMenuItem.Text = Language.GetText("Open directory")
@@ -1077,6 +1083,7 @@ Public Class Main
         ApplyQuotaBannerTheme()
         ApplyToolbarIconTheme()
         ApplyNavListColors()
+        ApplyNavRailTheme()
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -1193,6 +1200,724 @@ Public Class Main
     Private WithEvents ResetColumnsMenuItem As New ToolStripMenuItem()
     Private ReadOnly sepBatchMenuItem As New ToolStripSeparator()
     Private ReadOnly sepColumnsMenuItem As New ToolStripSeparator()
+
+#End Region
+
+#Region "v2.5: 左侧栏任务总览 + 快捷入口"
+
+    ' 左栏纵向扩展后的分段控件。navListBox 仍是过滤器本体(0..4),下方依次是
+    ' 任务总览(只读)与快捷入口(复用既有菜单命令)。
+    Private navOverviewHeader As Label = Nothing
+    Private navOverviewSpeedValue As Label = Nothing
+    Private navOverviewCountsValue As Label = Nothing
+    Private navOverviewProgressBar As ProgressBar = Nothing
+    Private navOverviewProgressText As Label = Nothing
+    Private navOverviewRemainingValue As Label = Nothing
+    Private navQuickHeader As Label = Nothing
+    Private WithEvents navQuickExtractButton As Button = Nothing
+    Private WithEvents navQuickLibraryButton As Button = Nothing
+    Private WithEvents navQuickLogsButton As Button = Nothing
+    Private navRailInitialized As Boolean = False
+
+    ' 左栏宽度:130 太窄放不下"总速度 12.4 MB/s"这类文案,加宽到 168。
+    ' 中部列表 FillsFreeSpace 列会自动吸收差额,1024 宽下仍有约 640px。
+    ' 注意:做成字段而非常量——过滤器文本超宽(大计数/长译文)时 FitNavListBoxNoScroll
+    ' 会按实测加宽到 220,免横滚;Const 写死就加不动了。
+    Private NavRailWidth As Integer = 168
+    ' 过滤器文本超宽时面板最多加到该宽度,再宽就吃掉中部列表,改出横滚兜底。
+    Private Const NavRailMaxWidth As Integer = 220
+
+#End Region
+
+#Region "v2.5: 左栏任务总览 + 快捷入口 —— 实现"
+
+    ''' <summary>
+    ''' 左栏下半部分此前 70% 留白(5 项过滤器约 130px,面板 429px)。此处补两段:
+    ''' B 任务总览——速度/计数/队列进度/剩余时间,数据全部复用既有字段与 430ms 刷新循环,
+    ''' 不新增计时器;C 快捷入口——把埋在二级菜单里的解压队列/流媒体库/日志提到首屏。
+    ''' 所有控件挂到 navPanel 内并置于 navListBox 之下,由 LayoutNavRail 统一定位,
+    ''' 主题走 ThemeManager 递归(navListBox 除外,仍需 ApplyNavListColors 手动同步)。
+    ''' </summary>
+    Private Sub InitNavRail()
+        Try
+            If navPanel Is Nothing Then Return
+
+            Dim sc As Single = GetUiScale()
+            Dim pad As Integer = CInt(6 * sc)
+            Dim innerW As Integer = NavRailWidth - pad * 2
+            Dim rowH As Integer = CInt(20 * sc)
+
+            ' ---- B 段:任务总览 ----
+            navOverviewHeader = CreateNavSectionHeader(Language.GetText("Overview_Title"), sc)
+
+            Dim speedLabel As New Label()
+            speedLabel.Name = "navOverviewSpeedLabel"
+            speedLabel.AutoSize = False
+            speedLabel.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            speedLabel.Text = Language.GetText("Overview_Speed")
+            speedLabel.Height = rowH
+
+            navOverviewSpeedValue = New Label()
+            navOverviewSpeedValue.Name = "navOverviewSpeedValue"
+            navOverviewSpeedValue.AutoSize = False
+            navOverviewSpeedValue.TextAlign = Drawing.ContentAlignment.MiddleRight
+            navOverviewSpeedValue.Height = rowH
+            navOverviewSpeedValue.Text = "-"
+
+            navOverviewCountsValue = New Label()
+            navOverviewCountsValue.Name = "navOverviewCountsValue"
+            navOverviewCountsValue.AutoSize = False
+            navOverviewCountsValue.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            navOverviewCountsValue.Height = CInt(34 * sc)
+            navOverviewCountsValue.Text = "-"
+
+            Dim progressCaption As New Label()
+            progressCaption.Name = "navOverviewProgressCaption"
+            progressCaption.AutoSize = False
+            progressCaption.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            progressCaption.Text = Language.GetText("Overview_Progress")
+            progressCaption.Height = rowH
+
+            navOverviewProgressText = New Label()
+            navOverviewProgressText.Name = "navOverviewProgressText"
+            navOverviewProgressText.AutoSize = False
+            navOverviewProgressText.TextAlign = Drawing.ContentAlignment.MiddleRight
+            navOverviewProgressText.Height = rowH
+            navOverviewProgressText.Text = "0%"
+
+            navOverviewProgressBar = New ProgressBar()
+            navOverviewProgressBar.Name = "navOverviewProgressBar"
+            navOverviewProgressBar.Minimum = 0
+            navOverviewProgressBar.Maximum = 100
+            navOverviewProgressBar.Value = 0
+            navOverviewProgressBar.Height = CInt(10 * sc)
+
+            Dim remainingCaption As New Label()
+            remainingCaption.Name = "navOverviewRemainingCaption"
+            remainingCaption.AutoSize = False
+            remainingCaption.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            remainingCaption.Text = Language.GetText("Overview_Remaining")
+            remainingCaption.Height = rowH
+
+            navOverviewRemainingValue = New Label()
+            navOverviewRemainingValue.Name = "navOverviewRemainingValue"
+            navOverviewRemainingValue.AutoSize = False
+            navOverviewRemainingValue.TextAlign = Drawing.ContentAlignment.MiddleRight
+            navOverviewRemainingValue.Height = rowH
+            navOverviewRemainingValue.Text = "-"
+
+            ' 控件登记到 navPanel,Text 属性留待 UpdateNavRailTexts 统一本地化(切换语言时重建)。
+            navPanel.Controls.Add(navOverviewHeader)
+            navPanel.Controls.Add(speedLabel)
+            navPanel.Controls.Add(navOverviewSpeedValue)
+            navPanel.Controls.Add(navOverviewCountsValue)
+            navPanel.Controls.Add(progressCaption)
+            navPanel.Controls.Add(navOverviewProgressText)
+            navPanel.Controls.Add(navOverviewProgressBar)
+            navPanel.Controls.Add(remainingCaption)
+            navPanel.Controls.Add(navOverviewRemainingValue)
+
+            ' 说明性 Label 用 Tag 登记,供 FindNavLabel 在换语言/换肤时按语义定位(它们不是交互控件)。
+            speedLabel.Tag = "overviewSpeedLabel"
+            progressCaption.Tag = "overviewProgressCaption"
+            remainingCaption.Tag = "overviewRemainingCaption"
+
+            ' ---- C 段:快捷入口 ----
+            navQuickHeader = CreateNavSectionHeader(Language.GetText("Quick_Title"), sc)
+
+            navQuickExtractButton = CreateNavQuickButton("navQuickExtractButton",
+                Language.GetText("Quick_ExtractQueue"), innerW, sc)
+            navQuickLibraryButton = CreateNavQuickButton("navQuickLibraryButton",
+                Language.GetText("Quick_StreamingLibrary"), innerW, sc)
+            navQuickLogsButton = CreateNavQuickButton("navQuickLogsButton",
+                Language.GetText("Quick_Logs"), innerW, sc)
+
+            navPanel.Controls.Add(navQuickHeader)
+            navPanel.Controls.Add(navQuickExtractButton)
+            navPanel.Controls.Add(navQuickLibraryButton)
+            navPanel.Controls.Add(navQuickLogsButton)
+
+            ' 复用的既有命令,通过 ToolTip 说明书与菜单入口一致
+            ToolTipBotones.SetToolTip(navQuickExtractButton, Language.GetText("See extraction queue"))
+            ToolTipBotones.SetToolTip(navQuickLibraryButton, Language.GetText("Manage Streaming Library"))
+            ToolTipBotones.SetToolTip(navQuickLogsButton, Language.GetText("See logs"))
+
+            ' 侧栏整体接受链接文本拖放(含递归到的 Label/按钮等子控件),转发到 Main_DragDrop。
+            EnableLinkDrop(navPanel)
+            If detailGroup IsNot Nothing AndAlso Not detailGroup.IsDisposed Then EnableLinkDrop(detailGroup)
+
+            navRailInitialized = True
+            LayoutNavRail()
+            ApplyNavRailTheme()
+            UpdateNavRailTexts()
+        Catch ex As Exception
+            Log.WriteError("InitNavRail failed: " & ex.ToString)
+        End Try
+    End Sub
+
+    Private Function CreateNavSectionHeader(text As String, sc As Single) As Label
+        Dim lbl As New Label()
+        lbl.Name = "navSectionHeader"
+        lbl.AutoSize = False
+        lbl.TextAlign = Drawing.ContentAlignment.MiddleLeft
+        lbl.Height = CInt(20 * sc)
+        lbl.Text = text
+        ' 分节标题用加粗主色(与说明性灰字区分)。Font 只在此处建一次,
+        ' 换肤只改颜色——避免每次 ApplyTheme 都 New Font 造成 GDI 对象堆积。
+        lbl.Font = New Drawing.Font(lbl.Font, Drawing.FontStyle.Bold)
+        Return lbl
+    End Function
+
+    Private Function CreateNavQuickButton(name As String, text As String, width As Integer, sc As Single) As Button
+        Dim btn As New Button()
+        btn.Name = name
+        btn.Text = text
+        btn.TextAlign = Drawing.ContentAlignment.MiddleLeft
+        btn.Height = CInt(26 * sc)
+        btn.Width = width
+        btn.UseVisualStyleBackColor = False
+        btn.FlatStyle = FlatStyle.Flat
+        Return btn
+    End Function
+
+    ''' <summary>左栏两段的所有几何一次算死,不依赖 Anchor 累加,避免 resize/DPI 变化漂移。
+    ''' 总览与快捷入口占据列表区下方,过滤器本体高度保持不变。</summary>
+    Private Sub LayoutNavRail()
+        Try
+            If Not navRailInitialized OrElse navPanel Is Nothing Then Return
+            Dim sc As Single = GetUiScale()
+            Dim pad As Integer = CInt(6 * sc)
+            Dim innerW As Integer = NavRailWidth - pad * 2
+            Dim rowH As Integer = CInt(20 * sc)
+
+            ' 过滤器本体高度 = 5 项 × 真实行高(见 GetNavActualItemHeight);它不再 Dock=Fill,必须显式给定,
+            ' 否则默认 130 在字体/DPI 变化时会截断第 5 项。Normal 模式 ItemHeight 无效,不可直接用它。
+            If navListBox IsNot Nothing AndAlso Not navListBox.IsDisposed AndAlso navListBox.Items.Count > 0 Then
+                FitNavListBoxNoScroll()
+            End If
+
+            Dim y As Integer = navListBox.Bottom + CInt(8 * sc)
+
+            ' 纵向空间不足时(最小窗口 280 高 → 内容区仅约 209px)整段隐藏,
+            ' 避免总览/快捷入口溢出到状态栏外面。阈值 = 总览+快捷入口两段所需高度。
+            Dim needH As Integer = CInt(8 * sc) + CInt(20 * sc) + rowH * 3 + CInt(34 * sc) +
+                                   CInt(10 * sc) + CInt(4 * sc) + CInt(10 * sc) +
+                                   CInt(20 * sc) + CInt(26 * sc) * 3 + CInt(3 * sc) * 3
+            Dim showRail As Boolean = (navPanel.ClientSize.Height - navListBox.Bottom) >= needH
+            SetNavRailSectionVisible(showRail, False)
+            If Not showRail Then Return
+            SetNavRailSectionVisible(True, True)
+
+            ' --- B 段:任务总览 ---
+            navOverviewHeader.SetBounds(pad, y, innerW, CInt(20 * sc))
+            y += navOverviewHeader.Height + CInt(2 * sc)
+
+            Dim speedLbl As Label = FindNavLabel("overviewSpeedLabel")
+            If speedLbl IsNot Nothing Then speedLbl.SetBounds(pad, y, CInt(66 * sc), rowH)
+            navOverviewSpeedValue.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
+            y += rowH
+
+            navOverviewCountsValue.SetBounds(pad, y, innerW, CInt(34 * sc))
+            y += navOverviewCountsValue.Height + CInt(2 * sc)
+
+            Dim progCap As Label = FindNavLabel("overviewProgressCaption")
+            If progCap IsNot Nothing Then progCap.SetBounds(pad, y, CInt(66 * sc), rowH)
+            navOverviewProgressText.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
+            y += rowH
+
+            navOverviewProgressBar.SetBounds(pad, y, innerW, navOverviewProgressBar.Height)
+            y += navOverviewProgressBar.Height + CInt(4 * sc)
+
+            Dim remCap As Label = FindNavLabel("overviewRemainingCaption")
+            If remCap IsNot Nothing Then remCap.SetBounds(pad, y, CInt(66 * sc), rowH)
+            navOverviewRemainingValue.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
+            y += rowH + CInt(10 * sc)
+
+            ' --- C 段:快捷入口 ---
+            navQuickHeader.SetBounds(pad, y, innerW, CInt(20 * sc))
+            y += navQuickHeader.Height + CInt(2 * sc)
+
+            For Each btn As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
+                If btn IsNot Nothing Then
+                    btn.SetBounds(pad, y, innerW, btn.Height)
+                    y += btn.Height + CInt(3 * sc)
+                End If
+            Next
+        Catch ex As Exception
+            Log.WriteDebug("LayoutNavRail failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>按 Tag 找 navPanel 内的说明性 Label(它们不参与交互,无需字段)。</summary>
+    Private Function FindNavLabel(tag As String) As Label
+        If navPanel Is Nothing Then Return Nothing
+        For Each c As Control In navPanel.Controls
+            If TypeOf c Is Label AndAlso String.Equals(TryCast(c.Tag, String), tag) Then Return CType(c, Label)
+        Next
+        Return Nothing
+    End Function
+
+    ''' <summary>整体显隐左栏两段。overview 与 quick 分开控制,便于未来只保留总览。</summary>
+    Private Sub SetNavRailSectionVisible(overviewVisible As Boolean, quickVisible As Boolean)
+        Try
+            If navOverviewHeader IsNot Nothing Then navOverviewHeader.Visible = overviewVisible
+            If navOverviewSpeedValue IsNot Nothing Then navOverviewSpeedValue.Visible = overviewVisible
+            If navOverviewCountsValue IsNot Nothing Then navOverviewCountsValue.Visible = overviewVisible
+            If navOverviewProgressBar IsNot Nothing Then navOverviewProgressBar.Visible = overviewVisible
+            If navOverviewProgressText IsNot Nothing Then navOverviewProgressText.Visible = overviewVisible
+            If navOverviewRemainingValue IsNot Nothing Then navOverviewRemainingValue.Visible = overviewVisible
+            For Each tag As String In New String() {"overviewSpeedLabel", "overviewProgressCaption", "overviewRemainingCaption"}
+                Dim l As Label = FindNavLabel(tag)
+                If l IsNot Nothing Then l.Visible = overviewVisible
+            Next
+
+            If navQuickHeader IsNot Nothing Then navQuickHeader.Visible = quickVisible
+            If navQuickExtractButton IsNot Nothing Then navQuickExtractButton.Visible = quickVisible
+            If navQuickLibraryButton IsNot Nothing Then navQuickLibraryButton.Visible = quickVisible
+            If navQuickLogsButton IsNot Nothing Then navQuickLogsButton.Visible = quickVisible
+        Catch ex As Exception
+            Log.WriteDebug("SetNavRailSectionVisible failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Shared Function GetUiScale() As Single
+        Dim sc As Single = 1.0F
+        Try
+            Using g As Drawing.Graphics = System.Drawing.Graphics.FromHwnd(IntPtr.Zero)
+                sc = g.DpiY / 96.0F
+            End Using
+        Catch
+        End Try
+        If sc < 1.0F Then sc = 1.0F
+        Return sc
+    End Function
+
+    ''' <summary>切换语言后重建左栏所有文案。计数/速度等动态值由 UpdateNavRailOverview 刷新。</summary>
+    Private Sub UpdateNavRailTexts()
+        Try
+            If Not navRailInitialized Then Return
+            navOverviewHeader.Text = Language.GetText("Overview_Title")
+            navQuickHeader.Text = Language.GetText("Quick_Title")
+            Dim speedLbl As Label = FindNavLabel("overviewSpeedLabel")
+            If speedLbl IsNot Nothing Then speedLbl.Text = Language.GetText("Overview_Speed")
+            Dim progCap As Label = FindNavLabel("overviewProgressCaption")
+            If progCap IsNot Nothing Then progCap.Text = Language.GetText("Overview_Progress")
+            Dim remCap As Label = FindNavLabel("overviewRemainingCaption")
+            If remCap IsNot Nothing Then remCap.Text = Language.GetText("Overview_Remaining")
+            If navQuickExtractButton IsNot Nothing Then navQuickExtractButton.Text = Language.GetText("Quick_ExtractQueue")
+            If navQuickLibraryButton IsNot Nothing Then navQuickLibraryButton.Text = Language.GetText("Quick_StreamingLibrary")
+            If navQuickLogsButton IsNot Nothing Then navQuickLogsButton.Text = Language.GetText("Quick_Logs")
+        Catch ex As Exception
+            Log.WriteDebug("UpdateNavRailTexts failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 任务总览数值刷新。在 430ms 刷新循环里调用(UI 线程),速度直接取该循环算好的
+    ''' VelocidadGlobalDescarga;计数复用 UpdateNavCounts 的同一判定 MatchesScope,
+    ''' 保证与过滤器后缀括号里的数字完全一致;进度与剩余时间按字节加权。
+    ''' </summary>
+    Private Sub UpdateNavRailOverview()
+        ' P1(审查):本函数在 430ms 后台循环里被直接调用,此前直接写控件属性=
+        ' 跨线程违规(与 UpdateQuotaUI/SetStatusBar 的编组惯例相悖),且无锁遍历
+        ' ListaPaquetes(他处持 Mutex.ListaDescargas 增删,foreach 可抛)。
+        ' 修法:先编组回 UI(同 UpdateQuotaUI 的 BeginInvoke 模式),计数快照持锁。
+        Try
+            If Me.IsDisposed OrElse Not Me.IsHandleCreated Then Return
+            If Me.InvokeRequired Then
+                Try
+                    Me.BeginInvoke(New Action(AddressOf UpdateNavRailOverview))
+                Catch
+                End Try
+                Return
+            End If
+            If Not navRailInitialized Then Return
+            If navPanel Is Nothing OrElse navPanel.IsDisposed Then Return
+
+            ' 速度(与状态栏同源,单位换算复用 PintarVelocidadDescarga)
+            Dim speedTxt As String = "-"
+            If VelocidadGlobalDescarga.HasValue AndAlso VelocidadGlobalDescarga.Value > 0 Then
+                speedTxt = PintarVelocidadDescarga(VelocidadGlobalDescarga.Value)
+            End If
+            navOverviewSpeedValue.Text = speedTxt
+            Try
+                TintNavSpeedValue()
+            Catch
+            End Try
+
+            ' 计数:一次遍历同时累加总量/已完成量,再算整体进度。
+            ' 快照持 Mutex.ListaDescargas(只包遍历,不包控件赋值,锁序与 RefreshListaDescargas 一致)。
+            Dim total As Integer = 0
+            Dim active As Integer = 0
+            Dim queued As Integer = 0
+            Dim failed As Integer = 0
+            Dim totalBytes As Decimal = 0D
+            Dim doneBytes As Decimal = 0D
+
+            If ListaPaquetes IsNot Nothing Then
+                Mutex.ListaDescargas.WaitOne()
+                Try
+                    For Each p As Paquete In ListaPaquetes
+                        total += 1
+                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Downloading) Then active += 1
+                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Waiting) Then queued += 1
+                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Failed) Then failed += 1
+
+                        Dim st As Long = p.DescargaTamanoBytes()
+                        Dim pct As Decimal = p.DescargaPorcentaje()
+                        If st > 0 Then
+                            totalBytes += st
+                            doneBytes += Math.Ceiling(pct * st / 100D)
+                        End If
+                    Next
+                Finally
+                    Mutex.ListaDescargas.ReleaseMutex()
+                End Try
+            End If
+
+            navOverviewCountsValue.Text = Language.GetText("Overview_Active") & " " & active.ToString() &
+                "   " & Language.GetText("Overview_Queued") & " " & queued.ToString() &
+                "   " & Language.GetText("Overview_Failed") & " " & failed.ToString()
+
+            Dim pctOverall As Integer = 0
+            If totalBytes > 0 Then pctOverall = CInt(Math.Floor(doneBytes * 100D / totalBytes))
+            If pctOverall < 0 Then pctOverall = 0
+            If pctOverall > 100 Then pctOverall = 100
+
+            ' ProgressBar.Value 越界会抛异常(高 DPI/极小文件时 pct 计算可能溢出)
+            Try
+                If navOverviewProgressBar.Value <> pctOverall Then navOverviewProgressBar.Value = pctOverall
+            Catch
+            End Try
+            navOverviewProgressText.Text = pctOverall.ToString() & "%"
+
+            ' 剩余:总剩余字节 / 当前总速度(KB/s)。速度缺失或无剩余时不显示估算,避免编造数字。
+            Dim remainTxt As String = "-"
+            If totalBytes > 0 AndAlso doneBytes < totalBytes AndAlso
+               VelocidadGlobalDescarga.HasValue AndAlso VelocidadGlobalDescarga.Value > 0 Then
+                Dim remainKB As Decimal = (totalBytes - doneBytes) / 1024D
+                Dim secs As Decimal = remainKB / VelocidadGlobalDescarga.Value
+                If secs > 0 AndAlso secs < 86400 * 7 Then
+                    remainTxt = FormatNavRemaining(CInt(Math.Ceiling(secs)))
+                End If
+            End If
+            navOverviewRemainingValue.Text = remainTxt
+        Catch ex As Exception
+            Log.WriteDebug("UpdateNavRailOverview failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>剩余时间简写:&lt;1min 读秒,否则分/时。与配额倒计时风格保持一致。</summary>
+    Private Shared Function FormatNavRemaining(totalSec As Integer) As String
+        If totalSec < 60 Then Return totalSec.ToString() & " s"
+        Dim totalMin As Integer = totalSec \ 60
+        If totalMin < 60 Then Return totalMin.ToString() & " min"
+        Dim h As Integer = totalMin \ 60
+        Dim m As Integer = totalMin Mod 60
+        If h >= 24 Then
+            Dim d As Integer = h \ 24
+            Return d.ToString() & " d " & (h Mod 24).ToString() & " h"
+        End If
+        Return h.ToString() & " h " & m.ToString() & " min"
+    End Function
+
+    ''' <summary>左栏总览/快捷入口换肤。分节标题用主题强调色(深浅主题下分别是深蓝/浅蓝),
+    ''' 说明文字用次要灰,数值用主色/语义色区分——避免之前全取 Border 一片灰、换肤也看不出变化。</summary>
+    Private Sub ApplyNavRailTheme()
+        Try
+            If Not navRailInitialized Then Return
+            Dim subtle As Drawing.Color = ThemeManager.GetColor("Border")
+            Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
+            Dim accent As Drawing.Color = ThemeManager.GetColor("Link")
+
+            ' 分节标题:强调色+加粗(换肤可见),不再用灰。
+            For Each hdr As Label In New Label() {navOverviewHeader, navQuickHeader}
+                If hdr IsNot Nothing Then
+                    hdr.ForeColor = accent
+                End If
+            Next
+
+            ' 计数行:主色保证可读(之前全灰,数字看不清)。
+            If navOverviewCountsValue IsNot Nothing Then navOverviewCountsValue.ForeColor = fore
+
+            ' 左列说明(label)次要灰,右列数值主色/语义色,两列一眼区分。
+            Dim speedLbl As Label = FindNavLabel("overviewSpeedLabel")
+            If speedLbl IsNot Nothing Then speedLbl.ForeColor = subtle
+            Dim progCap As Label = FindNavLabel("overviewProgressCaption")
+            If progCap IsNot Nothing Then progCap.ForeColor = subtle
+            Dim remCap As Label = FindNavLabel("overviewRemainingCaption")
+            If remCap IsNot Nothing Then remCap.ForeColor = subtle
+
+            ' 总速度:有速度时语义绿,无速度(-)时主色(由 UpdateNavRailOverview 每次刷新后重调)。
+            If navOverviewSpeedValue IsNot Nothing Then navOverviewSpeedValue.ForeColor = fore
+            If navOverviewProgressText IsNot Nothing Then navOverviewProgressText.ForeColor = fore
+            If navOverviewRemainingValue IsNot Nothing Then navOverviewRemainingValue.ForeColor = fore
+            Try
+                TintNavSpeedValue()
+            Catch
+            End Try
+
+            ' 快捷入口按钮:沿用主题按钮配色(与工具栏一致的 Flat + 边框)
+            Dim btnBack As Drawing.Color = ThemeManager.GetColor("ControlBack")
+            Dim btnBorder As Drawing.Color = ThemeManager.GetColor("Border")
+            Dim btnHover As Drawing.Color = ThemeManager.GetColor("ButtonHover")
+            Dim btnPressed As Drawing.Color = ThemeManager.GetColor("ButtonPressed")
+            For Each btn As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
+                If btn IsNot Nothing Then
+                    btn.BackColor = btnBack
+                    btn.ForeColor = fore
+                    btn.FlatStyle = FlatStyle.Flat
+                    btn.FlatAppearance.BorderSize = 1
+                    btn.FlatAppearance.BorderColor = btnBorder
+                    btn.FlatAppearance.MouseOverBackColor = btnHover
+                    btn.FlatAppearance.MouseDownBackColor = btnPressed
+                    btn.UseVisualStyleBackColor = False
+                End If
+            Next
+
+            ' 进度条走主题 token(与列表内进度条同色系)
+            ' 注意:系统 VisualStyles 下 ProgressBar 会忽略 Back/Fore,此处尽力而为。
+            If navOverviewProgressBar IsNot Nothing Then
+                navOverviewProgressBar.BackColor = ThemeManager.GetColor("ControlBack")
+                navOverviewProgressBar.ForeColor = ThemeManager.GetColor("Selection")
+            End If
+        Catch ex As Exception
+            Log.WriteDebug("ApplyNavRailTheme failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>总速度数值语义色:下载中绿色强调, idle 显示 - 时回主色,换肤/每次刷新都重调。</summary>
+    Private Sub TintNavSpeedValue()
+        If navOverviewSpeedValue Is Nothing OrElse navOverviewSpeedValue.IsDisposed Then Return
+        Dim hasSpeed As Boolean = VelocidadGlobalDescarga.HasValue AndAlso VelocidadGlobalDescarga.Value > 0
+        If hasSpeed Then
+            navOverviewSpeedValue.ForeColor = ThemeManager.GetColor("SuccessFore")
+        Else
+            navOverviewSpeedValue.ForeColor = ThemeManager.GetColor("Fore")
+        End If
+    End Sub
+
+#End Region
+
+#Region "v2.5: 右侧栏结构化详情"
+
+    ' 结构化详情:标签列 + 值列,进度单独一条细进度条。替代原先"一个 Label 灌多行文本"
+    ' 的写法——长文件名/长路径无法换行对齐,标签与值也没有视觉区分。
+    ' 无选中时不建/不显示这些控件,仍由 detailLabel 承担空态引导(B 段)。
+    Private detailContentPanel As Panel = Nothing
+    Private detailTitleLabel As Label = Nothing
+    Private detailRows As New Generic.List(Of KeyValuePair(Of Label, Label))()
+    Private detailProgressBar As ProgressBar = Nothing
+
+    ''' <summary>按需构建结构化详情面板(挂在 detailGroup 内,与空态 detailLabel 互斥显示)。
+    ''' 行数固定为 状态/进度/大小/速度/剩余/路径,内容在 UpdateDetailContent 里填。</summary>
+    Private Sub EnsureDetailContentPanel()
+        If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed Then Return
+        If detailGroup Is Nothing Then Return
+
+        detailContentPanel = New Panel()
+        detailContentPanel.Name = "detailContentPanel"
+        detailContentPanel.Dock = DockStyle.Fill
+        detailContentPanel.Visible = False
+
+        detailTitleLabel = New Label()
+        detailTitleLabel.Name = "detailTitleLabel"
+        detailTitleLabel.AutoSize = False
+        detailTitleLabel.AutoEllipsis = True
+        detailTitleLabel.Height = 36
+        ' 标题加粗,只在此处建一次 Font(换肤不重建,避免 GDI 对象堆积)。
+        detailTitleLabel.Font = New Drawing.Font(detailTitleLabel.Font, Drawing.FontStyle.Bold)
+
+        detailContentPanel.Controls.Add(detailTitleLabel)
+
+        detailRows.Clear()
+        For i As Integer = 0 To 5
+            Dim cap As New Label()
+            cap.Name = "detailCap" & i.ToString()
+            cap.AutoSize = False
+            cap.Width = 48
+            cap.Height = 20
+            cap.TextAlign = Drawing.ContentAlignment.MiddleLeft
+
+            Dim val As New Label()
+            val.Name = "detailVal" & i.ToString()
+            val.AutoSize = False
+            val.Height = 20
+            val.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            val.AutoEllipsis = True
+
+            detailContentPanel.Controls.Add(cap)
+            detailContentPanel.Controls.Add(val)
+            detailRows.Add(New KeyValuePair(Of Label, Label)(cap, val))
+        Next
+
+        detailProgressBar = New ProgressBar()
+        detailProgressBar.Name = "detailProgressBar"
+        detailProgressBar.Minimum = 0
+        detailProgressBar.Maximum = 100
+        detailProgressBar.Visible = False
+        detailProgressBar.Height = 10
+        detailContentPanel.Controls.Add(detailProgressBar)
+
+        detailGroup.Controls.Add(detailContentPanel)
+        detailContentPanel.BringToFront()
+        ' 运行时创建的详情面板同样接受链接文本拖放(与 detailLabel 一致)。
+        EnableLinkDrop(detailContentPanel)
+        LayoutDetailContent()
+        ApplyDetailContentTheme()
+    End Sub
+
+    ''' <summary>详情面板内部几何。宽度按 detailGroup 客户区算,避免 DPI 变化后错位。</summary>
+    Private Sub LayoutDetailContent()
+        Try
+            If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
+            Dim sc As Single = GetUiScale()
+            Dim pad As Integer = CInt(8 * sc)
+            Dim w As Integer = detailContentPanel.ClientSize.Width
+            If w <= 0 Then w = detailGroup.ClientSize.Width - pad * 2
+            Dim innerW As Integer = Math.Max(60, w - pad * 2)
+            Dim capW As Integer = CInt(46 * sc)
+            Dim rowH As Integer = Math.Max(18, CInt(20 * sc))
+
+            detailTitleLabel.SetBounds(pad, pad, innerW, CInt(34 * sc))
+
+            Dim y As Integer = detailTitleLabel.Bottom + CInt(4 * sc)
+            For i As Integer = 0 To detailRows.Count - 1
+                Dim cap As Label = detailRows(i).Key
+                Dim val As Label = detailRows(i).Value
+                cap.SetBounds(pad, y, capW, rowH)
+                val.SetBounds(pad + capW, y, innerW - capW, rowH)
+                y += rowH
+
+                ' 第 2 行(进度)下方插一条进度条
+                If i = 1 AndAlso detailProgressBar IsNot Nothing Then
+                    detailProgressBar.SetBounds(pad + capW, y, innerW - capW, CInt(10 * sc))
+                    detailProgressBar.Visible = True
+                    y += detailProgressBar.Height + CInt(2 * sc)
+                End If
+            Next
+        Catch ex As Exception
+            Log.WriteDebug("LayoutDetailContent failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub ApplyDetailContentTheme()
+        Try
+            If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
+            Dim subtle As Drawing.Color = ThemeManager.GetColor("Border")
+            Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
+            If detailTitleLabel IsNot Nothing Then
+                detailTitleLabel.ForeColor = fore
+            End If
+            For Each kv As KeyValuePair(Of Label, Label) In detailRows
+                kv.Key.ForeColor = subtle
+                kv.Value.ForeColor = fore
+            Next
+            If detailProgressBar IsNot Nothing Then
+                detailProgressBar.BackColor = ThemeManager.GetColor("ControlBack")
+                detailProgressBar.ForeColor = ThemeManager.GetColor("Selection")
+            End If
+        Catch ex As Exception
+            Log.WriteDebug("ApplyDetailContentTheme failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>把选中项的数据填进结构化详情。标签文案走语言系统,随语言切换同步。</summary>
+    Private Sub UpdateDetailContent(ele As IDescarga)
+        Try
+            EnsureDetailContentPanel()
+            If detailContentPanel Is Nothing Then Return
+
+            detailTitleLabel.Text = ele.DescargaNombre
+
+            Dim st As Estado = ele.DescargaEstado()
+            Dim pct As Decimal = ele.DescargaPorcentaje()
+            Dim size As Long = ele.DescargaTamanoBytes()
+            Dim done As String = "-"
+            If size > 0 Then
+                done = PintarTamano(Math.Ceiling(pct * size / 100)) & " / " & PintarTamano(size)
+            End If
+
+            Dim fic As Fichero = TryCast(ele, Fichero)
+            Dim ruta As String = "-"
+            If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.RutaRelativa) Then ruta = fic.RutaRelativa
+
+            Dim captions() As String = {
+                Language.GetText("Status"),
+                Language.GetText("Progress"),
+                Language.GetText("Size"),
+                Language.GetText("Speed"),
+                Language.GetText("Remaining"),
+                Language.GetText("Detail_Path")
+            }
+            ' 空字符串统一显示为 "-",避免详情出现空白行(速度/剩余在未下载时本就无值)。
+            Dim speedTxt As String = PintarVelocidadDescarga(ele)
+            If String.IsNullOrEmpty(speedTxt) Then speedTxt = "-"
+            Dim remainTxt As String = ele.DescargaTiempoEstimadoDescarga()
+            If String.IsNullOrEmpty(remainTxt) Then remainTxt = "-"
+
+            Dim values() As String = {
+                EstadoDisplayText(st),
+                pct.ToString("F2") & "%",
+                done,
+                speedTxt,
+                remainTxt,
+                ruta
+            }
+
+            For i As Integer = 0 To Math.Min(captions.Length, detailRows.Count) - 1
+                detailRows(i).Key.Text = captions(i)
+                detailRows(i).Value.Text = values(i)
+                ' 失败态用语义色标注,与列表"状态"列的着色保持一致
+                If i = 0 AndAlso st = Estado.Erroneo Then
+                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("ErrorFore")
+                ElseIf i = 0 AndAlso st = Estado.Completado Then
+                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("SuccessFore")
+                Else
+                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("Fore")
+                End If
+            Next
+
+            If detailProgressBar IsNot Nothing Then
+                Dim p As Integer = CInt(Math.Floor(pct))
+                If p < 0 Then p = 0
+                If p > 100 Then p = 100
+                Try
+                    detailProgressBar.Value = p
+                Catch
+                End Try
+            End If
+
+            detailContentPanel.Visible = True
+            If detailLabel IsNot Nothing Then detailLabel.Visible = False
+            LayoutDetailContent()
+        Catch ex As Exception
+            Log.WriteDebug("UpdateDetailContent failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>回到空态:显示引导文案(Detail_Empty + Detail_EmptyHint),隐藏结构化面板。
+    ''' 主/副两行通过换行拼进同一个 detailLabel,不新增控件。</summary>
+    Private Sub ShowDetailEmptyState()
+        Try
+            If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed Then
+                detailContentPanel.Visible = False
+            End If
+            If detailLabel Is Nothing OrElse detailLabel.IsDisposed Then Return
+            detailLabel.Visible = True
+            Dim main As String = Language.GetText("Detail_Empty")
+            Dim hint As String = Language.GetText("Detail_EmptyHint")
+            Dim text As String = main
+            If Not String.IsNullOrEmpty(hint) AndAlso Not String.Equals(hint, "Detail_EmptyHint") Then
+                text = main & vbCrLf & vbCrLf & hint
+            End If
+            If detailLabel.Text <> text Then detailLabel.Text = text
+        Catch ex As Exception
+            Log.WriteDebug("ShowDetailEmptyState failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+#End Region
 
     ''' <summary>配额横幅:Anchor 布局,显示/隐藏时整体下移下载列表,无 Dock 冲突。
     ''' RC:Top 跟随工具栏底部(不再写死 40),高度按 DPI 缩放,防 125%/150% 下压住工具栏。</summary>
@@ -1452,7 +2177,6 @@ Public Class Main
         End Try
     End Sub
 
-#End Region
     Private Function PintarVelocidadDescarga(ele As IDescarga) As String
         If ele.DescargaEstado = Estado.Descargando Then
             Return PintarVelocidadDescarga(ele.DescargaVelocidadKBs)
@@ -1652,6 +2376,14 @@ Public Class Main
 
     Private Sub InitNavList()
         ' RC:ItemHeight 跟随 DPI/字体(此前写死 20,大字体下截断)。
+        ' 注意:DrawMode=Normal 时 ItemHeight 被忽略,真实行高由字体决定,
+        ' 高度必须按 GetItemHeight 实测(见 GetNavActualItemHeight),否则 5 项放不下出竖滚。
+        Try
+            navListBox.IntegralHeight = False
+            navListBox.HorizontalScrollbar = False
+            navListBox.ScrollAlwaysVisible = False
+        Catch
+        End Try
         Try
             Dim sc As Single = 1.0F
             Using g As Drawing.Graphics = Me.CreateGraphics()
@@ -1664,6 +2396,111 @@ Public Class Main
         UpdateNavCounts()
         If navListBox.SelectedIndex < 0 Then navListBox.SelectedIndex = 0
         ApplyNavListColors()
+    End Sub
+
+    ''' <summary>左导航真实行高。Normal 模式下 ItemHeight 属性无效,必须用 GetItemHeight 实测,
+    ''' 否则按 ItemHeight×5 算出的高度偏小,第 5 项被截断需要手动滚动。</summary>
+    Private Function GetNavActualItemHeight() As Integer
+        Try
+            If navListBox IsNot Nothing AndAlso Not navListBox.IsDisposed AndAlso navListBox.Items.Count > 0 Then
+                Dim h As Integer = navListBox.GetItemHeight(0)
+                If h > 0 Then Return h
+            End If
+        Catch
+        End Try
+        Try
+            If navListBox IsNot Nothing AndAlso navListBox.Font IsNot Nothing Then
+                Return Math.Max(20, navListBox.Font.Height + 6)
+            End If
+        Catch
+        End Try
+        Return 20
+    End Function
+
+    ''' <summary>左导航免滚动适配:高度按真实行高×项数一次给够(无竖滚),
+    ''' 宽度占满 navPanel;文本超宽时优先加宽面板(≤220),平时无任何滚动条,
+    ''' 窄窗口实在加不动才出横滚兜底(此时高度补上横滚条高度,横滚不再顶出竖滚)。</summary>
+    Private Sub FitNavListBoxNoScroll()
+        Try
+            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+            If navPanel Is Nothing OrElse navPanel.IsDisposed Then Return
+            If navListBox.Items.Count <= 0 Then Return
+            navListBox.IntegralHeight = False
+            navListBox.ScrollAlwaysVisible = False
+            ' 先关横滚:开着时 ClientSize.Height 被压缩,边框与宽度都会误算,
+            ' 且横滚条会盖住最后一项反过来顶出竖滚。
+            If navListBox.HorizontalScrollbar Then
+                Try
+                    navListBox.HorizontalScrollbar = False
+                    navListBox.HorizontalExtent = 0
+                Catch
+                End Try
+            End If
+            Dim itemH As Integer = GetNavActualItemHeight()
+            ' 边框实测(自适应 Fixed3D/FixedSingle),失败时按 Fixed3D 取 4。
+            Dim borderH As Integer = 4
+            Try
+                Dim bh As Integer = navListBox.Height - navListBox.ClientSize.Height
+                If bh >= 2 AndAlso bh <= 10 Then borderH = bh
+            Catch
+            End Try
+            ' GDI 量字(与 ListBox 渲染同管线,比 GDI+ 的 MeasureString 准)。
+            Dim maxW As Integer = 0
+            Try
+                For Each o As Object In navListBox.Items
+                    Dim s As String = If(o Is Nothing, String.Empty, o.ToString())
+                    If String.IsNullOrEmpty(s) Then Continue For
+                    Dim sz As Drawing.Size = Windows.Forms.TextRenderer.MeasureText(
+                        s, navListBox.Font, New Drawing.Size(Integer.MaxValue, Integer.MaxValue),
+                        Windows.Forms.TextFormatFlags.SingleLine Or Windows.Forms.TextFormatFlags.NoPadding)
+                    Dim w As Integer = sz.Width + 10
+                    If w > maxW Then maxW = w
+                Next
+            Catch
+            End Try
+            ' 超宽则加宽面板而不是出横滚(上限 220,避免吃掉中部列表)。
+            If maxW > 0 Then
+                Dim chromeW As Integer = 0
+                Try
+                    chromeW = (navPanel.Width - navPanel.ClientSize.Width) +
+                              (navListBox.Width - navListBox.ClientSize.Width) + 4
+                    If chromeW < 4 OrElse chromeW > 30 Then chromeW = 8
+                Catch
+                    chromeW = 8
+                End Try
+                Dim needPanelW As Integer = maxW + chromeW
+                If needPanelW > NavRailWidth AndAlso needPanelW <= NavRailMaxWidth Then
+                    NavRailWidth = needPanelW
+                    ApplyNavRailWidth()
+                ElseIf needPanelW > NavRailMaxWidth AndAlso NavRailWidth < NavRailMaxWidth Then
+                    NavRailWidth = NavRailMaxWidth
+                    ApplyNavRailWidth()
+                End If
+            End If
+            Dim fullW As Integer = navPanel.ClientSize.Width
+            If fullW > 0 AndAlso navListBox.Width <> fullW Then navListBox.Width = fullW
+            Dim listH As Integer = itemH * navListBox.Items.Count + borderH
+            ' 面板实在加不动(窄窗口被 ApplyNavRailWidth 钳住)才出横滚,
+            ' 高度必须补上横滚条高度,否则横滚盖住最后一项又顶出竖滚。
+            Dim needH As Boolean = False
+            If maxW > 0 Then
+                Try
+                    needH = maxW > navListBox.ClientSize.Width
+                Catch
+                End Try
+            End If
+            If needH Then
+                Try
+                    navListBox.HorizontalScrollbar = True
+                    navListBox.HorizontalExtent = maxW
+                Catch
+                End Try
+                listH += Windows.Forms.SystemInformation.HorizontalScrollBarHeight
+            End If
+            If navListBox.Height <> listH Then navListBox.Height = listH
+        Catch ex As Exception
+            Log.WriteDebug("FitNavListBoxNoScroll failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Sub ApplyNavListColors()
@@ -1723,6 +2560,8 @@ Public Class Main
             Finally
                 _updatingNav = False
             End Try
+            ' 计数后缀变宽(如 9→10000)时刷新横向范围;高度按真实行高重算,保证 5 项免竖滚。
+            FitNavListBoxNoScroll()
         Catch ex As Exception
             Log.WriteDebug("UpdateNavCounts failed: " & Log.SafeException(ex))
         End Try
@@ -1778,8 +2617,40 @@ Public Class Main
             navPanel.Height = h
             detailPanel.Top = top
             detailPanel.Height = h
+
+            ' 左栏加宽:列表 Left/Width 同步跟随,否则列表会压到加宽后的侧栏上。
+            ' 窄窗口(接近 MinimumSize 640)时按可用空间回退,保证中部列表不被挤没。
+            ApplyNavRailWidth()
+
+            ' 左栏纵向分段定位(总览/快捷入口贴在过滤器下方,不随窗口高度拉伸)
+            LayoutNavRail()
+
+            ' 右栏详情内部几何跟随宽度变化(标签/值两列按客户区宽度算)
+            If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed AndAlso
+               detailContentPanel.Visible Then
+                LayoutDetailContent()
+            End If
         Catch ex As Exception
             Log.WriteDebug("LayoutDownloadArea failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>左栏宽度单一来源。保证最小宽度下中部列表仍有可用空间(≥320px)。</summary>
+    Private Sub ApplyNavRailWidth()
+        Try
+            If navPanel Is Nothing OrElse ListaDescargas Is Nothing Then Return
+            Dim desired As Integer = NavRailWidth
+            ' 右侧 detailPanel 与各边距固定占用约 210px(见 Designer 的 x 布局),留 320px 给列表。
+            Dim maxAllowed As Integer = Me.ClientSize.Width - 210 - 320
+            If maxAllowed < 130 Then maxAllowed = 130
+            Dim finalWidth As Integer = Math.Min(desired, maxAllowed)
+
+            If navPanel.Width <> finalWidth Then navPanel.Width = finalWidth
+            Dim listLeft As Integer = navPanel.Left + finalWidth + 6
+            If ListaDescargas.Left <> listLeft Then ListaDescargas.Left = listLeft
+            ListaDescargas.Width = Math.Max(50, detailPanel.Left - 6 - listLeft)
+        Catch ex As Exception
+            Log.WriteDebug("ApplyNavRailWidth failed: " & Log.SafeException(ex))
         End Try
     End Sub
 
@@ -1801,37 +2672,21 @@ Public Class Main
 
     Private Sub UpdateDetailPanel()
         Try
-            If detailLabel Is Nothing OrElse detailLabel.IsDisposed Then Return
-            Dim text As String = Language.GetText("Detail_Empty")
-            If ListaDescargas.SelectedObjects IsNot Nothing AndAlso ListaDescargas.SelectedObjects.Count > 0 Then
-                Dim ele As IDescarga = TryCast(ListaDescargas.SelectedObjects(0), IDescarga)
-                If ele IsNot Nothing Then text = BuildDetailText(ele)
+            Dim sel As IDescarga = Nothing
+            If ListaDescargas IsNot Nothing AndAlso ListaDescargas.SelectedObjects IsNot Nothing AndAlso
+               ListaDescargas.SelectedObjects.Count > 0 Then
+                sel = TryCast(ListaDescargas.SelectedObjects(0), IDescarga)
             End If
-            If detailLabel.Text <> text Then detailLabel.Text = text
+
+            If sel Is Nothing Then
+                ShowDetailEmptyState()
+            Else
+                UpdateDetailContent(sel)
+            End If
         Catch ex As Exception
             Log.WriteDebug("UpdateDetailPanel failed: " & Log.SafeException(ex))
         End Try
     End Sub
-
-    Private Function BuildDetailText(ele As IDescarga) As String
-        Dim sb As New System.Text.StringBuilder()
-        sb.AppendLine(Language.GetText("Name") & ": " & ele.DescargaNombre)
-        sb.AppendLine(Language.GetText("Status") & ": " & EstadoDisplayText(ele.DescargaEstado()))
-        Dim tamano As Decimal = ele.DescargaTamanoBytes
-        Dim pct As Decimal = ele.DescargaPorcentaje
-        Dim done As String = "-"
-        If tamano > 0 Then
-            done = PintarTamano(Math.Ceiling(pct * tamano / 100)) & " / " & PintarTamano(tamano)
-        End If
-        sb.AppendLine(Language.GetText("Progress") & ": " & pct.ToString("F2") & "% (" & done & ")")
-        sb.AppendLine(Language.GetText("Speed") & ": " & PintarVelocidadDescarga(ele))
-        sb.AppendLine(Language.GetText("Remaining") & ": " & ele.DescargaTiempoEstimadoDescarga)
-        Dim fic As Fichero = TryCast(ele, Fichero)
-        If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.RutaRelativa) Then
-            sb.AppendLine(Language.GetText("Path") & ": " & fic.RutaRelativa)
-        End If
-        Return sb.ToString().TrimEnd()
-    End Function
 
     ''' <summary>状态本地化文本(ColEstado AspectGetter 的只读镜像,供详情面板复用;改键时两处同步,热路径本身不动)。</summary>
     Private Shared Function EstadoDisplayText(st As Estado) As String
@@ -2232,6 +3087,9 @@ Public Class Main
 
                 SetStatusBar(RAMStr & "MB", ProcesadorStr & "%", EstadoTxt, VelocidadTxt, Config.ConexionesPorFichero & "/" & Config.DescargasSimultaneas)
 
+                ' 左栏任务总览:与状态栏同频(430ms)刷新,数据源一致,不额外起线程。
+                UpdateNavRailOverview()
+
                 UpdateQuotaUI()
 
                 If worker.CancellationPending Then Exit While
@@ -2496,8 +3354,15 @@ Public Class Main
             Try
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each Fichero As Fichero In paq.ListaFicheros
+                        ' B2-⑩:关闭必须等瞬态(此前只等 Descargando/Pausado,CreandoLocal/
+                        ' Verificando/解压/MD5 回补中的任务会被撕裂存盘且关后复活)。
+                        ' Pausado 为稳态,照旧等待以保持原有关机语义(有暂停项时走足超时,不在此批改动)。
                         If Fichero.DescargaEstado = Estado.Descargando Or _
-                           Fichero.DescargaEstado = Estado.Pausado Then
+                           Fichero.DescargaEstado = Estado.Pausado Or _
+                           Fichero.DescargaEstado = Estado.CreandoLocal Or _
+                           Fichero.DescargaEstado = Estado.Verificando Or _
+                           Fichero.DescargaEstado = Estado.Descomprimiendo Or _
+                           Fichero.DescargaEstado = Estado.ComprobandoMD5 Then
                             TodosFinalizados = False
                         End If
                     Next
@@ -3056,6 +3921,19 @@ Public Class Main
         ElseIf String.IsNullOrEmpty(Config.RutaDefecto) OrElse Not System.IO.Directory.Exists(Config.RutaDefecto) Then
             Return Language.GetText("Can not add remote links without a default path")
         Else
+            ' B1-①:Web 推送与手动加链走同链路——先经 URLProcessor 展开文件夹/ELC
+            ' (此前逐 URL 直建 Fichero,文件夹链变成单个 FileID=根ID 的坏任务,API 报 ENOENT 永久错误);
+            ' pckname 强净化(此前字符串拼接 .RutaLocal & "\" & .Nombre,已认证任意目录创建+下载落盘越狱)。
+            Dim expanded As Generic.List(Of URLProcessor.FileURL) = Nothing
+            Try
+                expanded = URLProcessor.ProcessURLs(URLs, Config)
+            Catch ex As Exception
+                Log.WriteError("ControlRemotoAgregarLinks: failed to resolve links: " & Log.SafeException(ex))
+                Return ex.Message
+            End Try
+            If expanded Is Nothing OrElse expanded.Count = 0 Then
+                Return Language.GetText("No valid URLs have been inserted")
+            End If
             Dim oPaquete As New Paquete
             With oPaquete
                 .Nombre = NombrePaquete
@@ -3067,21 +3945,47 @@ Public Class Main
 
                 ' Creamos el directorio
                 If .CrearSubdirectorio Then
-                    .RutaLocal = .RutaLocal.Trim("\"c) & "\" & .Nombre
+                    Dim packageSegment As String = PathGuard.SanitizeFileName(.Nombre, Language.GetText("New package"))
+                    Try
+                        .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
+                    Catch ex As Exception
+                        Log.WriteError("ControlRemotoAgregarLinks: invalid package name: " & Log.SafeException(ex))
+                        Return Language.GetText("Invalid package name")
+                    End Try
                     System.IO.Directory.CreateDirectory(.RutaLocal)
                 End If
 
                 Log.WriteWarning("Adding package in " & .RutaLocal)
 
                 .SetDescargaExtraccionAutomatica(Nothing) = Config.ExtraerAutomaticamente
-                For Each URL As String In URLs
+                For Each FileURL As URLProcessor.FileURL In expanded
 
-                    Dim oFichero As New Fichero(URL)
+                    Dim ruta As String = .RutaLocal
+                    If Not String.IsNullOrEmpty(FileURL.Path) Then
+                        Try
+                            ruta = PathGuard.GetSafePathUnderRoot(.RutaLocal, FileURL.Path, allowRoot:=True)
+                        Catch ex As Exception
+                            Log.WriteError("ControlRemotoAgregarLinks: invalid subfolder path, using package root: " & Log.SafeException(ex))
+                            ruta = .RutaLocal
+                        End Try
+                        System.IO.Directory.CreateDirectory(ruta)
+                    End If
+
+                    Dim URLFile As String = FileURL.URL
+                    Dim Visible As Boolean = True
+                    If Not String.IsNullOrEmpty(URLFile) AndAlso URLFile.Contains(Fichero.HIDDEN_LINK) Then
+                        Visible = False
+                        URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
+                    End If
+
+                    Dim oFichero As New Fichero(URLFile)
                     With oFichero
-                        .RutaLocal = oPaquete.RutaLocal
-                        .NombreFichero = URL
-                        .FileID = Fichero.ExtraerFileID(URL)
-                        .FileKey = Fichero.ExtraerFileKey(URL)
+                        .LinkVisible = Visible
+                        .RutaLocal = ruta
+                        .RutaRelativa = If(FileURL.Path, String.Empty)
+                        .NombreFichero = If(Visible, URLFile, Fichero.HIDDEN_LINK_DESC)
+                        .FileID = Fichero.ExtraerFileID(URLFile)
+                        .FileKey = Fichero.ExtraerFileKey(URLFile)
                         .SetDescargaExtraccionAutomatica(Nothing) = Config.ExtraerAutomaticamente
                         Log.WriteWarning("Adding files to package: " & .FileID)
                     End With
@@ -3314,7 +4218,34 @@ Public Class Main
     End Sub
 
 
+    ''' <summary>
+    ''' P2(审查):空态 hint 承诺"拖入链接",但此前只收 FileDrop(.dlc/.elc),
+    ''' 浏览器拖过来的链接文本被静默丢弃;且侧栏子控件 AllowDrop=False 会吞事件。
+    ''' 此处补文本分支(复用 ComprobarYAgregarLinks,与剪贴板同一入口),
+    ''' 子面板由 EnableLinkDrop 递归打开并转发到这两个处理器(文件逻辑不动)。
+    ''' </summary>
+    Private Sub EnableLinkDrop(target As Control)
+        If target Is Nothing OrElse target.IsDisposed Then Return
+        Try
+            target.AllowDrop = True
+            RemoveHandler target.DragEnter, AddressOf Main_DragEnter
+            RemoveHandler target.DragDrop, AddressOf Main_DragDrop
+            AddHandler target.DragEnter, AddressOf Main_DragEnter
+            AddHandler target.DragDrop, AddressOf Main_DragDrop
+            For Each c As Control In target.Controls
+                EnableLinkDrop(c)
+            Next
+        Catch
+        End Try
+    End Sub
+
     Private Sub Main_DragDrop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragDrop
+        Dim dropText As String = TryCast(e.Data.GetData(DataFormats.UnicodeText), String)
+        If String.IsNullOrEmpty(dropText) Then dropText = TryCast(e.Data.GetData(DataFormats.Text), String)
+        If Not String.IsNullOrEmpty(dropText) Then
+            ComprobarYAgregarLinks(dropText, True, False)
+            Return
+        End If
         If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
             ' File drag & drop
 
@@ -3341,6 +4272,10 @@ Public Class Main
     End Sub
 
     Private Sub Main_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragEnter
+        If e.Data.GetDataPresent(DataFormats.UnicodeText) OrElse e.Data.GetDataPresent(DataFormats.Text) Then
+            e.Effect = DragDropEffects.Copy
+            Return
+        End If
         If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
             ' File drag & drop
             Dim ficheros() As String = CType(e.Data.GetData(DataFormats.FileDrop), String())
@@ -3632,6 +4567,20 @@ Public Class Main
         End If
     End Sub
 
+    ''' <summary>左栏快捷入口:直接复用既有菜单命令的事件处理器,不复制业务逻辑,
+    ''' 保证侧栏与菜单两条路径行为完全一致(避免逻辑分叉)。</summary>
+    Private Sub navQuickExtractButton_Click(sender As Object, e As EventArgs) Handles navQuickExtractButton.Click
+        VerDescompresor_Click(sender, e)
+    End Sub
+
+    Private Sub navQuickLibraryButton_Click(sender As Object, e As EventArgs) Handles navQuickLibraryButton.Click
+        SeeLibraryManager_Click(sender, e)
+    End Sub
+
+    Private Sub navQuickLogsButton_Click(sender As Object, e As EventArgs) Handles navQuickLogsButton.Click
+        VerLogs_Click(sender, e)
+    End Sub
+
     Private Sub VerLogs_Click(sender As System.Object, e As System.EventArgs)
         Dim PathLog As String = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader")
 
@@ -3699,7 +4648,12 @@ Public Class Main
 
     Private Sub btnUpdate_Click(sender As System.Object, e As System.EventArgs) Handles btnUpdate.Click
         If String.IsNullOrEmpty(Me.UrlNuevaVersionMegadownloader) Then Exit Sub
-        If Not Me.UrlNuevaVersionMegadownloader.StartsWith("http") Then Exit Sub
+        ' B3:更新 URL 只允许 https。version.xml 若被投毒/中间人替换,http 明文链接
+        ' 会把用户送到钓鱼站;Process.Start 直接打开,必須掐掉降级。
+        If Not Me.UrlNuevaVersionMegadownloader.StartsWith("https", StringComparison.OrdinalIgnoreCase) Then
+            Log.WriteError("Update URL rejected (not https): " & Log.Redact(Me.UrlNuevaVersionMegadownloader))
+            Exit Sub
+        End If
         Dim Key As String = Fichero.ExtraerFileKey(UrlNuevaVersionMegadownloader)
         If String.IsNullOrEmpty(Key) AndAlso URLExtractor.EsUrlAcortador(UrlNuevaVersionMegadownloader) Then
             Dim url As String = Conexion.ObtenerUrlDesdeAcortador(UrlNuevaVersionMegadownloader)

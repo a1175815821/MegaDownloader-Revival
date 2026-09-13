@@ -436,6 +436,14 @@
     <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
     <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
     <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
+    <!-- 单文件版生命线：主 exe 通过 ApplicationEvents.LoadDLLFromStream 从内嵌资源按需加载 DLL。
+         v2.2 构建工具链新增的 5 个 System.*.dll 当时只加了引用没加内嵌，裸 exe 在新目录启动即崩。
+         此后新增任何 CopyLocal 引用，必须同步在此内嵌，否则单文件版回归“双击没反应”。 -->
+    <EmbeddedResource Include="Resources\DLLs\System.Buffers.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Memory.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Numerics.Vectors.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Resources.Extensions.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Runtime.CompilerServices.Unsafe.dll" />
     <EmbeddedResource Include="Resources\Binaries\7zr.exe">
       <LogicalName>MegaDownloader.7zr.exe</LogicalName>
     </EmbeddedResource>

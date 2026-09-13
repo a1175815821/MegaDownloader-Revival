@@ -285,6 +285,11 @@ Public Class Fichero
 				Me.SetDescargaEstado = Estado.Verificando
 				
 				Dim Info As Conexion.InformacionFichero = Conexion.ObtenerInformacionFichero(Config, Me.FileID, Me.FileKey, ComprobacionAntesDescarga)
+				' B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
+				' 同锁互斥,否则关机存盘会读到半新半旧的撕裂对象(新 Key+旧 Size+旧分片表)。
+				' 网络 IO 已在锁外完成,此处仅内存赋值,持锁极短无性能影响。
+				Mutex.FicheroDownloader.WaitOne()
+				Try
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
 					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
@@ -309,6 +314,9 @@ Public Class Fichero
 							" * Internal info: " & Info.Errtxt)
 					End If
 				End If
+				Finally
+					Mutex.FicheroDownloader.ReleaseMutex()
+				End Try
 			Finally
 				_Actualizando = False
 			End Try
@@ -383,6 +391,10 @@ Public Class Fichero
 	' Usamos un worker para iniciar la descarga en segundo plano, ya que es necesario llamar a ActualizarInformacionFichero pero esta función
 	' puede tardar mucho y así no bloqueamos el UI
 	Private WithEvents bgArranque As DownloadWorker
+	' B1-④:验证阶段取消标志。bgArranque.WorkerSupportsCancellation=False,Stop/Dispose
+	' 拦不住 threadpool 上的验证;无此标志时 Stop 后 DoWork 照样 New FileDownloader+Start() 复活。
+	' Boolean 读写原子,Stop 还有 5s 轮询,可见性足够,无需加锁。
+	Private _StartupCancelled As Boolean = False
 	Private Sub bgArranque_DoWork(sender As Object, e As System.ComponentModel.DoWorkEventArgs) Handles bgArranque.DoWork
 		Try
 			
@@ -396,7 +408,14 @@ Public Class Fichero
 				' La función ActualizarInformacionFichero ya ha actualizado el estado de la descarga, no hacemos nada
 				Exit Sub
 			End If
-			
+
+			' B1-④:验证耗时(60s API 超时/大文件夹解密)期间用户已 Stop/关闭:直接退出,
+			' 不得再建下载器(此前必复活)。
+			If Me._StartupCancelled Then
+				Log.WriteWarning("Startup cancelled during file info verification, not starting downloader for " & Me.FileID)
+				Exit Sub
+			End If
+
 			Me.NumErroresChunk = 0
 			Me.Downloader = New FileDownloader(True)
 			
@@ -422,7 +441,18 @@ Public Class Fichero
 			Me.Downloader.PartsPerFile = worker.Config.ConexionesPorFichero
 			Me.Downloader.NumConnections = If(worker.Config.ConexionesPorFichero < worker.NumConexionesDisponibles, worker.Config.ConexionesPorFichero, worker.NumConexionesDisponibles)
 			Me.Downloader.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes)
-			
+
+			' B1-④:装配完成到 Start 之间的取消窗口同样要拦,否则建完即启动,前功尽弃。
+			If Me._StartupCancelled Then
+				Log.WriteWarning("Startup cancelled just before downloader start, disposing it for " & Me.FileID)
+				Try
+					Me.Downloader.Dispose()
+				Catch ex As Exception
+					Log.WriteError("Error disposing cancelled startup downloader: " & Log.SafeException(ex))
+				End Try
+				Me.Downloader = Nothing
+				Exit Sub
+			End If
 			If Me.Downloader.CanStart Then
 				Me.Downloader.Start()
 			End If
@@ -449,10 +479,11 @@ Public Class Fichero
 	
 	Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
 		If Estado.Erroneo = Me.DescargaEstado Then Exit Sub
-		
+
 		If Me.Downloader Is Nothing And bgArranque Is Nothing Then
 			Me.EstadoDescarga = Estado.CreandoLocal
 			Me.DescargaComenzada = True
+			Me._StartupCancelled = False
 			bgArranque = New DownloadWorker(Config, NumConexionesDisponibles)
 			bgArranque.WorkerSupportsCancellation = False
 			bgArranque.WorkerReportsProgress = False
@@ -478,6 +509,8 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub [Stop]()
+		' B1-④:先置验证取消标志,再等。bgArranque 不可 CancelAsync,只能靠标志自停。
+		Me._StartupCancelled = True
 		Dim CiclosMax As Integer = 100 ' 100*50 = 5 segundos
 		Dim Ciclos As Integer = 0
 		While Me._Actualizando And Ciclos < CiclosMax
@@ -681,6 +714,10 @@ Public Class Fichero
 	
 	
 	Public Sub ActualizarDatosDescarga()
+		' B2-⑥:100% 回补的完整流程(MD5 全文件读+解压入队)不得在 FicheroDownloader/
+		' ListaDescargas 锁内同步执行,否则 GB 级文件撞线时冻结 UI/调度数秒~数分钟。
+		' 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
+		Dim needDeferredCompletion As Boolean = False
 		Mutex.FicheroDownloader.WaitOne()
 		Try
 			If Me.Downloader IsNot Nothing Then
@@ -711,6 +748,7 @@ Public Class Fichero
 				' NOTE: we must run the full completion flow (MD5 verification + automatic
 				' extraction), not just flip the state — otherwise the UI shows "complete"
 				' while integrity is never checked and auto-extract never fires.
+				' B2-⑥:不得在此(双全局锁内)同步跑 MD5,只做预定并延迟到线程池执行。
 				If Me.EstadoDescarga = Estado.Descargando AndAlso
 				   Me.TamanoBytes > 0 AndAlso
 				   Me.BytesDescargados >= Me.TamanoBytes AndAlso
@@ -718,8 +756,9 @@ Public Class Fichero
 				   Me.Downloader.File.DataPartInitialized AndAlso
 				   Me.Downloader.File.GetDataPart.AllFinished AndAlso
 				   Not Me.Downloader.IsBusy Then
-					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Running full completion flow. File: " & Me.FileID)
-					Me.downloader_Completed(Nothing, EventArgs.Empty)
+					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Queueing deferred completion flow. File: " & Me.FileID)
+					Me.EstadoDescarga = Estado.ComprobandoMD5
+					needDeferredCompletion = True
 				End If
 			End If
 			If EstadoDescarga = Estado.Descargando Then
@@ -745,6 +784,26 @@ Public Class Fichero
 			End If
 		Finally
 			Mutex.FicheroDownloader.ReleaseMutex()
+		End Try
+		If needDeferredCompletion Then
+			Try
+				System.Threading.ThreadPool.QueueUserWorkItem(AddressOf RunDeferredCompletion)
+			Catch ex As Exception
+				Log.WriteError("ActualizarDatosDescarga: failed to queue deferred completion: " & Log.SafeException(ex))
+			End Try
+		End If
+	End Sub
+
+	''' <summary>
+	''' B2-⑥:锁外执行的延迟补完流程(对应 ActualizarDatosDescarga 内预定的回补)。
+	''' 在线程池运行,可安全做 MD5 全文件读与解压入队,不阻塞 ListaDescargas 调度与 UI 刷新。
+	''' downloader_Completed 内部自带 Estado 非 Erroneo 守卫,重复投递 harmless(第二次 MD5 命中已 Completado 可接受)。
+	''' </summary>
+	Private Sub RunDeferredCompletion(ByVal state As Object)
+		Try
+			Me.downloader_Completed(Nothing, EventArgs.Empty)
+		Catch ex As Exception
+			Log.WriteError("RunDeferredCompletion failed: " & Log.SafeException(ex))
 		End Try
 	End Sub
 	
@@ -829,6 +888,8 @@ Public Class Fichero
 	' IDisposable
 	Protected Overridable Sub Dispose(disposing As Boolean)
 		If Not Me.disposedValue Then
+			' B1-④:释放即取消验证,防关机后复活。
+			Me._StartupCancelled = True
 			If disposing Then
 				Try
 					If Me.Downloader IsNot Nothing Then
@@ -991,6 +1052,10 @@ Public Class Fichero
 
 
     Public Function GuardarXML(ByVal XML As XmlDocument, IncluirDatosCifrados As Boolean) As XmlNode
+        ' B2-⑩:序列化与 ActualizarInformacionFichero 回写同锁,防关机撕裂(半新半旧队列)。
+        ' 锁序与 ActualizarDatosDescarga 一致(ListaDescargas->FicheroDownloader),无反转死锁。
+        Mutex.FicheroDownloader.WaitOne()
+        Try
         Dim NodoFic As XmlNode = XML.CreateElement("Fichero")
         NodoFic.Attributes.Append(XML.CreateAttribute("v")).Value = Me.Version.ToString
 
@@ -1057,6 +1122,9 @@ Public Class Fichero
         End If
 
         Return NodoFic
+        Finally
+            Mutex.FicheroDownloader.ReleaseMutex()
+        End Try
 
     End Function
 	

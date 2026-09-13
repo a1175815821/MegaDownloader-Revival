@@ -124,18 +124,23 @@ Partial Class Main
         Me.navPanel.Controls.Add(Me.navListBox)
         Me.navPanel.Location = New System.Drawing.Point(12, 46)
         Me.navPanel.Name = "navPanel"
-        Me.navPanel.Size = New System.Drawing.Size(130, 429)
+        Me.navPanel.Size = New System.Drawing.Size(168, 429)
         Me.navPanel.TabIndex = 8
         '
         'navListBox
         '
-        Me.navListBox.Dock = System.Windows.Forms.DockStyle.Fill
+        ' 不再 Dock=Fill:下方留给任务总览与快捷入口(见 InitNavRail/LayoutNavRail),
+        ' 高度由 LayoutNavRail 按 ItemHeight×5 算死,Anchor 只保留 Top|Left|Right。
+        Me.navListBox.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
+            Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.navListBox.FormattingEnabled = True
+        Me.navListBox.HorizontalScrollbar = False
+        Me.navListBox.IntegralHeight = False
         Me.navListBox.ItemHeight = 20
         Me.navListBox.Location = New System.Drawing.Point(0, 0)
         Me.navListBox.Name = "navListBox"
         Me.navListBox.SelectionMode = System.Windows.Forms.SelectionMode.One
-        Me.navListBox.Size = New System.Drawing.Size(130, 429)
+        Me.navListBox.Size = New System.Drawing.Size(168, 130)
         Me.navListBox.TabIndex = 0
         '
         'detailPanel
@@ -161,11 +166,13 @@ Partial Class Main
         '
         'detailLabel
         '
+        ' 空态文案载体:无选中时显示引导文字(Detail_Empty + Detail_EmptyHint);
+        ' 有选中时隐藏,交给运行时构建的结构化详情面板(detailContentPanel)。
         Me.detailLabel.AutoSize = False
         Me.detailLabel.Dock = System.Windows.Forms.DockStyle.Fill
         Me.detailLabel.Location = New System.Drawing.Point(3, 16)
         Me.detailLabel.Name = "detailLabel"
-        Me.detailLabel.Padding = New System.Windows.Forms.Padding(4)
+        Me.detailLabel.Padding = New System.Windows.Forms.Padding(8)
         Me.detailLabel.Size = New System.Drawing.Size(174, 410)
         Me.detailLabel.TabIndex = 0
         Me.detailLabel.UseMnemonic = False
