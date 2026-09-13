@@ -1,0 +1,167 @@
+name: Docs i18n
+
+# =============================================================
+# 文档多语言自动翻译
+# =============================================================
+# 维护模型:
+#   1. 你只改中文源文件(docs/*.zh-CN.md) —— 它同时就是简体中文成品
+#   2. 推到 main 后，本工作流自动把它们翻译成英文 + 各目标语言
+#   3. 产物自动 commit 回仓库 --- 英文进 README.md / docs/*.md，
+#      其他语言进 README.<lang>.md / docs/*.<lang>.md
+#   4. zh-CN 不生成产物：源文件本身就是简体中文版
+#
+# 触发条件:
+#   - 中文源文件变更后推送到 main
+#   - workflow_dispatch 手动触发(可指定只翻某个文档/语言)
+#
+# 需要配置的 Secret(必须):
+#   TRANSLATE_API_KEY   —— LLM 服务商的 API Key
+# 可选的 Repository Variables:
+#   TRANSLATE_API_BASE  —— 默认 https://api.deepseek.com/v1
+#   TRANSLATE_MODEL     —— 默认 deepseek-chat
+#
+# 如果想换服务商(OpenAI / 通义 / 智谱 / 自建网关)，只改上面两个变量即可，
+# 只要对方兼容 OpenAI 的 /chat/completions 接口格式。
+# =============================================================
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'docs/README.zh-CN.md'
+      - 'docs/CHANGELOG.zh-CN.md'
+      - 'docs/CONTRIBUTING.zh-CN.md'
+      - 'i18n/**'
+      - '.github/workflows/i18n.yml'
+  workflow_dispatch:
+    inputs:
+      doc:
+        description: '只翻译指定文档 id (readme / changelog / contributing)，留空=全部'
+        required: false
+        default: ''
+      lang:
+        description: '只翻译指定语言 (zh-TW / ja-JP / ko-KR)，留空=全部'
+        required: false
+        default: ''
+
+# 同一分支上的翻译任务串行，避免两次提交互相覆盖产物
+concurrency:
+  group: docs-i18n-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write    # 需要写权限才能把翻译产物 commit 回仓库
+
+jobs:
+  translate:
+    name: Translate docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --quiet pyyaml
+
+      # 没有配 Key 时给出明确提示而不是让 job 报"fail" —— 首次接入时很常见
+      - name: Check API key
+        id: key
+        run: |
+          if [ -z "${{ secrets.TRANSLATE_API_KEY }}" ]; then
+            echo "::warning::未配置 TRANSLATE_API_KEY，跳过自动翻译。"
+            echo "::warning::请在仓库 Settings → Secrets and variables → Actions 中添加名为 TRANSLATE_API_KEY 的 Secret。"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Translate
+        if: steps.key.outputs.configured == 'true'
+        env:
+          TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE || 'https://api.deepseek.com/v1' }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL || 'deepseek-chat' }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.doc }}" ]; then
+            ARGS="$ARGS --doc ${{ github.event.inputs.doc }}"
+          fi
+          if [ -n "${{ github.event.inputs.lang }}" ]; then
+            ARGS="$ARGS --lang ${{ github.event.inputs.lang }}"
+          fi
+          python i18n/translate.py $ARGS
+
+      # 提交前先看一眼改了哪些文件，方便在 Actions 日志里核对
+      - name: Show changes
+        if: steps.key.outputs.configured == 'true'
+        run: |
+          git status --short
+          echo "---"
+          git diff --stat
+
+      - name: Commit and push
+        if: steps.key.outputs.configured == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+           # 白名单提交：只收 12 个翻译产物 + 3 个中文源（CI 只改源里的语言导航条）
+           # + 翻译缓存。绝不用 docs/*.md 这类通配，否则内部笔记等无关文件会被 bot
+           # 自动推进 main。文件可能尚不存在（9 个产物待首次回填），只加已存在的，
+           # 否则 git add 会因 pathspec 落空而报错（run 步骤默认 bash -e）。
+           for f in README.md README.zh-TW.md README.ja-JP.md README.ko-KR.md \
+                    docs/CHANGELOG.md docs/CHANGELOG.zh-CN.md \
+                    docs/CHANGELOG.zh-TW.md docs/CHANGELOG.ja-JP.md docs/CHANGELOG.ko-KR.md \
+                    docs/CONTRIBUTING.md docs/CONTRIBUTING.zh-CN.md \
+                    docs/CONTRIBUTING.zh-TW.md docs/CONTRIBUTING.ja-JP.md docs/CONTRIBUTING.ko-KR.md \
+                    docs/README.zh-CN.md; do
+             if [ -e "$f" ]; then git add -- "$f"; fi
+           done
+           if [ -d i18n/.cache ]; then git add -- 'i18n/.cache/*.json' 2>/dev/null || true; fi
+
+          if git diff --cached --quiet; then
+            echo "没有需要提交的改动。"
+            exit 0
+          fi
+
+          git commit -m "docs(i18n): auto-translate from Chinese source [skip ci]"
+          git push
+
+      # 产物缺失守卫：所有该生成的文件都必须存在，否则让 job 失败
+      # 注意：这里不含 zh-CN —— 简体中文的成品是 docs/*.zh-CN.md 源文件本身，
+      # CI 不生成它，所以它不在「产物」清单里。
+      - name: Verify outputs exist
+        if: steps.key.outputs.configured == 'true'
+        run: |
+          missing=0
+          for f in README.md README.zh-TW.md README.ja-JP.md README.ko-KR.md \
+                   docs/CHANGELOG.md docs/CHANGELOG.zh-TW.md \
+                   docs/CHANGELOG.ja-JP.md docs/CHANGELOG.ko-KR.md \
+                   docs/CONTRIBUTING.md docs/CONTRIBUTING.zh-TW.md \
+                   docs/CONTRIBUTING.ja-JP.md docs/CONTRIBUTING.ko-KR.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::缺少产物: $f"
+              missing=1
+            fi
+          done
+          if [ "$missing" = "1" ]; then exit 1; fi
+          echo "全部产物齐备。"
+
+      # 源文件守卫：中文源必须存在（它是权威源，丢了整个体系就断了）
+      - name: Verify Chinese sources exist
+        run: |
+          missing=0
+          for f in docs/README.zh-CN.md docs/CHANGELOG.zh-CN.md docs/CONTRIBUTING.zh-CN.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::缺少中文源文件: $f"
+              missing=1
+            fi
+          done
+          if [ "$missing" = "1" ]; then exit 1; fi
+          echo "中文源齐备。"
