@@ -84,7 +84,7 @@ MegaDownloader/
 ├── MegaDownloader.vbproj           # VS 工程
 ├── app.config                      # .NET 執行階段組態
 ├── ApplicationEvents.vb            # 應用層級事件處理
-├── README.md                       # 文件首頁索引（正文在 docs/）
+├── README.md                       # 專案說明
 ├── LICENSE                         # MIT 授權條款
 └── .gitignore                      # Git 忽略規則
 ```

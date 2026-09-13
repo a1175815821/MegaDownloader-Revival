@@ -84,7 +84,7 @@ MegaDownloader/
 ├── MegaDownloader.vbproj           # VS 프로젝트
 ├── app.config                      # .NET 런타임 구성
 ├── ApplicationEvents.vb            # 응용 프로그램 수준 이벤트 처리
-├── README.md                       # 문서 색인(본문은 docs/에 있음)
+├── README.md                       # 프로젝트 설명
 ├── LICENSE                         # MIT 라이선스
 └── .gitignore                      # Git 무시 규칙
 ```

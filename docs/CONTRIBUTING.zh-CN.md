@@ -84,7 +84,7 @@ MegaDownloader/
 ├── MegaDownloader.vbproj           # VS 工程
 ├── app.config                      # .NET 运行时配置
 ├── ApplicationEvents.vb            # 应用级事件处理
-├── README.md                       # 文档首页索引（正文在 docs/）
+├── README.md                       # 项目说明
 ├── LICENSE                         # MIT 许可证
 └── .gitignore                      # Git 忽略规则
 ```

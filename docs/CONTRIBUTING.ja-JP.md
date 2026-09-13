@@ -84,7 +84,7 @@ MegaDownloader/
 ├── MegaDownloader.vbproj           # VS プロジェクト
 ├── app.config                      # .NET ランタイム構成
 ├── ApplicationEvents.vb            # アプリケーションレベルのイベント処理
-├── README.md                       # ドキュメント索引（本文は docs/ にあります）
+├── README.md                       # プロジェクト説明
 ├── LICENSE                         # MIT ライセンス
 └── .gitignore                      # Git 無視ルール
 ```

@@ -84,7 +84,7 @@ MegaDownloader/
 ├── MegaDownloader.vbproj           # VS project
 ├── app.config                      # .NET runtime configuration
 ├── ApplicationEvents.vb            # Application-level event handling
-├── README.md                       # Docs index (full readme lives in docs/)
+├── README.md                       # Project readme
 ├── LICENSE                         # MIT license
 └── .gitignore                      # Git ignore rules
 ```
