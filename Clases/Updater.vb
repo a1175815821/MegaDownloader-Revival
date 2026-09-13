@@ -16,6 +16,9 @@ Public Class Updater
         If Resultado.Excepcion Is Nothing Then
             Dim XML As New XmlDocument
             Try
+                ' B3:远端 XML 禁外部实体解析。version.xml 来自网络,默认 XmlResolver
+                ' 会跟随 DOCTYPE 外部实体(file/http),仓库沦陷/MITM 时即 XXE。
+                XML.XmlResolver = Nothing
                 XML.LoadXml(Resultado.Mensaje)
             Catch ex As Exception
                 Log.WriteError("Error loading the version check XML: " & ex.ToString)

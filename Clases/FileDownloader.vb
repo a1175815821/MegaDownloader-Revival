@@ -447,6 +447,25 @@ Public Class FileDownloader
     Private m_localDirectory As String
     Private m_file As FileInfo
     Private m_totalSize As Int64
+
+    ''' <summary>v2.5 beta: 配额异常归一上报。返回 True 表示已按配额处理(调用方不再普通重试)。</summary>
+    Friend Shared Function ReportQuotaIfMatch(ex As Exception) As Boolean
+        If TypeOf ex Is MegaQuotaExceededException Then
+            MegaQuotaManager.ReportQuota()
+            Return True
+        End If
+        Dim wex As System.Net.WebException = TryCast(ex, System.Net.WebException)
+        If wex IsNot Nothing AndAlso MegaQuotaManager.IsQuotaWebException(wex) Then
+            Dim hint As Long? = MegaQuotaManager.TryGetRetryAfterSeconds(wex)
+            MegaQuotaManager.ReportQuota(If(hint.HasValue, hint.Value, 0))
+            Return True
+        End If
+        If ex IsNot Nothing AndAlso Conexion.IsQuotaErrorText(ex.Message) Then
+            MegaQuotaManager.ReportQuota()
+            Return True
+        End If
+        Return False
+    End Function
 #End Region
 
 #Region "Constructors"
@@ -645,8 +664,10 @@ Public Class FileDownloader
                     m_currentFileSize = TotalSize
                     Log.WriteInfo("File size " & file.Name & ": " & TotalSize)
                 Catch ex As WebException
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 Catch ex As Exception
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 End Try
             End If
@@ -677,6 +698,45 @@ Public Class FileDownloader
                 Log.WriteError("Error preparing download " & file.Name & " - " & Log.SafeException(exc))
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
                 exc = Nothing
+                Exit Try
+            End If
+
+            ' B1-③:0 字节空文件短路。探活后仍为 0 即 MEGA 占位空文件:不建 DataPart
+            ' (FileInfo.Size=0 时 GetDataPart 抛 "Must specify size")、不开连接,
+            ' 直接落 0 字节文件、验 MetaMAC(空文件期望 (0,0))、走正常重命名与成功事件。
+            ' 此前必经 GetDataPart 抛错 + 自愈每 15 分钟空转,永不成功。
+            If file.Size = 0 AndAlso Not bgwDownloader.CancellationPending Then
+                Try
+                    Log.WriteInfo("Finalizing empty (0-byte) file " & file.Name)
+                    Me.MutexFile.WaitOne()
+                    Try
+                        Using fs As New System.IO.FileStream(FicheroPART, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None)
+                        End Using
+                    Finally
+                        Me.MutexFile.ReleaseMutex()
+                    End Try
+                    Dim keyForEmpty As String = file.FileKey
+                    If Not String.IsNullOrEmpty(keyForEmpty) AndAlso keyForEmpty.Contains("=###n=") Then
+                        keyForEmpty = keyForEmpty.Substring(0, keyForEmpty.IndexOf("=###n="))
+                    End If
+                    If String.IsNullOrEmpty(keyForEmpty) Then
+                        Throw New ApplicationException("FileKey not defined")
+                    End If
+                    If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForEmpty) Then
+                        Throw New ApplicationException("MEGA MetaMAC verification failed for empty file " & file.Name & ".")
+                    End If
+                    Me.MutexFile.WaitOne()
+                    Try
+                        RenamePartToReal(FicheroPART, FicheroReal)
+                    Finally
+                        Me.MutexFile.ReleaseMutex()
+                    End Try
+                    Log.WriteWarning("File downloaded successfully")
+                    fireEventFromBgw([Event].FileDownloadSucceeded)
+                Catch emptyEx As Exception
+                    Log.WriteError("Error finalizing empty file " & file.Name & " - " & Log.SafeException(emptyEx))
+                    bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, emptyEx)
+                End Try
                 Exit Try
             End If
 
@@ -791,14 +851,10 @@ Public Class FileDownloader
                     End If
                 Loop
 
-                ' Report the timeout as a download failure (e.g. persistent 403 from an
-                ' expired URL). Chunk state is intentionally preserved for resumption.
-                If timedOut AndAlso Not bgwDownloader.CancellationPending Then
-                    bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
-                        New ApplicationException("Download timed out: chunks did not finish within 120 seconds (the MEGA URL may have expired). Please retry to resume."))
-                End If
-
-                ' Wait until chunk workers finish before rename
+                ' Wait until chunk workers finish before rename/timeout decision.
+                ' B2:看门狗失败判定必须在排空后做——超时瞬间与撞线完成竞态时,
+                ' 若已 AllFinished 则走正常重命名/MetaMAC 流程,不得再报 FileDownloadFailed
+                ' (否则成功与失败双事件竞态,失败先到会把完好文件钉成 Erroneo)。
                 Dim waitUntil As Date = Now.AddSeconds(30)
                 While Now < waitUntil
                     Me.Mutex.WaitOne()
@@ -811,6 +867,22 @@ Public Class FileDownloader
                     If Not busy Then Exit While
                     System.Threading.Thread.Sleep(50)
                 End While
+
+                ' Report the timeout as a download failure. Chunk state is intentionally
+                ' preserved for resumption. RC:配额熔断期内超时必须报配额异常(否则 FailedByQuota=False,
+                ' 立即重试捞不回);非配额超时文案去“过期”误导,明确 120s 是总时长上限。
+                ' B2:排空后已 AllFinished 则不报(交由下述重命名流程成功)。
+                If timedOut AndAlso Not bgwDownloader.CancellationPending AndAlso Not file.GetDataPart.AllFinished Then
+                    If MegaQuotaManager.IsQuarantined() Then
+                        bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
+                            New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509). Download paused during quota quarantine; use Retry now after changing IP/proxy or wait for auto-resume. Progress preserved."))
+                    Else
+                        bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
+                            New ApplicationException("Download did not finish within the 120-second total watchdog (total window, not idle; quota pause can also trigger this - check the quota banner). Progress preserved, retry resumes from the .part file."))
+                    End If
+                ElseIf timedOut AndAlso file.GetDataPart.AllFinished Then
+                    Log.WriteWarning("Download watchdog timed out but all chunks finished during drain for " & file.Name & "; proceeding to finalize instead of failing.")
+                End If
             End If
         Catch ex As Exception
             exc = ex
@@ -861,47 +933,7 @@ Public Class FileDownloader
 
                 Me.MutexFile.WaitOne()
                 Try
-                    If System.IO.File.Exists(FicheroPART) Then
-
-                        If Not System.IO.File.Exists(FicheroReal) Then
-                            Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal)
-                            FileSystem.Rename(FicheroPART, FicheroReal)
-                        Else
-
-                            ' File exists, create someone like "file (2).txt"
-
-                            Dim extension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(FicheroReal.LastIndexOf("."c) + 1), "")
-                            Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
-
-                            Dim i As Integer = 1
-                            Dim renamed As Boolean = False
-                            Do
-                                i += 1
-                                Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
-                                If Not System.IO.File.Exists(FicheroReal2) Then
-                                    Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
-                                    FileSystem.Rename(FicheroPART, FicheroReal2)
-                                    renamed = True
-                                    Exit Do
-                                End If
-
-                                If i > 9999 Then
-                                    Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
-                                    Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
-                                    FileSystem.Rename(FicheroPART, uniqueName)
-                                    renamed = True
-                                    Exit Do
-                                End If
-                            Loop
-                            If Not renamed Then
-                                Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
-                            End If
-
-                        End If
-
-                    End If
+                    RenamePartToReal(FicheroPART, FicheroReal)
                 Finally
                     Me.MutexFile.ReleaseMutex()
                 End Try
@@ -926,6 +958,54 @@ Public Class FileDownloader
                 Log.WriteWarning("Error during cleanup after finalization failure: " & Log.SafeException(cleanupEx))
             End Try
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' B1-③:把 FicheroPART 重命名为成品(含 "file (i)" 冲突消解),供正常终结与空文件短路共用。
+    ''' 调用方必须已持有 Me.MutexFile(与原内联代码的加锁位置一致)。
+    ''' </summary>
+    Private Sub RenamePartToReal(ByVal FicheroPART As String, ByVal FicheroReal As String)
+        If System.IO.File.Exists(FicheroPART) Then
+
+            If Not System.IO.File.Exists(FicheroReal) Then
+                Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal)
+                FileSystem.Rename(FicheroPART, FicheroReal)
+            Else
+
+                ' File exists, create someone like "file (2).txt"
+
+                Dim extension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(FicheroReal.LastIndexOf("."c) + 1), "")
+                Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
+
+                Dim i As Integer = 1
+                Dim renamed As Boolean = False
+                Do
+                    i += 1
+                    Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
+                    If Not System.IO.File.Exists(FicheroReal2) Then
+                        Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
+                        FileSystem.Rename(FicheroPART, FicheroReal2)
+                        renamed = True
+                        Exit Do
+                    End If
+
+                    If i > 9999 Then
+                        Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                        PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
+                        Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
+                        FileSystem.Rename(FicheroPART, uniqueName)
+                        renamed = True
+                        Exit Do
+                    End If
+                Loop
+                If Not renamed Then
+                    Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
+                End If
+
+            End If
+
+        End If
     End Sub
 
     Private Sub bwgDownloader_ProgressChanged(ByVal sender As Object, ByVal e As ProgressChangedEventArgs) Handles bgwDownloader.ProgressChanged
@@ -1082,7 +1162,12 @@ Public Class FileDownloader
 
                     ' Require Partial Content for ranged requests
                     If webResp.StatusCode <> HttpStatusCode.PartialContent AndAlso webResp.StatusCode <> HttpStatusCode.OK Then
-                        exc = New ApplicationException("Unexpected HTTP status for ranged download: " & CInt(webResp.StatusCode).ToString())
+                        If MegaQuotaManager.IsQuotaStatusCode(webResp.StatusCode) Then
+                            MegaQuotaManager.ReportQuota()
+                            exc = New MegaQuotaExceededException("MEGA transfer quota exceeded (HTTP 509) during download.")
+                        Else
+                            exc = New ApplicationException("Unexpected HTTP status for ranged download: " & CInt(webResp.StatusCode).ToString())
+                        End If
                     Else
                         Dim contentRangeHeader As String = webResp.Headers.Item("Content-Range")
                         ' Content-Range: bytes 1769472-2147111/2147112
@@ -1136,8 +1221,10 @@ Public Class FileDownloader
                     End If
 
                 Catch ex As WebException
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 Catch ex As Exception
+                    ReportQuotaIfMatch(ex)
                     exc = ex
                 End Try
 
@@ -1242,8 +1329,10 @@ Public Class FileDownloader
                             Next
 
                         Catch ex As WebException
+                            ReportQuotaIfMatch(ex)
                             exc = ex
                         Catch ex As Exception
+                            ReportQuotaIfMatch(ex)
                             exc = ex
                         End Try
 
@@ -1416,6 +1505,11 @@ Public Class FileDownloader
         If Not HasBeenCanceled Then
 
             If worker.ChunkDownloadFailed Then
+                ' v2.5 beta: 配额期内不再空转重试,等待全局熔断解除后由调度器统一唤醒。
+                If MegaQuotaManager.IsQuarantined() Then
+                    Log.WriteInfo("Chunk failed during MEGA quota quarantine; worker will NOT restart until quota clears.")
+                    Return
+                End If
                 ' Exponential backoff with jitter (cap ~30s).
                 ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
                 ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
@@ -1510,6 +1604,7 @@ Public Class FileDownloader
             If size < 0 Then Throw New ApplicationException("Could not determine remote file size.")
             m_totalSize = size
         Catch ex As Exception
+            ReportQuotaIfMatch(ex)
             Throw New ApplicationException("Connection error: " & ex.Message)
         End Try
 

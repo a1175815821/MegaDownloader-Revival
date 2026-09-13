@@ -16,7 +16,8 @@ Public Class StreamingForm
             txtUrlMEGA.Enabled = False
             txtUrlStreaming.Enabled = False
             lblInfo.Text = Language.GetText("Streaming server not activated")
-            lblInfo.ForeColor = Color.Red
+            ' RC:此前写死纯红,深色下对比与主题脱节,改用主题 ErrorFore。
+            lblInfo.ForeColor = ThemeManager.GetColor("ErrorFore")
         End If
 
 
@@ -104,7 +105,16 @@ Public Class StreamingForm
 
     Private Sub btnLanzarVLC_Click(sender As System.Object, e As System.EventArgs) Handles btnLanzarVLC.Click
 
-        If Not ValidURLMega Then Exit Sub
+        ' RC:ValidURLMega 靠后台 150ms 轮询,粘贴后立即点会误判。先同步算一次再判。
+        Try
+            ActualizarDatos()
+        Catch
+        End Try
+        ' RC:无效链接此前静默 Exit,用户以为按钮死了,给提示。
+        If Not ValidURLMega Then
+            MessageBox.Show(Language.GetText("URL is mandatory"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End If
         If Not StreamingHelper.WatchOnline(Config.VLCPath, txtUrlStreaming.Text) Then
             MessageBox.Show(Language.GetText("VLC could not be started"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
         End If

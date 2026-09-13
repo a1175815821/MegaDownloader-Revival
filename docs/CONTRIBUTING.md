@@ -1,171 +1,285 @@
-# 贡献指南
+# Contributing Guide
 
-首先,感谢你愿意为 MegaDownloader 复活计划贡献代码!本文档将指引你完成贡献流程。
+First of all, thank you for contributing to the MegaDownloader Revival project! This document walks you through the contribution workflow.
 
-## 行为准则
+## Code of conduct
 
-请保持友善、尊重所有参与者。我们欢迎任何与项目目标(让 MegaDownloader 重新可用)相关的贡献,无论是修复 Bug、添加功能、完善翻译还是改进文档。
+Please be friendly and respectful to all participants. We welcome any contribution related to the project's goal (making MegaDownloader usable again) — whether that's fixing bugs, adding features, improving translations, or refining documentation.
 
-## 我能贡献什么?
+## What can I contribute?
 
-| 类型 | 说明 |
+| Type | Description |
 | --- | --- |
-| 🐛 Bug 修复 | 修复链接解析、下载失败、界面错误等问题 |
-| ✨ 新功能 | 支持新的 Crypter、新的链接保护器、新的协议等 |
-| 🌐 翻译 | 在 `Resources/Language/` 中改进现有翻译或新增语言 |
-| 📚 文档 | 改进 README、CHANGELOG、代码注释 |
-| 🎨 UI/UX | 改进 WinForms 界面布局、图标、可用性 |
-| 🔧 重构 | 在不影响功能的前提下提升代码质量 |
+| 🐛 Bug fixes | Fix link parsing, download failures, UI issues, and so on |
+| ✨ New features | Support new crypters, new link protectors, new protocols, etc. |
+| 🌐 Translation | Improve existing translations or add a language in `Resources/Language/` |
+| 📚 Documentation | Improve README, CHANGELOG, and code comments |
+| 🎨 UI/UX | Improve WinForms layout, icons, and usability |
+| 🔧 Refactoring | Raise code quality without changing behaviour |
 
-## 开发环境
+## Development environment
 
 - Visual Studio 2019 / 2022
 - .NET Framework 4.8 SDK
 - Git
 
-## 贡献流程
+## Project structure
 
-### 1. Fork 并克隆仓库
-
-```bash
-# Fork 仓库到自己的 GitHub 账户后:
-git clone https://github.com/<你的用户名>/MegaDownloader.git
-cd MegaDownloader
-git remote add upstream https://github.com/<原始仓库>/MegaDownloader.git
+```
+MegaDownloader/
+├── Clases/                         # Core class library
+│   ├── Cryptography/AES.vb         #   AES encryption
+│   ├── StreamingLibrary/           #   Streaming library management
+│   │   ├── LibraryElement.vb
+│   │   ├── StreamingLibrary.vb
+│   │   └── StreamingLibraryManager.vb
+│   ├── ApplicationInstanceManager.vb
+│   ├── Conexion.vb                 #   HTTP/network communication
+│   ├── Configuracion.vb            #   Configuration management
+│   ├── ConfiguracionUI.vb          #   UI configuration (themes, etc.) ★ new in v2.0
+│   ├── FileDownloader.vb           #   File download core
+│   ├── MegaFolderHelper.vb         #   MEGA folder parsing
+│   ├── MegaURIProtocol.vb          #   mega:// protocol registration
+│   ├── Mutex.vb                    #   Mutex (single-instance process)
+│   ├── Paquete.vb                  #   Download package data
+│   ├── ThrottledStream.vb          #   Rate-limited stream
+│   ├── ThemeManager.vb             #   Theme manager ★ new in v2.0
+│   ├── URLExtractor.vb             #   URL parsing
+│   ├── URLProcessor.vb             #   URL processing
+│   └── Updater.vb                  #   Auto-update
+├── Controls/                       # Custom controls
+│   └── ELCAccountControl.vb
+├── HttpModule/                     # Built-in web server modules
+│   ├── StreamingModule.vb
+│   ├── StreamingLibraryModule.vb
+│   ├── WebInterfaceModule.vb
+│   └── Template/                   #   HTML templates
+├── Stegano/                        # Steganography forms
+│   ├── SteganoManager.vb
+│   ├── SteganoWizardLoad.vb
+│   └── SteganoWizardSave.vb
+├── Resources/
+│   ├── DLLs/                       # Third-party DLL dependencies
+│   ├── Language/                   # Multi-language XML (10 languages)
+│   └── Installer MSD/              # WiX installer project
+├── My Project/                     # VS project metadata
+├── Forms/                          # WinForms forms (12)
+│   ├── Main.vb                     #   Main form
+│   ├── AddLinks.vb                 #   Add-links form
+│   ├── Configuration.vb            #   Settings form (includes theme switching)
+│   ├── StreamingForm.vb            #   Streaming playback form
+│   ├── Credits.vb                  #   About/credits
+│   ├── SplashScreen.vb             #   Splash screen
+│   ├── Cerrando.vb                 #   Closing screen
+│   ├── Descompresor.vb             #   Extraction form
+│   ├── ELCForm.vb                  #   ELC container form
+│   ├── EncodeLinksForm.vb          #   Link encryption form
+│   ├── PantallaMsg.vb              #   Message dialog form
+│   └── PropiedadesDescarga.vb      #   Download properties form
+├── docs/                           # Project documentation
+│   ├── CHANGELOG.md                #   Changelog
+│   └── CONTRIBUTING.md             #   Contributing guide
+├── MegaDownloader.sln              # VS solution
+├── MegaDownloader.vbproj           # VS project
+├── app.config                      # .NET runtime configuration
+├── ApplicationEvents.vb            # Application-level event handling
+├── README.md                       # Project readme
+├── LICENSE                         # MIT license
+└── .gitignore                      # Git ignore rules
 ```
 
-### 2. 创建功能分支
+### Key directories
+
+| Directory | Contents |
+| --- | --- |
+| `Clases/` | Core class library: cryptography (`Cryptography/`), streaming library (`StreamingLibrary/`), HTTP communication (`Conexion.vb`), configuration (`Configuracion.vb`), download core (`FileDownloader.vb`), folder parsing (`MegaFolderHelper.vb`), themes (`ThemeManager.vb`), updating (`Updater.vb`) |
+| `Forms/` | WinForms forms. The main form is `Main.vb`, which holds most of the download-list and theme logic |
+| `HttpModule/` | Built-in web server modules; `Template/` holds the HTML templates |
+| `Stegano/` | Steganography forms and logic |
+| `Resources/Language/` | UI localization XML, one file per language |
+| `Resources/DLLs/` | Third-party dependency DLLs, committed with the repository |
+| `docs/` | This document and the changelog |
+
+## Contribution workflow
+
+### 1. Fork and clone the repository
 
 ```bash
-# 从最新的 main 分支创建
+# After forking the repository to your own GitHub account:
+git clone https://github.com/<your-username>/MegaDownloader-Revival.git
+cd MegaDownloader
+git remote add upstream https://github.com/a1175815821/MegaDownloader-Revival.git
+```
+
+### 2. Create a feature branch
+
+```bash
+# Branch off the latest main
 git checkout main
 git pull upstream main
-git checkout -b feature/你的功能名称
-# 或: fix/bug-描述, docs/文档主题, i18n/语言-改进
+git checkout -b feature/your-feature-name
+# or: fix/bug-description, docs/topic, i18n/language-improvement
 ```
 
-### 3. 开发与本地测试
+### 3. Develop and test locally
 
-- 在 Visual Studio 中打开 `MegaDownloader.sln`
-- 选择 `Debug` 配置构建
-- 运行 `bin/Debug/MegaDownloader.exe`,验证你的修改
+- Open `MegaDownloader.sln` in Visual Studio
+- Build with the `Debug` configuration
+- Run `bin/Debug/MegaDownloader.exe` to verify your changes
 
-**测试用例(请务必覆盖):**
+**Test cases (please cover these):**
 
-- 旧版链接:`https://mega.nz/#!abcDEF!ghijklmnop`
-- 新版链接:`https://mega.nz/file/abcDEF#ghijklmnop`
-- 文件夹链接:`https://mega.nz/folder/abcDEF#ghijklmnop`
-- 加密链接:`mega://enc?...`
-- 剪贴板自动识别
-- 拖拽链接
+- Legacy link: `https://mega.nz/#!abcDEF!ghijklmnop`
+- New link: `https://mega.nz/file/abcDEF#ghijklmnop`
+- Folder link: `https://mega.nz/folder/abcDEF#ghijklmnop`
+- Encrypted link: `mega://enc?...`
+- Clipboard auto-detection
+- Drag & drop of links
 
-### 4. 提交代码
+### 4. Commit your changes
 
-遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/) 规范:
+Follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification:
 
 ```
 <type>(<scope>): <subject>
 
-<body可选>
+<optional body>
 
-<footer可选>
+<optional footer>
 ```
 
-常用类型:
+Common types:
 
-- `feat`: 新功能,如 `feat(url): 支持 mega.nz/embed/ 链接格式`
-- `fix`: Bug 修复,如 `fix(clipboard): 修复剪贴板监听失效问题`
-- `docs`: 文档,如 `docs: 补充 zh-CN 翻译`
-- `refactor`: 重构,如 `refactor(conexion): 简化代理设置逻辑`
-- `i18n`: 翻译,如 `i18n(zh-CN): 补全未翻译条目`
+- `feat`: new feature, e.g. `feat(url): support mega.nz/embed/ links`
+- `fix`: bug fix, e.g. `fix(clipboard): restore broken clipboard monitoring`
+- `docs`: documentation, e.g. `docs: fill in the zh-CN translation`
+- `refactor`: refactoring, e.g. `refactor(conexion): simplify proxy configuration`
+- `i18n`: translation, e.g. `i18n(zh-CN): complete untranslated entries`
 
 ```bash
 git add .
-git commit -m "feat(url): 支持 mega.nz/embed/ 链接格式"
+git commit -m "feat(url): support mega.nz/embed/ links"
 ```
 
-### 5. 推送并发起 PR
+### 5. Push and open a PR
 
 ```bash
-git push origin feature/你的功能名称
+git push origin feature/your-feature-name
 ```
 
-到 GitHub 上发起 Pull Request 到 `main` 分支,在 PR 描述中说明:
+Open a Pull Request against `main` on GitHub. In the description, explain:
 
-- 这个 PR 修改了什么?
-- 为什么需要修改?(关联 Issue 编号)
-- 如何测试?
-- 是否影响现有功能?
+- What does this PR change?
+- Why is the change needed? (reference the Issue number)
+- How can it be tested?
+- Does it affect existing functionality?
 
-### 6. 代码评审与合并
+### 6. Review and merge
 
-维护者会评审你的 PR,可能会请求修改。请耐心配合,所有修改都为了项目的长期可维护性。
+A maintainer will review your PR and may request changes. Please be patient — every change is in service of the project's long-term maintainability.
 
-## 代码风格约定
+## Code style conventions
 
-- VB.NET 项目已启用 `Option Strict On`、`Option Explicit Off`、`Option Infer On`,**新增代码必须满足这些约束**
-- 文件编码:**UTF-8 with BOM**
-- 缩进:**4 个空格**
-- 命名:
-  - 类、方法: PascalCase,如 `ExtraerFileID`
-  - 私有字段: camelCase 或带下划线前缀,如 `_ProxyIP`
-  - 局部变量: camelCase,如 `fileInfo`
-- 注释:
-  - 复杂逻辑需用 `'` 单行注释说明
-  - 公共 API 用 `''' <summary>` XML 文档注释
-- 原项目使用西班牙语命名,如 `Clases`、`Configuracion`、`Fichero`。**为保持一致性,新增代码可使用英语命名**,但不要批量重命名现有标识符
+- The VB.NET project has `Option Strict On`, `Option Explicit Off`, and `Option Infer On` enabled — **new code must satisfy these constraints**
+- File encoding: **UTF-8 with BOM**
+- Indentation: **4 spaces**
+- Naming:
+  - Classes and methods: PascalCase, e.g. `ExtraerFileID`
+  - Private fields: camelCase or an underscore prefix, e.g. `_ProxyIP`
+  - Local variables: camelCase, e.g. `fileInfo`
+- Comments:
+  - Non-obvious logic needs a `'` single-line comment
+  - Public APIs use `''' <summary>` XML doc comments
+- The original project uses Spanish names such as `Clases`, `Configuracion`, `Fichero`. **New code may use English names** to stay consistent, but do not mass-rename existing identifiers
 
-## 添加新的语言翻译
+## Adding a new Crypter / Link Protector
 
-1. 复制 `Resources/Language/en-US-Language.xml` 为 `<locale>-Language.xml`(如 `ja-JP-Language.xml`)
-2. 翻译所有 `<Text>` 节点的 `CDATA` 内容
-3. 在 `MegaDownloader.vbproj` 中添加 `<EmbeddedResource>` 引用:
+Follow the pattern in [`Clases/Crypters/EncrypterMega.vb`](../Clases/Crypters/EncrypterMega.vb):
+
+1. Create `<Name>.vb` under `Clases/Crypters/`
+2. Implement `ObtenerInformacionFichero`, returning `Conexion.InformacionFichero`
+3. In [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb):
+   - Add a `<NAME>TOKEN` constant
+   - Add a matching regex to `patternOthers`
+   - Add a branch in `ExtraerFileID`
+4. Wire up the UI in `Forms/Main.vb` if needed
+
+## Documentation and translation
+
+This project maintains **two independent multilingual systems** — one for documentation and one for the app UI. Contributions to either are welcome.
+
+### Documentation languages (README / CHANGELOG / CONTRIBUTING)
+
+Documentation follows a "Chinese source → automatic translation" model:
+
+- **Only the Chinese source files are hand-maintained**: `docs/README.zh-CN.md`, `docs/CHANGELOG.zh-CN.md`, `docs/CONTRIBUTING.zh-CN.md`
+- English and the other languages (Traditional Chinese / Japanese / Korean) are generated automatically by GitHub Actions — **do not edit the generated files by hand**
+- To improve wording, edit the Chinese source file, or open a PR that modifies it
+- To add a language, edit `i18n/config.yml`; see [i18n/README.md](../i18n/README.md) for details
+
+### App UI languages
+
+UI strings live in `Resources/Language/<locale>-Language.xml`, one file per language.
+
+To improve a translation:
+
+1. Find the XML for the target language (e.g. `ja-JP-Language.xml`)
+2. Edit the CDATA content of the `<Text>` nodes — **do not change the `key` attribute**
+3. If you add a key, make sure `en-US-Language.xml` also has a key with the same name (it serves as the fallback baseline)
+
+### Adding a new UI language
+
+1. Copy `Resources/Language/en-US-Language.xml` to `<locale>-Language.xml`
+2. Translate the CDATA content of every `<Text>` node
+3. Register the embedded resource in `MegaDownloader.vbproj`:
 
 ```xml
 <EmbeddedResource Include="Resources\Language\ja-JP-Language.xml" />
 ```
 
-4. 在 README 的「支持的语言」表格中添加新语言
+4. Run the app — the new language appears under **Settings → Language**
 
-## 添加新的 Crypter / Link Protector
+> Language key lookup falls back in three stages: disk file → embedded resource → `en-US` → the key itself. So even if some keys are missing, the app will not crash — it just shows English or the raw key.
 
-参考 [`Clases/Crypters/EncrypterMega.vb`](../Clases/Crypters/EncrypterMega.vb) 的实现模式:
+## Reporting bugs
 
-1. 在 `Clases/Crypters/` 下新建 `<Name>.vb`
-2. 实现 `ObtenerInformacionFichero` 方法,返回 `Conexion.InformacionFichero`
-3. 在 [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb) 中:
-   - 添加 `<NAME>TOKEN` 常量
-   - 在 `patternOthers` 中添加匹配正则
-   - 在 `ExtraerFileID` 中添加分支
-4. 必要时在 `Forms/Main.vb` 中接入 UI
+When filing a bug, please include the following in the Issue:
 
-## 报告 Bug
+- **MegaDownloader version** (see About → Version)
+- **Windows version**
+- **Link type** (paste a full example link; you may redact sensitive parts)
+- **Steps to reproduce**
+- **Expected behaviour** vs **actual behaviour**
+- **Error log** (if any — located in the application directory)
 
-提交 Bug 时请在 Issue 中包含以下信息:
+## Release process (maintainers only)
 
-- **MegaDownloader 版本**(查看 关于 → 版本)
-- **Windows 版本**
-- **链接类型**(完整复制一个示例链接,敏感部分可脱敏)
-- **复现步骤**
-- **预期行为** vs **实际行为**
-- **错误日志**(如有,位于程序目录下的日志文件)
+1. Confirm all tests pass and that both `Debug` and `Release` build
+2. Update `docs/CHANGELOG.zh-CN.md` with the new version section (documentation is translated automatically once pushed)
+3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
+4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
+5. Update `<Version>` in `docs/version.xml`
+6. Write bilingual release notes (format described in section 6 of [i18n/README.md](../i18n/README.md))
+7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
-## 发布流程(仅维护者)
+```bash
+git tag -a v2.5.0 -m "Release v2.5.0"
+git push origin main
+git push origin v2.5.0
+```
 
-1. 确认所有测试通过
-2. 更新 [CHANGELOG.md](CHANGELOG.md)
-3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
-4. 在 `InternalConfig.xml`(Base64 编码)中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
-5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 创建 Git Tag(触发 CI 自动构建与 Release):`git tag -a v2.2.0 -m "Release v2.2.0"`
-7. 推送分支与 Tag:`git push origin main` 后 `git push origin v2.2.0`
-8. CI 在 tag `v*` 上自动打包并创建 GitHub Release
+On a `v*` tag, CI automatically:
+- Builds the Release configuration
+- Verifies that all 12 embedded DLLs are present in the single-file build (the build fails if any are missing, so we never ship a "double-click does nothing" package)
+- Packages the zip and uploads it to the GitHub Release
 
-## 联系方式
+> For test pre-releases (RC builds), publish as `prerelease` first and promote to a full release once verified.
 
-- 提交 Issue:GitHub Issues
-- 安全相关问题:请勿在公开 Issue 中讨论,通过邮件联系维护者
+## Contact
+
+- Filing an Issue: GitHub Issues
+- Security-related matters: please do not discuss them in a public Issue — contact the maintainers by email instead
 
 ---
 
-再次感谢你的贡献!让我们一起让 MegaDownloader 焕发新生。 🚀
+Thank you again for contributing! Let's bring MegaDownloader back to life. 🚀

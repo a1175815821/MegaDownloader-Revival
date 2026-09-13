@@ -24,6 +24,8 @@ Public Class StreamingModule
     Private Shared ReadOnly UrlsLock As New Object
     Private Shared Urls As New Generic.Dictionary(Of String, KeyValuePair(Of Date, Conexion.InformacionFichero))
     Private Const MaxUrlCacheEntries As Integer = 64
+    ' B3-⑧:Range 解析正则单例,每次流式请求不再 New Regex。
+    Private Shared ReadOnly rxRange As New System.Text.RegularExpressions.Regex("bytes=(\d*)-(\d*)", System.Text.RegularExpressions.RegexOptions.Compiled)
 
     Public Overrides Function Process(request As HttpServer.IHttpRequest, _
         response As HttpServer.IHttpResponse, _
@@ -242,7 +244,7 @@ Public Class StreamingModule
         rangeEnd = 0
 
         If Not String.IsNullOrEmpty(request.Headers("Range")) Then
-            Dim mRange = System.Text.RegularExpressions.Regex.Match(request.Headers("Range"), "bytes=(\d*)-(\d*)")
+            Dim mRange = rxRange.Match(request.Headers("Range"))
             If mRange.Success Then
                 'range = mRange.Groups[1].Value + "-" + mRange.Groups[2].Value;
                 Dim hasStart As Boolean = Not String.IsNullOrEmpty(mRange.Groups(1).Value)
@@ -428,20 +430,30 @@ Public Class StreamingModule
     End Sub
 
 
+    ' B3:畸形 mega 参数(?mega=!abc / 多余 ! / 空)此前越界抛 IndexOutOfRange,
+    ' 外层 Catch 转 500。现返回 "" 走 "Missing FileID" 400 分支。
+    ' 合法形如 !FileID!FileKey → Split 为 {"", id, key}(首段必须空)。
+    Private Shared Function SplitStreamingMega(ByVal megaValue As String) As String()
+        If String.IsNullOrEmpty(megaValue) Then Return Nothing
+        Dim parts As String() = megaValue.Split("!"c)
+        If parts.Length <> 3 Then Return Nothing
+        If Not String.IsNullOrEmpty(parts(0)) Then Return Nothing
+        If String.IsNullOrEmpty(parts(1)) Then Return Nothing
+        Return parts
+    End Function
+
     ''' <summary>从 streaming 链接的 mega 参数值(形如 !FileID!FileKey)提取 FileKey</summary>
     Public Shared Function ExtraerStreamingFileKey(ByVal megaValue As String) As String
-        If String.IsNullOrEmpty(megaValue) Then Return ""
-        If megaValue.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(megaValue.Split("!"c)(0)) Then Return ""
-
-        Return megaValue.Split("!"c)(2)
+        Dim parts As String() = SplitStreamingMega(megaValue)
+        If parts Is Nothing Then Return ""
+        Return parts(2)
     End Function
 
     ''' <summary>从 streaming 链接的 mega 参数值(形如 !FileID!FileKey)提取 FileID</summary>
     Public Shared Function ExtraerStreamingFileID(ByVal megaValue As String) As String
-        If String.IsNullOrEmpty(megaValue) Then Return ""
-        If megaValue.Split("!"c).Length <> 3 AndAlso Not String.IsNullOrEmpty(megaValue.Split("!"c)(0)) Then Return ""
-
-        Return megaValue.Split("!"c)(1)
+        Dim parts As String() = SplitStreamingMega(megaValue)
+        If parts Is Nothing Then Return ""
+        Return parts(1)
     End Function
 
 

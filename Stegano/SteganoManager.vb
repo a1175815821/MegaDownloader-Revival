@@ -9,6 +9,50 @@ Namespace Stegano
             Return Password
         End Function
 
+        ' B3:远端图片下载上限 64MB + 30s 超时。WebClient.DownloadData 无超时无上限,
+        ' 误填/恶意的大文件 URL 直接整块进内存 OOM。超限抛 ApplicationException,
+        ' 向导已有友好分支接住弹窗(不记为崩溃);超时/404 等 WebException 原样上抛,记日志。
+        Private Const MaxRemoteImageBytes As Long = 64L * 1024L * 1024L
+
+        Private Shared Function DownloadImageBytes(ByVal url As String) As Byte()
+            ' file:// URI 不走 HTTP 栈(FileWebRequest 不支持 Timeout 等属性,此前 WebClient 兼容):
+            ' 直接读本地文件,同样执行 64MB 上限。
+            If url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) Then
+                Dim localBytes As Byte() = IO.File.ReadAllBytes(New Uri(url).LocalPath)
+                If localBytes.Length > MaxRemoteImageBytes Then
+                    Throw New ApplicationException("Remote image is too large (over 64 MB).")
+                End If
+                Return localBytes
+            End If
+            Dim req As Net.HttpWebRequest = CType(Net.WebRequest.Create(url), Net.HttpWebRequest)
+            req.Method = "GET"
+            req.Timeout = 30000
+            req.ReadWriteTimeout = 60000
+            req.AllowAutoRedirect = True
+            req.MaximumAutomaticRedirections = 5
+            Using resp As Net.HttpWebResponse = CType(req.GetResponse(), Net.HttpWebResponse)
+                If resp.ContentLength > MaxRemoteImageBytes Then
+                    Throw New ApplicationException("Remote image is too large (over 64 MB).")
+                End If
+                Using src As IO.Stream = resp.GetResponseStream()
+                    Using mem As New IO.MemoryStream()
+                        Dim buf(81919) As Byte
+                        Dim total As Long = 0
+                        While True
+                            Dim n As Integer = src.Read(buf, 0, buf.Length)
+                            If n <= 0 Then Exit While
+                            total += CLng(n)
+                            If total > MaxRemoteImageBytes Then
+                                Throw New ApplicationException("Remote image is too large (over 64 MB).")
+                            End If
+                            mem.Write(buf, 0, n)
+                        End While
+                        Return mem.ToArray()
+                    End Using
+                End Using
+            End Using
+        End Function
+
         Public Function CreateImage(Text As String, Input As String, Output As String, Quality As Integer, Password As String) As Boolean
 
             ' Cipher data
@@ -33,11 +77,9 @@ Namespace Stegano
                     img = Image.FromStream(backingStream)
                 Else
                     ' From URL
-                    Using webClient As New Net.WebClient()
-                        Dim imgBytes = webClient.DownloadData(Input)
-                        backingStream = New MemoryStream(imgBytes)
-                        img = Image.FromStream(backingStream)
-                    End Using
+                    Dim imgBytes As Byte() = DownloadImageBytes(Input)
+                    backingStream = New MemoryStream(imgBytes)
+                    img = Image.FromStream(backingStream)
                 End If
 
                 ' 先在内存中编码与校验,全部通过后才落盘:
@@ -109,12 +151,10 @@ Namespace Stegano
                             End Using
                         End Using
                     Else
-                        Using webClient As New Net.WebClient()
-                            data = webClient.DownloadData(Input)
-                            Using st As New MemoryStream(data)
-                                Using extractor As New F5.JpegExtract(mem, System.Text.Encoding.Unicode.GetBytes(Password))
-                                    extractor.Extract(st)
-                                End Using
+                        data = DownloadImageBytes(Input)
+                        Using st As New MemoryStream(data)
+                            Using extractor As New F5.JpegExtract(mem, System.Text.Encoding.Unicode.GetBytes(Password))
+                                extractor.Extract(st)
                             End Using
                         End Using
                     End If

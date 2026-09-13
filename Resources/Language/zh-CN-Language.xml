@@ -17,6 +17,35 @@
   <Text key="Decrease priority"><![CDATA[降低优先度]]></Text>
   <Text key="Close"><![CDATA[关闭]]></Text>
   <Text key="Pause"><![CDATA[暂停]]></Text>
+  <Text key="Start"><![CDATA[开始]]></Text>
+  <Text key="Stop"><![CDATA[停止]]></Text>
+  <Text key="Add"><![CDATA[添加]]></Text>
+  <Text key="Update"><![CDATA[更新]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[已添加：%N%]]></Text>
+  <Text key="OLV_EmptyList"><![CDATA[把 MEGA 链接拖到这里，或直接复制——剪贴板监控会自动识别]]></Text>
+  <Text key="Config_SearchHint"><![CDATA[搜索设置（代理、主题、VLC…）]]></Text>
+  <Text key="Nav_All"><![CDATA[全部]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[下载中]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[等待中]]></Text>
+  <Text key="Nav_Failed"><![CDATA[失败]]></Text>
+  <Text key="Nav_Completed"><![CDATA[已完成]]></Text>
+  <Text key="Detail_Title"><![CDATA[详情]]></Text>
+  <Text key="Detail_Empty"><![CDATA[选择一个任务查看详情]]></Text>
+  <Text key="Detail_EmptyHint"><![CDATA[或拖入链接 / Ctrl+V 添加]]></Text>
+  <Text key="Overview_Title"><![CDATA[任务总览]]></Text>
+  <Text key="Overview_Speed"><![CDATA[总速度]]></Text>
+  <Text key="Overview_Active"><![CDATA[进行中]]></Text>
+  <Text key="Overview_Queued"><![CDATA[等待]]></Text>
+  <Text key="Overview_Failed"><![CDATA[失败]]></Text>
+  <Text key="Overview_Progress"><![CDATA[队列进度]]></Text>
+  <Text key="Overview_Remaining"><![CDATA[预计剩余]]></Text>
+  <Text key="Quick_Title"><![CDATA[快捷入口]]></Text>
+  <Text key="Quick_ExtractQueue"><![CDATA[解压队列]]></Text>
+  <Text key="Quick_StreamingLibrary"><![CDATA[流媒体库]]></Text>
+  <Text key="Quick_Logs"><![CDATA[日志]]></Text>
+  <Text key="Detail_Path"><![CDATA[路径]]></Text>
+  <Text key="AddLinks_LinkCount"><![CDATA[%N% 个链接]]></Text>
+  <Text key="AddLinks_CueBanner"><![CDATA[在此粘贴 MEGA 链接，每行一个…]]></Text>
   <Text key="Delete from list"><![CDATA[从列表删除]]></Text>
   <Text key="Delete from list and disk"><![CDATA[从列表和磁盘删除]]></Text>
   <Text key="Add link"><![CDATA[添加连接]]></Text>
@@ -348,12 +377,62 @@ B 是同行下载数。]]></Text>
   <Text key="optional"><![CDATA[选择性]]></Text>
   <Text key="Multiple ELC"><![CDATA[多个 ELC]]></Text>
   <Text key="MsgPasswordZip">
-    <![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
-Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]>
+    <![CDATA[如果压缩包设有密码，可在此输入，解压时会自动使用；否则留空。
+支持 ZIP、RAR（含多分卷）与 7z。]]>
   </Text>
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
   <Text key="Check for updates"><![CDATA[检查更新]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：数据校验失败，输出文件未创建。可能图片太小，请换一张更大的图片。]]></Text>
+  <Text key="Steganograph&amp;y"><![CDATA[隐写(&Y)]]></Text>
+  <Text key="&amp;Hide links inside an image"><![CDATA[隐藏链接到图片(&H)]]></Text>
+  <Text key="&amp;Retrieve links from an image"><![CDATA[从图片提取链接(&R)]]></Text>
+  <Text key="Retrieve links from an image"><![CDATA[从图片提取链接]]></Text>
+  <Text key="Hide links inside an image"><![CDATA[隐藏链接到图片]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[隐写向导]]></Text>
+  <Text key="Input image not specified"><![CDATA[未指定输入图片]]></Text>
+  <Text key="Output image not specified"><![CDATA[未指定输出图片]]></Text>
+  <Text key="Input image does not exist"><![CDATA[输入图片不存在]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[JPEG 质量无效]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[图片已成功创建，用时 {0} 毫秒]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[未找到隐藏的链接。请检查图片和密码。]]></Text>
+  <Text key="Images"><![CDATA[图片]]></Text>
+  <Text key="Introduction"><![CDATA[介绍]]></Text>
+  <Text key="Image to load"><![CDATA[要载入的图片]]></Text>
+  <Text key="Other options"><![CDATA[其他选项]]></Text>
+  <Text key="Load"><![CDATA[载入]]></Text>
+  <Text key="JPEG Quality"><![CDATA[JPEG 质量]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[隐写术是将信息隐藏在另一条消息中的艺术与科学。
+使用隐写功能，MegaDownloader 可以将一条或多条链接隐藏到 JPEG 图片中。
+
+使用方法只需简单的 3 步：
+
+1) 输入要隐藏的链接
+2) 选择要使用的输入图片，以及要生成的输出图片。
+3) 可选：指定密码以提高链接安全性。]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[隐写术是将信息隐藏在另一条消息中的艺术与科学。
+使用隐写功能，MegaDownloader 可以将一条或多条链接隐藏到 JPEG 图片中。
+
+使用此选项可以从已包含一条或多条链接的 JPEG 图片中载入链接。
+注意：可以在菜单“选项”下的“隐写”功能中生成图片。
+
+提取链接只需简单的 2 步：
+
+1) 从磁盘选择包含隐藏链接的图片，或输入图片网址。
+2) 指定隐藏链接时使用的密码（如果没有密码则留空）。]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[输入一条或多条要隐藏的 MEGA 链接。]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[选择一张现有图片作为“输入图片”，再选择或新建一张 JPEG 图片作为“输出图片”。
+输入图片可以是本地文件，也可以是图片网址。]]></Text>
+  <Text key="Input image"><![CDATA[输入图片]]></Text>
+  <Text key="Output image"><![CDATA[输出图片]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[可以指定 JPEG 质量和密码，也可以留空。]]></Text>
+  <Text key="Visible links"><![CDATA[可见链接]]></Text>
+  <Text key="Visible links HELP"><![CDATA[如果勾选此选项，提取链接的用户将能看到链接明文。
+否则他只能下载这些链接，看不到链接内容。]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[点击此处了解更多信息]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[选择一张现有图片作为“输入图片”，或输入图片网址。]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[如果图片设有密码，请输入密码；否则留空。]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[警告：图片太小，数据可能已损坏。]]></Text>
+  <Text key="Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：输出图片已创建，但数据校验失败。可能是图片太小，请换一张更大的图片。]]></Text>
   <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[拖放功能仅支持 .elc 和 .dlc 文件。]]></Text>
   <Text key="ELC file is empty"><![CDATA[ELC 文件为空。]]></Text>
   <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[DLC 格式已不再受支持（dcrypt.it 服务已停止）。请改用 .elc 文件。]]></Text>
@@ -366,4 +445,16 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="VLC path is not valid"><![CDATA[VLC 路径无效。]]></Text>
   <Text key="Open &amp;ELC"><![CDATA[打开 ELC(&E)]]></Text>
   <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[配置保存失败，请检查磁盘空间和权限。]]></Text>
+  <Text key="Quota_Banner"><![CDATA[MEGA 配额已用尽（未给出确切恢复时间）。已自动暂停，将在 %T% 后自动重试。]]></Text>
+  <Text key="Quota_Status"><![CDATA[配额：%T% 后重试]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[立即重试]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[MEGA 配额已恢复，下载已自动继续。]]></Text>
+  <Text key="Quota_Error"><![CDATA[MEGA 配额已用尽，下载已自动暂停并将在配额恢复后自动继续。如已更换 IP 或代理，可点“立即重试”。]]></Text>
+  <Text key="Retry all failed"><![CDATA[重试全部失败项]]></Text>
+  <Text key="Remove all failed"><![CDATA[移除全部失败项]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[确定从列表移除 %N% 个失败项吗？]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[是否同时删除这些失败项的本地 .part 文件？]]></Text>
+  <Text key="Folder_Reading"><![CDATA[正在读取文件夹，请稍候…]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[正在读取文件夹…已解析 %N% 项]]></Text>
+  <Text key="Reset column widths"><![CDATA[恢复默认列宽]]></Text>
 </Language>

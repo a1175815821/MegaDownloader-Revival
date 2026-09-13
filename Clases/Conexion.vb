@@ -36,6 +36,8 @@ Public Class Conexion
         UsuarioInvalido
         ErrorConexion
         Otros
+        ''' <summary>v2.5 beta: MEGA 配额耗尽(HTTP 509 / API -17)。调度器据此熔断而非普通重试。</summary>
+        QuotaExceeded
     End Enum
 
     Public Class InformacionFichero
@@ -298,6 +300,14 @@ Public Class Conexion
 
     Friend Const patternGetFileName As String = "MEGA.*?""n""\s*:\s*""(?<FileName>.*?)"""
 
+    ''' <summary>v2.5 beta: 仅识别 API 配额语义(-17 / EOVERQUOTA),不做 "509" 文本匹配。</summary>
+    Friend Shared Function IsQuotaErrorText(s As String) As Boolean
+        If String.IsNullOrEmpty(s) Then Return False
+        Dim t As String = s.Trim()
+        If t = "-17" OrElse t = "[-17]" Then Return True
+        Return t.IndexOf("EOVERQUOTA", StringComparison.OrdinalIgnoreCase) >= 0
+    End Function
+
 
     Public Shared Function ObtenerInformacionFichero(ByVal Config As Configuracion, ByVal FileID As String, ByVal FileKey As String, ByVal ComprobacionAntesDescarga As Boolean) As InformacionFichero
 
@@ -377,6 +387,13 @@ Public Class Conexion
                 If Not FileInfoRS.ContainsKey("at") Then Throw New Exception
                 If Not FileInfoRS.ContainsKey("g") Then Throw New Exception
             Catch excFileInfo As Exception
+                If IsQuotaErrorText(excFileInfo.Message) OrElse IsQuotaErrorText(Resultado.Mensaje) Then
+                    Info.Err = TipoError.QuotaExceeded
+                    Info.Errtxt = "MEGA transfer quota exceeded (EOVERQUOTA). Queue will pause and retry automatically."
+                    MegaQuotaManager.ReportQuota()
+                    Log.WriteWarning("MEGA quota (EOVERQUOTA -17) while retrieving file info for " & FileID)
+                    Return Info
+                End If
                 Info.Err = TipoError.Otros
                 If excFileInfo.Message.Contains("when retrieving file information") Then
                     Info.Errtxt = excFileInfo.Message
@@ -427,6 +444,15 @@ Public Class Conexion
 
 
         ElseIf TypeOf (Resultado.Excepcion) Is WebException Then
+            Dim wex As WebException = DirectCast(Resultado.Excepcion, WebException)
+            If MegaQuotaManager.IsQuotaWebException(wex) Then
+                Dim hint As Long? = MegaQuotaManager.TryGetRetryAfterSeconds(wex)
+                MegaQuotaManager.ReportQuota(If(hint.HasValue, hint.Value, 0))
+                Info.Err = TipoError.QuotaExceeded
+                Info.Errtxt = "MEGA transfer quota exceeded (HTTP 509). Queue will pause and retry automatically."
+                Log.WriteWarning("MEGA quota (HTTP 509) while retrieving file info for " & FileID)
+                Return Info
+            End If
             Info.Err = TipoError.ErrorConexion
             Info.Errtxt = "Connection error: " & Resultado.Excepcion.Message & " - Message received: " & Resultado.Mensaje
             Log.WriteError("Error getting the info for file " & FileID & ": " & Resultado.Excepcion.Message & " - Message received: " & Resultado.Mensaje)

@@ -36,7 +36,13 @@ Public Class Fichero
 	Public LinkVisible As Boolean
 	
 	Public DescripcionError As String
-	
+
+	''' <summary>v2.5 beta: 永久失败(链接失效/key错/无权限/被封),自愈跳过,需手动处理。</summary>
+	Public EsErrorPermanente As Boolean = False
+
+	''' <summary>v2.5 RC: 配额失败,配额期内自愈跳过,到期由配额恢复统一唤醒。RC起持久化,重启后立即重试仍可捞回。</summary>
+	Public FailedByQuota As Boolean = False
+
 	Public FechaUltimoError As Date?
 	
 	Public Porcentaje As Decimal
@@ -279,6 +285,11 @@ Public Class Fichero
 				Me.SetDescargaEstado = Estado.Verificando
 				
 				Dim Info As Conexion.InformacionFichero = Conexion.ObtenerInformacionFichero(Config, Me.FileID, Me.FileKey, ComprobacionAntesDescarga)
+				' B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
+				' 同锁互斥,否则关机存盘会读到半新半旧的撕裂对象(新 Key+旧 Size+旧分片表)。
+				' 网络 IO 已在锁外完成,此处仅内存赋值,持锁极短无性能影响。
+				Mutex.FicheroDownloader.WaitOne()
+				Try
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
 					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
@@ -292,11 +303,20 @@ Public Class Fichero
 					Me.FileID = Info.FileID
 				ElseIf Info IsNot Nothing AndAlso Info.Err <> Conexion.TipoError.SinErrores Then
 					ErrorObtenido = Info.Err
-					Me.EstablecerError("The file could not be verified." & vbNewLine & _
-						" * File code: " & Me.FileID & vbNewLine & _
-						" * Error type: " & Info.Err.ToString & vbNewLine & _
-						" * Internal info: " & Info.Errtxt)
+					If Info.Err = Conexion.TipoError.QuotaExceeded Then
+						Me.EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." & vbNewLine & _
+							" * File code: " & Me.FileID & vbNewLine & _
+							" * Internal info: " & Info.Errtxt, False, True)
+					Else
+						Me.EstablecerError("The file could not be verified." & vbNewLine & _
+							" * File code: " & Me.FileID & vbNewLine & _
+							" * Error type: " & Info.Err.ToString & vbNewLine & _
+							" * Internal info: " & Info.Errtxt)
+					End If
 				End If
+				Finally
+					Mutex.FicheroDownloader.ReleaseMutex()
+				End Try
 			Finally
 				_Actualizando = False
 			End Try
@@ -371,6 +391,10 @@ Public Class Fichero
 	' Usamos un worker para iniciar la descarga en segundo plano, ya que es necesario llamar a ActualizarInformacionFichero pero esta función
 	' puede tardar mucho y así no bloqueamos el UI
 	Private WithEvents bgArranque As DownloadWorker
+	' B1-④:验证阶段取消标志。bgArranque.WorkerSupportsCancellation=False,Stop/Dispose
+	' 拦不住 threadpool 上的验证;无此标志时 Stop 后 DoWork 照样 New FileDownloader+Start() 复活。
+	' Boolean 读写原子,Stop 还有 5s 轮询,可见性足够,无需加锁。
+	Private _StartupCancelled As Boolean = False
 	Private Sub bgArranque_DoWork(sender As Object, e As System.ComponentModel.DoWorkEventArgs) Handles bgArranque.DoWork
 		Try
 			
@@ -384,7 +408,14 @@ Public Class Fichero
 				' La función ActualizarInformacionFichero ya ha actualizado el estado de la descarga, no hacemos nada
 				Exit Sub
 			End If
-			
+
+			' B1-④:验证耗时(60s API 超时/大文件夹解密)期间用户已 Stop/关闭:直接退出,
+			' 不得再建下载器(此前必复活)。
+			If Me._StartupCancelled Then
+				Log.WriteWarning("Startup cancelled during file info verification, not starting downloader for " & Me.FileID)
+				Exit Sub
+			End If
+
 			Me.NumErroresChunk = 0
 			Me.Downloader = New FileDownloader(True)
 			
@@ -410,7 +441,18 @@ Public Class Fichero
 			Me.Downloader.PartsPerFile = worker.Config.ConexionesPorFichero
 			Me.Downloader.NumConnections = If(worker.Config.ConexionesPorFichero < worker.NumConexionesDisponibles, worker.Config.ConexionesPorFichero, worker.NumConexionesDisponibles)
 			Me.Downloader.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes)
-			
+
+			' B1-④:装配完成到 Start 之间的取消窗口同样要拦,否则建完即启动,前功尽弃。
+			If Me._StartupCancelled Then
+				Log.WriteWarning("Startup cancelled just before downloader start, disposing it for " & Me.FileID)
+				Try
+					Me.Downloader.Dispose()
+				Catch ex As Exception
+					Log.WriteError("Error disposing cancelled startup downloader: " & Log.SafeException(ex))
+				End Try
+				Me.Downloader = Nothing
+				Exit Sub
+			End If
 			If Me.Downloader.CanStart Then
 				Me.Downloader.Start()
 			End If
@@ -437,10 +479,11 @@ Public Class Fichero
 	
 	Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
 		If Estado.Erroneo = Me.DescargaEstado Then Exit Sub
-		
+
 		If Me.Downloader Is Nothing And bgArranque Is Nothing Then
 			Me.EstadoDescarga = Estado.CreandoLocal
 			Me.DescargaComenzada = True
+			Me._StartupCancelled = False
 			bgArranque = New DownloadWorker(Config, NumConexionesDisponibles)
 			bgArranque.WorkerSupportsCancellation = False
 			bgArranque.WorkerReportsProgress = False
@@ -466,6 +509,8 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub [Stop]()
+		' B1-④:先置验证取消标志,再等。bgArranque 不可 CancelAsync,只能靠标志自停。
+		Me._StartupCancelled = True
 		Dim CiclosMax As Integer = 100 ' 100*50 = 5 segundos
 		Dim Ciclos As Integer = 0
 		While Me._Actualizando And Ciclos < CiclosMax
@@ -523,11 +568,19 @@ Public Class Fichero
 		Catch ex As Exception
 			Log.WriteError("downloader_FileDownloadFailed: could not read server error response: " & Log.SafeException(ex))
 		End Try
-		Me.EstablecerError("File download failed." & vbNewLine & _
-			" * File code: " & Me.FileID & vbNewLine & _
-			" * Error type: An error occurred while trying to download the file." & vbNewLine & _
-			" * Server response: " & Mensaje & vbNewLine & _
-			" * Internal info: " & e.ToString)
+		Dim esQuota As Boolean = (TypeOf e Is MegaQuotaExceededException) OrElse FileDownloader.ReportQuotaIfMatch(e)
+		If esQuota Then
+			Me.EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." & vbNewLine & _
+				" * File code: " & Me.FileID & vbNewLine & _
+				" * Server response: " & Mensaje & vbNewLine & _
+				" * Internal info: " & e.ToString, False, True)
+		Else
+			Me.EstablecerError("File download failed." & vbNewLine & _
+				" * File code: " & Me.FileID & vbNewLine & _
+				" * Error type: An error occurred while trying to download the file." & vbNewLine & _
+				" * Server response: " & Mensaje & vbNewLine & _
+				" * Internal info: " & e.ToString)
+		End If
 		Log.WriteError(Me.DescripcionError)
 	End Sub
 	
@@ -645,12 +698,14 @@ Public Class Fichero
 		End If
 		
 		If Me.NumErroresChunk > Fichero.NUM_MAX_ERRORES_CHUNK Then
+			Dim lastIsQuota As Boolean = (TypeOf Me.UltimoErrorChunk Is MegaQuotaExceededException) OrElse IsQuotaErrorText(If(Me.UltimoErrorChunk Is Nothing, "", Me.UltimoErrorChunk.ToString))
+			If lastIsQuota Then FileDownloader.ReportQuotaIfMatch(Me.UltimoErrorChunk)
 			Dim descError As String = "Download stopped because there were too many connection errors (" & Me.NumErroresChunk & "). " & vbNewLine & _
 				"Last error: " & vbNewLine & _
 				" * File code: " & Me.FileID & vbNewLine & _
 				" * Error type: Connection error." & vbNewLine & _
 				" * Internal info: " & Me.UltimoErrorChunk.ToString
-			Me.EstablecerError(descError)
+			Me.EstablecerError(descError, False, lastIsQuota)
 			Log.WriteError(descError)
 		End If
 		
@@ -659,6 +714,10 @@ Public Class Fichero
 	
 	
 	Public Sub ActualizarDatosDescarga()
+		' B2-⑥:100% 回补的完整流程(MD5 全文件读+解压入队)不得在 FicheroDownloader/
+		' ListaDescargas 锁内同步执行,否则 GB 级文件撞线时冻结 UI/调度数秒~数分钟。
+		' 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
+		Dim needDeferredCompletion As Boolean = False
 		Mutex.FicheroDownloader.WaitOne()
 		Try
 			If Me.Downloader IsNot Nothing Then
@@ -689,6 +748,7 @@ Public Class Fichero
 				' NOTE: we must run the full completion flow (MD5 verification + automatic
 				' extraction), not just flip the state — otherwise the UI shows "complete"
 				' while integrity is never checked and auto-extract never fires.
+				' B2-⑥:不得在此(双全局锁内)同步跑 MD5,只做预定并延迟到线程池执行。
 				If Me.EstadoDescarga = Estado.Descargando AndAlso
 				   Me.TamanoBytes > 0 AndAlso
 				   Me.BytesDescargados >= Me.TamanoBytes AndAlso
@@ -696,8 +756,9 @@ Public Class Fichero
 				   Me.Downloader.File.DataPartInitialized AndAlso
 				   Me.Downloader.File.GetDataPart.AllFinished AndAlso
 				   Not Me.Downloader.IsBusy Then
-					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Running full completion flow. File: " & Me.FileID)
-					Me.downloader_Completed(Nothing, EventArgs.Empty)
+					Log.WriteWarning("ActualizarDatosDescarga: download is 100% and AllFinished but state was still Descargando. Queueing deferred completion flow. File: " & Me.FileID)
+					Me.EstadoDescarga = Estado.ComprobandoMD5
+					needDeferredCompletion = True
 				End If
 			End If
 			If EstadoDescarga = Estado.Descargando Then
@@ -724,13 +785,58 @@ Public Class Fichero
 		Finally
 			Mutex.FicheroDownloader.ReleaseMutex()
 		End Try
+		If needDeferredCompletion Then
+			Try
+				System.Threading.ThreadPool.QueueUserWorkItem(AddressOf RunDeferredCompletion)
+			Catch ex As Exception
+				Log.WriteError("ActualizarDatosDescarga: failed to queue deferred completion: " & Log.SafeException(ex))
+			End Try
+		End If
+	End Sub
+
+	''' <summary>
+	''' B2-⑥:锁外执行的延迟补完流程(对应 ActualizarDatosDescarga 内预定的回补)。
+	''' 在线程池运行,可安全做 MD5 全文件读与解压入队,不阻塞 ListaDescargas 调度与 UI 刷新。
+	''' downloader_Completed 内部自带 Estado 非 Erroneo 守卫,重复投递 harmless(第二次 MD5 命中已 Completado 可接受)。
+	''' </summary>
+	Private Sub RunDeferredCompletion(ByVal state As Object)
+		Try
+			Me.downloader_Completed(Nothing, EventArgs.Empty)
+		Catch ex As Exception
+			Log.WriteError("RunDeferredCompletion failed: " & Log.SafeException(ex))
+		End Try
 	End Sub
 	
 	Private Sub EstablecerError(ByVal msj As String)
+		EstablecerError(msj, IsPermanentErrorText(msj), IsQuotaErrorText(msj))
+	End Sub
+
+	Private Sub EstablecerError(ByVal msj As String, ByVal esPermanente As Boolean, ByVal esQuota As Boolean)
 		Me.EstadoDescarga = Estado.Erroneo
 		Me.DescripcionError = msj
 		Me.FechaUltimoError = Now
+		Me.EsErrorPermanente = esPermanente
+		Me.FailedByQuota = esQuota
+		If esQuota Then Me.EsErrorPermanente = False
 	End Sub
+
+	''' <summary>v2.5 beta: 永久失败码 -9 ENOENT / -11 EACCESS / -14 EKEY / -16 EBLOCKED。仅匹配错误码语义,不做泛文本匹配。</summary>
+	Friend Shared Function IsPermanentErrorText(s As String) As Boolean
+		If String.IsNullOrEmpty(s) Then Return False
+		If s.IndexOf("-9", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("ENOENT", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-11", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EACCESS", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-14", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EKEY", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("-16", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EBLOCKED", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		Return False
+	End Function
+
+	Friend Shared Function IsQuotaErrorText(s As String) As Boolean
+		If String.IsNullOrEmpty(s) Then Return False
+		If s.IndexOf("EOVERQUOTA", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("MegaQuotaExceededException", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		If s.IndexOf("transfer quota exceeded", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		Return False
+	End Function
 
 	''' <summary>
 	''' 重设下载状态：清理 DatosPartes/BytesDescargados/Porcentaje 并删除残留的 .part 文件。
@@ -753,6 +859,8 @@ Public Class Fichero
 		Me.UltimoErrorChunk = Nothing
 		Me.DescripcionError = Nothing
 		Me.FechaUltimoError = Nothing
+		Me.EsErrorPermanente = False
+		Me.FailedByQuota = False
 		Me.TiempoEstimadoDescarga = ""
 
 		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
@@ -780,6 +888,8 @@ Public Class Fichero
 	' IDisposable
 	Protected Overridable Sub Dispose(disposing As Boolean)
 		If Not Me.disposedValue Then
+			' B1-④:释放即取消验证,防关机后复活。
+			Me._StartupCancelled = True
 			If disposing Then
 				Try
 					If Me.Downloader IsNot Nothing Then
@@ -890,6 +1000,17 @@ Public Class Fichero
         If [Enum].IsDefined(GetType(Estado), LeerNodo(XML, "EstadoDescarga", "")) Then
             EstadoDescarga = CType([Enum].Parse(GetType(Estado), LeerNodo(XML, "EstadoDescarga", "")), Estado)
         End If
+        ' RC:重启后查看错误空白/永久失败诈尸的根因——此前只存 Estado,不存描述与标记。
+        Me.DescripcionError = LeerNodo(XML, "DescripcionError", "")
+        If String.IsNullOrEmpty(Me.DescripcionError) Then Me.DescripcionError = Nothing
+        Boolean.TryParse(LeerNodo(XML, "EsErrorPermanente", "false"), EsErrorPermanente)
+        Boolean.TryParse(LeerNodo(XML, "FailedByQuota", "false"), FailedByQuota)
+        ' 兼容旧版派生标记:老队列无标记时按描述文本回推,避免重启后永久失败被自愈捞起。
+        If Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
+            EsErrorPermanente = IsPermanentErrorText(Me.DescripcionError)
+            If Not EsErrorPermanente Then FailedByQuota = IsQuotaErrorText(Me.DescripcionError)
+            If FailedByQuota Then EsErrorPermanente = False
+        End If
         Boolean.TryParse(LeerNodo(XML, "MarcadoParaBorrarFicheroLocal", "false"), MarcadoParaBorrarFicheroLocal)
         Boolean.TryParse(LeerNodo(XML, "DescargaIndividual", "false"), DescargaIndividual)
         Boolean.TryParse(LeerNodo(XML, "PausaIndividual", "false"), PausaIndividual)
@@ -931,6 +1052,10 @@ Public Class Fichero
 
 
     Public Function GuardarXML(ByVal XML As XmlDocument, IncluirDatosCifrados As Boolean) As XmlNode
+        ' B2-⑩:序列化与 ActualizarInformacionFichero 回写同锁,防关机撕裂(半新半旧队列)。
+        ' 锁序与 ActualizarDatosDescarga 一致(ListaDescargas->FicheroDownloader),无反转死锁。
+        Mutex.FicheroDownloader.WaitOne()
+        Try
         Dim NodoFic As XmlNode = XML.CreateElement("Fichero")
         NodoFic.Attributes.Append(XML.CreateAttribute("v")).Value = Me.Version.ToString
 
@@ -943,9 +1068,6 @@ Public Class Fichero
             NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = CacheSecureData.URLFichero
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
-            'NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = Criptografia.ToInsecureString(_FileKey)
-            'NodoFic.AppendChild(XML.CreateElement("URL")).InnerText = If(LinkVisible, "", HIDDEN_LINK) & Criptografia.ToInsecureString(Me._URL)
-            'NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = Criptografia.ToInsecureString(_URLFichero)
         End If
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
@@ -970,6 +1092,13 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("BytesDescargados")).InnerText = BytesDescargados.ToString
 
         NodoFic.AppendChild(XML.CreateElement("EstadoDescarga")).InnerText = [Enum].GetName(GetType(Estado), EstadoDescarga)
+        ' RC:持久化错误描述与标记(重启后查看错误不再空白,永久/配额标记不再丢失)。
+        ' 描述含内部堆栈,截断到 4000 字防队列文件膨胀;标记缺省 false 兼容旧版。
+        Dim descToSave As String = If(DescripcionError, "")
+        If descToSave.Length > 4000 Then descToSave = descToSave.Substring(0, 4000)
+        NodoFic.AppendChild(XML.CreateElement("DescripcionError")).InnerText = descToSave
+        NodoFic.AppendChild(XML.CreateElement("EsErrorPermanente")).InnerText = EsErrorPermanente.ToString
+        NodoFic.AppendChild(XML.CreateElement("FailedByQuota")).InnerText = FailedByQuota.ToString
         NodoFic.AppendChild(XML.CreateElement("MarcadoParaBorrarFicheroLocal")).InnerText = MarcadoParaBorrarFicheroLocal.ToString
         NodoFic.AppendChild(XML.CreateElement("TiempoEstimadoDescarga")).InnerText = TiempoEstimadoDescarga
         NodoFic.AppendChild(XML.CreateElement("PausaIndividual")).InnerText = PausaIndividual.ToString
@@ -993,6 +1122,9 @@ Public Class Fichero
         End If
 
         Return NodoFic
+        Finally
+            Mutex.FicheroDownloader.ReleaseMutex()
+        End Try
 
     End Function
 	

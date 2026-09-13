@@ -42,13 +42,32 @@ Public Class URLExtractor
     Private Shared ReadOnly patternELCUri() As String = _
         {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>elc(\?|/\?))(?<ENCODED_FILEID>[\w-]+)"}
 
+    ' 注意:patternElcConfig 必须在下面的 rx 单例之前声明(Shared 字段按文本顺序初始化)。
+    Private Shared ReadOnly patternElcConfig() As String = _
+        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>configelc(\?|/\?))(?<ENCODED_CONFIG>[^\s]+)"}
+
+    ' B3-⑧:正则单例(Compiled)。此前每次调用 New Regex,粘贴数百链接时
+    ' ExtraerURLs×ExtraerFileID/Key×IsMegaFolder 层层回扫(11 pattern 全表扫描),
+    ' UI 线程冻结数秒~十数秒。Regex 实例读方法线程安全,可全局共享。
+    Private Shared Function BuildRegexes(ByVal ParamArray patterns As String()) As Regex()
+        Dim list As New Generic.List(Of Regex)(patterns.Length)
+        For Each p As String In patterns
+            list.Add(New Regex(p, RegexOptions.IgnoreCase Or RegexOptions.Compiled))
+        Next
+        Return list.ToArray()
+    End Function
+
+    Private Shared ReadOnly rxHTTPURI As Regex() = BuildRegexes(patternHTTPURI)
+    Private Shared ReadOnly rxELCUri As Regex() = BuildRegexes(patternELCUri)
+    Private Shared ReadOnly rxGetInfoURL As Regex() = BuildRegexes(patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray())
+    Private Shared ReadOnly rxMegaGeneric As New Regex("(?<TAG>mega)(?<MODE>://|:///|:)(?<DATA>[\w-/#!:.?]+)", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxElcConfig As Regex() = BuildRegexes(patternElcConfig)
+    Private Shared ReadOnly rxSubFolderSuffix As New Regex("/folder/(?<SubFolderID>[\w\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxSubFileSuffix As New Regex("/file/(?<SubFileID>[\w\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+
     Private Shared Function patternGetInfoURL() As String()
         Return patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray
     End Function
-
-
-    Private Shared ReadOnly patternElcConfig() As String = _
-        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>configelc(\?|/\?))(?<ENCODED_CONFIG>[^\s]+)"}
 
 
     ''' <summary>
@@ -65,8 +84,7 @@ Public Class URLExtractor
                  uriLower.Contains("mega.nz/folder/") OrElse uriLower.Contains("mega.co.nz/folder/")
 
         If Not Result Then ' Enlaces mega sin codificar
-            For Each pattern As String In patternGetInfoURL()
-                Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            For Each regex As Regex In rxGetInfoURL
                 If regex.IsMatch(URI) Then
                     Dim match = regex.Match(URI)
 
@@ -97,8 +115,7 @@ Public Class URLExtractor
     ''' <param name="URI"></param>
     ''' <returns></returns>
     Friend Shared Function IsELC(ByVal URI As String) As Boolean
-        For Each pattern As String In patternELCUri
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        For Each regex As Regex In rxELCUri
             If regex.IsMatch(URI) Then Return True
         Next
         Return False
@@ -110,10 +127,9 @@ Public Class URLExtractor
 
         If Texto Is Nothing Then Return links.ToList
 
-        For Each pattern As String In patternHTTPURI
-            Dim regx As New Regex(pattern, RegexOptions.IgnoreCase)
+        For Each regx As Regex In rxHTTPURI
 
-            ' 1) Detect ONLY valid MEGA http links 
+            ' 1) Detect ONLY valid MEGA http links
             ' Examples:
             ' https://mega.co.nz/#!abcdef!ghijklmnopqr
             ' https://mega.co.nz/#!123456!789123456789
@@ -141,11 +157,9 @@ Public Class URLExtractor
 
         If String.IsNullOrEmpty(Texto) Then Return conf.ToList
 
-        Dim regx As Regex
         Dim matches As MatchCollection
 
-        For Each pattern As String In patternElcConfig
-            regx = New Regex(pattern, RegexOptions.IgnoreCase)
+        For Each regx As Regex In rxElcConfig
 
             matches = regx.Matches(Texto)
 
@@ -176,11 +190,9 @@ Public Class URLExtractor
 
 
         'Dim regx As New Regex("(http|https)://([\w+?\.\w+])+([a-zA-Z0-9\~\!\@\#\$\%\^\&amp;\*\(\)_\-\=\+\\\/\?\.\:\;\'\,]*)?", RegexOptions.IgnoreCase)
-        Dim regx As Regex
         Dim matches As MatchCollection
 
-        For Each pattern As String In patternHTTPURI
-            regx = New Regex(pattern, RegexOptions.IgnoreCase)
+        For Each regx As Regex In rxHTTPURI
 
             matches = regx.Matches(Texto)
 
@@ -211,8 +223,7 @@ Public Class URLExtractor
         ' mega://https://mega.co.nz/#!abcdef!ghijklmnopqr
         ' mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
         ' mega://senc?_xlPqemSILarh5VBKbhSTFyQQQ0
-        regx = New Regex("(?<TAG>mega)(?<MODE>://|:///|:)(?<DATA>[\w-/#!:.?]+)", RegexOptions.IgnoreCase)
-        matches = regx.Matches(Texto)
+        matches = rxMegaGeneric.Matches(Texto)
         For Each match As Match In matches
 
             Dim data As String = match.Groups("DATA").Value
@@ -384,8 +395,7 @@ Public Class URLExtractor
         If String.IsNullOrEmpty(URL) Then Return ""
 
         Dim m As System.Text.RegularExpressions.Match = Nothing
-        For Each pattern As String In patternHTTPURI
-            Dim regex As New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        For Each regex As System.Text.RegularExpressions.Regex In rxHTTPURI
             If regex.IsMatch(URL) Then
                 m = regex.Match(URL)
                 Exit For
@@ -396,8 +406,7 @@ Public Class URLExtractor
         Dim subFolderID As String = m.Groups("SubFolderID").Value & ""
         If String.IsNullOrEmpty(subFolderID) Then
             ' 回退:旧式 token (mega://#F!根!key/folder/子ID,ELC 解码产物)后缀解析
-            Dim suffix As System.Text.RegularExpressions.Match = _
-                New System.Text.RegularExpressions.Regex("/folder/(?<SubFolderID>[\w\-]+)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Match(URL)
+            Dim suffix As System.Text.RegularExpressions.Match = rxSubFolderSuffix.Match(URL)
             If suffix.Success Then subFolderID = suffix.Groups("SubFolderID").Value
         End If
         Return subFolderID.Trim()
@@ -411,8 +420,7 @@ Public Class URLExtractor
         If String.IsNullOrEmpty(URL) Then Return ""
 
         Dim m As System.Text.RegularExpressions.Match = Nothing
-        For Each pattern As String In patternHTTPURI
-            Dim regex As New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        For Each regex As System.Text.RegularExpressions.Regex In rxHTTPURI
             If regex.IsMatch(URL) Then
                 m = regex.Match(URL)
                 Exit For
@@ -423,21 +431,34 @@ Public Class URLExtractor
         Dim subFileID As String = m.Groups("SubFileID").Value & ""
         If String.IsNullOrEmpty(subFileID) Then
             ' 回退:旧式 token (mega://#F!根!key/file/文件ID,ELC 解码产物)后缀解析
-            Dim suffix As System.Text.RegularExpressions.Match = _
-                New System.Text.RegularExpressions.Regex("/file/(?<SubFileID>[\w\-]+)\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Match(URL)
+            Dim suffix As System.Text.RegularExpressions.Match = rxSubFileSuffix.Match(URL)
             If suffix.Success Then subFileID = suffix.Groups("SubFileID").Value
         End If
         Return subFileID.Trim()
     End Function
 
+    ' B3-⑨:论坛/聊天软件会把 fragment 转义(%23=#,%3D== 等,=###n= 恰含 #/=)。
+    ' 旧代码只洗 %21/%20,转义过的 key 原样进 B64Decode 必败,报永久性"无法解密"。
+    ' 这里做一次性 URL 解码(非法 % 序列回退原串)+去空白;长度判定必须在清洗后做。
+    Private Shared Function NormalizeLinkForExtraction(ByVal URL As String) As String
+        URL = URL.Replace("%21", "!") ' Algunos links estan sin el ! :/
+        URL = URL.Replace("%20", "") ' Algunos links tienen espacios en medio :/
+        Try
+            Dim unescaped As String = Uri.UnescapeDataString(URL)
+            If Not String.IsNullOrEmpty(unescaped) Then URL = unescaped
+        Catch
+            ' 非法 % 序列(如裸 %/截断 %2)保持原串,后续正则照常处理
+        End Try
+        URL = URL.Replace(" ", "").Replace(vbTab, "").Replace(vbCr, "").Replace(vbLf, "")
+        Return URL
+    End Function
+
     Public Shared Function ExtraerFileID(ByVal URL As String) As String
         If String.IsNullOrEmpty(URL) Then Return ""
 
-        URL = URL.Replace("%21", "!") ' Algunos links estan sin el ! :/
-        URL = URL.Replace("%20", "") ' Algunos links tienen espacios en medio :/
+        URL = NormalizeLinkForExtraction(URL)
 
-        For Each pattern As String In patternGetInfoURL()
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        For Each regex As Regex In rxGetInfoURL
             If regex.IsMatch(URL) Then
                 Dim match = regex.Match(URL)
 
@@ -464,20 +485,18 @@ Public Class URLExtractor
     Public Shared Function ExtraerFileKey(ByVal URL As String) As String
         If String.IsNullOrEmpty(URL) Then Return ""
 
-        URL = URL.Replace("%21", "!") ' Algunos links estan sin el ! :/
-        URL = URL.Replace("%20", "") ' Algunos links tienen espacios en medio :/
+        URL = NormalizeLinkForExtraction(URL)
 
 
-        For Each pattern As String In patternGetInfoURL()
-            Dim regex = New System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        For Each regex As Regex In rxGetInfoURL
             If regex.IsMatch(URL) Then
                 Dim match = regex.Match(URL)
 
                 Dim fileKey = match.Groups("FileKey").Value & ""
+                ' B3-⑨:空白已在 NormalizeLinkForExtraction 去除(旧 Contains(" ") 分支是死代码:
+                ' FileKey 组字符集 [\w\-#=] 根本吃不进空格),此处直接判长。
                 If fileKey.Length < 40 And Not IsMegaFolder(URL) Then ' Seguramente esté mal
                     Return String.Empty
-                ElseIf fileKey.Contains(" ") Then
-                    fileKey = fileKey.Replace(" ", "")
                 End If
                 Return fileKey
             End If

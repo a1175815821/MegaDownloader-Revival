@@ -1,12 +1,157 @@
-# 变更日志 (Changelog)
+# 变更日志
 
-本项目所有重要变更均会记录在此文件中。
+本项目所有重要变更均记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),并遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+*面向用户的版本亮点摘要见 [GitHub Releases](../../releases)。*
+
+---
+
+## 版本亮点速览
+
+| 版本 | 日期 | 主题 |
+| --- | --- | --- |
+| 2.5 RC2 | 2026-09-13 | 生产审计三批修复：发布阻塞 / 可靠性 / 体验与纵深 |
+| 2.5 RC1 | 2026-09-12 | MEGA 配额熔断 + 倒计时横幅；失败自愈默认开启 |
+| 2.4.7 | 2026-09-12 | 更新提醒三选项；移除废弃搜索引擎集成 |
+| 2.4.6 | 2026-09-04 | 假成功 / 静默失败专项 |
+| 2.4.5 | 2026-09-02 | 全面代码审查后的系统性修复（16 项） |
+| 2.4.4 | 2026-09-01 | 子文件夹链接下载；MetaMAC 分块初值修复；9 项安全加固 |
+| 2.4.3 | 2026-08-26 | 7z 解压；Web 局域网推送；剪贴板漏检修复 |
+| 2.4.2 | 2026-08-19 | 修复下载文件真实损坏（MetaMAC / 续传对齐） |
+| 2.4.1 | 2026-08-15 | 修复下载完成但显示错误 |
+| 2.4.0 | 2026-08-14 | 21 项 bug 修复（安全 / 泄漏 / 并发 / 死代码） |
+| 2.3.0 | 2026-08-13 | 加密失败崩溃、资源泄漏、移除 `Thread.Abort` |
+| 2.2.x | 2026-07~08 | 路径安全、下载完整性、原子配置保存、Web CSRF |
+| 2.1.0 | 2026-07-19 | 深色主题可用性修复 |
+| 2.0.0 | 2026-07-13 | 4 阶段 60+ 项修复；深/浅色主题；代码清理 |
+| 1.9.x | 2026-07-05 | 修复新版 MEGA 链接格式识别 |
+| 1.8.0 | 原版 | 反编译源，复活计划的起点 |
+
+---
+
+## v2.4 系列详细变更
+
+下面是 v2.4 各版本的变更明细（同一版本在上方版本历史中也有条目）。
+
+### 变更明细
+
+#### 更新提醒与搜索引擎清理(v2.4.7)
+
+| 变更                   | 说明                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| 更新提醒三选项             | 是=立即更新;否=3 小时后再提醒;取消=不再提醒当前版本(`UpdateSkipVersion` 按版本记录,新版本发布后自动恢复提醒) |
+| 移除搜索引擎集成           | "寻找"菜单 4 个域名(megafiles.me/megafindr/megasearch.co 等)已全部下线;`mega://mega-search?` 链接解析同步移除 |
+
+#### 假成功/静默失败修复(v2.4.6)
+
+| 修复                     | 说明                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| 重启后假成功(P1)          | `Verificando`/`Descomprimiendo` 被标 `Completado`,但两者都可能一字节未落盘;统一回 `EnCola` 靠断点续传继续          |
+| 设置保存假成功           | `GuardarXML` 失败只记底层日志,UI 照弹成功;现检查 `ErrorConfig` 失败则弹错停留                                  |
+| 大写链接静默丢弃          | 匹配 IgnoreCase 但校验大小写敏感,`HTTPS://MEGA.NZ/...` 无反应;6 处正则 + 前缀比较全部补齐大小写不敏感              |
+| 畸形 enc 崩溃            | base64url 长度 %4==1 抛 `ArgumentOutOfRangeException` 裸崩;提前判定弹友好错误                                    |
+| 文件夹 API 空响应 NRE     | 畸形响应(空串/代理 HTML)抛 NRE;加 Try/Catch + 空检查,统一报"无效服务器响应"                                    |
+| ELC 子范围保留           | `MegaLink` 增子范围字段,编码时追加 `/folder/子ID` 或 `/file/文件ID` 后缀;旧版解码器忽略后缀=历史行为,新版恢复子范围   |
+| 语言缺键                | en-US/zh-CN 各 +5(ELC 成功提示、URL 必填、VLC 路径无效、打开 ELC 菜单、配置保存失败)                             |
+
+#### 稳定性与安全(v2.4.5)
+
+| 修复             | 说明                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| 全局异常兜底       | 此前无任何兜底,UI 异常直接闪退;现在记日志且不退出,后台线程异常留日志                           |
+| 列表刷新闪退       | 4 个 AspectGetter 报错时每行重绘弹一次窗再崩溃;改为记日志返回占位值                              |
+| 缺分卷 RAR 假成功   | `IsComplete=False` 静默跳过且上游报"解压成功";现显式抛错                                       |
+| UI 冻结         | 分块失败退避的忙等跑在 UI 线程(最长 16.5 秒);移到线程池                                          |
+| Streaming Range | RFC 7233 合规:后缀/开放区间、416 响应、`bytes=0-0` 不再拉整个文件、响应体不超发 Content-Length        |
+| 流媒体库 CSRF     | Delete/Save/OpenVLC/Import/Export 要求 POST + token(复用 Web 界面 EnsureCsrf 模式)              |
+| 登录限速          | 并发上限 4 + 60 秒窗口失败锁定 10 次,防 PBKDF2 POST 轰炸打满线程池                                |
+| Stegano 落盘安全   | 内存编码+校验通过才写盘(不再留写坏的 .jpg);`WriteAllBytes` 截断覆盖(不再拼接旧文件尾部)             |
+| 资源泄漏          | FileDownloader 句柄、`CreateDecryptor`/MD5 Using、5 处 Mutex Try/Finally、5 处悬停 ToolTip       |
+| 维护性           | vbproj 死引用、DPI 配置统一 PerMonitorV2、硬编码英文消息接入语言系统(新增 en-US/zh-CN 条目)          |
+
+#### 新功能与完整性(v2.4.4)
+
+| 功能/修复          | 说明                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 子文件夹链接下载       | `mega.nz/folder/根ID#密钥/folder/子ID` 仅下载指定子文件夹(路径重定基);`/file/文件ID` 仅下载指定文件——此前一律下载整个根文件夹                                                                  |
+| MetaMAC 分块初值修复 | 分块 CBC-MAC 初值由零 IV 改为文件 nonce 复制两份 `[n0,n1,n0,n1]`(对齐 SDK `SymmCipher::ctr_crypt`),修复 8 words key 下载完成后必然误报校验错误                                         |
+| MetaMAC 标准校验   | 移除"分块边界前缀匹配"宽容逻辑,与 SDK 一致:读完整个文件后一次性完整比较                                                                                                                |
+| 9 项安全加固        | StripNullCharacters 偏移修复;AES 失败返回 Nothing 且持久化点保留旧值;密文新增随机 IV 格式(兼容旧数据);Web 密码 PBKDF2(100k)+随机盐;Streaming 恒定时间密码比较;PSK 非 ASCII 校验;ClientConnected 反射健壮化 |
+
+#### 新功能(v2.4.3)
+
+| 功能        | 说明                                                                          |
+| --------- | --------------------------------------------------------------------------- |
+| 7z 解压     | 优先系统 7-Zip,未安装时自动释放内置 7zr.exe(公共域);支持密码与 multipart 分卷;解压前 PathGuard 校验防路径逃逸 |
+| Web 局域网推送 | 「允许局域网访问」开关(默认关),开启后手机/局域网设备可经浏览器推送下载;强制密码保护;支持自定义绑定 IP(留空=全部网卡)            |
+| 剪贴板监控修复   | 浏览器延迟渲染 + 剪贴板占用竞态导致网页复制漏检——改为重试读取,全部访问加异常保护                                 |
+
+#### 下载完整性(v2.4.2)
+
+| 修复          | 说明                                                                     |
+| ----------- | ---------------------------------------------------------------------- |
+| MetaMAC 算法  | 分块调度对齐 MEGA SDK `ChunkedHash`:128 KiB × i(i=1..8)后固定 1 MiB;空文件返回 (0,0) |
+| 下载完成判定      | 移除"文件大小匹配即强制完成";仅真实 chunk 全部完成才判定完成;120 秒超时上报失败并保留断点                   |
+| CTR 密钥流错位防护 | 中断 flush 与续传起点强制 16 字节对齐;启动时回退旧版遗留的非对齐进度——杜绝"大小正确但内容损坏"                |
+
+#### 稳定性(v2.4.0/2.4.1)
+
+| 修复       | 说明                                                |
+| -------- | ------------------------------------------------- |
+| 后台线程弹窗卡死 | 下载失败改经 UI 线程呈现;关闭期间跨线程 MsgBox 加 `IsDisposed` 防护   |
+| 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
+| 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
+| 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5 RC2] - 2026-09-13
+
+生产级破坏性审计后的三批修复(RC1 之后的新改动全在此)。核心主题:**消灭静默失败与高频卡顿**。
+
+### 🐛 RC2 修复:发布阻塞 5 项(Batch-1)
+
+([Main.vb](../Forms/Main.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb) / [URLProcessor.vb](../Clases/URLProcessor.vb))
+
+- Web 推送与手动加链同链路:`ControlRemotoAgregarLinks` 先经 `URLProcessor.ProcessURLs` 展开文件夹/ELC(此前文件夹链变成单个坏任务);`pckname` 经 `PathGuard` 净化(此前字符串拼接,已认证任意目录创建+落盘越狱);子目录结构保留
+- 文件夹跳过计数:单节点解密失败记账,部分跳过记 Warning(含示例 handle,不记 key 材料),全部失败抛错(此前零文件也报成功)
+- 0 字节空文件短路:探活后仍为 0 直接落空文件、验 MetaMAC(期望 `(0,0)` )、走正常重命名与成功事件(此前 `GetDataPart` 抛错 + 自愈空转);重命名冲突逻辑抽为 `RenamePartToReal` 共用
+- 验证取消标志:`bgArranque` 不可 `CancelAsync`,加 `_StartupCancelled` 标志,Stop/Dispose 置位后验证完成不再建下载器(此前 Stop 后必复活)
+- 坏 ELC per-URL 隔离:单条失败只跳过该条、同条部分结果回滚,全灭时仍抛首错保持单链语义(此前一条坏 ELC 团灭整批)
+
+### 🐛 RC2 修复:可靠性 4 项(Batch-2)
+
+([Fichero.vb](../Clases/Fichero.vb) / [Configuracion.vb](../Clases/Configuracion.vb) / [Main.vb](../Forms/Main.vb) / [FileDownloader.vb](../Clases/FileDownloader.vb))
+
+- 100% 回补 MD5 移出全局锁:锁内只预定(置 `ComprobandoMD5` 防重投),锁外线程池执行(此前 GB 文件撞线冻结 UI/调度)
+- Web 密码随机 IV 移出配置去重比对,改明文快照比对(此前有 Web 密码时 `Configuration.xml` 每 5 秒必重写)
+- 关闭等待补齐 `CreandoLocal/Verificando/Descomprimiendo/ComprobandoMD5`;验证回写与 `GuardarXML` 同持 `FicheroDownloader`(此前关机撕裂队列)
+- 120 秒看门狗判定移到 30 秒排空后,排空期间撞线完成不再误报失败(此前成功/失败双事件竞态可把完好文件钉成错误)
+
+### 🐛 RC2 修复:体验与纵深(Batch-3)
+
+([URLExtractor.vb](../Clases/URLExtractor.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [StreamingModule.vb](../HttpModule/StreamingModule.vb) / [Main.vb](../Forms/Main.vb) / [Updater.vb](../Clases/Updater.vb) / [Criptografia.vb](../Clases/Criptografia.vb) / [SteganoManager.vb](../Stegano/SteganoManager.vb))
+
+- 正则单例化(`Compiled` 共享实例):`URLExtractor` 全表扫描、`MegaFolderHelper` 逐节点、`StreamingModule` 逐请求不再 `New Regex`(此前数百链接粘贴 UI 冻结)
+- fragment 解码:`UnescapeDataString` + 去空白,`%23/%3D` 转义链不再永久"无法解密";删 dead `Contains(" ")` 分支
+- 更新 URL 仅 https;`version.xml` 禁外部实体(XXE);公开链跳校验改 Warning 留痕;Stegano 远端 64MB+30s 上限;streaming 畸形 mega 参数返 400 不再 500
+
+### 🐛 RC2 修复:合流审查补丁(Pre-merge Gate)
+
+- 左栏任务总览+快捷入口:总速度/计数/队列进度/剩余时间,复用既有 430ms 刷新循环(无新增计时器);解压队列/流媒体库/日志提到首屏
+- 流媒体库 Web 导入加按条隔离:坏文件夹/过期 ELC 只跳过该条(此前整请求无响应)
+- 配额同事件去重:熔断期内重复上报不升级档位不延长等待(此前多连接并发命中可瞬间跳档到 6h)
+- CI 单文件校验改 Windows PowerShell 5.1 执行(此前 `pwsh` 下 ReflectionOnlyLoad 必抛,构建必红)
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.0.0`(RC 不动)
+
+- InternalConfig `VERSION_MEGADOWNLOADER` → `2.5 RC2` / `VERSION_UPDATE` → `2.5`(数字不动,beta/RC 期间不提示更新;`docs/version.xml` 保持 `2.4.7.0`,正式版才抬)
 
 ***
 
-## \[2.5 RC1] - 2026-09-12
+## [2.5 RC1] - 2026-09-12
 
 匿名下载 MEGA 配额(HTTP 509 / API -17)专项。核心主题:**配额可预期——自动暂停、诚实倒计时、到点自动恢复**。
 
@@ -67,7 +212,7 @@
 
 ***
 
-## \[2.4.7] - 2026-09-12
+## [2.4.7] - 2026-09-12
 
 更新提醒升级为三选项 + 移除已废弃的搜索引擎集成。核心主题:**把"提醒频率"的选择权交给用户,把死域名扫地出门**。
 
@@ -91,7 +236,7 @@
 
 ***
 
-## \[2.4.6] - 2026-09-04
+## [2.4.6] - 2026-09-04
 
 7 项假成功/静默失败修复 + 1 项维护清理。核心主题:**让失败以失败的样子呈现出来**。
 
@@ -132,7 +277,7 @@
 
 ***
 
-## \[2.4.5] - 2026-09-02
+## [2.4.5] - 2026-09-02
 
 本版本为全面代码审查后的系统性修复:36 项确认问题全部处理,涵盖崩溃修复、功能正确性、HTTP 协议合规、资源泄漏与安全加固。
 
@@ -217,7 +362,7 @@
 
 ***
 
-## \[2.4.4] - 2026-09-01
+## [2.4.4] - 2026-09-01
 
 ### ✨ 新功能:子文件夹链接下载
 
@@ -281,7 +426,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.4.3] - 2026-08-26
+## [2.4.3] - 2026-08-26
 
 ### ✨ 新功能(Issue #1)
 
@@ -317,7 +462,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.4.2] - 2026-08-19
+## [2.4.2] - 2026-08-19
 
 ### 🐛 修复:下载文件真实损坏(用户实测确认)
 
@@ -351,7 +496,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.4.1] - 2026-08-15
+## [2.4.1] - 2026-08-15
 
 ### 🐛 修复:下载完成但显示错误(用户实测确认)
 
@@ -379,7 +524,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.4.0] - 2026-08-14
+## [2.4.0] - 2026-08-14
 
 ### 🐛 全面 Bug 修复 - 21 项确认存在的问题
 
@@ -445,7 +590,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.3.0] - 2026-08-13
+## [2.3.0] - 2026-08-13
 
 ### 🐛 稳定性修复
 
@@ -468,7 +613,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 - `docs/version.xml` → `2.3.0.0`
 
-## \[2.2.1] - 2026-08-09
+## [2.2.1] - 2026-08-09
 
 ### 🐛 下载状态修复
 
@@ -500,7 +645,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.2.0] - 2026-07-20
+## [2.2.0] - 2026-07-20
 
 ### 安全加固与下载完整性
 
@@ -554,7 +699,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.1.0] - 2026-07-19
+## [2.1.0] - 2026-07-19
 
 ### 主题完善 - 深色模式可用性修复
 
@@ -598,7 +743,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[2.0.0] - 2026-07-13
+## [2.0.0] - 2026-07-13
 
 ### 重大版本 - 安全加固 + 代码清理 + 暗色主题
 
@@ -730,7 +875,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[1.9.1] - 2026-07-05
+## [1.9.1] - 2026-07-05
 
 ### 🐛 修复
 
@@ -738,7 +883,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[1.9.0] - 2026-07-05
+## [1.9.0] - 2026-07-05
 
 ### MegaDownloader 复活计划首个公开发布版本
 
@@ -794,7 +939,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 ***
 
-## \[1.8.0] - 原版 (反编译源)
+## [1.8.0] - 原版 (反编译源)
 
 复活计划所基于的原始版本,本仓库通过反编译得到其源码作为修复起点。
 
@@ -829,4 +974,3 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 - 次版本号:新增功能,向下兼容
 
 - 修订号:Bug 修复,向下兼容
-

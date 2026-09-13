@@ -55,6 +55,13 @@ Public Class Configuracion
 	Public DescargasSimultaneas As Integer
 	
 	Public ResetearErrores As Boolean
+
+	''' <summary>v2.5 beta 一次性迁移:老配置的 ResetearErrores=False 翻为 True(15min)。True=已迁移,不再重复覆盖用户后续手动选择。</summary>
+	Public ResetearErroresMigratedV25 As Boolean
+	
+	''' <summary>P0-1 UI 一次性列默认集:开 Progreso%、藏 Descargado、Estado 加宽。True=已迁移,不再覆盖用户后续手动调整。
+	''' 注:V26 是 UI 修订号,不是 App 版本(当前发布线 v2.5),为兼容已迁移用户保留原名,RC 起双写 V25 别名。</summary>
+	Public ColumnUIDefaultsMigratedV26 As Boolean
 	
 	Public UsarProxy As Boolean
 	
@@ -166,6 +173,9 @@ Public Class Configuracion
 	
 	
 	Private Shared _LastSavedXML As String = Nothing
+	' B2-⑦:ServidorWebPassword 明文快照,用于去重比对。密文每次随机 IV 必变,
+	' 不得参与 OuterXml 比对(否则有 Web 密码时配置每 5s 必重写)。
+	Private Shared _LastSavedWebPasswordPlain As String = Nothing
 	Public Sub GuardarXML(ByVal ForzarGuardado As Boolean)
 		ApplyConfigLimits()
 		Dim Xml As New XmlDocument
@@ -189,6 +199,9 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ConexionesPorFichero")).InnerText = ConexionesPorFichero.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresMigratedV25")).InnerText = ResetearErroresMigratedV25.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV26")).InnerText = ColumnUIDefaultsMigratedV26.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV25")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
 		
@@ -225,11 +238,8 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebActivo")).InnerText = ServidorWebActivo.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebNombre")).InnerText = ServidorWebNombre
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebRutaPlantilla")).InnerText = ServidorWebRutaPlantilla
-		' 加密失败返回 Nothing：跳过写入该节点，保留磁盘上的旧密文而非存入空值
-		Dim encryptedWebPassword As String = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
-		If encryptedWebPassword IsNot Nothing Then
-			Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
-		End If
+		' B2-⑦:ServidorWebPassword 密文(随机 IV,每次不同)不得参与去重比对,
+		' 否则 OuterXml 恒变、后台每 5s 必落盘。此处先不写该节点,比对通过后再补(见下)。
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebTimeout")).InnerText = ServidorWebTimeout.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPermitirLAN")).InnerText = ServidorWebPermitirLAN.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebBindIP")).InnerText = ServidorWebBindIP
@@ -244,10 +254,19 @@ Public Class Configuracion
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
 		
-		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml Or ForzarGuardado Then
+		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
+		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain Or ForzarGuardado Then
 
 			_LastSavedXML = Xml.DocumentElement.OuterXml
-			
+			_LastSavedWebPasswordPlain = curWebPasswordPlain
+
+			' B2-⑦:随机 IV 密文只写盘、不比对。加密失败返回 Nothing 时跳过该节点,
+			' 保留磁盘旧密文而非存入空值(与旧逻辑一致,只是位置后移)。
+			Dim encryptedWebPassword As String = Criptografia.AES_EncryptString(ServidorWebPassword, KeyPassword)
+			If encryptedWebPassword IsNot Nothing Then
+				Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
+			End If
+
 			' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
 			Xml.DocumentElement.AppendChild(Xml.CreateElement("Usuario")).InnerText = Criptografia.EncryptString_DPAPI(_Usuario)
 			Xml.DocumentElement.AppendChild(Xml.CreateElement("Password")).InnerText = Criptografia.EncryptString_DPAPI(_Password)
@@ -273,6 +292,7 @@ Public Class Configuracion
 				Log.WriteError("Error saving configuration XML: " & Log.SafeException(ex))
 				ErrorConfig = ErrorConfigClass.Fichero_No_Creado
 				_LastSavedXML = Nothing
+				_LastSavedWebPasswordPlain = Nothing
 			Finally
 				Mutex.GuardarConfig.ReleaseMutex()
 			End Try
@@ -357,7 +377,13 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "CrearDirectorioPaquete", "false"), CrearDirectorioPaquete)
 		Boolean.TryParse(LeerNodo(Xml, "AnalizarPortapapeles", "false"), AnalizarPortapapeles)
 		'Boolean.TryParse(LeerNodo(Xml, "PermitirSkins", "true"), PermitirSkins)
-		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "false"), ResetearErrores)
+		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "true"), ResetearErrores)
+		Boolean.TryParse(LeerNodo(Xml, "ResetearErroresMigratedV25", "false"), ResetearErroresMigratedV25)
+		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV26", "false"), ColumnUIDefaultsMigratedV26)
+		Dim migratedV25Alias As Boolean = False
+		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV25", "false"), migratedV25Alias)
+		If migratedV25Alias Then ColumnUIDefaultsMigratedV26 = True
+		Dim needV25Migration As Boolean = Not ResetearErroresMigratedV25
 		Boolean.TryParse(LeerNodo(Xml, "UsarProxy", "false"), UsarProxy)
 		Boolean.TryParse(LeerNodo(Xml, "IniciarConWindows", "false"), IniciarConWindows)
 		Boolean.TryParse(LeerNodo(Xml, "MantenerUltimaConfiguracion", "true"), MantenerUltimaConfiguracion)
@@ -378,6 +404,12 @@ Public Class Configuracion
         If ResetearErroresPeriodoMinutos < 1 Or ResetearErroresPeriodoMinutos > 999 Then
             ResetearErroresPeriodoMinutos = 15
         End If
+		If needV25Migration Then
+			' v2.5 beta:存量配置一次性迁移到默认开(15min)。新装直接缺省 True,不走这里。
+			ResetearErrores = True
+			ResetearErroresMigratedV25 = True
+			Log.WriteWarning("Migrated ResetearErrores to True (v2.5 default-on self-heal).")
+		End If
 		ApplyConfigLimits()
 		
 		NivelLog = Log.LevelLogType.Normal
@@ -461,6 +493,9 @@ Public Class Configuracion
 	
 	Public Sub ConfiguracionDefectoVacia()
 		Me.RutaDefecto = ""
+		Me.ResetearErrores = True
+		Me.ResetearErroresMigratedV25 = True
+		Me.ResetearErroresPeriodoMinutos = 15
 		Me.Idioma = System.Threading.Thread.CurrentThread.CurrentUICulture.Name
 		Me.ExtraerAutomaticamente = False
 		Me.CondicionesAceptadas = False

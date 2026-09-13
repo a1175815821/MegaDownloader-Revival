@@ -29,6 +29,13 @@ Public Partial Class ELCAccountControl
 	public Sub CargarDatos
 		' SEL Accounts
 		If Config IsNot Nothing Then 
+			If ELCAccountH IsNot Nothing Then
+				Try
+					ELCAccountH.Dispose()
+				Catch
+				End Try
+				ELCAccountH = Nothing
+			End If
 			ELCAccountH = New ELCAccountHelper(Config)
 			dgELCUsers.BackgroundColor = ThemeManager.GetColor("AltBack")
 			With dgELCUsers.ColumnHeadersDefaultCellStyle
@@ -88,13 +95,12 @@ Public Partial Class ELCAccountControl
 		Me.Label3.Text = Language.GetText("Alias") & ":"
 		Me.btnELCAccountAddNew.Text = Language.GetText("Add new")
 		Me.lblELCUrl.Text = Language.GetText("URL") & ":"
-		Me.lblELCApiKey.Text = Language.GetText("Key") & ":"
 		Me.GroupBox10.Text = Language.GetText("Information")
 		Me.lblELCUrl.Text = Language.GetText("URL") & ":"
 		Me.GroupBox8.Text =  Language.GetText("ELC Accounts") 
 		Me.GroupBox9.Text = Language.GetText("ELC Account Info")
 		Me.lblInfoELC.Text = Language.GetText("ELC Desc Info") 
-		Me.lblELCApiKey.Text = Language.GetText("API-Key") 
+		Me.lblELCApiKey.Text = Language.GetText("API-Key") & ":"
 		
 	End Sub
 	
@@ -321,6 +327,7 @@ Public Partial Class ELCAccountControl
 	
 	Private Sub lklELCUrl_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCUrl.MouseHover
 		If t Is Nothing Then t = New ToolTip
+		ThemeManager.ApplyThemeToToolTip(t)
 		t.SetToolTip(lklELCUrl, MsgUrlELCAccount)
 	End Sub
 	
@@ -339,6 +346,7 @@ Public Partial Class ELCAccountControl
 	
 	Private Sub lklELCAliasAccount_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCAliasAccount.MouseHover
 		If t Is Nothing Then t = New ToolTip
+		ThemeManager.ApplyThemeToToolTip(t)
 		t.SetToolTip(lklELCAliasAccount, MsgAliasELCAccount)
 	End Sub
 	
@@ -357,6 +365,7 @@ Public Partial Class ELCAccountControl
 	
 	Private Sub lklELCMainAccount_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCMainAccount.MouseHover
 		If t Is Nothing Then t = New ToolTip
+		ThemeManager.ApplyThemeToToolTip(t)
 		t.SetToolTip(lklELCMainAccount, MsgDefaultELCAccount)
 	End Sub
 	
@@ -375,6 +384,7 @@ Public Partial Class ELCAccountControl
 	
 	Private Sub lklELCShowPassword_MouseHover(sender As Object, e As System.EventArgs) Handles lklELCShowPassword.MouseHover
 		If t Is Nothing Then t = New ToolTip
+		ThemeManager.ApplyThemeToToolTip(t)
 		t.SetToolTip(lklELCShowPassword, MsgELCShowPassword)
 	End Sub
 	

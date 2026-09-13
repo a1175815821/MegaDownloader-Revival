@@ -76,6 +76,11 @@
   <PropertyGroup>
     <ApplicationIcon>Resources\icono.ico</ApplicationIcon>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- 现代 MSBuild 把含非字符串资源的 resx 编译为 preserialized 格式,运行时需 System.Resources.Extensions。
+         旧版 MSBuild 不认识此属性会自动忽略,仍走 legacy BinaryFormatter 路径,双向兼容。 -->
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug_MSD|x86'">
     <DebugSymbols>true</DebugSymbols>
     <DefineDebug>true</DefineDebug>
@@ -122,6 +127,23 @@
     </Reference>
     <Reference Include="ObjectListView">
       <HintPath>Resources\DLLs\ObjectListView.dll</HintPath>
+    </Reference>
+    <!-- preserialized resx 运行时依赖链(GenerateResourceUsePreserializedResources)。随第三方 DLL 一样入库,
+         CopyLocal 到输出目录;app.config 含版本重定向(SRE 4.0.0.0->6.0.0.0, Unsafe 4.0.4.1->6.0.0.0)。 -->
+    <Reference Include="System.Resources.Extensions">
+      <HintPath>Resources\DLLs\System.Resources.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>Resources\DLLs\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>Resources\DLLs\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>Resources\DLLs\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>Resources\DLLs\System.Numerics.Vectors.dll</HintPath>
     </Reference>
     <Reference Include="SharpCompress">
       <HintPath>Resources\DLLs\SharpCompress.dll</HintPath>
@@ -184,6 +206,7 @@
     <Compile Include="Clases\StreamingLibrary\StreamingLibraryManager.vb" />
     <Compile Include="Clases\Criptografia.vb" />
     <Compile Include="Clases\DescompresorController.vb" />
+    <Compile Include="Clases\DownloadEstadoFilter.vb" />
     <Compile Include="Clases\Fichero.vb">
       <SubType>Component</SubType>
     </Compile>
@@ -197,6 +220,7 @@
     <Compile Include="Clases\MD5Utils.vb" />
     <Compile Include="Clases\Mutex.vb" />
     <Compile Include="Clases\Paquete.vb" />
+    <Compile Include="Clases\MegaQuotaManager.vb" />
     <Compile Include="Clases\PathGuard.vb" />
     <Compile Include="Clases\AtomicFile.vb" />
     <Compile Include="Clases\PreSharedKeyManager.vb" />
@@ -308,6 +332,9 @@
     <Compile Include="Forms\StreamingForm.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\ToastForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Forms\AddLinks.resx">
@@ -409,6 +436,14 @@
     <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
     <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
     <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
+    <!-- 单文件版生命线：主 exe 通过 ApplicationEvents.LoadDLLFromStream 从内嵌资源按需加载 DLL。
+         v2.2 构建工具链新增的 5 个 System.*.dll 当时只加了引用没加内嵌，裸 exe 在新目录启动即崩。
+         此后新增任何 CopyLocal 引用，必须同步在此内嵌，否则单文件版回归“双击没反应”。 -->
+    <EmbeddedResource Include="Resources\DLLs\System.Buffers.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Memory.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Numerics.Vectors.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Resources.Extensions.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Runtime.CompilerServices.Unsafe.dll" />
     <EmbeddedResource Include="Resources\Binaries\7zr.exe">
       <LogicalName>MegaDownloader.7zr.exe</LogicalName>
     </EmbeddedResource>
@@ -420,9 +455,6 @@
     <EmbeddedResource Include="Resources\Language\es-ES-Language.xml">
       <SubType>Designer</SubType>
     </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Resources\Tools\mpress.exe" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\mega.png" />
@@ -447,7 +479,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\collaborate.png" />
-    <None Include="Resources\plantilla.png" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="HttpModule\Template\StreamingLibraryTemplateLogin.htm">

@@ -219,7 +219,7 @@ Partial Class PropiedadesDescarga
         'txtPassword
         '
         Me.txtPassword.Location = New System.Drawing.Point(266, 88)
-        Me.txtPassword.MaxLength = 6
+        Me.txtPassword.MaxLength = 128
         Me.txtPassword.Name = "txtPassword"
         Me.txtPassword.Size = New System.Drawing.Size(153, 20)
         Me.txtPassword.TabIndex = 27

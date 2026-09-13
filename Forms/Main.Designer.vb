@@ -52,11 +52,15 @@ Partial Class Main
         Me.VerLinksToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.VerLinksDescToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.OcultarEnlacesImagenMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.ToolStripSeparator4 = New System.Windows.Forms.ToolStripSeparator()
         Me.VerProgresoDescompresionToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ResetToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.LimpiarCompletados2ToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.PropiedadesToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.navPanel = New System.Windows.Forms.Panel()
+        Me.navListBox = New System.Windows.Forms.ListBox()
+        Me.detailPanel = New System.Windows.Forms.Panel()
+        Me.detailGroup = New System.Windows.Forms.GroupBox()
+        Me.detailLabel = New System.Windows.Forms.Label()
         Me.MenuPanel = New System.Windows.Forms.ContextMenuStrip(Me.components)
         Me.AgregarLinksToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.LimpiarCompletadosToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
@@ -82,6 +86,9 @@ Partial Class Main
         Me.MenuMinimizado.SuspendLayout()
         Me.TableLayoutPanel1.SuspendLayout()
         Me.StatusStrip1.SuspendLayout()
+        Me.navPanel.SuspendLayout()
+        Me.detailPanel.SuspendLayout()
+        Me.detailGroup.SuspendLayout()
         Me.SuspendLayout()
         '
         'ListaDescargas
@@ -100,15 +107,75 @@ Partial Class Main
             Or System.Windows.Forms.AnchorStyles.Left) _
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.ListaDescargas.Columns.AddRange(New System.Windows.Forms.ColumnHeader() {Me.OlvColumnPrioridad, Me.OlvColumnNombre, Me.OlvColumnDescargado, Me.OlvColumnTamano, Me.OlvColumnEstado, Me.OlvColumnProgreso, Me.OlvColumnVelocidad, Me.OlvColumnEDT})
-        Me.ListaDescargas.Location = New System.Drawing.Point(12, 46)
+        Me.ListaDescargas.Location = New System.Drawing.Point(148, 46)
         Me.ListaDescargas.Name = "ListaDescargas"
         Me.ListaDescargas.OwnerDraw = True
         Me.ListaDescargas.ShowGroups = False
-        Me.ListaDescargas.Size = New System.Drawing.Size(580, 311)
+        Me.ListaDescargas.Size = New System.Drawing.Size(678, 429)
         Me.ListaDescargas.TabIndex = 0
         Me.ListaDescargas.UseCompatibleStateImageBehavior = False
         Me.ListaDescargas.View = System.Windows.Forms.View.Details
         Me.ListaDescargas.VirtualMode = True
+        '
+        'navPanel
+        '
+        Me.navPanel.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+            Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.navPanel.Controls.Add(Me.navListBox)
+        Me.navPanel.Location = New System.Drawing.Point(12, 46)
+        Me.navPanel.Name = "navPanel"
+        Me.navPanel.Size = New System.Drawing.Size(168, 429)
+        Me.navPanel.TabIndex = 8
+        '
+        'navListBox
+        '
+        ' 不再 Dock=Fill:下方留给任务总览与快捷入口(见 InitNavRail/LayoutNavRail),
+        ' 高度由 LayoutNavRail 按 ItemHeight×5 算死,Anchor 只保留 Top|Left|Right。
+        Me.navListBox.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
+            Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.navListBox.FormattingEnabled = True
+        Me.navListBox.HorizontalScrollbar = False
+        Me.navListBox.IntegralHeight = False
+        Me.navListBox.ItemHeight = 20
+        Me.navListBox.Location = New System.Drawing.Point(0, 0)
+        Me.navListBox.Name = "navListBox"
+        Me.navListBox.SelectionMode = System.Windows.Forms.SelectionMode.One
+        Me.navListBox.Size = New System.Drawing.Size(168, 130)
+        Me.navListBox.TabIndex = 0
+        '
+        'detailPanel
+        '
+        Me.detailPanel.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+            Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.detailPanel.Controls.Add(Me.detailGroup)
+        Me.detailPanel.Location = New System.Drawing.Point(832, 46)
+        Me.detailPanel.Name = "detailPanel"
+        Me.detailPanel.Size = New System.Drawing.Size(180, 429)
+        Me.detailPanel.TabIndex = 9
+        '
+        'detailGroup
+        '
+        Me.detailGroup.Controls.Add(Me.detailLabel)
+        Me.detailGroup.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.detailGroup.Location = New System.Drawing.Point(0, 0)
+        Me.detailGroup.Name = "detailGroup"
+        Me.detailGroup.Size = New System.Drawing.Size(180, 429)
+        Me.detailGroup.TabIndex = 0
+        Me.detailGroup.TabStop = False
+        Me.detailGroup.Text = "Detalle"
+        '
+        'detailLabel
+        '
+        ' 空态文案载体:无选中时显示引导文字(Detail_Empty + Detail_EmptyHint);
+        ' 有选中时隐藏,交给运行时构建的结构化详情面板(detailContentPanel)。
+        Me.detailLabel.AutoSize = False
+        Me.detailLabel.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.detailLabel.Location = New System.Drawing.Point(3, 16)
+        Me.detailLabel.Name = "detailLabel"
+        Me.detailLabel.Padding = New System.Windows.Forms.Padding(8)
+        Me.detailLabel.Size = New System.Drawing.Size(174, 410)
+        Me.detailLabel.TabIndex = 0
+        Me.detailLabel.UseMnemonic = False
         '
         'OlvColumnPrioridad
         '
@@ -136,12 +203,12 @@ Partial Class Main
         'OlvColumnEstado
         '
         Me.OlvColumnEstado.Text = "Estado"
-        Me.OlvColumnEstado.Width = 50
+        Me.OlvColumnEstado.Width = 90
         '
         'OlvColumnProgresoPorc
         '
-        Me.OlvColumnProgresoPorc.IsVisible = False
         Me.OlvColumnProgresoPorc.Text = "Progreso %"
+        Me.OlvColumnProgresoPorc.Width = 55
         '
         'OlvColumnProgreso
         '
@@ -195,7 +262,7 @@ Partial Class Main
         '
         'MenuDescarga
         '
-        Me.MenuDescarga.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.AbrirEnCarpetaToolStripMenuItem, Me.ToolStripSeparator2, Me.SubirPrioridadMenuItem, Me.BajarPrioridadMenuItem, Me.ToolStripSeparator3, Me.ForceDownloadStripMenuItem, Me.PausarStripMenuItem, Me.EliminarMenuItem, Me.EliminarYBorrarMenuItem, Me.ToolStripSeparator1, Me.VerErrorToolStripMenuItem, Me.VerLinksToolStripMenuItem, Me.VerLinksDescToolStripMenuItem, Me.OcultarEnlacesImagenMenuItem, Me.ToolStripSeparator4, Me.VerProgresoDescompresionToolStripMenuItem, Me.ResetToolStripMenuItem, Me.LimpiarCompletados2ToolStripMenuItem, Me.PropiedadesToolStripMenuItem})
+        Me.MenuDescarga.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.AbrirEnCarpetaToolStripMenuItem, Me.PropiedadesToolStripMenuItem, Me.ToolStripSeparator2, Me.ForceDownloadStripMenuItem, Me.PausarStripMenuItem, Me.SubirPrioridadMenuItem, Me.BajarPrioridadMenuItem, Me.ToolStripSeparator3, Me.EliminarMenuItem, Me.EliminarYBorrarMenuItem, Me.ResetToolStripMenuItem, Me.LimpiarCompletados2ToolStripMenuItem, Me.ToolStripSeparator1, Me.VerErrorToolStripMenuItem, Me.VerLinksToolStripMenuItem, Me.VerLinksDescToolStripMenuItem, Me.OcultarEnlacesImagenMenuItem, Me.VerProgresoDescompresionToolStripMenuItem})
         Me.MenuDescarga.Name = "MenuDescarga"
         Me.MenuDescarga.Size = New System.Drawing.Size(226, 336)
         '
@@ -280,11 +347,6 @@ Partial Class Main
         Me.OcultarEnlacesImagenMenuItem.Size = New System.Drawing.Size(225, 22)
         Me.OcultarEnlacesImagenMenuItem.Text = "Ocultar en imagen"
         '
-        'ToolStripSeparator4
-        '
-        Me.ToolStripSeparator4.Name = "ToolStripSeparator4"
-        Me.ToolStripSeparator4.Size = New System.Drawing.Size(222, 6)
-        '
         'VerProgresoDescompresionToolStripMenuItem
         '
         Me.VerProgresoDescompresionToolStripMenuItem.Name = "VerProgresoDescompresionToolStripMenuItem"
@@ -362,10 +424,10 @@ Partial Class Main
         'TableLayoutPanel1
         '
         Me.TableLayoutPanel1.ColumnCount = 6
-        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 40.0!))
-        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 40.0!))
-        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 55.0!))
-        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 40.0!))
+        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 88.0!))
+        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 88.0!))
+        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 88.0!))
+        Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 88.0!))
         Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle())
         Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 120.0!))
         Me.TableLayoutPanel1.Controls.Add(Me.btnPlay, 0, 0)
@@ -387,8 +449,10 @@ Partial Class Main
         '
         Me.btnPlay.Location = New System.Drawing.Point(12, 3)
         Me.btnPlay.Name = "btnPlay"
-        Me.btnPlay.Size = New System.Drawing.Size(34, 34)
+        Me.btnPlay.Size = New System.Drawing.Size(88, 34)
         Me.btnPlay.TabIndex = 1
+        Me.btnPlay.Text = "Iniciar"
+        Me.btnPlay.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipBotones.SetToolTip(Me.btnPlay, "Iniciar descargas")
         Me.btnPlay.UseVisualStyleBackColor = True
         '
@@ -396,8 +460,10 @@ Partial Class Main
         '
         Me.btnPause.Location = New System.Drawing.Point(52, 3)
         Me.btnPause.Name = "btnPause"
-        Me.btnPause.Size = New System.Drawing.Size(34, 34)
+        Me.btnPause.Size = New System.Drawing.Size(88, 34)
         Me.btnPause.TabIndex = 2
+        Me.btnPause.Text = "Pausar"
+        Me.btnPause.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipBotones.SetToolTip(Me.btnPause, "Pausar descargas")
         Me.btnPause.UseVisualStyleBackColor = True
         '
@@ -405,8 +471,10 @@ Partial Class Main
         '
         Me.btnStop.Location = New System.Drawing.Point(92, 3)
         Me.btnStop.Name = "btnStop"
-        Me.btnStop.Size = New System.Drawing.Size(34, 34)
+        Me.btnStop.Size = New System.Drawing.Size(88, 34)
         Me.btnStop.TabIndex = 3
+        Me.btnStop.Text = "Detener"
+        Me.btnStop.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipBotones.SetToolTip(Me.btnStop, "Detener descargas")
         Me.btnStop.UseVisualStyleBackColor = True
         '
@@ -415,8 +483,10 @@ Partial Class Main
         Me.btnAddLink.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.btnAddLink.Location = New System.Drawing.Point(147, 3)
         Me.btnAddLink.Name = "btnAddLink"
-        Me.btnAddLink.Size = New System.Drawing.Size(34, 34)
+        Me.btnAddLink.Size = New System.Drawing.Size(88, 34)
         Me.btnAddLink.TabIndex = 4
+        Me.btnAddLink.Text = "Añadir"
+        Me.btnAddLink.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipBotones.SetToolTip(Me.btnAddLink, "Agregar links")
         Me.btnAddLink.UseVisualStyleBackColor = True
         '
@@ -425,8 +495,10 @@ Partial Class Main
         Me.btnUpdate.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.btnUpdate.Location = New System.Drawing.Point(187, 3)
         Me.btnUpdate.Name = "btnUpdate"
-        Me.btnUpdate.Size = New System.Drawing.Size(34, 34)
+        Me.btnUpdate.Size = New System.Drawing.Size(104, 34)
         Me.btnUpdate.TabIndex = 6
+        Me.btnUpdate.Text = "Actualizar"
+        Me.btnUpdate.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText
         Me.ToolTipBotones.SetToolTip(Me.btnUpdate, "Existe una versión nueva de Megadownloader, haga click aquí para descargarla")
         Me.btnUpdate.UseVisualStyleBackColor = True
         '
@@ -454,7 +526,7 @@ Partial Class Main
         Me.RAMProcToolStripStatusLabel.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text
         Me.RAMProcToolStripStatusLabel.Name = "RAMProcToolStripStatusLabel"
         Me.RAMProcToolStripStatusLabel.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.RAMProcToolStripStatusLabel.Size = New System.Drawing.Size(90, 17)
+        Me.RAMProcToolStripStatusLabel.Size = New System.Drawing.Size(150, 17)
         Me.RAMProcToolStripStatusLabel.Text = "RAM: - / Proc: -"
         '
         'Main
@@ -462,12 +534,14 @@ Partial Class Main
         Me.AllowDrop = True
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(604, 382)
+        Me.ClientSize = New System.Drawing.Size(1024, 500)
         Me.Controls.Add(Me.StatusStrip1)
         Me.Controls.Add(Me.TableLayoutPanel1)
+        Me.Controls.Add(Me.detailPanel)
+        Me.Controls.Add(Me.navPanel)
         Me.Controls.Add(Me.ListaDescargas)
         Me.Icon = Global.MegaDownloader.My.Resources.Resources.icono
-        Me.MinimumSize = New System.Drawing.Size(410, 250)
+        Me.MinimumSize = New System.Drawing.Size(640, 280)
         Me.Name = "Main"
         Me.StartPosition = System.Windows.Forms.FormStartPosition.Manual
         Me.Text = "MegaDownloader"
@@ -479,11 +553,21 @@ Partial Class Main
         Me.TableLayoutPanel1.ResumeLayout(False)
         Me.StatusStrip1.ResumeLayout(False)
         Me.StatusStrip1.PerformLayout()
+        Me.navPanel.ResumeLayout(False)
+        Me.detailPanel.ResumeLayout(False)
+        Me.detailPanel.PerformLayout()
+        Me.detailGroup.ResumeLayout(False)
+        Me.detailGroup.PerformLayout()
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
     End Sub
     Friend WithEvents ListaDescargas As BrightIdeasSoftware.TreeListView
+    Friend WithEvents navPanel As System.Windows.Forms.Panel
+    Friend WithEvents navListBox As System.Windows.Forms.ListBox
+    Friend WithEvents detailPanel As System.Windows.Forms.Panel
+    Friend WithEvents detailGroup As System.Windows.Forms.GroupBox
+    Friend WithEvents detailLabel As System.Windows.Forms.Label
     Friend WithEvents OlvColumnNombre As BrightIdeasSoftware.OLVColumn
     Friend WithEvents OlvColumnTamano As BrightIdeasSoftware.OLVColumn
     Friend WithEvents OlvColumnProgreso As BrightIdeasSoftware.OLVColumn
@@ -527,7 +611,6 @@ Partial Class Main
     'Friend WithEvents SkinEngine As Sunisoft.IrisSkin.SkinEngine
     Friend WithEvents LimpiarCompletadosToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents LimpiarCompletados2ToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents ToolStripSeparator4 As System.Windows.Forms.ToolStripSeparator
     Friend WithEvents btnAddLink As System.Windows.Forms.Button
     Friend WithEvents PausarStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents ToolTipBotones As System.Windows.Forms.ToolTip
