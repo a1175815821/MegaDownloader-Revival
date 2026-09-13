@@ -136,6 +136,13 @@
 - fragment 解码:`UnescapeDataString` + 去空白,`%23/%3D` 转义链不再永久"无法解密";删 dead `Contains(" ")` 分支
 - 更新 URL 仅 https;`version.xml` 禁外部实体(XXE);公开链跳校验改 Warning 留痕;Stegano 远端 64MB+30s 上限;streaming 畸形 mega 参数返 400 不再 500
 
+### 🐛 RC2 修复:合流审查补丁(Pre-merge Gate)
+
+- 左栏任务总览+快捷入口:总速度/计数/队列进度/剩余时间,复用既有 430ms 刷新循环(无新增计时器);解压队列/流媒体库/日志提到首屏
+- 流媒体库 Web 导入加按条隔离:坏文件夹/过期 ELC 只跳过该条(此前整请求无响应)
+- 配额同事件去重:熔断期内重复上报不升级档位不延长等待(此前多连接并发命中可瞬间跳档到 6h)
+- CI 单文件校验改 Windows PowerShell 5.1 执行(此前 `pwsh` 下 ReflectionOnlyLoad 必抛,构建必红)
+
 ### 📦 版本号
 
 - Assembly / FileVersion → `2.5.0.0`(RC 不动)
