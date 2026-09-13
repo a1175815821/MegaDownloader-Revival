@@ -210,12 +210,12 @@ This project maintains **two independent multilingual systems** — one for docu
 
 ### Documentation languages (README / CHANGELOG / CONTRIBUTING)
 
-Documentation follows a "Chinese source → automatic translation" model:
+Documentation is translated by hand — there is no automatic translation pipeline:
 
-- **Only the Chinese source files are hand-maintained**: `docs/README.zh-CN.md`, `docs/CHANGELOG.zh-CN.md`, `docs/CONTRIBUTING.zh-CN.md`
-- English and the other languages (Traditional Chinese / Japanese / Korean) are generated automatically by GitHub Actions — **do not edit the generated files by hand**
-- To improve wording, edit the Chinese source file, or open a PR that modifies it
-- To add a language, edit `i18n/config.yml`; see [i18n/README.md](../i18n/README.md) for details
+- Every language version is hand-maintained: English (`README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), Simplified Chinese (`docs/*.zh-CN.md`, authoritative source), plus the Traditional Chinese / Japanese / Korean counterparts
+- When you update docs, please update all language versions to keep them in sync
+- To improve wording, edit the file of the corresponding language directly, or open a PR
+- To add a language, copy the English (or Chinese) document to the new language file, then update the language navigation links at the top of each document and the language table
 
 ### App UI languages
 
@@ -255,11 +255,11 @@ When filing a bug, please include the following in the Issue:
 ## Release process (maintainers only)
 
 1. Confirm all tests pass and that both `Debug` and `Release` build
-2. Update `docs/CHANGELOG.zh-CN.md` with the new version section (documentation is translated automatically once pushed)
+2. Update `docs/CHANGELOG.zh-CN.md` with the new version section, and sync the CHANGELOG in the other languages
 3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
-6. Write bilingual release notes (format described in section 6 of [i18n/README.md](../i18n/README.md))
+6. Write bilingual release notes (Chinese + English; see the structure of previous `release-notes-*.md` files)
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash

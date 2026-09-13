@@ -1,8 +1,6 @@
 # MegaDownloader 复活计划
 
-<!-- i18n:nav -->
 **语言**：[English](../README.md) · **简体中文** · [繁體中文](../README.zh-TW.md) · [日本語](../README.ja-JP.md) · [한국어](../README.ko-KR.md)
-<!-- /i18n:nav -->
 
 > 让经典 MEGA 下载器重新可用。基于 v1.8 反编译源码修复而成，已完成 60+ 项修复。
 
@@ -175,7 +173,7 @@ MegaDownloader/
 | Magyar | `hu-HU-Language.xml` |
 | Română | `ro-RO-Language.xml` |
 
-想加一门语言或改进现有翻译，见 [CONTRIBUTING](CONTRIBUTING.md#添加新的语言翻译)。
+想加一门语言或改进现有翻译，见 [CONTRIBUTING](CONTRIBUTING.md)。
 
 ---
 
@@ -186,18 +184,17 @@ MegaDownloader/
 | [CHANGELOG](CHANGELOG.md) | 完整版本历史与每版修复明细 |
 | [CONTRIBUTING](CONTRIBUTING.md) | 贡献流程、代码风格、发布流程 |
 
-本文档提供多种语言。**`docs/` 下的简体中文文件是唯一人工维护的版本**，其余语言全部由 GitHub Actions 自动生成：
+本文档提供多种语言。**所有语言版本均为手动维护**，更新某一语言时请同步更新其他语言：
 
 | 语言 | README | CHANGELOG | CONTRIBUTING | |
 | --- | --- | --- | --- | --- |
-| English | `README.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` | 自动生成 |
+| English | `README.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` | 手动维护 |
 | 简体中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.zh-CN.md` | `docs/CONTRIBUTING.zh-CN.md` | **权威源** |
-| 繁體中文 | `README.zh-TW.md` | `docs/CHANGELOG.zh-TW.md` | `docs/CONTRIBUTING.zh-TW.md` | 自动生成 |
-| 日本語 | `README.ja-JP.md` | `docs/CHANGELOG.ja-JP.md` | `docs/CONTRIBUTING.ja-JP.md` | 自动生成 |
-| 한국어 | `README.ko-KR.md` | `docs/CHANGELOG.ko-KR.md` | `docs/CONTRIBUTING.ko-KR.md` | 自动生成 |
+| 繁體中文 | `README.zh-TW.md` | `docs/CHANGELOG.zh-TW.md` | `docs/CONTRIBUTING.zh-TW.md` | 手动维护 |
+| 日本語 | `README.ja-JP.md` | `docs/CHANGELOG.ja-JP.md` | `docs/CONTRIBUTING.ja-JP.md` | 手动维护 |
+| 한국어 | `README.ko-KR.md` | `docs/CHANGELOG.ko-KR.md` | `docs/CONTRIBUTING.ko-KR.md` | 手动维护 |
 
-> 简体中文是权威源，所以不会再单独生成一份 `README.zh-CN.md` —— 源文件本身就是简体中文版。
-> 自动生成的产物要等工作流首次运行后才会出现在仓库里。管线原理与「如何新增一门语言」见 [i18n/README.md](../i18n/README.md)。
+> 简体中文是权威源，源文件本身就是简体中文版，所以仓库根目录下没有单独的 `README.zh-CN.md`。
 
 ---
 

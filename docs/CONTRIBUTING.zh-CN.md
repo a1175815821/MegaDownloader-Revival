@@ -210,14 +210,12 @@ git push origin feature/你的功能名称
 
 ### 文档多语言（README / CHANGELOG / CONTRIBUTING）
 
-文档采用「中文源 → 自动翻译」模式：
+文档采用手动翻译模式，无自动翻译流程：
 
-- **人工维护的只有中文源文件**：`docs/README.zh-CN.md`、`docs/CHANGELOG.zh-CN.md`、`docs/CONTRIBUTING.zh-CN.md`
-- 英文与其他语言（繁中/日/韩）由 GitHub Actions 自动生成，**请勿手动修改产物**
-- 想改进文档措辞 → 改中文源文件，或提 PR 修改源文件
-- 想新增一门语言 → 编辑 `i18n/config.yml`，详见 [i18n/README.md](../i18n/README.md)
-
-> 注：中文之外的各语言产物由翻译工作流首次运行后回填，在此之前仓库里可能只有部分产物文件，这是正常的；届时英文等产物会以中文源为准重新生成。
+- 每种语言的文档都是人工维护的：英文（`README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、简体中文（`docs/*.zh-CN.md`，权威源）、繁中/日/韩对应文件
+- 改文档时请同步更新所有语言版本，保持内容一致
+- 想改进文档措辞 → 直接改对应语言的文件，或提 PR
+- 想新增一门语言 → 复制英文（或中文）文档为新语言文件，并更新各文档顶部的语言导航链接与语言对照表
 
 ### 软件界面多语言
 
@@ -257,11 +255,11 @@ git push origin feature/你的功能名称
 ## 发布流程（仅维护者）
 
 1. 确认所有测试通过，`Debug` 与 `Release` 配置都能构建
-2. 更新 `docs/CHANGELOG.zh-CN.md`，追加新版本章节（推送后文档自动翻译）
+2. 更新 `docs/CHANGELOG.zh-CN.md`，追加新版本章节，并同步更新其他语言的 CHANGELOG
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 撰写中英双语的发布说明（格式见 [i18n/README.md](../i18n/README.md) 第六节）
+6. 撰写中英双语的发布说明（中英对照，先写中文再写英文，参考往期 `release-notes-*.md` 的结构）
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
