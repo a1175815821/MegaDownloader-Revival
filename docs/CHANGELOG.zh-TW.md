@@ -2,7 +2,7 @@
 
 本專案所有重要變更均記錄於此。格式參考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本號遵循 [語義化版本](https://semver.org/lang/zh-CN/)。
 
-*面向使用者的版本亮點摘要見 [GitHub Releases](../../releases)。*
+*面向使用者的版本亮點摘要見 [GitHub Releases](../../../releases)。*
 
 ---
 
@@ -122,7 +122,7 @@
 
 ### 🌐 文件：4 語言全量補齊(手動維護)
 
-- 新增 `README.zh-TW.md / README.ko-KR.md`、`docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`、`docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md`，英文 CHANGELOG 重寫為真正的英文
+- 新增 `docs/README.zh-TW.md / docs/README.ko-KR.md`、`docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`、`docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md`，英文 CHANGELOG 重寫為真正的英文
 - 自動翻譯流水線已整體下線(`i18n/` 指令碼 + Docs i18n 工作流刪除)，以後所有語言版本手動同步更新，改一處請同步其他語言
 
 ---
@@ -927,7 +927,7 @@ Dim chunkMac As Integer() = New Integer() {nonceWords(0), nonceWords(1), nonceWo
 
 - **TLS 1.2/1.3**:在 [`Clases/Conexion.vb`](../Clases/Conexion.vb) 中顯式啟用 `Tls12 | Tls11 | Tls` 協定
 
-- 增加本倉庫的 [README.md](../README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、`.gitignore` 等開發者文件
+- 增加本倉庫的 [README.md](README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、`.gitignore` 等開發者文件
 
 ### 🐛 修復
 

@@ -2,7 +2,7 @@
 
 본 프로젝트의 모든 중요한 변경 사항은 이 문서에 기록됩니다. 형식은 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)를 따르며, 버전 번호는 [시맨틱 버저닝](https://semver.org/lang/zh-CN/)을 따릅니다.
 
-*사용자 대상 버전 하이라이트 요약은 [GitHub Releases](../../releases)를 참조하십시오.*
+*사용자 대상 버전 하이라이트 요약은 [GitHub Releases](../../../releases)를 참조하십시오.*
 
 ---
 
@@ -122,7 +122,7 @@
 
 ### 🌐 문서: 4개 언어 전체 보완(수동 유지)
 
-- `README.zh-TW.md / README.ko-KR.md`, `docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`, `docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md` 신규 추가, 영문 CHANGELOG를 실제 영어로 다시 작성
+- `docs/README.zh-TW.md / docs/README.ko-KR.md`, `docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`, `docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md` 신규 추가, 영문 CHANGELOG를 실제 영어로 다시 작성
 - 자동 번역 파이프라인 전체 폐기(`i18n/` 스크립트 + Docs i18n 워크플로 삭제), 이후 모든 언어 버전은 수동으로 동기화하며, 한 곳을 수정하면 다른 언어도 함께 동기화할 것
 
 ---
@@ -927,7 +927,7 @@ MegaDownloader v1.8 디컴파일 소스를 기반으로 수정 및 리팩터링�
 
 - **TLS 1.2/1.3**: [`Clases/Conexion.vb`](../Clases/Conexion.vb)에서 `Tls12 | Tls11 | Tls` 프로토콜 명시적 활성화
 
-- 본 저장소의 [README.md](../README.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), `.gitignore` 등 개발자 문서 추가
+- 본 저장소의 [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), `.gitignore` 등 개발자 문서 추가
 
 ### 🐛 수정
 

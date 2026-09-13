@@ -77,13 +77,14 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   Message dialog form
 │   └── PropiedadesDescarga.vb      #   Download properties form
 ├── docs/                           # Project documentation
-│   ├── CHANGELOG.md                #   Changelog
-│   └── CONTRIBUTING.md             #   Contributing guide
+│   ├── README*.md                   #   Project readme (5 languages)
+│   ├── CHANGELOG*.md                #   Changelog (5 languages)
+│   └── CONTRIBUTING*.md             #   Contributing guide (5 languages)
 ├── MegaDownloader.sln              # VS solution
 ├── MegaDownloader.vbproj           # VS project
 ├── app.config                      # .NET runtime configuration
 ├── ApplicationEvents.vb            # Application-level event handling
-├── README.md                       # Project readme
+├── README.md                       # Docs index (full readme lives in docs/)
 ├── LICENSE                         # MIT license
 └── .gitignore                      # Git ignore rules
 ```
@@ -212,7 +213,7 @@ This project maintains **two independent multilingual systems** — one for docu
 
 Documentation is translated by hand — there is no automatic translation pipeline:
 
-- Every language version is hand-maintained: English (`README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), Simplified Chinese (`docs/*.zh-CN.md`, authoritative source), plus the Traditional Chinese / Japanese / Korean counterparts
+- Every language version is hand-maintained: English (`docs/README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), Simplified Chinese (`docs/*.zh-CN.md`, authoritative source), plus the Traditional Chinese / Japanese / Korean counterparts
 - When you update docs, please update all language versions to keep them in sync
 - To improve wording, edit the file of the corresponding language directly, or open a PR
 - To add a language, copy the English (or Chinese) document to the new language file, then update the language navigation links at the top of each document and the language table

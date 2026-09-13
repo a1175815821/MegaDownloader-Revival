@@ -2,7 +2,7 @@
 
 本プロジェクトの重要な変更はすべてここに記録されます。形式は [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) を参照し、バージョン番号は [セマンティック バージョニング](https://semver.org/lang/zh-CN/) に従います。
 
-*ユーザー向けのバージョン概要は [GitHub Releases](../../releases) をご覧ください。*
+*ユーザー向けのバージョン概要は [GitHub Releases](../../../releases) をご覧ください。*
 
 ---
 
@@ -122,7 +122,7 @@
 
 ### 🌐 ドキュメント：4言語の完全補完（手動メンテナンス）
 
-- `README.zh-TW.md / README.ko-KR.md`、`docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`、`docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md` を新規追加し、英文 CHANGELOG を真の英語に書き直し
+- `docs/README.zh-TW.md / docs/README.ko-KR.md`、`docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`、`docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md` を新規追加し、英文 CHANGELOG を真の英語に書き直し
 - 自動翻訳パイプラインは全体を廃止（`i18n/` スクリプト + Docs i18n ワークフローを削除）、今後は全言語版を手動で同期更新します。1か所を変更したら他言語も同期してください
 
 ---
@@ -927,7 +927,7 @@ MegaDownloader v1.8 逆編訳源に基づき修正と再構築を行い、MEGA �
 
 - **TLS 1.2/1.3**：[`Clases/Conexion.vb`](../Clases/Conexion.vb) で `Tls12 | Tls11 | Tls` 規約を明示有効化
 
-- 本倉庫の [README.md](../README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、`.gitignore` など開発者文書を追加
+- 本倉庫の [README.md](README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、`.gitignore` など開発者文書を追加
 
 ### 🐛 修正
 

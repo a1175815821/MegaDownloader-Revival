@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/).
 
-*See [GitHub Releases](../../releases) for user-facing release highlights.*
+*See [GitHub Releases](../../../releases) for user-facing release highlights.*
 
 ***
 
@@ -122,7 +122,7 @@ Final release. The delta since RC2 is very small: one concurrency bug fix, versi
 
 ### 🌐 Docs: all 4 languages completed (maintained manually)
 
-- Added `README.zh-TW.md / README.ko-KR.md`, `docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`, `docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md`, English CHANGELOG rewritten as genuine English
+- Added `docs/README.zh-TW.md / docs/README.ko-KR.md`, `docs/CHANGELOG.{zh-TW,ja-JP,ko-KR}.md`, `docs/CONTRIBUTING.{zh-TW,ja-JP,ko-KR}.md`, English CHANGELOG rewritten as genuine English
 - The automatic translation pipeline is fully retired (`i18n/` scripts + Docs i18n workflow deleted); from now on all language versions are synced manually, please sync the other languages when changing one
 
 ***
@@ -927,7 +927,7 @@ Fixed and refactored from the MegaDownloader v1.8 decompiled source, with the co
 
 - **TLS 1.2/1.3**: explicitly enabled `Tls12 | Tls11 | Tls` protocols in [`Clases/Conexion.vb`](../Clases/Conexion.vb)
 
-- Added developer docs for this repository: [README.md](../README.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), `.gitignore` and others
+- Added developer docs for this repository: [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), `.gitignore` and others
 
 ### 🐛 Fixes
 

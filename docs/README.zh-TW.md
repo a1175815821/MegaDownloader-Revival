@@ -1,6 +1,6 @@
 # MegaDownloader 復活計畫
 
-**語言**：[English](README.md) · [简体中文](docs/README.zh-CN.md) · **繁體中文** · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
+**語言**：[English](README.md) · [简体中文](README.zh-CN.md) · **繁體中文** · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
 > 讓經典 MEGA 下載器重新可用。基於 v1.8 反編譯原始碼修復而成，已完成 60+ 項修復。
 
@@ -8,10 +8,10 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
 ---
 
@@ -21,7 +21,7 @@ MegaDownloader 是西班牙開發者 **Andres Soliño** 製作的 MEGA 網碟下
 
 本倉庫是它的復活計畫：反編譯 v1.8 拿到原始碼，在其基礎上修復與重構。
 
-**目前版本：v2.5.0**。完整變更歷史見 [CHANGELOG](docs/CHANGELOG.zh-TW.md)。
+**目前版本：v2.5.0**。完整變更歷史見 [CHANGELOG](CHANGELOG.zh-TW.md)。
 
 > ⚠️ **法律聲明**：本專案源自對第三方已發佈軟體的反編譯，目的僅在於修復相容性問題以恢復其可用性。若原作者認為本倉庫侵犯了其權益，請透過 Issue 聯繫，我們將配合處理。
 
@@ -29,7 +29,7 @@ MegaDownloader 是西班牙開發者 **Andres Soliño** 製作的 MEGA 網碟下
 
 ## 快速開始
 
-1. 從 [Releases](../../releases) 下載，二選一：
+1. 從 [Releases](../../../releases) 下載，二選一：
    - **`MegaDownloader-Revival-win-x86.zip`** —— 綠色版。解壓縮到任意目錄，雙擊 `MegaDownloader.exe`
    - **`MegaDownloader.exe`** —— 單檔案版。12 個相依 DLL 已內嵌，下載後直接雙擊，無需解壓縮
 2. 複製 MEGA 連結，程式自動識別剪貼簿內容
@@ -147,12 +147,12 @@ MegaDownloader/
 │   ├── DLLs/               # 第三方 DLL 相依
 │   ├── Language/           # 多語言 XML（10 種）
 │   └── Installer MSD/      # WiX 安裝包工程
-├── docs/                   # 文件（變更日誌、貢獻指南）
+├── docs/                   # 文件（README / 變更日誌、貢獻指南）
 ├── My Project/             # VS 專案中繼資料
 └── MegaDownloader.sln
 ```
 
-完整的目錄樹與檔案用途說明見 [CONTRIBUTING](docs/CONTRIBUTING.zh-TW.md)。
+完整的目錄樹與檔案用途說明見 [CONTRIBUTING](CONTRIBUTING.zh-TW.md)。
 
 ---
 
@@ -173,7 +173,7 @@ MegaDownloader/
 | Magyar | `hu-HU-Language.xml` |
 | Română | `ro-RO-Language.xml` |
 
-想加一門語言或改進現有翻譯，見 [CONTRIBUTING](docs/CONTRIBUTING.zh-TW.md)。
+想加一門語言或改進現有翻譯，見 [CONTRIBUTING](CONTRIBUTING.zh-TW.md)。
 
 ---
 
@@ -181,20 +181,20 @@ MegaDownloader/
 
 | 文件 | 內容 |
 | --- | --- |
-| [CHANGELOG](docs/CHANGELOG.zh-TW.md) | 完整版本歷史與每版修復明細 |
-| [CONTRIBUTING](docs/CONTRIBUTING.zh-TW.md) | 貢獻流程、程式碼風格、發佈流程 |
+| [CHANGELOG](CHANGELOG.zh-TW.md) | 完整版本歷史與每版修復明細 |
+| [CONTRIBUTING](CONTRIBUTING.zh-TW.md) | 貢獻流程、程式碼風格、發佈流程 |
 
 本文檔提供多種語言。**所有語言版本均為手動維護**，更新某一語言時請同步更新其他語言：
 
 | 語言 | README | CHANGELOG | CONTRIBUTING | |
 | --- | --- | --- | --- | --- |
-| English | `README.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` | 手動維護 |
-| 簡體中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.zh-CN.md` | `docs/CONTRIBUTING.zh-CN.md` | **權威源** |
-| 繁體中文 | `README.zh-TW.md` | `docs/CHANGELOG.zh-TW.md` | `docs/CONTRIBUTING.zh-TW.md` | 手動維護 |
-| 日本語 | `README.ja-JP.md` | `docs/CHANGELOG.ja-JP.md` | `docs/CONTRIBUTING.ja-JP.md` | 手動維護 |
-| 한국어 | `README.ko-KR.md` | `docs/CHANGELOG.ko-KR.md` | `docs/CONTRIBUTING.ko-KR.md` | 手動維護 |
+| English | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | 手動維護 |
+| 簡體中文 | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **權威源** |
+| 繁體中文 | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | 手動維護 |
+| 日本語 | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | 手動維護 |
+| 한국어 | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | 手動維護 |
 
-> 簡體中文是權威源，源文件本身就是簡體中文版，所以倉庫根目錄下沒有單獨的 `README.zh-CN.md`。
+> 簡體中文是權威源，源文件本身就是簡體中文版，所以沒有單獨的 `README.zh-CN.md`。
 
 ---
 

@@ -77,13 +77,14 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   訊息提示窗體
 │   └── PropiedadesDescarga.vb      #   下載屬性窗體
 ├── docs/                           # 專案文件
-│   ├── CHANGELOG.md                #   變更日誌
-│   └── CONTRIBUTING.md             #   貢獻指南
+│   ├── README*.md                   #   專案說明（5 種語言）
+│   ├── CHANGELOG*.md                #   變更日誌（5 種語言）
+│   └── CONTRIBUTING*.md             #   貢獻指南（5 種語言）
 ├── MegaDownloader.sln              # VS 解決方案
 ├── MegaDownloader.vbproj           # VS 工程
 ├── app.config                      # .NET 執行階段組態
 ├── ApplicationEvents.vb            # 應用層級事件處理
-├── README.md                       # 專案說明
+├── README.md                       # 文件首頁索引（正文在 docs/）
 ├── LICENSE                         # MIT 授權條款
 └── .gitignore                      # Git 忽略規則
 ```
@@ -212,7 +213,7 @@ git push origin feature/你的功能名稱
 
 文件採手動翻譯模式，無自動翻譯流程：
 
-- 每種語言的文件都是人工維護的：英文（`README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、簡體中文（`docs/*.zh-CN.md`，權威來源）、繁中/日/韓對應檔案
+- 每種語言的文件都是人工維護的：英文（`docs/README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、簡體中文（`docs/*.zh-CN.md`，權威來源）、繁中/日/韓對應檔案
 - 修改文件時請同步更新所有語言版本，保持內容一致
 - 想改進文件用詞 → 直接修改對應語言的檔案，或提交 PR
 - 想新增一種語言 → 複製英文（或中文）文件為新語言檔案，並更新各文件頂部的語言導覽連結與語言對照表

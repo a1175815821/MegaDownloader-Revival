@@ -1,6 +1,6 @@
 # MegaDownloader 复活计划
 
-**语言**：[English](../README.md) · **简体中文** · [繁體中文](../README.zh-TW.md) · [日本語](../README.ja-JP.md) · [한국어](../README.ko-KR.md)
+**语言**：[English](README.md) · **简体中文** · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
 > 让经典 MEGA 下载器重新可用。基于 v1.8 反编译源码修复而成，已完成 60+ 项修复。
 
@@ -147,7 +147,7 @@ MegaDownloader/
 │   ├── DLLs/               # 第三方 DLL 依赖
 │   ├── Language/           # 多语言 XML（10 种）
 │   └── Installer MSD/      # WiX 安装包工程
-├── docs/                   # 文档（变更日志、贡献指南）
+├── docs/                   # 文档（README / 变更日志、贡献指南）
 ├── My Project/             # VS 项目元数据
 └── MegaDownloader.sln
 ```
@@ -188,13 +188,13 @@ MegaDownloader/
 
 | 语言 | README | CHANGELOG | CONTRIBUTING | |
 | --- | --- | --- | --- | --- |
-| English | `README.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` | 手动维护 |
-| 简体中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.zh-CN.md` | `docs/CONTRIBUTING.zh-CN.md` | **权威源** |
-| 繁體中文 | `README.zh-TW.md` | `docs/CHANGELOG.zh-TW.md` | `docs/CONTRIBUTING.zh-TW.md` | 手动维护 |
-| 日本語 | `README.ja-JP.md` | `docs/CHANGELOG.ja-JP.md` | `docs/CONTRIBUTING.ja-JP.md` | 手动维护 |
-| 한국어 | `README.ko-KR.md` | `docs/CHANGELOG.ko-KR.md` | `docs/CONTRIBUTING.ko-KR.md` | 手动维护 |
+| English | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | 手动维护 |
+| 简体中文 | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **权威源** |
+| 繁體中文 | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | 手动维护 |
+| 日本語 | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | 手动维护 |
+| 한국어 | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | 手动维护 |
 
-> 简体中文是权威源，源文件本身就是简体中文版，所以仓库根目录下没有单独的 `README.zh-CN.md`。
+> 简体中文是权威源，本文件本身就是简体中文版，所以不存在单独的 `README.zh-CN.md`。
 
 ---
 

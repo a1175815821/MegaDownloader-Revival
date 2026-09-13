@@ -77,13 +77,14 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   메시지 알림 폼
 │   └── PropiedadesDescarga.vb      #   다운로드 속성 폼
 ├── docs/                           # 프로젝트 문서
-│   ├── CHANGELOG.md                #   변경 로그
-│   └── CONTRIBUTING.md             #   기여 가이드
+│   ├── README*.md                   #   프로젝트 설명(5개 언어)
+│   ├── CHANGELOG*.md                #   변경 로그(5개 언어)
+│   └── CONTRIBUTING*.md             #   기여 가이드(5개 언어)
 ├── MegaDownloader.sln              # VS 솔루션
 ├── MegaDownloader.vbproj           # VS 프로젝트
 ├── app.config                      # .NET 런타임 구성
 ├── ApplicationEvents.vb            # 응용 프로그램 수준 이벤트 처리
-├── README.md                       # 프로젝트 설명
+├── README.md                       # 문서 색인(본문은 docs/에 있음)
 ├── LICENSE                         # MIT 라이선스
 └── .gitignore                      # Git 무시 규칙
 ```
@@ -212,7 +213,7 @@ GitHub에서 `main` 브랜치로 Pull Request를 생성하고, PR 설명에 다�
 
 문서는 수동 번역 모드를 채택하며 자동 번역 흐름은 없습니다:
 
-- 각 언어의 문서는 사람이 직접 유지관리합니다: 영어(`README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), 간체 중국어(`docs/*.zh-CN.md`, 권위 원본), 번체/일본어/한국어 대응 파일
+- 각 언어의 문서는 사람이 직접 유지관리합니다: 영어(`docs/README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), 간체 중국어(`docs/*.zh-CN.md`, 권위 원본), 번체/일본어/한국어 대응 파일
 - 문서 수정 시 모든 언어 버전을 동기화하여 내용을 일치시키세요
 - 문서 표현을 개선하고 싶다면 → 해당 언어 파일을 직접 수정하거나 PR 제출
 - 새 언어를 추가하고 싶다면 → 영어(또는 중국어) 문서를 복사하여 새 언어 파일로 만들고 각 문서 상단의 언어 탐색 링크와 언어 대조표를 업데이트하세요

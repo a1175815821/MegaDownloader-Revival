@@ -77,13 +77,14 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   メッセージ通知フォーム
 │   └── PropiedadesDescarga.vb      #   ダウンロードプロパティフォーム
 ├── docs/                           # プロジェクトドキュメント
-│   ├── CHANGELOG.md                #   変更履歴
-│   └── CONTRIBUTING.md             #   貢献ガイド
+│   ├── README*.md                   #   プロジェクト説明（5言語）
+│   ├── CHANGELOG*.md                #   変更履歴（5言語）
+│   └── CONTRIBUTING*.md             #   貢献ガイド（5言語）
 ├── MegaDownloader.sln              # VS ソリューション
 ├── MegaDownloader.vbproj           # VS プロジェクト
 ├── app.config                      # .NET ランタイム構成
 ├── ApplicationEvents.vb            # アプリケーションレベルのイベント処理
-├── README.md                       # プロジェクト説明
+├── README.md                       # ドキュメント索引（本文は docs/ にあります）
 ├── LICENSE                         # MIT ライセンス
 └── .gitignore                      # Git 無視ルール
 ```
@@ -212,7 +213,7 @@ GitHub 上で `main` ブランチへの Pull Request を作成し、PR の説明
 
 ドキュメントは手動翻訳モードを採用しており、自動翻訳フローはありません：
 
-- 各言語のドキュメントは人手で保守されています：英語（`README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、簡体字中国語（`docs/*.zh-CN.md`、正本）、繁体字中国語/日本語/韓国語の対応ファイル
+- 各言語のドキュメントは人手で保守されています：英語（`docs/README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、簡体字中国語（`docs/*.zh-CN.md`、正本）、繁体字中国語/日本語/韓国語の対応ファイル
 - ドキュメントを変更する際は、すべての言語バージョンを同期して更新し、内容を一致させてください
 - ドキュメントの表現を改善したい場合 → 対応する言語のファイルを直接修正するか、PR を提出してください
 - 新しい言語を追加したい場合 → 英語（または中国語）ドキュメントを複製して新しい言語ファイルとし、各ドキュメント上部の言語ナビゲーションリンクと言語対照表を更新してください
