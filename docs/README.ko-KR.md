@@ -13,6 +13,8 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
+> ⭐ 이 프로젝트가 도움이 되었다면 오른쪽 위 Star를 눌러 응원해 주세요!
+
 ---
 
 ## 소개

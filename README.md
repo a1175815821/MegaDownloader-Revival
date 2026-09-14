@@ -1,6 +1,6 @@
 # MegaDownloader Revival Project
 
-**Languages**: **English** · [简体中文](docs/README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
+**Languages**: **English** · [简体中文](docs/README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja-JP.md) · [한국어](docs/README.ko-KR.md)
 
 > Restoring the classic MEGA Downloader to working order. Based on a decompiled version of v1.8 source code, with over 60 fixes implemented.
 
