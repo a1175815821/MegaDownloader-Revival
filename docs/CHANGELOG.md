@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format is based on 
 
 | Version | Date | Theme |
 | --- | --- | --- |
+| 2.5.1 | 2026-09-14 | Patch: resume that keeps working, honest speed limits, two audit follow-up rounds |
 | 2.5.0 | 2026-09-14 | Final: Watch Online concurrency fix + version finalized into update channel + 4-language docs completed |
 | 2.5 RC2 | 2026-09-13 | Production audit fixes in three batches: release-blocking / reliability / experience and defense-in-depth |
 | 2.5 RC1 | 2026-09-12 | MEGA quota circuit-breaker + countdown banner; self-healing for failures enabled by default |
@@ -103,6 +104,42 @@ Below are the detailed changes for each v2.4 version (each version also appears 
 | Concurrency contamination | Streaming module AJAX responses changed to `AsyncLocal`, multiple requests no longer interfere |
 | Resource leak | mutex `Try/Finally` release; `BackgroundWorker.Dispose` |
 | Public-link false positives | 4 words keys without MetaMAC skip verification (logged), no longer misreported as failures |
+
+***
+
+## \[2.5.1\] - 2026-09-14
+
+Patch release. Two audit rounds since 2.5.0 — self-heal follow-ups plus the remaining user-visible issues. Core theme: **resume keeps working, limits mean what they say**.
+
+### 🐛 Fixes round 1: watchdog, AddLinks, 7z quota, speed limit, hidden links
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb) / [Main.vb](../Forms/Main.vb) / [AddLinks.vb](../Forms/AddLinks.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [Configuration.vb](../Forms/Configuration.vb))
+
+- 120-second wall-clock watchdog → idle (stall) watchdog: the timer resets on every chunk progress, so large files no longer fail unconditionally; self-heal and quota wake-ups keep chunk state and the `.part` file, so retries resume instead of looping re-downloads
+- Watch Online cancel no longer locks the button: the shared resolve continuation now resets both buttons plus the in-progress flag (previously it reset the wrong button and never cleared the flag)
+- Add-links with a missing directory creates it and continues — the first click no longer silently does nothing
+- 7z CLI path enforces the 50 GiB uncompressed cap like the managed path (the entry-count cap already applied there)
+- Fractional speed limits such as 0.5 MB/s save correctly (parsed as Double, rounded back to KB); the unit label now correctly reads MB/s
+- Multiple hidden-link batches no longer merge into a single unparseable blob (newline separator, same as the visible-URL path)
+
+### 🐛 Fixes round 2: 11 follow-up items (including 2 regressions introduced by the round-1 patch)
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [ThrottledStreamController.vb](../Clases/ThrottledStreamController.vb) / [Main.vb](../Forms/Main.vb) / [PropiedadesDescarga.vb](../Forms/PropiedadesDescarga.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb))
+
+- `.part` size mismatch (remote replaced / truncated / short file after a full disk) is repaired in place — rebuild plus chunk reset, then continue — instead of failing every 15 minutes forever
+- Retry progress no longer double-counts (per-run counters reset on start; pause/resume unaffected — previously jumped to ~100% right after retry)
+- Speed limits reach the controller in bytes (KB × 1024 at all 5 call sites) — previously 1 MB/s behaved as ~1 KB/s
+- Pause time no longer counts toward the stall timer; quota-quarantine stalls fail fast (10 s watchdog + 5 s drain) instead of ~150 s at zero speed
+- Multiple `.elc` / `.dlc` files queue up instead of taking only the first (drag & drop and command line); the command line now accepts `.elc` (previously a silent no-op)
+- Force-download works on failed (red) tasks via full reset plus individual start (permanent errors still excluded; previously zero feedback)
+- Package properties no longer silently zero per-file speed limits when only path/password changed (shows the shared limit when uniform, skips overwrite otherwise)
+- 7z extraction publishes its total size, so progress shows `done / total` instead of `-` (per-byte progress remains managed-path only)
+- Speed boxes display at most 4 decimals (`1.46484375` → `1.4648`, round-trips within 1 KB)
+
+### 📦 Version numbers
+
+- Assembly / FileVersion → `2.5.1.0`; `docs/version.xml` → `2.5.1.0` (2.5.0 and earlier will be offered this update)
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.1` (`VERSION_UPDATE` keeps the known `Double`-parse limitation for the statistics ping, same trade-off as 2.5.0; the update check itself compares with `System.Version` and is unaffected)
 
 ***
 

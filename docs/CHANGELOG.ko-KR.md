@@ -10,6 +10,7 @@
 
 | 버전 | 날짜 | 주제 |
 | --- | --- | --- |
+| 2.5.1 | 2026-09-14 | 패치: 이어받기 유지, 속도 제한 단위 수정, 감사 후속 2차 |
 | 2.5.0 | 2026-09-14 | 정식 버전: 온라인 시청 동시성 수정 + 버전 번호 정식화 및 업데이트 채널 진입 + 4개 언어 문서 보완 |
 | 2.5 RC2 | 2026-09-13 | 프로덕션 감사 3차 수정: 릴리스 차단 / 안정성 / 경험 및 심층 방어 |
 | 2.5 RC1 | 2026-09-12 | MEGA 할당량 서킷 브레이커 + 카운트다운 배너; 실패 자동 복구 기본 활성화 |
@@ -103,6 +104,42 @@
 | 동시성 오염     | Streaming 모듈 AJAX 응답을 `AsyncLocal`로 변경, 다중 요청이 서로 간섭하지 않음        |
 | 리소스 누수     | Mutex `Try/Finally` 해제; `BackgroundWorker.Dispose` |
 | 공개 링크 오보   | 4 words key에 MetaMAC이 없을 때 검증을 건너뜀(로그 기록), 더 이상 실패로 오판하지 않음           |
+
+---
+
+## [2.5.1] - 2026-09-14
+
+패치 버전. 2.5.0 이후 감사 후속 2차 — 자가치유 활성화 후 회귀 + 나머지 사용자 가시 issue. 한 줄로: **이어받기는 유지, 속도 제한은 표시대로**.
+
+### 🐛 1차: 워치독, AddLinks, 7z 쿼터, 속도 제한, 숨김 링크
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb) / [Main.vb](../Forms/Main.vb) / [AddLinks.vb](../Forms/AddLinks.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [Configuration.vb](../Forms/Configuration.vb))
+
+- 120초 총시간 워치독→무진행 타임아웃으로 변경: 청크가 진행될 때마다 타이머 리셋, 대용량 파일 무조건 실패 해소; 자가치유·쿼터 복구는 청크 상태와 `.part` 유지, 재시도는 이어받기(재다운로드 루프 없음)
+- "온라인 시청" 취소 후 버튼 고착 해소: 공유 resolve 후속이 두 버튼+진행 플래그를 복원(기존은 잘못된 버튼 복원·플래그 잔류)
+- 저장 경로 미존재 시 생성 후 계속 — 첫 클릭 무반응 해소
+- 외부 7z CLI 경로에 50 GiB 압축 해제 후 크기 상한 적용(항목 수 상한은 기존대로)
+- 0.5 MB/s 등 소수 제한 저장 가능(Double 파싱→KB 반올림); 단위 표기 MB/s 정정
+- 여러 배치 숨김 링크를 개행 구분으로 변경, 거대 blob 병합으로 인한 조용한 유실 해소
+
+### 🐛 2차: 11건 후속(1차 패치로 인한 회귀 2건 포함)
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [ThrottledStreamController.vb](../Clases/ThrottledStreamController.vb) / [Main.vb](../Forms/Main.vb) / [PropiedadesDescarga.vb](../Forms/PropiedadesDescarga.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb))
+
+- `.part` 크기 불일치(원격 교체/잘림/디스크 가득 후 단축)를 제자리 재구축+청크 초기화 후 계속 — 15분마다 영구 실패 해소
+- 재시도 진행률 이중 계산 해소(시작 시 당회 카운터 초기화; 일시정지/재개 영향 없음. 기존은 재시도 직후 ~100% 점프)
+- 속도 제한 5곳을 KB×1024 바이트 환산으로 컨트롤러에 전달(기존 1 MB/s 지정이 ~1 KB/s 상당)
+- 일시정지 시간은 정체에 미산입; 쿼터 격리 중 무속도는 10초 감시+5초 드레인으로 신속 적색 전환(기존 ~150초 방치)
+- 복수 `.elc`/`.dlc` 큐 순차 가져오기(드래그 앤 드롭·명령줄); 명령줄 `.elc` 수락(기존 무반응); 복수 `.dlc` 첫 항목만 문제 해소
+- 실패(적색) 작업 강제 다운로드 가능: 전체 리셋 후 개별 시작(영구 실패는 계속 제외; 기존 무반응)
+- 패키지 속성 저장이 각 파일 제한을 조용히 0으로 만들지 않음(균일 시 공유값 표시, 미선택 시 덮어쓰기 억제)
+- 7z 압축 해제는 총량을 게시하여 진행률을 완료/전체 표시로 변경(바이트 단위는 기존대로 매니지드 경로만)
+- 속도 입력란 소수 4자리까지(`1.46484375`→`1.4648`, 왕복 오차 <1KB)
+
+### 📦 버전 번호
+
+- Assembly / FileVersion → `2.5.1.0`; `docs/version.xml` → `2.5.1.0`(2.5.0 이하는 본 업데이트 알림 대상)
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.1`(`VERSION_UPDATE`는 기존 `Double` 파싱 제한으로 통계 ping은 2.5.0과 동일 취급; 업데이트 검사 자체는 `System.Version` 비교로 영향 없음)
 
 ---
 

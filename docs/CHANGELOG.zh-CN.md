@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.1 | 2026-09-14 | 补丁版：断点续传保得住、限速单位修正、两批审计跟进修复 |
 | 2.5.0 | 2026-09-14 | 正式版：在线观看并发修复 + 版本号转正进更新通道 + 4 语言文档补齐 |
 | 2.5 RC2 | 2026-09-13 | 生产审计三批修复：发布阻塞 / 可靠性 / 体验与纵深 |
 | 2.5 RC1 | 2026-09-12 | MEGA 配额熔断 + 倒计时横幅；失败自愈默认开启 |
@@ -103,6 +104,42 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.1] - 2026-09-14
+
+补丁版。相对 2.5.0 的两批审计跟进：自愈上线后的回归 + 其余用户可感知的明显问题。一句话：**续传保得住，限速说了算**。
+
+### 🐛 第一批：看门狗、AddLinks、7z 配额、限速、隐身链接
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb) / [Main.vb](../Forms/Main.vb) / [AddLinks.vb](../Forms/AddLinks.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [Configuration.vb](../Forms/Configuration.vb))
+
+- 120 秒总时长墙钟→无进度超时：有分块推进就重置计时，大文件不再无条件失败；自愈与配额唤醒保留分块与 `.part`，重试续传不再循环重下
+- 「在线观看」取消不再锁死按钮：共享解析续体同时复位两个按钮 + 进行中标志（此前复位错按钮、标志永不清）
+- 下载目录不存在时建完继续添加，第一下不再静默无操作
+- 外部 7z CLI 路径补上 50 GiB 解压后体积上限（条目数上限原本就有）
+- 0.5 MB/s 等小数限速可保存（按 Double 解析、四舍五入回 KB）；单位标签更正为 MB/s
+- 多批隐身链接加换行分隔，不再拼成一个无法解析的大 blob 而静默丢失
+
+### 🐛 第二批：11 项跟进（含第一批补丁引入的 2 个回归）
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [ThrottledStreamController.vb](../Clases/ThrottledStreamController.vb) / [Main.vb](../Forms/Main.vb) / [PropiedadesDescarga.vb](../Forms/PropiedadesDescarga.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb))
+
+- `.part` 尺寸不符（远端替换/截断/磁盘满短文件）就地重建 + 重置分块后继续，不再每 15 分钟失败一次、永远救不回
+- 重试进度不再双计（启动清单次计数器；暂停/恢复不受影响；此前重试瞬间跳 ~100%）
+- 限速 5 处调用统一 KB×1024 按字节传给控制器，此前设 1 MB/s 实际约 1 KB/s
+- 暂停时长不再计入停滞；配额熔断期零速 10 秒看门狗 + 5 秒排空即变红（此前干等 ~150 秒）
+- 多个 `.elc`/`.dlc` 排队逐个导入（拖放与命令行），命令行支持 `.elc`（此前静默无操作）；多 `.dlc` 不再只取第一个
+- 红字任务「强制下载」可用：全量重置后按单个强制起（永久失败仍排除；此前零反馈）
+- 包属性只改路径/密码不再静默清零各文件限速（一致时显示公共值，未勾选不覆写）
+- 7z 解压发布总量，进度显示 已/共 而不是 `-`（逐字节进度仍仅托管分支有）
+- 限速框最多 4 位小数（`1.46484375`→`1.4648`，回乘误差 <1KB）
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.1.0`；`docs/version.xml` → `2.5.1.0`（2.5.0 及更早版本会收到本次更新提示）
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.1`（`VERSION_UPDATE` 沿用已知的 `Double` 解析限制，统计 ping 同 2.5.0 取舍；更新检查本身用 `System.Version` 比较，不受影响）
 
 ---
 
