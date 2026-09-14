@@ -793,34 +793,51 @@ Public Class DescompresorController
             EnsureExtractWithinQuota(totalUncompressed, entryKeys.Count)
             PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
 
-            ' ---- Pass 2: extract ----
-            If Not String.IsNullOrEmpty(Password) AndAlso Password.Contains(""""c) Then
-                ' 7-Zip CLI argument quoting cannot express a double quote inside a
-                ' password reliably — reject instead of silently mis-decrypting.
-                Throw New NotSupportedException("7z passwords containing double quotes are not supported.")
-            End If
-
-            Dim args As New System.Text.StringBuilder()
-            args.Append("x -y -bd -sccUTF-8 -o""")
-            args.Append(PathExtraccion)
-            args.Append(""" ")
-            If Not String.IsNullOrEmpty(Password) Then
-                ' -p<password>: no space after -p; no -p at all means "no password",
-                ' and an empty -p would make 7-Zip prompt (impossible headless).
-                args.Append("-p").Append(Password).Append(" ")
-            End If
-            args.Append("-- """).Append(PathFichero).Append(""""c)
-
-            RunSevenZip(cli, args.ToString(), checkCancel:=True)
-
-            ' Report the file name currently extracted for the UI (no byte progress
-            ' from the CLI — total sizes remain unknown / null).
+            ' ⑩:把 Pass1 已算出的解压后总量发布到控制器,解压窗不再全程显示 " -"。
+            ' CLI 无逐字节回调,已解字节只能显示 0/总量(托管分支才有细粒度);结束后按惯例清回 Nothing。
             Dim c As DescompresorController = DescompresorController.GetController
             Mutex.WaitOne()
             Try
+                c._TamanoTotal = totalUncompressed
+                c._FicActTamanoTotal = 0
+                c._TamanoTotalExtraido = 0
+                c._FicActExtraido = 0
                 c._FicActNombre = PathFichero
             Finally
                 Mutex.ReleaseMutex()
+            End Try
+
+            Try
+                ' ---- Pass 2: extract ----
+                If Not String.IsNullOrEmpty(Password) AndAlso Password.Contains(""""c) Then
+                    ' 7-Zip CLI argument quoting cannot express a double quote inside a
+                    ' password reliably — reject instead of silently mis-decrypting.
+                    Throw New NotSupportedException("7z passwords containing double quotes are not supported.")
+                End If
+
+                Dim args As New System.Text.StringBuilder()
+                args.Append("x -y -bd -sccUTF-8 -o""")
+                args.Append(PathExtraccion)
+                args.Append(""" ")
+                If Not String.IsNullOrEmpty(Password) Then
+                    ' -p<password>: no space after -p; no -p at all means "no password",
+                    ' and an empty -p would make 7-Zip prompt (impossible headless).
+                    args.Append("-p").Append(Password).Append(" ")
+                End If
+                args.Append("-- """).Append(PathFichero).Append(""""c)
+
+                RunSevenZip(cli, args.ToString(), checkCancel:=True)
+            Finally
+                Mutex.WaitOne()
+                Try
+                    c._TamanoTotal = Nothing
+                    c._FicActTamanoTotal = Nothing
+                    c._TamanoTotalExtraido = Nothing
+                    c._FicActExtraido = Nothing
+                    c._FicActNombre = Nothing
+                Finally
+                    Mutex.ReleaseMutex()
+                End Try
             End Try
         End Sub
 

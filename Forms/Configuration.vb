@@ -208,7 +208,8 @@ Public Class Configuration
         chkLimitarVelocidad.Checked = (Config.LimiteVelocidadKBs > 0)
         txtLimiteVelocidadKBs.Enabled = chkLimitarVelocidad.Checked
         If (Config.LimiteVelocidadKBs > 0) Then
-            txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString
+            ' ⑪:限长小数(1500KB→1.46484375)。4 位小数约 0.1KB 精度,回乘 Round 后误差 <1KB。
+            txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString("0.####")
         End If
 
         chkProxy.Checked = Config.UsarProxy
@@ -597,7 +598,8 @@ Public Class Configuration
         Conexion.SetProxy(Config)
         Configuracion.RegisterInStartup(Config.IniciarConWindows)
 
-        ThrottledStreamController.GetController.SetMaxGlobalSpeed(Config.LimiteVelocidadKBs)
+        ' ③:同 Configuracion,全局限速 KB→B。
+        ThrottledStreamController.GetController.SetMaxGlobalSpeed(CLng(Config.LimiteVelocidadKBs) * 1024L)
 
         Main.Config = Config
         Main.NecesitaCambiarUsuarioYPassword = False

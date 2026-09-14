@@ -3282,6 +3282,12 @@ Public Class Main
             ElseIf Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada Then
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
+            ElseIf Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
+                ' ⑧:红字强制=手动全量重置后按单个强制起(删 .part 从头来,顺带修尺寸不符类错误)。
+                Fichero.ResetearDescarga()
+                Fichero.SetDescargaEstado = Estado.EnCola
+                Fichero.DescargaIndividual = True
+                Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             End If
         Finally
             Mutex.ListaDescargas.ReleaseMutex()
@@ -4260,12 +4266,15 @@ Public Class Main
             Next
             If TodosExisten Then
 
+                ' ⑥:多个 .elc/.dlc 逐个排队导入,此前 Exit Sub 只进第一个。
+                Dim handled As Integer = 0
                 For Each Fichero As String In ficheros
                     If Fichero.ToUpper.EndsWith(".DLC") Or Fichero.ToUpper.EndsWith(".ELC") Then
                         AddDLC(Fichero)
-                        Exit Sub
+                        handled += 1
                     End If
                 Next
+                If handled > 0 Then Return
 
                 ' 拖入的是其它类型文件:给出提示而不是静默丢弃
                 MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
@@ -4873,9 +4882,11 @@ Public Class Main
 
     Private Sub ForceDownloadStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ForceDownloadStripMenuItem.Click
         For Each o As Object In ListaDescargas.SelectedObjects
+            ' ⑧:红字(Erroneo)此前被拦,点 Force 零反馈。放行并由 ForzarDescarga 重置后强制起。
             If TypeOf (o) Is Fichero _
                 AndAlso (CType(o, Fichero).DescargaEstado = Estado.Pausado _
-                         Or CType(o, Fichero).DescargaEstado = Estado.EnCola) Then
+                         Or CType(o, Fichero).DescargaEstado = Estado.EnCola _
+                         Or CType(o, Fichero).DescargaEstado = Estado.Erroneo) Then
                 ForzarDescarga(CType(o, Fichero))
             End If
         Next
@@ -4991,16 +5002,17 @@ Public Class Main
             For Each url As String In URLExtractor.ExtraerURLs(arg)
                 URLlist.Add(url)
             Next
-            If arg.ToUpper.EndsWith(".DLC") AndAlso IO.File.Exists(arg) Then
+            ' ⑦:双击/命令行 .elc 此前无分支静默无操作;多 .dlc 只取 [0]。统一排队逐个导入。
+            If IO.File.Exists(arg) AndAlso (arg.ToUpper.EndsWith(".DLC") OrElse arg.ToUpper.EndsWith(".ELC")) Then
                 DLCList.Add(arg)
             End If
         Next
         If URLlist.Count > 0 Then
             ComprobarYAgregarLinks(String.Join(vbNewLine, URLlist.ToArray), True, False)
         End If
-        If DLCList.Count > 0 Then
-            AddDLC(DLCList(0))
-        End If
+        For Each dlcPath As String In DLCList
+            AddDLC(dlcPath)
+        Next
 
     End Sub
 
@@ -5014,16 +5026,24 @@ Public Class Main
     Private DLCPath As String = String.Empty
     Private DLCResults As Generic.List(Of String) = Nothing
     Private DLCErrorProcessing As Exception = Nothing
+    ' ⑥⑦:多文件排队。AddDLC 原来 DLCProcessing=True 时直接丢弃,拖多个/传多个只进第一个。
+    Private DLCQueue As New Generic.Queue(Of String)
 
 
     Private Sub AddDLC(ByVal DLCFilePath As String)
-        If DLCProcessing Then Exit Sub
         ' 用户在文件对话框点了"取消"时传空串:静默退出,不弹"The path is not valid"假错误
         If String.IsNullOrWhiteSpace(DLCFilePath) Then Exit Sub
+        DLCQueue.Enqueue(DLCFilePath)
+        PumpDLCQueue()
+    End Sub
 
+    ''' <summary>⑥⑦:空闲且队列非空时取下一个开工;保证多 .elc/.dlc 逐个导入,不再吞文件。</summary>
+    Private Sub PumpDLCQueue()
+        If DLCProcessing Then Exit Sub
+        If DLCQueue.Count = 0 Then Exit Sub
         DLCProcessing = True
         Dim Thread As New System.Threading.Thread(AddressOf StartProcessDLC)
-        DLCPath = DLCFilePath
+        DLCPath = DLCQueue.Dequeue()
         Thread.Start()
     End Sub
 
@@ -5054,6 +5074,8 @@ Public Class Main
                        MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
         End If
+        ' ⑥⑦:当前处理完顺手起下一个排队文件。
+        PumpDLCQueue()
     End Sub
     Private Sub StartProcessDLC()
         Dim Thread As New System.Threading.Thread(AddressOf ProcessDLC)

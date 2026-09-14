@@ -253,7 +253,8 @@ Public Class Paquete
                         ' 已完整的文件只会做快速校验,不会从零重下。
                         Fichero.SetDescargaEstado = Estado.EnCola
                     End If
-                    ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, Fichero.LimiteVelocidad)
+                    ' ③:存量 KB→控制器字节(×1024),否则历史限速全部 1/1024。
+                    ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, CLng(Fichero.LimiteVelocidad) * 1024L)
                 Next
             Next
         Finally

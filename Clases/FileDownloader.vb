@@ -789,15 +789,36 @@ Public Class FileDownloader
                     Me.MutexFile.ReleaseMutex()
                 End Try
             Else
+                ' ①:.part 尺寸与远端不一致(远端替换/截断/磁盘满短文件)必须就地修复,
+                ' 否则报一次错后自愈 preserve 原样保留,下次必进同一分支,每 15min 空转一次。
+                ' 此处删坏件、重置分块、按正确尺寸重建后继续下载,不再抛错。
+                Dim rebuiltPart As Boolean = False
                 Me.MutexFile.WaitOne()
                 Try
                     Dim inf As New System.IO.FileInfo(FicheroPART)
                     If inf.Length <> file.Size Then
-                        exc = New ApplicationException("The file exists and does not have the expected size [" & inf.Length & " - " & file.Size & "]")
+                        Log.WriteWarning("Part size mismatch for " & file.Name & " (disk " & inf.Length & " vs expected " & file.Size & "); rebuilding .part.")
+                        Try
+                            System.IO.File.Delete(FicheroPART)
+                        Catch delEx As Exception
+                            exc = New ApplicationException("The file exists and does not have the expected size [" & inf.Length & " - " & file.Size & "]")
+                            Log.WriteWarning("Could not delete mismatched .part: " & Log.SafeException(delEx))
+                        End Try
+                        If exc Is Nothing Then
+                            file.SetDataPart(New DataPart(file.Size, file.NumParts))
+                            Using Stream As System.IO.FileStream = System.IO.File.Create(FicheroPART, 64 * 1024, FileOptions.RandomAccess)
+                                Stream.SetLength(file.Size)
+                                Stream.Flush(True)
+                            End Using
+                            rebuiltPart = True
+                        End If
                     End If
+                Catch ex As Exception
+                    exc = ex
                 Finally
                     Me.MutexFile.ReleaseMutex()
                 End Try
+                If rebuiltPart Then fireEventFromBgw([Event].CreatingFilesLocal)
 
             End If
 
@@ -841,7 +862,12 @@ Public Class FileDownloader
                 Do
                     System.Threading.Thread.Sleep(100)
 
-                    trigger.WaitOne()
+                    ' ④:暂停补偿。trigger.WaitOne() 在暂停期无限阻塞,墙钟会把暂停时长
+                    ' 算成停滞,暂停超 120s 恢复即变红。此处 100ms 轮询,暂停期不断顺延计时。
+                    While Not trigger.WaitOne(100)
+                        waitStartTime = Now
+                        If bgwDownloader.CancellationPending Then Exit While
+                    End While
                     If bgwDownloader.CancellationPending Then
                         Log.WriteDebug("Aborting connection - stop requested")
                         Me.Mutex.WaitOne()
@@ -868,10 +894,13 @@ Public Class FileDownloader
                         waitStartTime = Now
                     End If
 
-                    ' Stall timeout at 120 seconds without any progress — report failure
-                    ' but keep the chunk state so a retry resumes from the .part file.
-                    If Now.Subtract(waitStartTime).TotalSeconds > 120 Then
-                        Log.WriteError("Download stalled with no progress for 120s for " & file.Name & "; aborting.")
+                    ' Stall timeout without any progress — report failure but keep the
+                    ' chunk state so a retry resumes from the .part file.
+                    ' ⑤:配额熔断期 worker 不再重启,零速干等 120s+30s 才变红。
+                    ' 熔断期内阈值收紧到 10s,快速转红并标配额,由边沿唤醒恢复。
+                    Dim idleLimitSeconds As Integer = If(MegaQuotaManager.IsQuarantined(), 10, 120)
+                    If Now.Subtract(waitStartTime).TotalSeconds > idleLimitSeconds Then
+                        Log.WriteError("Download stalled with no progress for " & idleLimitSeconds & "s for " & file.Name & "; aborting.")
                         timedOut = True
                         Exit Do
                     End If
@@ -881,7 +910,9 @@ Public Class FileDownloader
                 ' B2:看门狗失败判定必须在排空后做——超时瞬间与撞线完成竞态时,
                 ' 若已 AllFinished 则走正常重命名/MetaMAC 流程,不得再报 FileDownloadFailed
                 ' (否则成功与失败双事件竞态,失败先到会把完好文件钉成 Erroneo)。
-                Dim waitUntil As Date = Now.AddSeconds(30)
+                ' ⑤:配额期 worker 已不再重启,排空通常瞬间结束;熔断期只等 5s,避免再叠 30s。
+                Dim drainSeconds As Integer = If(timedOut AndAlso MegaQuotaManager.IsQuarantined(), 5, 30)
+                Dim waitUntil As Date = Now.AddSeconds(drainSeconds)
                 While Now < waitUntil
                     Me.Mutex.WaitOne()
                     Dim busy As Boolean
@@ -896,7 +927,8 @@ Public Class FileDownloader
 
                 ' Report the timeout as a download failure. Chunk state is intentionally
                 ' preserved for resumption. RC:配额熔断期内超时必须报配额异常(否则 FailedByQuota=False,
-                ' 立即重试捞不回);非配额超时为 120s 无进度停滞(有推进会自动顺延,不再是总时长上限)。
+                ' 立即重试捞不回);非配额超时为无进度停滞(正常 120s,暂停不计,熔断期 10s;
+                ' 有推进会自动顺延,不再是总时长上限)。
                 ' B2:排空后已 AllFinished 则不报(交由下述重命名流程成功)。
                 If timedOut AndAlso Not bgwDownloader.CancellationPending AndAlso Not file.GetDataPart.AllFinished Then
                     If MegaQuotaManager.IsQuarantined() Then
@@ -904,7 +936,7 @@ Public Class FileDownloader
                             New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509). Download paused during quota quarantine; use Retry now after changing IP/proxy or wait for auto-resume. Progress preserved."))
                     Else
                         bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
-                            New ApplicationException("Download stalled with no progress for 120 seconds (idle watchdog; progress resets the timer; quota pause can also trigger this - check the quota banner). Progress preserved, retry resumes from the .part file."))
+                            New ApplicationException("Download stalled with no progress (idle watchdog 120s; pause not counted; progress resets the timer). Progress preserved, retry resumes from the .part file."))
                     End If
                 ElseIf timedOut AndAlso file.GetDataPart.AllFinished Then
                     Log.WriteWarning("Download watchdog timed out but all chunks finished during drain for " & file.Name & "; proceeding to finalize instead of failing.")
@@ -1899,6 +1931,10 @@ Public Class FileDownloader
                 m_busy = value
                 m_canceled = Not value
                 If Me.IsBusy Then
+                    ' ②:复用同一 Downloader 重试时 m_currentFileProgress 残留旧值,
+                    ' downloadFile() 入口又 += chunk.Index 会双计(瞬间满格)。与 m_totalProgress 同清零,
+                    ' 入口重播 chunk.Index 即得正确值;暂停/恢复不走 IsBusy,不受影响。
+                    m_currentFileProgress = 0
                     m_totalProgress = 0
                     bgwDownloader.RunWorkerAsync()
                     RaiseEvent Started(Me, New EventArgs)

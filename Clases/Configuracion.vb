@@ -21,7 +21,8 @@ Public Class Configuracion
 		Me.ConfigUI = New ConfiguracionUI
 		CargaXML()
 		Conexion.SetProxy(Me)
-		ThrottledStreamController.GetController.SetMaxGlobalSpeed(Me.LimiteVelocidadKBs)
+		' ③:MaximumBytesPerSecond 按字节限速,此处须 KB→B(×1024),否则 1MB/s 实得 1KB/s。
+		ThrottledStreamController.GetController.SetMaxGlobalSpeed(CLng(Me.LimiteVelocidadKBs) * 1024L)
 	End Sub
 	
 	Public ConfigUI As ConfiguracionUI

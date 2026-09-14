@@ -31,7 +31,7 @@ Public Class PropiedadesDescarga
             chkLimitarVelocidad.Checked = (f.LimiteVelocidad > 0)
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
             If chkLimitarVelocidad.Checked Then
-                txtLimiteVelocidad.Text = (f.LimiteVelocidad / 1024).ToString
+                txtLimiteVelocidad.Text = (f.LimiteVelocidad / 1024).ToString("0.####")
             End If
         Else
             GroupBox1.Text = Language.GetText("Package properties")
@@ -39,7 +39,30 @@ Public Class PropiedadesDescarga
             txtRuta.Text = p.RutaLocal
             txtMD5.Text = Language.GetText("Not applied")
             txtUrl.Text = Language.GetText("Not applied")
-            txtLimiteVelocidad.Enabled = False
+            ' ⑨:包模式初始化各文件公共限速(全一致才显示),否则保持未勾选;
+            ' 配合保存侧"未勾选不覆写",只改路径/密码不再静默清零文件限速。
+            Try
+                Dim commonLimit As Integer = -1
+                For Each ff As Fichero In p.ListaFicheros
+                    If commonLimit = -1 Then
+                        commonLimit = ff.LimiteVelocidad
+                    ElseIf commonLimit <> ff.LimiteVelocidad Then
+                        commonLimit = -2
+                        Exit For
+                    End If
+                Next
+                If commonLimit > 0 Then
+                    chkLimitarVelocidad.Checked = True
+                    txtLimiteVelocidad.Text = (commonLimit / 1024).ToString("0.####")
+                Else
+                    chkLimitarVelocidad.Checked = False
+                    txtLimiteVelocidad.Text = String.Empty
+                End If
+            Catch
+                chkLimitarVelocidad.Checked = False
+                txtLimiteVelocidad.Text = String.Empty
+            End Try
+            txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
         End If
         txtTamano.Text = Language.GetText("Downloaded") & ": " & PintarTamano(_Descarga.DescargaPorcentaje * _Descarga.DescargaTamanoBytes / 100) & " - " & Language.GetText("Total") & ": " & PintarTamano(_Descarga.DescargaTamanoBytes)
         chkUnZip.Checked = _Descarga.DescargaExtraccionAutomatica
@@ -177,7 +200,8 @@ Public Class PropiedadesDescarga
             End If
             f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
             f.LimiteVelocidad = LimiteVelocidad
-            ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, LimiteVelocidad)
+            ' ③:单文件限速同为 KB,控制器要字节。
+            ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
         Else
             Dim p As Paquete = CType(_Descarga, Paquete)
 
@@ -188,8 +212,12 @@ Public Class PropiedadesDescarga
                 If p.DescargaExtraccionAutomatica <> chkUnZip.Checked Then
                     f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
                 End If
-                f.LimiteVelocidad = LimiteVelocidad
-                ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, LimiteVelocidad)
+                ' ⑨:包模式未勾选=用户没碰限速,跳过覆写(此前默认 False 导致保存即清零各文件限速);
+                ' 勾选时才批量下发。单文件分支保持原语义(未勾选=清零本文件)。
+                If chkLimitarVelocidad.Checked Then
+                    f.LimiteVelocidad = LimiteVelocidad
+                    ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
+                End If
             Next
             If txtRuta.Text <> p.RutaLocal Then
                 p.RutaLocal = txtRuta.Text
