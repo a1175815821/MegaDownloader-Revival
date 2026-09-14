@@ -107,6 +107,22 @@ Public Class FileDownloader
             End Try
         End Sub
 
+        ''' <summary>P0-1:线程安全地汇总已下载字节(各 chunk Index 之和),供看门狗判断有无进度。</summary>
+        Public Function GetTotalProgress() As Long
+            Me._Mutex.WaitOne()
+            Try
+                Dim total As Long = 0
+                If Me.ChunkList IsNot Nothing Then
+                    For Each c1 As Chunk In Me.ChunkList
+                        total += c1.Index
+                    Next
+                End If
+                Return total
+            Finally
+                Me._Mutex.ReleaseMutex()
+            End Try
+        End Function
+
 
         Public ReadOnly Property NextAvailablePartIndex As Int32?
             Get
@@ -818,6 +834,10 @@ Public Class FileDownloader
                 ' (a 403 storm at the tail previously left holes that were force-finished).
                 Dim waitStartTime As Date = Now
                 Dim timedOut As Boolean = False
+                ' P0-1:无进度超时(stall watchdog)。此前是总时长墙钟:大文件即使一直在推进,
+                ' 只要墙钟超 120s 就判失败,叠加自愈删 .part 形成无限循环。此处每次有 chunk
+                ' 推进就重置计时,只有真正停滞 120s 才超时。
+                Dim lastProgress As Long = file.GetDataPart.GetTotalProgress()
                 Do
                     System.Threading.Thread.Sleep(100)
 
@@ -842,10 +862,16 @@ Public Class FileDownloader
                         Exit Do
                     End If
 
-                    ' Hard timeout at 120 seconds — report failure but keep the chunk
-                    ' state so a retry resumes from the .part file instead of restarting.
+                    Dim curProgress As Long = file.GetDataPart.GetTotalProgress()
+                    If curProgress <> lastProgress Then
+                        lastProgress = curProgress
+                        waitStartTime = Now
+                    End If
+
+                    ' Stall timeout at 120 seconds without any progress — report failure
+                    ' but keep the chunk state so a retry resumes from the .part file.
                     If Now.Subtract(waitStartTime).TotalSeconds > 120 Then
-                        Log.WriteError("Download wait loop timed out after 120s for " & file.Name & "; aborting.")
+                        Log.WriteError("Download stalled with no progress for 120s for " & file.Name & "; aborting.")
                         timedOut = True
                         Exit Do
                     End If
@@ -870,7 +896,7 @@ Public Class FileDownloader
 
                 ' Report the timeout as a download failure. Chunk state is intentionally
                 ' preserved for resumption. RC:配额熔断期内超时必须报配额异常(否则 FailedByQuota=False,
-                ' 立即重试捞不回);非配额超时文案去“过期”误导,明确 120s 是总时长上限。
+                ' 立即重试捞不回);非配额超时为 120s 无进度停滞(有推进会自动顺延,不再是总时长上限)。
                 ' B2:排空后已 AllFinished 则不报(交由下述重命名流程成功)。
                 If timedOut AndAlso Not bgwDownloader.CancellationPending AndAlso Not file.GetDataPart.AllFinished Then
                     If MegaQuotaManager.IsQuarantined() Then
@@ -878,7 +904,7 @@ Public Class FileDownloader
                             New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509). Download paused during quota quarantine; use Retry now after changing IP/proxy or wait for auto-resume. Progress preserved."))
                     Else
                         bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser,
-                            New ApplicationException("Download did not finish within the 120-second total watchdog (total window, not idle; quota pause can also trigger this - check the quota banner). Progress preserved, retry resumes from the .part file."))
+                            New ApplicationException("Download stalled with no progress for 120 seconds (idle watchdog; progress resets the timer; quota pause can also trigger this - check the quota banner). Progress preserved, retry resumes from the .part file."))
                     End If
                 ElseIf timedOut AndAlso file.GetDataPart.AllFinished Then
                     Log.WriteWarning("Download watchdog timed out but all chunks finished during drain for " & file.Name & "; proceeding to finalize instead of failing.")

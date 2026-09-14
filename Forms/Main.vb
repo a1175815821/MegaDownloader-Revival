@@ -2085,7 +2085,8 @@ Public Class Main
             Mutex.ListaDescargas.ReleaseMutex()
         End Try
         For Each fic As Fichero In pend
-            fic.ResetearDescarga()
+            ' P0-1:配额唤醒保留断点,不删 .part。
+            fic.ResetearDescarga(True)
             fic.SetDescargaEstado = Estado.EnCola
             woken += 1
         Next
@@ -3204,7 +3205,8 @@ Public Class Main
             Next
             Mutex.ListaDescargas.ReleaseMutex()
             For Each Fichero In ColaReseteo
-                Fichero.ResetearDescarga()
+                ' P0-1:自愈保留断点续传,不删 .part/不清分块(否则大文件超时后无限重下)。
+                Fichero.ResetearDescarga(True)
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Log.WriteInfo("Reseting file " & Fichero.FileID & " automatically.")
             Next

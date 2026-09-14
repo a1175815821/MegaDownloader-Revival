@@ -150,8 +150,9 @@ Public Class PropiedadesDescarga
 
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
 
-        Dim LimiteVelocidadMB As Integer = 0
-        Integer.TryParse(txtLimiteVelocidad.Text, LimiteVelocidadMB)
+        ' P1-2 同 Configuration:MB 小数须按 Double 解析,否则 0.5 存不进。
+        Dim LimiteVelocidadMB As Double = 0
+        Double.TryParse(txtLimiteVelocidad.Text, LimiteVelocidadMB)
         Dim LimiteVelocidad As Integer = 0
         If Not chkLimitarVelocidad.Checked Then
             LimiteVelocidad = 0
@@ -159,7 +160,11 @@ Public Class PropiedadesDescarga
             MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
         Else
-            Dim asLong As Long = CLng(LimiteVelocidadMB) * 1024L
+            Dim asLong As Long = CLng(Math.Round(LimiteVelocidadMB * 1024.0))
+            If asLong <= 0 Then
+                MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End If
             If asLong > Integer.MaxValue Then asLong = Integer.MaxValue
             LimiteVelocidad = CInt(asLong)
         End If

@@ -593,12 +593,12 @@ Partial Class Configuration
         Me.Label15.Name = "Label15"
         Me.Label15.Size = New System.Drawing.Size(31, 13)
         Me.Label15.TabIndex = 2
-        Me.Label15.Text = "KB/s"
+        Me.Label15.Text = "MB/s"
         '
         'txtLimiteVelocidadKBs
         '
         Me.txtLimiteVelocidadKBs.Location = New System.Drawing.Point(132, 27)
-        Me.txtLimiteVelocidadKBs.MaxLength = 6
+        Me.txtLimiteVelocidadKBs.MaxLength = 10
         Me.txtLimiteVelocidadKBs.Name = "txtLimiteVelocidadKBs"
         Me.txtLimiteVelocidadKBs.Size = New System.Drawing.Size(48, 20)
         Me.txtLimiteVelocidadKBs.TabIndex = 1

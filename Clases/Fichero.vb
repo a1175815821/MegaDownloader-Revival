@@ -841,8 +841,20 @@ Public Class Fichero
 	''' <summary>
 	''' 重设下载状态：清理 DatosPartes/BytesDescargados/Porcentaje 并删除残留的 .part 文件。
 	''' 用于从错误状态恢复，确保下次能从头下载而不是卡在"100% 但验证失败"的死循环。
+	''' P0-1:preserveProgress=True 时保留分块进度与 .part(自愈/配额唤醒用),只清错误记账,
+	''' 避免"超时→删.part→重下→再超时"无限循环;手动重置仍用默认 False 从头来。
 	''' </summary>
-	Public Sub ResetearDescarga()
+	Public Sub ResetearDescarga(Optional ByVal preserveProgress As Boolean = False)
+		If preserveProgress Then
+			Me.NumErroresChunk = 0
+			Me.UltimoErrorChunk = Nothing
+			Me.DescripcionError = Nothing
+			Me.FechaUltimoError = Nothing
+			Me.EsErrorPermanente = False
+			Me.FailedByQuota = False
+			Me.TiempoEstimadoDescarga = ""
+			Return
+		End If
 		' 重置分块状态：AllFinished=False 且所有 chunk 回到未下载
 		If Me.DatosPartes IsNot Nothing Then
 			Me.DatosPartes.AllFinished = False

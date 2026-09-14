@@ -232,12 +232,12 @@ Partial Class PropiedadesDescarga
         Me.Label15.Name = "Label15"
         Me.Label15.Size = New System.Drawing.Size(31, 13)
         Me.Label15.TabIndex = 26
-        Me.Label15.Text = "KB/s"
+        Me.Label15.Text = "MB/s"
         '
         'txtLimiteVelocidad
         '
         Me.txtLimiteVelocidad.Location = New System.Drawing.Point(144, 58)
-        Me.txtLimiteVelocidad.MaxLength = 6
+        Me.txtLimiteVelocidad.MaxLength = 10
         Me.txtLimiteVelocidad.Name = "txtLimiteVelocidad"
         Me.txtLimiteVelocidad.Size = New System.Drawing.Size(55, 20)
         Me.txtLimiteVelocidad.TabIndex = 3

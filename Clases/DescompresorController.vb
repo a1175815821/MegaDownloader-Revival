@@ -764,6 +764,10 @@ Public Class DescompresorController
             Dim listing As String = RunSevenZip(cli, "l -ba -slt -- """ & PathFichero & """", checkCancel:=True)
             Dim entryKeys As New Generic.List(Of String)
             Dim archiveFullPath As String = IO.Path.GetFullPath(PathFichero)
+            ' P1-1:7z CLI 路径此前只校验条目数与路径穿越,50GiB 体积上限被绕过。
+            ' 此处累加各条目 Size(=解压后体积),复用同一 EnsureExtractWithinQuota。
+            Dim totalUncompressed As Long = 0
+            Dim inArchiveBlock As Boolean = False
             For Each line As String In listing.Split(New String() {vbCrLf, vbLf, vbCr}, StringSplitOptions.RemoveEmptyEntries)
                 If line.StartsWith("Path = ", StringComparison.Ordinal) Then
                     Dim entryPath As String = line.Substring(7).Trim()
@@ -776,12 +780,17 @@ Public Class DescompresorController
                     Catch
                         ' Relative entry key — cannot be the archive file itself.
                     End Try
+                    inArchiveBlock = isArchiveItself
                     If Not isArchiveItself Then entryKeys.Add(entryPath)
+                ElseIf line.StartsWith("Size = ", StringComparison.Ordinal) AndAlso Not inArchiveBlock Then
+                    Dim sizeVal As Long = 0
+                    If Long.TryParse(line.Substring(7).Trim(), sizeVal) AndAlso sizeVal > 0 Then
+                        totalUncompressed += sizeVal
+                        If totalUncompressed > MaxExtractTotalBytes Then Exit For
+                    End If
                 End If
             Next
-            If entryKeys.Count > MaxExtractEntries Then
-                Throw New InvalidOperationException("Archive rejected: too many entries (" & entryKeys.Count & ").")
-            End If
+            EnsureExtractWithinQuota(totalUncompressed, entryKeys.Count)
             PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
 
             ' ---- Pass 2: extract ----

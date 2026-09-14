@@ -94,6 +94,9 @@ Public Class AddLinks
                     Next
                 End If
 
+                ' P1-3:多批隐身链接必须换行分隔,否则拼成 mega://elc?AAAAmega://elc?BBBB,
+                ' 正则把第二段吃掉导致静默丢失(同文件 URLstr 拼接即用 vbNewLine)。
+                If HiddenLinks.Length > 0 Then HiddenLinks &= vbNewLine
                 HiddenLinks &= "mega://elc?" & ServerEncoderLinkHelper.ServerEncode("HIDDEN", lHidden, Me.Config)
 
             End If
@@ -260,33 +263,33 @@ Public Class AddLinks
             Dim URLs As Generic.List(Of String) = ExtraerURLs()
             If URLs.Count = 0 Then
                 Throw New ApplicationException(Language.GetText("Links not valid"))
-            ElseIf Not System.IO.Directory.Exists(txtRuta.Text) Then
+            End If
 
+            ' P0-3:目录不存在时建完必须继续走添加流程,此前 ElseIf 建完直接 End If,
+            ' 第一次点击静默无操作,第二下才成功。
+            If Not System.IO.Directory.Exists(txtRuta.Text) Then
                 Try
                     System.IO.Directory.CreateDirectory(txtRuta.Text)
                     If Not System.IO.Directory.Exists(txtRuta.Text) Then Throw New ApplicationException("Invalid dir")
                 Catch ex As Exception
                     Throw New ApplicationException(Language.GetText("Invalid directory"))
                 End Try
-
-            Else
-
-                btnAgregar.Text = Language.GetText("Loading...")
-                btnAgregar.Enabled = False
-
-
-                ' Guardamos la última configuración usada
-                UltimaConfiguracionUsada.ExisteUltimaConfiguracion = True
-                UltimaConfiguracionUsada.CrearDirectorioPaquete = chkCrearDirectorio.Checked
-                UltimaConfiguracionUsada.ExtraerAutomaticamente = chkUnZip.Checked
-                UltimaConfiguracionUsada.RutaDescarga = txtRuta.Text
-                UltimaConfiguracionUsada.IniciarDescarga = chkStartDownload.Checked
-
-                ' v2.5 beta: 文件夹解析可能很慢(API + 逐节点解密),放线程池并显示实时计数,避免 UI 假死。
-                ResolveUrlsAsync(URLs, AddressOf OnResolveForAdd)
-                Return
-
             End If
+
+            btnAgregar.Text = Language.GetText("Loading...")
+            btnAgregar.Enabled = False
+
+
+            ' Guardamos la última configuración usada
+            UltimaConfiguracionUsada.ExisteUltimaConfiguracion = True
+            UltimaConfiguracionUsada.CrearDirectorioPaquete = chkCrearDirectorio.Checked
+            UltimaConfiguracionUsada.ExtraerAutomaticamente = chkUnZip.Checked
+            UltimaConfiguracionUsada.RutaDescarga = txtRuta.Text
+            UltimaConfiguracionUsada.IniciarDescarga = chkStartDownload.Checked
+
+            ' v2.5 beta: 文件夹解析可能很慢(API + 逐节点解密),放线程池并显示实时计数,避免 UI 假死。
+            ResolveUrlsAsync(URLs, AddressOf OnResolveForAdd)
+            Return
         Catch ex As Exception
             Log.WriteError("Error while adding the link: " & ex.ToString)
                 MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -397,6 +400,25 @@ Public Class AddLinks
         End Sub
     End Class
 
+    ''' <summary>P0-2:解析取消/完成的统一复位。ResolveUrlsAsync 被 Add 与 Watch 共用,
+    ''' 取消分支必须同时复位两个按钮 + _watchResolving,否则 Watch 取消一次就永久锁死。</summary>
+    Private Sub ResetResolveButtons()
+        _watchResolving = False
+        Try
+            If btnAgregar IsNot Nothing AndAlso Not btnAgregar.IsDisposed Then
+                btnAgregar.Enabled = True
+                btnAgregar.Text = Language.GetText("Add links")
+            End If
+        Catch
+        End Try
+        Try
+            If btnWatchOnline IsNot Nothing AndAlso Not btnWatchOnline.IsDisposed Then
+                btnWatchOnline.Enabled = True
+            End If
+        Catch
+        End Try
+    End Sub
+
     Private Sub ResolveUrlsAsync(URLs As Generic.List(Of String), onDone As Action(Of Generic.List(Of URLProcessor.FileURL), Exception, FolderResolveProgressForm))
         Dim dlg As New FolderResolveProgressForm()
         dlg.Show(Me)
@@ -414,16 +436,14 @@ Public Class AddLinks
                 dlg.Dispose()
                 If Me.IsDisposed Then Return
                 If wasCancelled Then
-                    btnAgregar.Enabled = True
-                    btnAgregar.Text = Language.GetText("Add links")
+                    ResetResolveButtons()
                     Return
                 End If
                 If t.IsFaulted Then
                     Dim inner As Exception = If(t.Exception IsNot Nothing AndAlso t.Exception.InnerException IsNot Nothing, t.Exception.InnerException, DirectCast(t.Exception, Exception))
                     onDone(Nothing, inner, Nothing)
                 ElseIf t.IsCanceled Then
-                    btnAgregar.Enabled = True
-                    btnAgregar.Text = Language.GetText("Add links")
+                    ResetResolveButtons()
                 Else
                     onDone(t.Result, Nothing, Nothing)
                 End If
