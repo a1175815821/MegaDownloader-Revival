@@ -108,6 +108,23 @@
 
 ---
 
+## [Unreleased]
+
+### 🐛 修复:好文件被误报 File download failed
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb))
+
+- 启动探大小（HEAD）抖一下就先报失败，而 `downloadFile` 里会重探并可能成功——先到的失败把随后成功的文件钉成 `Erroneo`，好文件反复重下。现探活失败只暂存，下载阶段自有报错为准；成功则直接丢弃
+- `downloader_FileDownloadFailed` 加过期免疫：已是 `Completado` 终态后到达的失败一律丢弃（成功与失败经不同 worker 编组，到达顺序不定）
+
+### 🐛 修复:进度条满格盖住 % 文案
+
+([Main.vb](../Forms/Main.vb))
+
+- 列表进度列自绘 `ThemeBarRenderer` 只画条不画字，满格填充盖住先画的文案。现用 renderer 自带 `Font`/`TextBrush` 按列对齐把文案重画在最上层；若 OLV 随后又画一次（同字体同位置），像素一致，无副作用
+
+---
+
 ## [2.5.2] - 2026-09-17
 
 回归风险评估的三批治理一次落地。一句话：**依赖补齐欠账，落盘更快不断电丢数，锁换轻量不再泄漏**。

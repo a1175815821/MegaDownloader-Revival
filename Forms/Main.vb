@@ -81,8 +81,53 @@ Public Class Main
                         g.FillRectangle(br, New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
                     End Using
                 End If
+                ' 文案压顶：填充从左往右盖，满格时会盖住先画的 % 文案（OLV 调 Render 与画文本
+                ' 的先后在不同路径下不一致）。此处用 renderer 自带 Font/TextBrush 按列对齐把文案
+                ' 重画在最上层；若 OLV 随后又画一次（同字体同位置），像素一致，无副作用。
+                DrawPercentTextOnTop(g, r, cur)
             Catch ex As Exception
                 MyBase.Render(g, r)
+            End Try
+        End Sub
+
+        Private Sub DrawPercentTextOnTop(ByVal g As Drawing.Graphics, ByVal r As Drawing.Rectangle, ByVal cur As Double)
+            Try
+                Dim txt As String = cur.ToString("F2") & "%"
+                Dim fnt As Drawing.Font = Me.Font
+                If fnt Is Nothing AndAlso Me.ListView IsNot Nothing Then
+                    fnt = Me.ListView.Font
+                End If
+                If fnt Is Nothing Then Return
+                Dim textR As New Drawing.Rectangle(r.X + 4, r.Y, r.Width - 8, r.Height)
+                If textR.Width <= 0 OrElse textR.Height <= 0 Then Return
+                Dim sf As New Drawing.StringFormat()
+                Try
+                    sf.Alignment = Drawing.StringAlignment.Near
+                    sf.LineAlignment = Drawing.StringAlignment.Center
+                    sf.Trimming = Drawing.StringTrimming.EllipsisCharacter
+                    Try
+                        If Me.Column IsNot Nothing Then
+                            Select Case Me.Column.TextAlign
+                                Case HorizontalAlignment.Center
+                                    sf.Alignment = Drawing.StringAlignment.Center
+                                Case HorizontalAlignment.Right
+                                    sf.Alignment = Drawing.StringAlignment.Far
+                            End Select
+                        End If
+                    Catch
+                    End Try
+                    If Me.TextBrush IsNot Nothing Then
+                        g.DrawString(txt, fnt, Me.TextBrush, textR, sf)
+                    ElseIf Me.ListView IsNot Nothing Then
+                        Using br As New Drawing.SolidBrush(Me.ListView.ForeColor)
+                            g.DrawString(txt, fnt, br, textR, sf)
+                        End Using
+                    End If
+                Finally
+                    sf.Dispose()
+                End Try
+            Catch
+                ' 文案画失败不影响条本身（外层已有兜底），静默吞掉
             End Try
         End Sub
     End Class

@@ -456,7 +456,10 @@ Public Class FileDownloader
     Private m_localDirectory As String
     Private m_file As FileInfo
     Private m_totalSize As Int64
-
+    ' 启动时探大小失败的暂存：不再立即上报（探活 HEAD 抖一下就报失败，
+    ' 而 downloadFile 里会重探并可能成功——先报失败后报成功会把好文件钉成 Erroneo）。
+    ' 若后续下载也失败，以下载阶段自己的错误为准；若成功，此错误直接丢弃。
+    Private m_sizeProbeError As Exception = Nothing
     ''' <summary>v2.5 beta: 配额异常归一上报。返回 True 表示已按配额处理(调用方不再普通重试)。</summary>
     Friend Shared Function ReportQuotaIfMatch(ex As Exception) As Boolean
         If TypeOf ex Is MegaQuotaExceededException Then
@@ -613,12 +616,12 @@ Public Class FileDownloader
 
     Private Sub bgwDownloader_DoWork(ender As Object, e As DoWorkEventArgs) Handles bgwDownloader.DoWork
         Try
-
+            m_sizeProbeError = Nothing
             Try
                 If Me.SupportsProgress Then calculateFilesSize()
             Catch ex As Exception
-                Log.WriteError("Error in bgwDownloader.DoWork/calculateFilesSize: " & ex.ToString)
-                bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, ex)
+                Log.WriteError("Error in bgwDownloader.DoWork/calculateFilesSize (deferred, reported only if download never succeeds): " & ex.ToString)
+                m_sizeProbeError = ex
             End Try
 
 

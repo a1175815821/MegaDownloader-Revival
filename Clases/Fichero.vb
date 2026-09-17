@@ -550,6 +550,13 @@ Public Class Fichero
 	End Sub
 	
 	Private Sub downloader_FileDownloadFailed(ByVal sender As System.Object, ByVal e As System.Exception)
+		' 过期失败免疫：成功与失败经不同 worker 编组，到达顺序不定；文件已交付成功后，
+		' 任何后到的失败都是过期事件，直接丢弃。注意与成功侧对称：成功守卫 <>Erroneo
+		' （失败优先），失败侧守卫 <>Completado（成功终态优先）——两者都不翻转对方的终态。
+		If Me.EstadoDescarga = Estado.Completado Then
+			Log.WriteWarning("downloader_FileDownloadFailed: stale failure after success ignored for " & Me.FileID & ": " & Log.SafeException(e))
+			Return
+		End If
 		Me.EstadoDescarga = Estado.Erroneo
 		Dim Mensaje As String = ""
 		Try
