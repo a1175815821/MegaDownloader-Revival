@@ -44,7 +44,7 @@ Public Class Main
     ''' </summary>
     Private progressBarRenderer As ThemeBarRenderer
 
-    ''' <summary>RC:主题感知进度条。背景透明露出行底色,边框随主题,小进度保底 2px,% 文案双色叠在条上层。</summary>
+    ''' <summary>RC:主题感知进度条。背景透明露出行底色,边框随主题,小进度保底 2px,只画条不画字(% 另有独立文本列)。</summary>
     Private Class ThemeBarRenderer
         Inherits BrightIdeasSoftware.BarRenderer
 
@@ -73,59 +73,14 @@ Public Class Main
                     g.DrawRectangle(pen, barR)
                 End Using
                 Dim inner As Drawing.Rectangle = Drawing.Rectangle.Inflate(barR, -1, -1)
-                Dim fillW As Integer = 0
                 If inner.Width > 0 AndAlso inner.Height > 0 AndAlso frac > 0.0 Then
-                    fillW = CInt(Math.Floor(inner.Width * frac))
+                    Dim fillW As Integer = CInt(Math.Floor(inner.Width * frac))
                     If fillW < 2 Then fillW = 2
                     If fillW > inner.Width Then fillW = inner.Width
                     Using br As New Drawing.SolidBrush(Me.FillColor)
                         g.FillRectangle(br, New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
                     End Using
                 End If
-                ' % 实时叠在条上层:双色裁剪,填充区白字、未填充区常规文字色,满格也清晰。
-                ' (独立 Try:离屏/无 ListView 时 TextBrush 可能取不到,只丢文案不丢条。)
-                Try
-                    Dim pctText As String = If(cur >= 99.95, "100%", cur.ToString("F1") & "%")
-                    Dim f As Drawing.Font = Nothing
-                    Try
-                        f = Me.Font
-                        If f Is Nothing AndAlso Me.ListView IsNot Nothing Then f = Me.ListView.Font
-                    Catch
-                    End Try
-                    If f IsNot Nothing Then
-                        Dim sf As New Drawing.StringFormat()
-                        sf.Alignment = Drawing.StringAlignment.Center
-                        sf.LineAlignment = Drawing.StringAlignment.Center
-                        sf.Trimming = Drawing.StringTrimming.None
-                        sf.FormatFlags = Drawing.StringFormatFlags.NoWrap
-                        Dim baseBrush As Drawing.Brush = Nothing
-                        Try
-                            baseBrush = Me.TextBrush
-                        Catch
-                        End Try
-                        If baseBrush Is Nothing Then baseBrush = Drawing.SystemBrushes.ControlText
-                        Dim savedClip As Drawing.Region = g.Clip
-                        Try
-                            If fillW > 0 Then
-                                g.SetClip(New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height), Drawing.Drawing2D.CombineMode.Exclude)
-                            End If
-                            g.DrawString(pctText, f, baseBrush, r, sf)
-                        Finally
-                            g.Clip = savedClip
-                        End Try
-                        Try
-                            If fillW > 0 Then
-                                g.SetClip(New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
-                                g.DrawString(pctText, f, Drawing.Brushes.White, r, sf)
-                            End If
-                        Finally
-                            g.Clip = savedClip
-                            savedClip.Dispose()
-                        End Try
-                        sf.Dispose()
-                    End If
-                Catch
-                End Try
             Catch ex As Exception
                 MyBase.Render(g, r)
             End Try
@@ -462,19 +417,19 @@ Public Class Main
             Config.GuardarXML(False)
         End If
 
-        ' 进度数字列(IndiceColumnaPorcentajeTexto)已并入条形列:每次启动强制隐藏一次,
-        ' 压住老用户持久化里的可见状态(右键列菜单当次仍可手动恢复,重启后继续隐藏)。
+        ' 进度数字列(IndiceColumnaPorcentajeTexto)与条形列并排展示:每次启动强制显示一次,
+        ' 把 2.5.2/2.5.3 隐藏期落盘的不可见状态翻回来(右键列菜单当次仍可手动隐藏,重启后继续显示)。
         Try
             If ListaDescargas IsNot Nothing AndAlso ListaDescargas.AllColumns IsNot Nothing _
                 AndAlso ListaDescargas.AllColumns.Count > 5 _
-                AndAlso ListaDescargas.AllColumns(5).IsVisible Then
-                ListaDescargas.AllColumns(5).IsVisible = False
+                AndAlso Not ListaDescargas.AllColumns(5).IsVisible Then
+                ListaDescargas.AllColumns(5).IsVisible = True
                 ListaDescargas.RebuildColumns()
                 Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
                 Config.GuardarXML(False)
             End If
         Catch ex As Exception
-            Log.WriteError("HidePctTextColumn failed: " & ex.ToString)
+            Log.WriteError("ShowPctTextColumn failed: " & ex.ToString)
         End Try
 
         If Not CheckMEGAConditions() Then Exit Sub
@@ -1066,9 +1021,8 @@ Public Class Main
                                               End Try
                                           End Function
         ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).TextAlign = HorizontalAlignment.Right
-        ' 进度数字列已并入条形列(IndiceColumnaPorcentaje)，不再单独展示，默认隐藏
-        ' （右键列菜单仍可手动恢复；启动后段有强制隐藏兜底，压住老持久化状态）。
-        ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).IsVisible = False
+        ' 进度数字列(IndiceColumnaPorcentajeTexto)与条形列(IndiceColumnaPorcentaje)并排展示:
+        ' 条只画条不画字,% 文案由本列负责,两者各干各的不打架。
 
 
 
@@ -2089,7 +2043,7 @@ Public Class Main
             SetColumnWidthLimit(3, 60, 120)
             SetColumnWidthLimit(4, 90, 320)
             SetColumnWidthLimit(5, 45, 80)
-            SetColumnWidthLimit(6, 80, 220)
+            SetColumnWidthLimit(6, 60, 200)
             SetColumnWidthLimit(7, 55, 120)
             SetColumnWidthLimit(8, 55, 120)
             SetColumnWidthLimit(9, 55, 120)
@@ -2117,7 +2071,7 @@ Public Class Main
             If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
             If ListaDescargas.AllColumns.Count < 10 Then Return
             ApplyColumnWidthLimits()
-            Dim widths() As Integer = {20, 185, 70, 70, 90, 55, 110, 77, 70, 60}
+            Dim widths() As Integer = {20, 185, 70, 70, 90, 55, 80, 77, 70, 60}
             For i As Integer = 0 To 9
                 Dim col As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(i)
                 col.Width = widths(i)
@@ -2127,9 +2081,8 @@ Public Class Main
                 End Try
             Next
             ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复);Restante 默认隐藏
-            ' 进度数字列(5, IndiceColumnaPorcentajeTexto)已并入条形列(6),不再单独成列
+            ' 进度数字列(5)与条形列(6)并排展示,两者都默认可见
             ListaDescargas.AllColumns(2).IsVisible = False
-            ListaDescargas.AllColumns(5).IsVisible = False
             ListaDescargas.AllColumns(9).IsVisible = False
             ListaDescargas.AllColumns(1).FillsFreeSpace = True
             For i As Integer = 0 To 9
