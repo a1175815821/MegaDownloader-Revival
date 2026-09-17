@@ -31,7 +31,7 @@ MegaDownloader is a MEGA cloud storage download manager created by Spanish devel
 
 This repository is a project to revive it: we decompiled v1.8 to obtain the source code, and have since fixed and refactored it based on that foundation.
 
-**Current version: v2.5.2**. See [CHANGELOG](docs/CHANGELOG.md) for the complete change log.
+**Current version: v2.5.3**. See [CHANGELOG](docs/CHANGELOG.md) for the complete change log.
 
 > ⚠️ **Legal Notice**: This project is derived from the decompilation of third-party published software, with the sole purpose of fixing compatibility issues to restore its usability. If the original author believes this repository infringes upon their rights, please contact us via an Issue, and we will cooperate to resolve the matter.
 
