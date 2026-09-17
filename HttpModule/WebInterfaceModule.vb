@@ -10,7 +10,9 @@ Public Class WebInterfaceModule
     Inherits HttpModule
 
 
-    Public Downloader As Main
+    ' P0-3：只依赖 IDownloaderService（9 方法 + DownloaderEstado），不再持有 Main 窗体实例。
+    ' 实现仍是 Main（ServidorWebController.StartWebServer 传入 Me），行为不变。
+    Public Downloader As IDownloaderService
 
 
     Public Const PaginaLogin As String = "/login"
@@ -82,7 +84,7 @@ Public Class WebInterfaceModule
     Private _TimeoutSesion As Integer
     Private _Language As String
 
-    Public Sub New(ByRef Downloader As Main, _
+    Public Sub New(ByVal Downloader As IDownloaderService, _
                    ByVal TemplatePath As String, _
                    ByVal Password As String, _
                    ByVal TituloVentana As String, _
@@ -339,11 +341,11 @@ Public Class WebInterfaceModule
     Private Function ProcesoStatus(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         _RespuestaAjax = "<span class='StatusMuyImportante'><strong>" & Language.GetText("Status") & "</strong>: "
         Select Case Downloader.ControlRemotoObtenerEstado
-            Case Main.TipoEstadoAplicacion.Descargando
+            Case DownloaderEstado.Descargando
                 _RespuestaAjax &= "<span class='iconPlay'>" & Language.GetText("Downloading") & "</span>"
-            Case Main.TipoEstadoAplicacion.Parado
+            Case DownloaderEstado.Parado
                 _RespuestaAjax &= "<span class='iconPause'>" & Language.GetText("Stopped") & "</span>"
-            Case Main.TipoEstadoAplicacion.Pausa
+            Case DownloaderEstado.Pausa
                 _RespuestaAjax &= "<span class='iconPause'>" & Language.GetText("Paused") & "</span>"
 
         End Select

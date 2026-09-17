@@ -277,19 +277,18 @@ Public Class Fichero
 	End Function
 	
 	Private _Actualizando As Boolean = False
-	Public Sub ActualizarInformacionFichero(ByVal Config As Configuracion, ByRef ErrorObtenido As Conexion.TipoError, ByVal ComprobacionAntesDescarga As boolean)
+	Public Sub ActualizarInformacionFichero(ByVal Config As Configuracion, ByRef ErrorObtenido As Conexion.TipoError, ByVal ComprobacionAntesDescarga As boolean, Optional ByVal ct As System.Threading.CancellationToken = Nothing)
 		If Not _Actualizando Then
 			_Actualizando = True
 			Try
 				Dim EstadoAnterior As Estado = Me.DescargaEstado
 				Me.SetDescargaEstado = Estado.Verificando
 				
-				Dim Info As Conexion.InformacionFichero = Conexion.ObtenerInformacionFichero(Config, Me.FileID, Me.FileKey, ComprobacionAntesDescarga)
+				Dim Info As Conexion.InformacionFichero = Conexion.ObtenerInformacionFichero(Config, Me.FileID, Me.FileKey, ComprobacionAntesDescarga, ct)
 				' B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
 				' 同锁互斥,否则关机存盘会读到半新半旧的撕裂对象(新 Key+旧 Size+旧分片表)。
 				' 网络 IO 已在锁外完成,此处仅内存赋值,持锁极短无性能影响。
-				Mutex.FicheroDownloader.WaitOne()
-				Try
+				SyncLock Mutex.FicheroDownloader
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
 					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
@@ -314,9 +313,7 @@ Public Class Fichero
 							" * Internal info: " & Info.Errtxt)
 					End If
 				End If
-				Finally
-					Mutex.FicheroDownloader.ReleaseMutex()
-				End Try
+				End SyncLock
 			Finally
 				_Actualizando = False
 			End Try
@@ -335,7 +332,7 @@ Public Class Fichero
 	
 	Public Sub BorrarFicheroLocal()
 		If Me.MarcadoParaBorrarFicheroLocal Then
-			Mutex.DeletingFiles.WaitOne()
+			SyncLock Mutex.DeletingFiles
 			Dim Ruta As String = String.Empty
 			Try
 				If String.IsNullOrWhiteSpace(Me.RutaLocal) OrElse String.IsNullOrWhiteSpace(Me.NombreFichero) Then
@@ -353,9 +350,8 @@ Public Class Fichero
 				Log.WriteError("Error deleting local files - Path: " & Ruta & " - Error: " & e.ToString)
                 MessageBox.Show(Language.GetText("Error deleting local files - Path: %PATH% - Error: %ERROR%").Replace("%PATH%", Ruta).Replace("%ERROR%", e.Message), _
                     Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-			Finally
-				Mutex.DeletingFiles.ReleaseMutex()
 			End Try
+			End SyncLock
 		End If
 	End Sub
 	
@@ -670,8 +666,7 @@ Public Class Fichero
 	Private Sub downloader_Canceled(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		Me.EstadoDescarga = Estado.EnCola
 		
-		Mutex.FicheroDownloader.WaitOne()
-		Try
+		SyncLock Mutex.FicheroDownloader
 			If Me.Downloader IsNot Nothing Then
 				
 				RemoveHandler Me.Downloader.Resumed, AddressOf downloader_Started
@@ -689,9 +684,7 @@ Public Class Fichero
 				
 			End If
 			Me.Downloader = Nothing
-		Finally
-			Mutex.FicheroDownloader.ReleaseMutex()
-		End Try
+		End SyncLock
 		
 		If Me.MarcadoParaBorrarFicheroLocal Then
 			Me.BorrarFicheroLocal()
@@ -718,8 +711,7 @@ Public Class Fichero
 		' ListaDescargas 锁内同步执行,否则 GB 级文件撞线时冻结 UI/调度数秒~数分钟。
 		' 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
 		Dim needDeferredCompletion As Boolean = False
-		Mutex.FicheroDownloader.WaitOne()
-		Try
+		SyncLock Mutex.FicheroDownloader
 			If Me.Downloader IsNot Nothing Then
 				
 				Me.NumeroConexionesAbiertas = Me.Downloader.OpenConnections
@@ -782,9 +774,7 @@ Public Class Fichero
 			Else
 				TiempoEstimadoDescarga = ""
 			End If
-		Finally
-			Mutex.FicheroDownloader.ReleaseMutex()
-		End Try
+		End SyncLock
 		If needDeferredCompletion Then
 			Try
 				System.Threading.ThreadPool.QueueUserWorkItem(AddressOf RunDeferredCompletion)
@@ -861,6 +851,7 @@ Public Class Fichero
 			If Me.DatosPartes.ChunkList IsNot Nothing Then
 				For Each c As FileDownloader.DataPart.Chunk In Me.DatosPartes.ChunkList
 					c.Index = 0
+					c.SyncedIndex = 0
 					c.Available = True
 				Next
 			End If
@@ -1042,6 +1033,9 @@ Public Class Fichero
                     Long.TryParse(LeerNodo(NodoChunk, "Size", "0"), Chunk.Size)
                     Long.TryParse(LeerNodo(NodoChunk, "StartIndex", "0"), Chunk.StartIndex)
                     Boolean.TryParse(LeerNodo(NodoChunk, "Available", "false"), Chunk.Available)
+                    ' 方案B：旧版本 XML 无 SyncedIndex 记账，但历史进度在旧版每次落盘都 fsync，
+                    ' 直接继承为已同步边界，避免升级后重启把存量进度钳到 0 重下。
+                    Chunk.SyncedIndex = Chunk.Index
                     Me.DatosPartes.ChunkList.Add(Chunk)
                 Next
             End If
@@ -1066,8 +1060,7 @@ Public Class Fichero
     Public Function GuardarXML(ByVal XML As XmlDocument, IncluirDatosCifrados As Boolean) As XmlNode
         ' B2-⑩:序列化与 ActualizarInformacionFichero 回写同锁,防关机撕裂(半新半旧队列)。
         ' 锁序与 ActualizarDatosDescarga 一致(ListaDescargas->FicheroDownloader),无反转死锁。
-        Mutex.FicheroDownloader.WaitOne()
-        Try
+        SyncLock Mutex.FicheroDownloader
         Dim NodoFic As XmlNode = XML.CreateElement("Fichero")
         NodoFic.Attributes.Append(XML.CreateAttribute("v")).Value = Me.Version.ToString
 
@@ -1126,7 +1119,11 @@ Public Class Fichero
                     Dim NodoChunk As XmlNode = NodoChunkList.AppendChild(XML.CreateElement("Chunk"))
                     NodoChunk.AppendChild(XML.CreateElement("StartIndex")).InnerText = chunk.StartIndex.ToString
                     NodoChunk.AppendChild(XML.CreateElement("Size")).InnerText = chunk.Size.ToString
-                    NodoChunk.AppendChild(XML.CreateElement("Index")).InnerText = chunk.Index.ToString
+                    ' 方案B 红线：只持久化已 fsync 的边界。内存 Index 可能超前（节流窗口内），
+                    ' 取 Min 后断电重启最多重下窗口内数据，永不出现空洞。
+                    Dim persistedIndex As Long = Math.Min(chunk.Index, chunk.SyncedIndex)
+                    If persistedIndex < 0 Then persistedIndex = 0
+                    NodoChunk.AppendChild(XML.CreateElement("Index")).InnerText = persistedIndex.ToString
                     NodoChunk.AppendChild(XML.CreateElement("Available")).InnerText = chunk.Available.ToString
                 Next
             End If
@@ -1134,9 +1131,7 @@ Public Class Fichero
         End If
 
         Return NodoFic
-        Finally
-            Mutex.FicheroDownloader.ReleaseMutex()
-        End Try
+        End SyncLock
 
     End Function
 	

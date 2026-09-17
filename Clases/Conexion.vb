@@ -113,7 +113,7 @@ Public Class Conexion
         Return Url
     End Function
 
-    Friend Shared Function SendJSON(ByVal URL As String, ByVal JSON As String, Optional ByVal ContentType As String = "", Optional ByVal SendAppId As Boolean = True) As Respuesta
+    Friend Shared Function SendJSON(ByVal URL As String, ByVal JSON As String, Optional ByVal ContentType As String = "", Optional ByVal SendAppId As Boolean = True, Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Respuesta
 
 
         Dim webRQ As HttpWebRequest = CreateHttpWebRequest(URL)
@@ -138,7 +138,24 @@ Public Class Conexion
         Resultado.Excepcion = Nothing
         Resultado.Mensaje = ""
 
+        ' 真取消：net48 的 HttpWebRequest 不认 CancellationToken，阻塞在 GetResponse /
+        ' ReadToEnd 里的几十秒（超时 60s + 读写 120s，黑洞代理下打满）协作式取消根本进不来，
+        ' 文件夹解析窗表现为"一直在转且取消键无效"。此处用 ct.Register 调 Abort()
+        ' 把阻塞调用炸出来，转为 OperationCanceledException 走正常取消路径。
+        ' 不传 ct 的调用方（下载/更新等）行为与原来完全一致。
+        Dim abortReg As System.Threading.CancellationTokenRegistration = Nothing
+        Dim hasAbortReg As Boolean = False
         Try
+            If ct.CanBeCanceled Then
+                Dim reqToAbort As HttpWebRequest = webRQ
+                abortReg = ct.Register(Sub()
+                                           Try
+                                               reqToAbort.Abort()
+                                           Catch
+                                           End Try
+                                       End Sub)
+                hasAbortReg = True
+            End If
             Using newStream = webRQ.GetRequestStream()
                 newStream.Write(data, 0, data.Length)
             End Using
@@ -152,6 +169,9 @@ Public Class Conexion
             Resultado.Cookies = webRS.Headers("Set-Cookie")
 
         Catch ex As WebException
+            If ct.IsCancellationRequested Then
+                Throw New OperationCanceledException("Request aborted by user.", ex)
+            End If
             Try
                 If ex.Response IsNot Nothing Then
                     Resultado.Status = CType(ex.Response, HttpWebResponse).StatusCode
@@ -171,6 +191,12 @@ Public Class Conexion
             Log.WriteError("Error accessing the URL: " & Log.SafeException(ex))
             Resultado.Excepcion = ex
         Finally
+            If hasAbortReg Then
+                Try
+                    abortReg.Dispose()
+                Catch
+                End Try
+            End If
             If webRS IsNot Nothing Then webRS.Close()
             If inStream IsNot Nothing Then inStream.Close()
         End Try
@@ -180,8 +206,9 @@ Public Class Conexion
 
 
     Friend Shared Function SendPOST(ByVal URL As String, ByVal PostParameters As Specialized.NameValueCollection, _
-                                    Optional ByVal ContentType As String = "application/x-www-form-urlencoded", _
-                                    Optional ByVal SendAppId As Boolean = True) As Respuesta
+                                            Optional ByVal ContentType As String = "application/x-www-form-urlencoded", _
+                                            Optional ByVal SendAppId As Boolean = True, _
+                                            Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Respuesta
         Dim str As New System.Text.StringBuilder
         For Each param As String In PostParameters.Keys
             Dim value As String = PostParameters.Item(param)
@@ -193,7 +220,7 @@ Public Class Conexion
         If str.Length = 0 Then
             Throw New ArgumentException("No POST parameters found")
         End If
-        Return SendJSON(URL, str.ToString, ContentType, SendAppId)
+        Return SendJSON(URL, str.ToString, ContentType, SendAppId, ct)
     End Function
 
     Friend Shared Function ObtenerUrlDesdeAcortador(ByVal URL As String) As String
@@ -309,7 +336,7 @@ Public Class Conexion
     End Function
 
 
-    Public Shared Function ObtenerInformacionFichero(ByVal Config As Configuracion, ByVal FileID As String, ByVal FileKey As String, ByVal ComprobacionAntesDescarga As Boolean) As InformacionFichero
+    Public Shared Function ObtenerInformacionFichero(ByVal Config As Configuracion, ByVal FileID As String, ByVal FileKey As String, ByVal ComprobacionAntesDescarga As Boolean, Optional ByVal ct As System.Threading.CancellationToken = Nothing) As InformacionFichero
 
         Dim Info As New InformacionFichero
         Try
@@ -356,7 +383,7 @@ Public Class Conexion
 
         Dim data As Byte() = System.Text.Encoding.UTF8.GetBytes(json)
 
-        Dim Resultado As Respuesta = SendJSON(URL, json)
+        Dim Resultado As Respuesta = SendJSON(URL, json, ct:=ct)
 
 
         If Resultado.Excepcion Is Nothing Then

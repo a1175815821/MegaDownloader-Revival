@@ -525,4 +525,12 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Folder_Reading"><![CDATA[Reading folder, please wait...]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[Reading folder... %N% items parsed]]></Text>
   <Text key="Reset column widths"><![CDATA[Reset column widths]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[Download complete]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[Package "%N%" finished downloading. Click to view.]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[Download failed]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[%N% tasks failed recently. Click to review.]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[Unknown error. Check the log for details.]]></Text>
+  <Text key="Advice_Quota"><![CDATA[MEGA transfer quota exhausted. Downloads will resume automatically; change IP or proxy and use Retry now to continue immediately.]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[The link is dead or access is forbidden. Retrying will not help — remove the task.]]></Text>
+  <Text key="Advice_Connection"><![CDATA[Connection errors. Retrying automatically — no action needed.]]></Text>
 </Language>

@@ -98,7 +98,7 @@ Public Class Configuracion
 	
 	Public NivelLog As Log.LevelLogType
 	
-	Public PrioridadDescompresion As SharpCompress.PriorityExtension.Priority.PriorityType
+	Public PrioridadDescompresion As DescompresionPriority
 	
 	Public ServidorStreamingActivo As Boolean
 	
@@ -177,6 +177,18 @@ Public Class Configuracion
 	' B2-⑦:ServidorWebPassword 明文快照,用于去重比对。密文每次随机 IV 必变,
 	' 不得参与 OuterXml 比对(否则有 Web 密码时配置每 5s 必重写)。
 	Private Shared _LastSavedWebPasswordPlain As String = Nothing
+	' P0-4:代理/流媒体口令 DPAPI 密文同样非确定性(Protect 每次随机)，同样不得参与
+	' OuterXml 比对；此处快照其明文用于去重（Web 口令模式的复用）。
+	Private Shared _LastSavedProxyPasswordPlain As String = Nothing
+	Private Shared _LastSavedStreamingPasswordPlain As String = Nothing
+	' DPAPI 密文存储前缀：有前缀=DPAPI blob（解密失败=需重填）；无前缀=历史明文（直接沿用，
+	' 下次保存时转加密迁移）。前缀法避免 base64 启发式误判（如 8 位字母数字口令恰为合法 base64）。
+	' 注意：降级到旧版本会读到 "DPAPI:..." 原字串当密码用——升级前备份配置（release notes 已要求）。
+	Private Const DPAPI_PREFIX As String = "DPAPI:"
+	' P0-4：DPAPI 解密失败（换机器/换账户恢复配置）的运行时标记，不落盘。
+	' 由设置界面读取并提示用户重填；用户保存新值后清零。
+	Public ProxyPasswordNeedsReentry As Boolean
+	Public ServidorStreamingPasswordNeedsReentry As Boolean
 	Public Sub GuardarXML(ByVal ForzarGuardado As Boolean)
 		ApplyConfigLimits()
 		Dim Xml As New XmlDocument
@@ -218,15 +230,16 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ProxyPort")).InnerText = ProxyPort.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ProxyIP")).InnerText = ProxyIP
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ProxyUser")).InnerText = ProxyUser
-		Xml.DocumentElement.AppendChild(Xml.CreateElement("ProxyPassword")).InnerText = ProxyPassword
-		
+		' P0-4:口令密文写盘后移（见比对后 DPAPI 块）。此处不写明文节点，
+		' 旧明文值在首次保存后即被密文替换（向前兼容读侧保留明文回退）。
+
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("VLCPath")).InnerText = VLCPath
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresPeriodoMinutos")).InnerText = ResetearErroresPeriodoMinutos.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("NivelLog")).InnerText = [Enum].GetName(GetType(Log.LevelLogType), NivelLog)
 		
-		Xml.DocumentElement.AppendChild(Xml.CreateElement("PrioridadDescompresion")).InnerText = [Enum].GetName(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), PrioridadDescompresion)
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("PrioridadDescompresion")).InnerText = [Enum].GetName(GetType(DescompresionPriority), PrioridadDescompresion)
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("LimiteVelocidadKBs")).InnerText = LimiteVelocidadKBs.ToString
 		
@@ -234,8 +247,8 @@ Public Class Configuracion
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingActivo")).InnerText = ServidorStreamingActivo.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingPuerto")).InnerText = ServidorStreamingPuerto.ToString
-        Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingPassword")).InnerText = ServidorStreamingPassword
-		
+		' P0-4:同 ProxyPassword，密文节点后移，见下。
+
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebActivo")).InnerText = ServidorWebActivo.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebNombre")).InnerText = ServidorWebNombre
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebRutaPlantilla")).InnerText = ServidorWebRutaPlantilla
@@ -256,10 +269,14 @@ Public Class Configuracion
 		Fichero = ObtenerRutaFicheroConfiguracion()
 		
 		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
-		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain Or ForzarGuardado Then
+		Dim curProxyPasswordPlain As String = If(ProxyPassword, "")
+		Dim curStreamingPasswordPlain As String = If(ServidorStreamingPassword, "")
+		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain OrElse _LastSavedProxyPasswordPlain Is Nothing OrElse _LastSavedProxyPasswordPlain <> curProxyPasswordPlain OrElse _LastSavedStreamingPasswordPlain Is Nothing OrElse _LastSavedStreamingPasswordPlain <> curStreamingPasswordPlain Or ForzarGuardado Then
 
 			_LastSavedXML = Xml.DocumentElement.OuterXml
 			_LastSavedWebPasswordPlain = curWebPasswordPlain
+			_LastSavedProxyPasswordPlain = curProxyPasswordPlain
+			_LastSavedStreamingPasswordPlain = curStreamingPasswordPlain
 
 			' B2-⑦:随机 IV 密文只写盘、不比对。加密失败返回 Nothing 时跳过该节点,
 			' 保留磁盘旧密文而非存入空值(与旧逻辑一致,只是位置后移)。
@@ -268,9 +285,20 @@ Public Class Configuracion
 				Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorWebPassword")).InnerText = encryptedWebPassword
 			End If
 
-			' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
-			Xml.DocumentElement.AppendChild(Xml.CreateElement("Usuario")).InnerText = Criptografia.EncryptString_DPAPI(_Usuario)
-			Xml.DocumentElement.AppendChild(Xml.CreateElement("Password")).InnerText = Criptografia.EncryptString_DPAPI(_Password)
+		' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("Usuario")).InnerText = Criptografia.EncryptString_DPAPI(_Usuario)
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("Password")).InnerText = Criptografia.EncryptString_DPAPI(_Password)
+		' P0-4:代理/流媒体口令 DPAPI 密文（非确定性，只写盘不比对）。
+		' 空值照写空节点（读侧缺省空字串，语义不变）；仅加密失败返回 Nothing 时跳过
+		' 该节点，保留磁盘旧值而非存入空值覆盖。
+		Dim encryptedProxyPassword As String = EncryptPasswordField(ProxyPassword)
+		If encryptedProxyPassword IsNot Nothing Then
+			Xml.DocumentElement.AppendChild(Xml.CreateElement("ProxyPassword")).InnerText = encryptedProxyPassword
+		End If
+		Dim encryptedStreamingPassword As String = EncryptPasswordField(ServidorStreamingPassword)
+		If encryptedStreamingPassword IsNot Nothing Then
+			Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingPassword")).InnerText = encryptedStreamingPassword
+		End If
 			Xml.DocumentElement.AppendChild(SavePreSharedKeys(Xml))
 			
 			
@@ -286,7 +314,7 @@ Public Class Configuracion
 			
 			Log.WriteDebug("Saving configuration")
 			
-            Mutex.GuardarConfig.WaitOne()
+            SyncLock Mutex.GuardarConfig
 			Try
 				AtomicFile.SaveXml(Xml, Fichero)
 			Catch ex As Exception
@@ -294,9 +322,10 @@ Public Class Configuracion
 				ErrorConfig = ErrorConfigClass.Fichero_No_Creado
 				_LastSavedXML = Nothing
 				_LastSavedWebPasswordPlain = Nothing
-			Finally
-				Mutex.GuardarConfig.ReleaseMutex()
+				_LastSavedProxyPasswordPlain = Nothing
+				_LastSavedStreamingPasswordPlain = Nothing
 			End Try
+			End SyncLock
 			
 			
 			
@@ -321,8 +350,7 @@ Public Class Configuracion
 		
 		Dim Xml As XmlDocument = Nothing
 		Dim recoveredFromBackup As Boolean = False
-		Mutex.GuardarConfig.WaitOne()
-		Try
+		SyncLock Mutex.GuardarConfig
 			If Not AtomicFile.TryLoadXml(Fichero, Xml, recoveredFromBackup) Then
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
@@ -337,9 +365,7 @@ Public Class Configuracion
 			If recoveredFromBackup Then
 				Log.WriteWarning("Configuration restored from backup file.")
 			End If
-		Finally
-			Mutex.GuardarConfig.ReleaseMutex()
-		End Try
+		End SyncLock
 		
 		Idioma = LeerNodo(Xml, "Language", "")
 		Try
@@ -354,7 +380,7 @@ Public Class Configuracion
 		RutaDefecto = LeerNodo(Xml, "RutaDefecto", "")
 		ProxyIP = LeerNodo(Xml, "ProxyIP", "")
 		ProxyUser = LeerNodo(Xml, "ProxyUser", "")
-		ProxyPassword = LeerNodo(Xml, "ProxyPassword", "")
+		ProxyPassword = DecryptPasswordField(LeerNodo(Xml, "ProxyPassword", ""), "ProxyPassword", ProxyPasswordNeedsReentry)
 		VLCPath = LeerNodo(Xml, "VLCPath", "")
 		_Usuario = Criptografia.DecryptString_DPAPI(LeerNodo(Xml, "Usuario", ""))
 		_Password = Criptografia.DecryptString_DPAPI(LeerNodo(Xml, "Password", ""))
@@ -418,9 +444,9 @@ Public Class Configuracion
 			NivelLog = CType([Enum].Parse(GetType(Log.LevelLogType), LeerNodo(Xml, "NivelLog", "")), Log.LevelLogType)
 		End If
 		
-		PrioridadDescompresion = SharpCompress.PriorityExtension.Priority.PriorityType.Normal
-		If [Enum].IsDefined(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), LeerNodo(Xml, "PrioridadDescompresion", "")) Then
-			PrioridadDescompresion = CType([Enum].Parse(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), LeerNodo(Xml, "PrioridadDescompresion", "")), SharpCompress.PriorityExtension.Priority.PriorityType)
+		PrioridadDescompresion = DescompresionPriority.Normal
+		If [Enum].IsDefined(GetType(DescompresionPriority), LeerNodo(Xml, "PrioridadDescompresion", "")) Then
+			PrioridadDescompresion = CType([Enum].Parse(GetType(DescompresionPriority), LeerNodo(Xml, "PrioridadDescompresion", "")), DescompresionPriority)
 		End If
 		
 		DescargasSimultaneas = 3
@@ -434,7 +460,7 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "ServidorStreamingActivo", "false"), ServidorStreamingActivo)
 		ServidorStreamingPuerto = DEFAULT_STREAMING_PORT
         Integer.TryParse(LeerNodo(Xml, "ServidorStreamingPuerto", DEFAULT_STREAMING_PORT.ToString), ServidorStreamingPuerto)
-        ServidorStreamingPassword = LeerNodo(Xml, "ServidorStreamingPassword", "")
+        ServidorStreamingPassword = DecryptPasswordField(LeerNodo(Xml, "ServidorStreamingPassword", ""), "ServidorStreamingPassword", ServidorStreamingPasswordNeedsReentry)
 
 		' Servidor web
 		ServidorWebActivo = False
@@ -521,7 +547,7 @@ Public Class Configuracion
 		Me.ServidorStreamingActivo = False
 		Me.ServidorWebActivo = False
 		Me.ServidorStreamingPuerto = DEFAULT_STREAMING_PORT
-		Me.PrioridadDescompresion = SharpCompress.PriorityExtension.Priority.PriorityType.Normal
+		Me.PrioridadDescompresion = DescompresionPriority.Normal
 		Me._Usuario = Criptografia.ToSecureString("")
 		Me._Password = Criptografia.ToSecureString("")
 		Me.ListaPreSharedKeys = New List(Of SecureString)
@@ -566,7 +592,8 @@ Public Class Configuracion
 					Log.WriteWarning("VLC path is invalid and was cleared: " & VLCPath)
 					VLCPath = ""
 				End If
-			Catch
+			Catch ex As Exception
+				Log.WriteWarning("VLC path validation failed, clearing VLCPath (" & If(VLCPath, "") & "): " & Log.SafeException(ex))
 				VLCPath = ""
 			End Try
 		End If
@@ -627,6 +654,48 @@ Public Class Configuracion
             Return nodo.InnerText
         End If
     End Function
+
+	''' <summary>
+	''' P0-4：口令字段写盘加密。空值返回 ""（节点照写空字串，保持旧行为）；
+	''' 非空返回 "DPAPI:" + DPAPI 密文。加密失败返回 Nothing，调用方跳过该节点
+	''' （保留磁盘旧值，而非存入空值覆盖——与 ServidorWebPassword 模式一致）。
+	''' </summary>
+	Private Shared Function EncryptPasswordField(ByVal plainValue As String) As String
+		If String.IsNullOrEmpty(plainValue) Then Return ""
+		Try
+			Return DPAPI_PREFIX & Criptografia.EncryptString_DPAPI(Criptografia.ToSecureString(plainValue))
+		Catch ex As Exception
+			Log.WriteError("EncryptPasswordField: DPAPI encrypt failed, keeping on-disk value: " & Log.SafeException(ex))
+			Return Nothing
+		End Try
+	End Function
+
+	''' <summary>
+	''' P0-4：口令字段双读。无前缀=历史明文（直接沿用，迁移由下次保存完成）；
+	''' 有前缀=DPAPI blob，解密成功返回明文，失败则 needsReentry=True 并返回 ""，
+	''' 由设置界面提示用户重填（绝不静默置空当正常值用）。
+	''' </summary>
+	Private Shared Function DecryptPasswordField(ByVal rawValue As String, ByVal fieldName As String, ByRef needsReentry As Boolean) As String
+		needsReentry = False
+		If String.IsNullOrEmpty(rawValue) Then Return ""
+		If Not rawValue.StartsWith(DPAPI_PREFIX, StringComparison.Ordinal) Then
+			Return rawValue
+		End If
+		Dim blob As String = rawValue.Substring(DPAPI_PREFIX.Length)
+		Dim plain As String = ""
+		Try
+			plain = Criptografia.ToInsecureString(Criptografia.DecryptString_DPAPI(blob))
+		Catch ex As Exception
+			plain = ""
+			Log.WriteWarning(fieldName & ": DPAPI decrypt threw, treating as needs-reentry: " & Log.SafeException(ex))
+		End Try
+		If String.IsNullOrEmpty(plain) Then
+			needsReentry = True
+			Log.WriteWarning(fieldName & ": stored password cannot be decrypted on this machine/user (config restored from backup or DPAPI key lost); please re-enter the password in Settings. 口令无法在本机/账户解密（如从备份恢复配置），请在设置中重新输入。")
+			Return ""
+		End If
+		Return plain
+	End Function
 	
 	
 	

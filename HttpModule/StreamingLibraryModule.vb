@@ -10,7 +10,9 @@ Public Class StreamingLibraryModule
     Inherits HttpModule
 
 
-    Public Downloader As Main
+    ' P0-3：与 WebInterfaceModule 保持一致，不再引用 Main 类型。
+    ' 当前本模块未调用 ControlRemoto* 成员，仅保留引用以备后用。
+    Public Downloader As IDownloaderService
     Public Config As Configuracion
 
 
@@ -30,7 +32,7 @@ Public Class StreamingLibraryModule
     Private Shared _RespuestaAjax As System.Threading.AsyncLocal(Of String) = New System.Threading.AsyncLocal(Of String)()
     Private _TimeoutSesion As Integer
 
-    Public Sub New(ByRef Downloader As Main, ByRef Config As Configuracion)
+    Public Sub New(ByVal Downloader As IDownloaderService, ByRef Config As Configuracion)
 
         For Each resname As String In Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames
             If resname.EndsWith("StreamingLibraryManagerTemplateData.htm") Then

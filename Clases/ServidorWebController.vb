@@ -4,7 +4,7 @@ Public Class ServidorWebController
     Private Shared _WebServerStreaming As HttpServer.HttpServer = Nothing
 
 
-    Public Shared Function StartWebServer(ByRef Downloader As Main, ByVal Config As Configuracion) As String
+    Public Shared Function StartWebServer(ByVal Downloader As IDownloaderService, ByVal Config As Configuracion) As String
         If Config Is Nothing Then
             Return ""
         End If

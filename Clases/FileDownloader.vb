@@ -22,6 +22,10 @@ Public Class FileDownloader
             Public Size As Long ' Total size of the chunk
             Public Index As Long ' Position inside the chunk
             Public Available As Boolean
+            ' P0-1 方案B：已 fsync 的边界（≤ Index）。内存游标 Index 照常按每次落盘推进，
+            ' XML 只持久化 SyncedIndex（Fichero.GuardarXML 钳制），保证"持久化进度 ≤ 已 fsync 数据"。
+            ' 不参与 XML 序列化之外的任何持久化；全 0 默认，首刷必 fsync。
+            Public SyncedIndex As Long
 
             ' Ex: file of 10000 bytes, 4 chunks, the fourth chunk has 60% completed:
             ' * StartIndex: 7500
@@ -32,6 +36,7 @@ Public Class FileDownloader
                 Me.StartIndex = 0
                 Me.Size = 0
                 Me.Index = 0
+                Me.SyncedIndex = 0
                 Me.Available = True
             End Sub
         End Class
@@ -39,10 +44,10 @@ Public Class FileDownloader
 
         Public ChunkList As Generic.List(Of Chunk)
         Public AllFinished As Boolean
-        Private _Mutex As System.Threading.Mutex
+        Private _Mutex As Object
 
         Public Sub New()
-            Me._Mutex = New System.Threading.Mutex
+            Me._Mutex = New Object
             Me.AllFinished = False
             Me.ChunkList = New Generic.List(Of Chunk)
         End Sub
@@ -95,22 +100,18 @@ Public Class FileDownloader
         End Sub
 
         Public Sub ResetAvailableParts()
-            Me._Mutex.WaitOne()
-            Try
+            SyncLock _Mutex
                 For Each c1 As Chunk In Me.ChunkList
                     If c1.Index <> c1.Size Then
                         c1.Available = True
                     End If
                 Next
-            Finally
-                Me._Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Sub
 
         ''' <summary>P0-1:线程安全地汇总已下载字节(各 chunk Index 之和),供看门狗判断有无进度。</summary>
         Public Function GetTotalProgress() As Long
-            Me._Mutex.WaitOne()
-            Try
+            SyncLock _Mutex
                 Dim total As Long = 0
                 If Me.ChunkList IsNot Nothing Then
                     For Each c1 As Chunk In Me.ChunkList
@@ -118,16 +119,13 @@ Public Class FileDownloader
                     Next
                 End If
                 Return total
-            Finally
-                Me._Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Function
 
 
         Public ReadOnly Property NextAvailablePartIndex As Int32?
             Get
-                Me._Mutex.WaitOne()
-                Try
+                SyncLock _Mutex
                     Dim ret As Int32? = Nothing
                     Dim i As Integer = 0
                     For Each c1 As Chunk In Me.ChunkList
@@ -139,15 +137,12 @@ Public Class FileDownloader
                         i += 1
                     Next
                     Return ret
-                Finally
-                    Me._Mutex.ReleaseMutex()
-                End Try
+                End SyncLock
             End Get
         End Property
 
         Public Sub SetProgress(chunkIndex As Int32, index As Long)
-            Me._Mutex.WaitOne()
-            Try
+            SyncLock _Mutex
                 Dim c As Chunk = Me.ChunkList(chunkIndex)
                 c.Index = index
                 If c.Index = c.Size Then
@@ -161,17 +156,14 @@ Public Class FileDownloader
                         Me.AllFinished = True
                     End If
                 End If
-            Finally
-                Me._Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Sub
 
         ''' <summary>
         ''' Validates chunk layout and clears AllFinished when incomplete or inconsistent.
         ''' </summary>
         Public Function ValidateAndNormalize(ByVal expectedSize As Long) As Boolean
-            Me._Mutex.WaitOne()
-            Try
+            SyncLock _Mutex
                 If Me.ChunkList Is Nothing OrElse Me.ChunkList.Count = 0 Then
                     Me.AllFinished = False
                     Return False
@@ -209,14 +201,15 @@ Public Class FileDownloader
                                          c.StartIndex & "+" & c.Index & " -> " & (c.StartIndex + (c.Index And Not 15)) & ")")
                         c.Index = c.Index And Not 15L
                     End If
+                    ' 方案B：已同步边界永不超过持久化游标（旧版本无此字段时 SyncedIndex=0，
+                    ' 钳制只会让重启多重下零星数据，方向安全）。
+                    If c.SyncedIndex > c.Index Then c.SyncedIndex = c.Index
                 Next
 
                 Dim missing As Boolean = ordered.Any(Function(c) c.Index <> c.Size)
                 Me.AllFinished = Not missing
                 Return True
-            Finally
-                Me._Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Function
 
     End Class
@@ -233,7 +226,7 @@ Public Class FileDownloader
         Private _Size As Long
 
         Private _dataPart As DataPart
-        Private _Mutex As System.Threading.Mutex
+        Private _Mutex As Object
         ''' <summary>The name of the file</summary>
         Private _Name As String
 
@@ -248,7 +241,7 @@ Public Class FileDownloader
         ''' <summary>Create a new instance of FileInfo</summary>
         ''' <param name="path">The complete path of the file (directory + filename)</param>
         Public Sub New(ByVal path As String)
-            Me._Mutex = New System.Threading.Mutex
+            Me._Mutex = New Object
             Me.Path = path
             Me.Name = Me.Path.Split("/"c)(Me.Path.Split("/"c).Length - 1)
             Me.NumParts = 1
@@ -268,28 +261,22 @@ Public Class FileDownloader
                 If Size = 0 Then
                     Throw New InvalidOperationException("Must specify size")
                 End If
-                Me._Mutex.WaitOne()
-                Try
+                SyncLock _Mutex
                     If _dataPart Is Nothing Then
                         _dataPart = New DataPart(Me.Size, Me.NumParts)
                     End If
                     Return _dataPart
-                Finally
-                    Me._Mutex.ReleaseMutex()
-                End Try
+                End SyncLock
             End Get
         End Property
 
         Public Sub SetDataPart(ByVal d As DataPart)
-            Me._Mutex.WaitOne()
-            Try
+            SyncLock _Mutex
                 If d IsNot Nothing Then
                     Me._dataPart = d
                     Me._dataPart.ResetAvailableParts()
                 End If
-            Finally
-                Me._Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Sub
 
         Public Property Size As Long
@@ -300,8 +287,7 @@ Public Class FileDownloader
                 Me._Size = value
                 If DataPartInitialized Then
                     Dim Tamano As Long = 0
-                    Me._Mutex.WaitOne()
-                    Try
+                    SyncLock _Mutex
                         For Each c As DataPart.Chunk In _dataPart.ChunkList
                             'Tamano += c.Size
                             ' Now the chunks can be resized depending on MEGA response... so we will take the biggest chunk
@@ -309,9 +295,7 @@ Public Class FileDownloader
                                 Tamano = c.StartIndex + c.Size
                             End If
                         Next
-                    Finally
-                        Me._Mutex.ReleaseMutex()
-                    End Try
+                    End SyncLock
                     If value <> Tamano Then
                         Throw New InvalidOperationException("File size does not match [" & value & " - " & Tamano & "]")
                     End If
@@ -443,8 +427,17 @@ Public Class FileDownloader
 
     Private WithEvents bgwDownloader As New BackgroundWorker
     Private WithEvents listDownloaders As New Generic.List(Of DownloaderWorker)
-    Private Mutex As New System.Threading.Mutex() ' Sync workers for object manipulation
-    Private MutexFile As New System.Threading.Mutex() ' Sync workers for disk write
+    Private Mutex As New Object() ' Sync workers for object manipulation
+    Private MutexFile As New Object() ' Sync workers for disk write
+    ' P0-1 方案A：.part 长生命周期写流。FlushToDisk 复用本流，只做 Position+Write+Flush(True)，
+    ' 省掉每次 open/close；fsync 语义不变，"持久化进度 ≤ 已 fsync 数据"红线不变。
+    ' 仅在 MutexFile 保护下访问；.part 重建/重命名前必须先 ClosePartStream。
+    Private m_partStream As System.IO.FileStream = Nothing
+    Private m_partStreamPath As String = Nothing
+    ' P0-1 方案B：fsync 节流记账。达到任一阈值才 Flush(True)，其余落盘只 Write。
+    Private m_lastFsyncUtc As Date = Date.MinValue
+    Private Const FsyncEveryBytes As Long = 8L * 1024L * 1024L
+    Private Const FsyncEverySeconds As Double = 5.0
     Private trigger As New Threading.ManualResetEvent(True)
     Private m_num_connections, m_parts_per_file As Int32
 
@@ -638,6 +631,14 @@ Public Class FileDownloader
                 If bgwDownloader.CancellationPending Then
                     If DeleteFilesAfterCancel Then
                         fireEventFromBgw([Event].DeletingFilesAfterCancel)
+                        ' 取消删 .part 前先关复用流，否则打开中的句柄会挡住 Delete。
+                        Try
+                            SyncLock MutexFile
+                                ClosePartStream()
+                            End SyncLock
+                        Catch ex As Exception
+                            Log.WriteWarning("DoWork: part stream close before cleanup failed: " & Log.SafeException(ex))
+                        End Try
                         cleanUpFile()
                     End If
                     e.Cancel = True
@@ -724,13 +725,10 @@ Public Class FileDownloader
             If file.Size = 0 AndAlso Not bgwDownloader.CancellationPending Then
                 Try
                     Log.WriteInfo("Finalizing empty (0-byte) file " & file.Name)
-                    Me.MutexFile.WaitOne()
-                    Try
+                    SyncLock MutexFile
                         Using fs As New System.IO.FileStream(FicheroPART, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None)
                         End Using
-                    Finally
-                        Me.MutexFile.ReleaseMutex()
-                    End Try
+                    End SyncLock
                     Dim keyForEmpty As String = file.FileKey
                     If Not String.IsNullOrEmpty(keyForEmpty) AndAlso keyForEmpty.Contains("=###n=") Then
                         keyForEmpty = keyForEmpty.Substring(0, keyForEmpty.IndexOf("=###n="))
@@ -741,12 +739,9 @@ Public Class FileDownloader
                     If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForEmpty) Then
                         Throw New ApplicationException("MEGA MetaMAC verification failed for empty file " & file.Name & ".")
                     End If
-                    Me.MutexFile.WaitOne()
-                    Try
+                    SyncLock MutexFile
                         RenamePartToReal(FicheroPART, FicheroReal)
-                    Finally
-                        Me.MutexFile.ReleaseMutex()
-                    End Try
+                    End SyncLock
                     Log.WriteWarning("File downloaded successfully")
                     fireEventFromBgw([Event].FileDownloadSucceeded)
                 Catch emptyEx As Exception
@@ -771,33 +766,37 @@ Public Class FileDownloader
                     file.GetDataPart.AllFinished = False
                     For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
                         c.Index = 0
+                        c.SyncedIndex = 0
                         c.Available = True
                     Next
                 End If
 
                 fireEventFromBgw([Event].CreatingFilesLocal)
                 ' Creamos un fichero vacío con ese tamaño
-                Me.MutexFile.WaitOne()
+                SyncLock MutexFile
                 Try
+                    ' 复用流必须先关，否则 File.Create 会 sharing violation；语义不变。
+                    ClosePartStream()
                     Using Stream As System.IO.FileStream = System.IO.File.Create(FicheroPART, 64 * 1024, FileOptions.RandomAccess)
                         Stream.SetLength(file.Size)
                         Stream.Flush(True)
                     End Using
                 Catch ex As Exception
                     exc = ex
-                Finally
-                    Me.MutexFile.ReleaseMutex()
                 End Try
+                End SyncLock
             Else
                 ' ①:.part 尺寸与远端不一致(远端替换/截断/磁盘满短文件)必须就地修复,
                 ' 否则报一次错后自愈 preserve 原样保留,下次必进同一分支,每 15min 空转一次。
                 ' 此处删坏件、重置分块、按正确尺寸重建后继续下载,不再抛错。
                 Dim rebuiltPart As Boolean = False
-                Me.MutexFile.WaitOne()
+                SyncLock MutexFile
                 Try
                     Dim inf As New System.IO.FileInfo(FicheroPART)
                     If inf.Length <> file.Size Then
                         Log.WriteWarning("Part size mismatch for " & file.Name & " (disk " & inf.Length & " vs expected " & file.Size & "); rebuilding .part.")
+                        ' 重建前关闭复用流，否则 Delete/Create 会被占用中的句柄挡住。
+                        ClosePartStream()
                         Try
                             System.IO.File.Delete(FicheroPART)
                         Catch delEx As Exception
@@ -815,9 +814,8 @@ Public Class FileDownloader
                     End If
                 Catch ex As Exception
                     exc = ex
-                Finally
-                    Me.MutexFile.ReleaseMutex()
                 End Try
+                End SyncLock
                 If rebuiltPart Then fireEventFromBgw([Event].CreatingFilesLocal)
 
             End If
@@ -870,16 +868,13 @@ Public Class FileDownloader
                     End While
                     If bgwDownloader.CancellationPending Then
                         Log.WriteDebug("Aborting connection - stop requested")
-                        Me.Mutex.WaitOne()
-                        Try
+                        SyncLock Mutex
                             For Each w As DownloaderWorker In Me.listDownloaders
                                 If w.IsBusy Then
                                     w.CancelAsync()
                                 End If
                             Next
-                        Finally
-                            Me.Mutex.ReleaseMutex()
-                        End Try
+                        End SyncLock
                         Log.WriteWarning("File download stopped - " & file.Name)
                         Exit Do
                     End If
@@ -914,13 +909,10 @@ Public Class FileDownloader
                 Dim drainSeconds As Integer = If(timedOut AndAlso MegaQuotaManager.IsQuarantined(), 5, 30)
                 Dim waitUntil As Date = Now.AddSeconds(drainSeconds)
                 While Now < waitUntil
-                    Me.Mutex.WaitOne()
                     Dim busy As Boolean
-                    Try
+                    SyncLock Me.Mutex
                         busy = Me.listDownloaders.Any(Function(w) w.IsBusy)
-                    Finally
-                        Me.Mutex.ReleaseMutex()
-                    End Try
+                    End SyncLock
                     If Not busy Then Exit While
                     System.Threading.Thread.Sleep(50)
                 End While
@@ -989,12 +981,12 @@ Public Class FileDownloader
                     End If
                 End If
 
-                Me.MutexFile.WaitOne()
-                Try
+                SyncLock MutexFile
+                    ' 重命名前关闭复用流：Windows 下打开中的文件无法 Rename，
+                    ' 且关闭前已由每次 FlushToDisk 的 Flush(True) 保证落盘，语义不变。
+                    ClosePartStream()
                     RenamePartToReal(FicheroPART, FicheroReal)
-                Finally
-                    Me.MutexFile.ReleaseMutex()
-                End Try
+                End SyncLock
                 Log.WriteWarning("File downloaded successfully")
                 fireEventFromBgw([Event].FileDownloadSucceeded)
             End If
@@ -1009,6 +1001,7 @@ Public Class FileDownloader
                 file.GetDataPart.AllFinished = False
                 For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
                     c.Index = 0
+                    c.SyncedIndex = 0
                     c.Available = True
                 Next
                 Log.WriteWarning("Reset chunk state after finalization failure for " & file.Name)
@@ -1320,7 +1313,7 @@ Public Class FileDownloader
 
                         If worker.CancellationPending Then
                             If currentBuffersize > 0 Then
-                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk, True)
                             End If
                             speedTimer.Stop()
                             Exit Sub
@@ -1343,7 +1336,7 @@ Public Class FileDownloader
                         trigger.WaitOne()
                         If worker.CancellationPending Then
                             If currentBuffersize > 0 Then
-                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                                FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk, True)
                             End If
                             Log.WriteDebug("Download stopped - " & file.Name)
                             speedTimer.Stop()
@@ -1397,7 +1390,7 @@ Public Class FileDownloader
                         If exc IsNot Nothing Then
                             If currentBuffersize > 0 Then
                                 Try
-                                    FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
+                                    FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk, True)
                                 Catch flushEx As Exception
                                     Log.WriteError("ChunkDownloader_DoWork: best-effort FlushToDisk before failure reporting failed: " & flushEx.ToString)
                                 End Try
@@ -1408,18 +1401,17 @@ Public Class FileDownloader
                             Exit Sub
                         End If
 
-                        Me.Mutex.WaitOne()
-                        Try
+                        SyncLock Mutex
                             m_currentFileProgress += currentPackageSize
                             m_totalProgress += currentPackageSize
-                        Finally
-                            Me.Mutex.ReleaseMutex()
-                        End Try
+                        End SyncLock
 
                         bytesDownloadedSinceLastTimer += currentPackageSize
 
-                        fireEventFromDownloader(worker, [Event].ProgressChanged)
-
+                        ' P0-2:热路径 ProgressChanged 已确认零订阅者（全仓仅 FileDownloader
+                        ' 内部 RaiseEvent，无外部 AddHandler/Handles），此处不再经
+                        ' BackgroundWorker 编组到 UI 线程。chunk 启动时的低频触发
+                        '（:1311 fireEventFromDownloader ProgressChanged）予以保留。
                         currentBuffersize += currentPackageSize
 
                         If lastSpeedRefresh.AddMilliseconds(175) < Now Then ' Refrescamos cada 175ms
@@ -1439,12 +1431,9 @@ Public Class FileDownloader
 
                             Dim key As String = worker.ChunkIndex.ToString
                             Dim avgSpeed As Integer = CalculateAvgSpeed(readings, Me.StopWatchCyclesAmount, arraySpeed)
-                            Me.Mutex.WaitOne()
-                            Try
+                            SyncLock Mutex
                                 m_currentSpeed(key) = avgSpeed
-                            Finally
-                                Me.Mutex.ReleaseMutex()
-                            End Try
+                            End SyncLock
 
                         End If
                     End While
@@ -1471,7 +1460,8 @@ Public Class FileDownloader
 
     Public Function FlushToDisk(worker As Object, filePath As String, _
                                 ByRef BufferDisk As Byte(), ByRef CurrentBufferSize As Integer, _
-                                ByRef Chunk As DataPart.Chunk) As Boolean
+                                ByRef Chunk As DataPart.Chunk, _
+                                Optional ByVal forceSync As Boolean = False) As Boolean
 
         '''''''''''''''''''''''''
         'Dim BufferDisk2(Me.BufferSize - 1) As Byte
@@ -1498,51 +1488,94 @@ Public Class FileDownloader
                              originalSize & " -> " & roundedSize & ") to keep the resume offset block-aligned")
             Dim discarded As Integer = originalSize - roundedSize
             If discarded > 0 Then
-                Me.Mutex.WaitOne()
-                Try
+                SyncLock Mutex
                     m_currentFileProgress -= discarded
                     If m_currentFileProgress < 0 Then m_currentFileProgress = 0
                     m_totalProgress -= discarded
                     If m_totalProgress < 0 Then m_totalProgress = 0
-                Finally
-                    Me.Mutex.ReleaseMutex()
-                End Try
+                End SyncLock
             End If
             CurrentBufferSize = roundedSize
             If CurrentBufferSize = 0 Then Return Chunk.Index < Chunk.Size
         End If
 
-        Me.MutexFile.WaitOne()
-        Try
-            Using writer As New FileStream(filePath, IO.FileMode.Open, FileAccess.Write, FileShare.ReadWrite, Math.Max(CurrentBufferSize, 4096), FileOptions.RandomAccess)
-                writer.Position = Chunk.StartIndex + Chunk.Index
-                writer.Write(BufferDisk, 0, CurrentBufferSize)
-                writer.Flush(True)
-            End Using
-        Finally
-            Me.MutexFile.ReleaseMutex()
-        End Try
-
         Dim IndexProgress As Long = Chunk.Index + CurrentBufferSize
         If IndexProgress >= Chunk.Size Then
             IndexProgress = Chunk.Size
         End If
+        Dim isFinal As Boolean = (IndexProgress >= Chunk.Size)
+        ' 阈值判断在锁外读 SyncedIndex/m_lastFsyncUtc：仅决定本次是否 fsync，
+        ' 误判只造成多/少一次 fsync，不变量由锁内更新 + XML 钳制保证。
+        Dim syncNow As Boolean = forceSync OrElse isFinal OrElse _
+            (IndexProgress - Chunk.SyncedIndex >= FsyncEveryBytes) OrElse _
+            (Date.UtcNow.Subtract(m_lastFsyncUtc).TotalSeconds >= FsyncEverySeconds)
+
+        SyncLock MutexFile
+            Dim writer As System.IO.FileStream = GetPartStream(filePath)
+            writer.Position = Chunk.StartIndex + Chunk.Index
+            writer.Write(BufferDisk, 0, CurrentBufferSize)
+            ' 方案B：仅节流点 Flush(True)。Index 照常推进供进程内使用；
+            ' 断电安全由 SyncedIndex 记账 + XML 钳制保证（红线）。
+            If syncNow Then
+                writer.Flush(True)
+                m_lastFsyncUtc = Date.UtcNow
+            End If
+        End SyncLock
 
         Dim dWorker As DownloaderWorker = CType(worker, DownloaderWorker)
 
         File.GetDataPart.SetProgress(dWorker.ChunkIndex, IndexProgress)
         Chunk = File.GetDataPart.ChunkList(dWorker.ChunkIndex)
+        If syncNow Then Chunk.SyncedIndex = IndexProgress
 
         CurrentBufferSize = 0
 
         Return Chunk.Index < Chunk.Size
     End Function
 
+    ''' <summary>
+    ''' P0-1 方案A：获取 .part 复用写流。调用方必须已持有 MutexFile。
+    ''' 路径切换（新文件/重建后）时自动关闭旧流重开；只 open 不 close。
+    ''' </summary>
+    Private Function GetPartStream(ByVal filePath As String) As System.IO.FileStream
+        If m_partStream IsNot Nothing Then
+            If String.Equals(m_partStreamPath, filePath, StringComparison.OrdinalIgnoreCase) Then
+                Return m_partStream
+            End If
+            ClosePartStream()
+        End If
+        m_partStream = New System.IO.FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Write, System.IO.FileShare.ReadWrite, 64 * 1024, System.IO.FileOptions.RandomAccess)
+        m_partStreamPath = filePath
+        Return m_partStream
+    End Function
+
+    ''' <summary>
+    ''' 关闭复用写流（幂等）。调用方必须已持有 MutexFile；重命名/删除 .part 前必须先调。
+    ''' 流的 Flush(True) 由每次 FlushToDisk 保证，此处只做 Flush + Close，不改变持久化语义。
+    ''' </summary>
+    Private Sub ClosePartStream()
+        If m_partStream IsNot Nothing Then
+            Try
+                m_partStream.Flush(True)
+            Catch
+            End Try
+            Try
+                m_partStream.Close()
+            Catch
+            End Try
+            Try
+                m_partStream.Dispose()
+            Catch
+            End Try
+            m_partStream = Nothing
+            m_partStreamPath = Nothing
+        End If
+    End Sub
+
     Private Sub ChunkDownloader_RunWorkerCompleted(ByVal sender As Object, ByVal e As System.ComponentModel.RunWorkerCompletedEventArgs)
         Dim worker As DownloaderWorker = CType(sender, DownloaderWorker)
         Dim ChunkFallido As Boolean
-        Me.Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             ChunkFallido = worker.ChunkDownloadFailed
             Dim chunk As DataPart.Chunk = worker.File.GetDataPart.ChunkList(worker.ChunkIndex)
             If chunk.Size > chunk.Index Then
@@ -1557,9 +1590,7 @@ Public Class FileDownloader
             RemoveHandler worker.RunWorkerCompleted, AddressOf ChunkDownloader_RunWorkerCompleted
             Me.listDownloaders.Remove(worker)
             worker.Dispose()
-        Finally
-            Me.Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
         If Not HasBeenCanceled Then
 
             If worker.ChunkDownloadFailed Then
@@ -1626,8 +1657,7 @@ Public Class FileDownloader
     End Function
 
     Private Sub NewDownloaderWorker()
-        Me.Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             Dim part As Int32? = Me.File.GetDataPart.NextAvailablePartIndex
             If part.HasValue Then
                 Dim worker As New DownloaderWorker(part.Value, Me.File)
@@ -1639,9 +1669,7 @@ Public Class FileDownloader
                 Me.listDownloaders.Add(worker)
                 worker.RunWorkerAsync()
             End If
-        Finally
-            Me.Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
     Private Sub cleanUpFile()
@@ -1676,23 +1704,17 @@ Public Class FileDownloader
                     If bgwDownloader IsNot Nothing AndAlso bgwDownloader.IsBusy Then
                         bgwDownloader.CancelAsync()
                     End If
-                    Me.Mutex.WaitOne()
-                    Try
+                    SyncLock Mutex
                         For Each w As DownloaderWorker In Me.listDownloaders.ToList()
                             If w.IsBusy Then w.CancelAsync()
                         Next
-                    Finally
-                        Me.Mutex.ReleaseMutex()
-                    End Try
+                    End SyncLock
                     Dim waitUntil As Date = Now.AddSeconds(5)
                     While Now < waitUntil
-                        Me.Mutex.WaitOne()
                         Dim busy As Boolean
-                        Try
+                        SyncLock Me.Mutex
                             busy = Me.listDownloaders.Any(Function(x) x.IsBusy)
-                        Finally
-                            Me.Mutex.ReleaseMutex()
-                        End Try
+                        End SyncLock
                         If Not busy Then Exit While
                         System.Threading.Thread.Sleep(50)
                     End While
@@ -1702,8 +1724,7 @@ Public Class FileDownloader
                 ' Dispose every worker we spawned, not just the outer bgwDownloader.
                 ' Workers that were still running when CancelAsync was called will not
                 ' have hit their RunWorkerCompleted handler, so they must be disposed here.
-                Me.Mutex.WaitOne()
-                Try
+                SyncLock Mutex
                     For Each w As DownloaderWorker In Me.listDownloaders.ToList()
                         Try
                             w.Dispose()
@@ -1712,11 +1733,9 @@ Public Class FileDownloader
                         End Try
                     Next
                     Me.listDownloaders.Clear()
-                Finally
-                    Me.Mutex.ReleaseMutex()
-                End Try
+                End SyncLock
                 If bgwDownloader IsNot Nothing Then
-                    ' 等主 worker 退出后再释放同步原语,避免 DoWork 仍在使用 Mutex 时句柄被关
+                    ' 等主 worker 退出后再做收尾,避免 DoWork 仍在使用共享状态时被 Dispose 干扰
                     Dim waitMain As Date = Now.AddSeconds(10)
                     While bgwDownloader.IsBusy AndAlso Now < waitMain
                         System.Threading.Thread.Sleep(50)
@@ -1724,8 +1743,16 @@ Public Class FileDownloader
                     bgwDownloader.Dispose()
                 End If
 
-                ' 确定性释放本实例的同步原语(此前从不释放,每个下载任务泄漏 3 个内核句柄)。
-                ' 极端时序下若仍有路径在使用,仅记日志,不让清理失败中断 Dispose
+                ' 确定性释放本实例的内核对象。SyncLock 锁对象无需释放；
+                ' trigger（ManualResetEvent）仍需关闭。复用写流先关，避免 .part 句柄泄漏
+                ' 挡住后续删除/重建。
+                Try
+                    SyncLock MutexFile
+                        ClosePartStream()
+                    End SyncLock
+                Catch ex As Exception
+                    Log.WriteWarning("FileDownloader.Dispose: part stream close failed: " & ex.ToString)
+                End Try
                 Try
                     If trigger IsNot Nothing Then
                         trigger.Set() ' 唤醒可能还在 Pause 等待的路径,让其尽快退出
@@ -1734,16 +1761,9 @@ Public Class FileDownloader
                 Catch ex As Exception
                     Log.WriteWarning("FileDownloader.Dispose: trigger close failed: " & ex.ToString)
                 End Try
-                Try
-                    If MutexFile IsNot Nothing Then MutexFile.Close()
-                Catch ex As Exception
-                    Log.WriteWarning("FileDownloader.Dispose: MutexFile close failed: " & ex.ToString)
-                End Try
-                Try
-                    If Mutex IsNot Nothing Then Mutex.Close()
-                Catch ex As Exception
-                    Log.WriteWarning("FileDownloader.Dispose: Mutex close failed: " & ex.ToString)
-                End Try
+                ' SyncLock 锁对象无需释放（此前 Mutex 每个下载任务泄漏 3 个内核句柄，
+                ' 改轻量锁后泄漏源头消失）。trigger 是 ManualResetEvent，仍需关闭。
+                ' 复用写流已在上一步关闭（MutexFile 保护下）。
             End If
             Me.File = Nothing
         End If
@@ -1819,12 +1839,9 @@ Public Class FileDownloader
 
     Public ReadOnly Property OpenConnections As Int32
         Get
-            Me.Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return Me.listDownloaders.Count
-            Finally
-                Me.Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
@@ -2057,16 +2074,13 @@ Public Class FileDownloader
     ''' <summary>Gets the current download speed in bytes</summary>
     Public ReadOnly Property DownloadSpeed() As Int32
         Get
-            Me.Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Dim Speed As Int32 = 0
                 For Each value As Int32 In m_currentSpeed.Values
                     Speed += value
                 Next
                 Return Speed
-            Finally
-                Me.Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
 
         End Get
     End Property

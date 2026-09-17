@@ -1,18 +1,15 @@
 Public Class ThrottledStreamController
 
 #Region "Región Shared"
-    Private Shared Mutex As New System.Threading.Mutex()
+    Private Shared Mutex As New Object()
 
     Private Shared _Controller As ThrottledStreamController
     Public Shared Function GetController() As ThrottledStreamController
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             If _Controller Is Nothing Then
                 _Controller = New ThrottledStreamController
             End If
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
         Return _Controller
     End Function
 
@@ -28,12 +25,12 @@ Public Class ThrottledStreamController
     Private _globalMaxSpeed As Long
 
     Private Sub New()
-        Mutex.WaitOne()
-        _StreamList = New Generic.List(Of ThrottledStream)
-        _htId = New Generic.Dictionary(Of String, Generic.List(Of ThrottledStream))
-        _htMaxSpeed = New Generic.Dictionary(Of String, Long)
-        _globalMaxSpeed = 0
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            _StreamList = New Generic.List(Of ThrottledStream)
+            _htId = New Generic.Dictionary(Of String, Generic.List(Of ThrottledStream))
+            _htMaxSpeed = New Generic.Dictionary(Of String, Long)
+            _globalMaxSpeed = 0
+        End SyncLock
     End Sub
 
     Private Sub _RecalcularVelocidad()
@@ -63,8 +60,7 @@ Public Class ThrottledStreamController
 
         Dim str As New System.Text.StringBuilder
 
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
 
             If _StreamList.Count = 0 Then Exit Sub
 
@@ -132,9 +128,7 @@ Public Class ThrottledStreamController
                 str.Append("[").Append(CInt(stream.MaximumBytesPerSecond / 1024)).Append("]")
             Next
 
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
 
         Log.WriteDebug("Speed limit recalculated: " & str.ToString)
     End Sub
@@ -148,18 +142,18 @@ Public Class ThrottledStreamController
             Throw New ArgumentNullException
         End If
 
-        Mutex.WaitOne()
-        If Not _StreamList.Contains(Stream) Then
-            _StreamList.Add(Stream)
-            If Not _htId.ContainsKey(Id) Then
-                _htId(Id) = New Generic.List(Of ThrottledStream)
+        SyncLock Mutex
+            If Not _StreamList.Contains(Stream) Then
+                _StreamList.Add(Stream)
+                If Not _htId.ContainsKey(Id) Then
+                    _htId(Id) = New Generic.List(Of ThrottledStream)
+                End If
+                If Not _htMaxSpeed.ContainsKey(Id) Then
+                    _htMaxSpeed(Id) = 0
+                End If
+                _htId(Id).Add(Stream)
             End If
-            If Not _htMaxSpeed.ContainsKey(Id) Then
-                _htMaxSpeed(Id) = 0
-            End If
-            _htId(Id).Add(Stream)
-        End If
-        Mutex.ReleaseMutex()
+        End SyncLock
         _RecalcularVelocidad()
     End Sub
 
@@ -170,39 +164,39 @@ Public Class ThrottledStreamController
         End If
 
 
-        Mutex.WaitOne()
-        If _StreamList.Contains(Stream) Then
-            _StreamList.Remove(Stream)
-            Dim RemoveKey As String = Nothing
-            For Each key As String In _htId.Keys
-                If _htId(key).Contains(Stream) Then
-                    _htId(key).Remove(Stream)
-                    If _htId(key).Count = 0 Then
-                        RemoveKey = key
+        SyncLock Mutex
+            If _StreamList.Contains(Stream) Then
+                _StreamList.Remove(Stream)
+                Dim RemoveKey As String = Nothing
+                For Each key As String In _htId.Keys
+                    If _htId(key).Contains(Stream) Then
+                        _htId(key).Remove(Stream)
+                        If _htId(key).Count = 0 Then
+                            RemoveKey = key
+                        End If
                     End If
+                Next
+                If Not String.IsNullOrEmpty(RemoveKey) Then
+                    _htId.Remove(RemoveKey)
                 End If
-            Next
-            If Not String.IsNullOrEmpty(RemoveKey) Then
-                _htId.Remove(RemoveKey)
             End If
-        End If
-        Mutex.ReleaseMutex()
+        End SyncLock
         _RecalcularVelocidad()
     End Sub
 
     ' Llamar cuando se establece velocidad máxima global
     Public Sub SetMaxGlobalSpeed(ByVal Bps As Long)
-        Mutex.WaitOne()
-        _globalMaxSpeed = Bps
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            _globalMaxSpeed = Bps
+        End SyncLock
         _RecalcularVelocidad()
     End Sub
 
     ' Llamar cuando se establece velocidad máxima individual
     Public Sub SetMaxSpeed(ByVal Id As String, ByVal Bps As Long)
-        Mutex.WaitOne()
-        _htMaxSpeed(Id) = Bps
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            _htMaxSpeed(Id) = Bps
+        End SyncLock
         _RecalcularVelocidad()
     End Sub
 
@@ -213,22 +207,22 @@ Public Class ThrottledStreamController
         End If
 
 
-        Mutex.WaitOne()
-        If _htMaxSpeed.ContainsKey(Id) Then
-            _htMaxSpeed.Remove(Id)
-        End If
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            If _htMaxSpeed.ContainsKey(Id) Then
+                _htMaxSpeed.Remove(Id)
+            End If
+        End SyncLock
         _RecalcularVelocidad()
     End Sub
 
     ' Llamar cuando se pausen o detengan las descargas, o se cierre el programa
     ' Simplemente aborta las pausas introducidas para adecuar la velocidad
     Public Sub Abortar()
-        Mutex.WaitOne()
-        For Each stream As ThrottledStream In _StreamList
-            stream.Abort()
-        Next
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            For Each stream As ThrottledStream In _StreamList
+                stream.Abort()
+            Next
+        End SyncLock
     End Sub
 
     ' Llamar cuando se haga una pausa individual
@@ -238,25 +232,25 @@ Public Class ThrottledStreamController
             Throw New ArgumentNullException
         End If
 
-        Mutex.WaitOne()
-        If _htId.ContainsKey(Id) Then
-            For Each stream As ThrottledStream In _StreamList
-                If _htId(Id).Contains(stream) Then
-                    stream.Abort()
-                End If
-            Next
-        End If
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            If _htId.ContainsKey(Id) Then
+                For Each stream As ThrottledStream In _StreamList
+                    If _htId(Id).Contains(stream) Then
+                        stream.Abort()
+                    End If
+                Next
+            End If
+        End SyncLock
     End Sub
 
     ' Llamar cuando se vuelven a iniciar las descargas 
     ' (para reiniciar el bit de "abortar", sino se queda siempre activo!)
     Public Sub Continuar()
-        Mutex.WaitOne()
-        For Each stream As ThrottledStream In _StreamList
-            stream.Continue()
-        Next
-        Mutex.ReleaseMutex()
+        SyncLock Mutex
+            For Each stream As ThrottledStream In _StreamList
+                stream.Continue()
+            Next
+        End SyncLock
     End Sub
 
 #End Region

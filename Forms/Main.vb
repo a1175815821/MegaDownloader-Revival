@@ -3,6 +3,7 @@ Imports System.ComponentModel
 Imports System.Runtime.InteropServices
 
 Public Class Main
+    Implements IDownloaderService
 
 #Region "Variables internas"
 
@@ -187,6 +188,15 @@ Public Class Main
     Private NumDescargasCompletadas As Integer? = Nothing
 
     ''' <summary>
+    ''' 完成/失败通知的状态（仅 430ms 后台循环读写，无需加锁）。
+    ''' 按"跃迁"通知：首次见到的已完成/已失败不弹（避免启动时对存量红字刷屏），
+    ''' 只有本轮新进入终态的才弹；包完成只弹一次，重试后再次完成可重弹。
+    ''' </summary>
+    Private _lastFileEstado As New Generic.Dictionary(Of Fichero, Estado)
+    Private _notifiedPackages As New Generic.Dictionary(Of Paquete, Boolean)
+    Private _recentBalloonTimes As New Generic.List(Of Date)
+
+    ''' <summary>
     ''' Indica el número máximo de conexiones 
     ''' </summary>
     ''' <remarks></remarks>
@@ -306,7 +316,7 @@ Public Class Main
         InitNavRail()
         UpdateNavRailOverview()
 
-        SharpCompress.PriorityExtension.Priority.DecompressionPriority = Config.PrioridadDescompresion
+        DescompresionThrottle.DecompressionPriority = Config.PrioridadDescompresion
 
         Conexion.PingMega()
 
@@ -1555,8 +1565,7 @@ Public Class Main
             Dim doneBytes As Decimal = 0D
 
             If ListaPaquetes IsNot Nothing Then
-                Mutex.ListaDescargas.WaitOne()
-                Try
+                SyncLock Mutex.ListaDescargas
                     For Each p As Paquete In ListaPaquetes
                         total += 1
                         If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Downloading) Then active += 1
@@ -1570,9 +1579,7 @@ Public Class Main
                             doneBytes += Math.Ceiling(pct * st / 100D)
                         End If
                     Next
-                Finally
-                    Mutex.ListaDescargas.ReleaseMutex()
-                End Try
+                End SyncLock
             End If
 
             navOverviewCountsValue.Text = Language.GetText("Overview_Active") & " " & active.ToString() &
@@ -1699,223 +1706,10 @@ Public Class Main
 
 #End Region
 
-#Region "v2.5: 右侧栏结构化详情"
+#Region "v2.5: 右侧栏结构化详情（已迁移至 Forms/Main.DetailPanel.vb）"
 
-    ' 结构化详情:标签列 + 值列,进度单独一条细进度条。替代原先"一个 Label 灌多行文本"
-    ' 的写法——长文件名/长路径无法换行对齐,标签与值也没有视觉区分。
-    ' 无选中时不建/不显示这些控件,仍由 detailLabel 承担空态引导(B 段)。
-    Private detailContentPanel As Panel = Nothing
-    Private detailTitleLabel As Label = Nothing
-    Private detailRows As New Generic.List(Of KeyValuePair(Of Label, Label))()
-    Private detailProgressBar As ProgressBar = Nothing
-
-    ''' <summary>按需构建结构化详情面板(挂在 detailGroup 内,与空态 detailLabel 互斥显示)。
-    ''' 行数固定为 状态/进度/大小/速度/剩余/路径,内容在 UpdateDetailContent 里填。</summary>
-    Private Sub EnsureDetailContentPanel()
-        If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed Then Return
-        If detailGroup Is Nothing Then Return
-
-        detailContentPanel = New Panel()
-        detailContentPanel.Name = "detailContentPanel"
-        detailContentPanel.Dock = DockStyle.Fill
-        detailContentPanel.Visible = False
-
-        detailTitleLabel = New Label()
-        detailTitleLabel.Name = "detailTitleLabel"
-        detailTitleLabel.AutoSize = False
-        detailTitleLabel.AutoEllipsis = True
-        detailTitleLabel.Height = 36
-        ' 标题加粗,只在此处建一次 Font(换肤不重建,避免 GDI 对象堆积)。
-        detailTitleLabel.Font = New Drawing.Font(detailTitleLabel.Font, Drawing.FontStyle.Bold)
-
-        detailContentPanel.Controls.Add(detailTitleLabel)
-
-        detailRows.Clear()
-        For i As Integer = 0 To 5
-            Dim cap As New Label()
-            cap.Name = "detailCap" & i.ToString()
-            cap.AutoSize = False
-            cap.Width = 48
-            cap.Height = 20
-            cap.TextAlign = Drawing.ContentAlignment.MiddleLeft
-
-            Dim val As New Label()
-            val.Name = "detailVal" & i.ToString()
-            val.AutoSize = False
-            val.Height = 20
-            val.TextAlign = Drawing.ContentAlignment.MiddleLeft
-            val.AutoEllipsis = True
-
-            detailContentPanel.Controls.Add(cap)
-            detailContentPanel.Controls.Add(val)
-            detailRows.Add(New KeyValuePair(Of Label, Label)(cap, val))
-        Next
-
-        detailProgressBar = New ProgressBar()
-        detailProgressBar.Name = "detailProgressBar"
-        detailProgressBar.Minimum = 0
-        detailProgressBar.Maximum = 100
-        detailProgressBar.Visible = False
-        detailProgressBar.Height = 10
-        detailContentPanel.Controls.Add(detailProgressBar)
-
-        detailGroup.Controls.Add(detailContentPanel)
-        detailContentPanel.BringToFront()
-        ' 运行时创建的详情面板同样接受链接文本拖放(与 detailLabel 一致)。
-        EnableLinkDrop(detailContentPanel)
-        LayoutDetailContent()
-        ApplyDetailContentTheme()
-    End Sub
-
-    ''' <summary>详情面板内部几何。宽度按 detailGroup 客户区算,避免 DPI 变化后错位。</summary>
-    Private Sub LayoutDetailContent()
-        Try
-            If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
-            Dim sc As Single = GetUiScale()
-            Dim pad As Integer = CInt(8 * sc)
-            Dim w As Integer = detailContentPanel.ClientSize.Width
-            If w <= 0 Then w = detailGroup.ClientSize.Width - pad * 2
-            Dim innerW As Integer = Math.Max(60, w - pad * 2)
-            Dim capW As Integer = CInt(46 * sc)
-            Dim rowH As Integer = Math.Max(18, CInt(20 * sc))
-
-            detailTitleLabel.SetBounds(pad, pad, innerW, CInt(34 * sc))
-
-            Dim y As Integer = detailTitleLabel.Bottom + CInt(4 * sc)
-            For i As Integer = 0 To detailRows.Count - 1
-                Dim cap As Label = detailRows(i).Key
-                Dim val As Label = detailRows(i).Value
-                cap.SetBounds(pad, y, capW, rowH)
-                val.SetBounds(pad + capW, y, innerW - capW, rowH)
-                y += rowH
-
-                ' 第 2 行(进度)下方插一条进度条
-                If i = 1 AndAlso detailProgressBar IsNot Nothing Then
-                    detailProgressBar.SetBounds(pad + capW, y, innerW - capW, CInt(10 * sc))
-                    detailProgressBar.Visible = True
-                    y += detailProgressBar.Height + CInt(2 * sc)
-                End If
-            Next
-        Catch ex As Exception
-            Log.WriteDebug("LayoutDetailContent failed: " & Log.SafeException(ex))
-        End Try
-    End Sub
-
-    Private Sub ApplyDetailContentTheme()
-        Try
-            If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
-            Dim subtle As Drawing.Color = ThemeManager.GetColor("Border")
-            Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
-            If detailTitleLabel IsNot Nothing Then
-                detailTitleLabel.ForeColor = fore
-            End If
-            For Each kv As KeyValuePair(Of Label, Label) In detailRows
-                kv.Key.ForeColor = subtle
-                kv.Value.ForeColor = fore
-            Next
-            If detailProgressBar IsNot Nothing Then
-                detailProgressBar.BackColor = ThemeManager.GetColor("ControlBack")
-                detailProgressBar.ForeColor = ThemeManager.GetColor("Selection")
-            End If
-        Catch ex As Exception
-            Log.WriteDebug("ApplyDetailContentTheme failed: " & Log.SafeException(ex))
-        End Try
-    End Sub
-
-    ''' <summary>把选中项的数据填进结构化详情。标签文案走语言系统,随语言切换同步。</summary>
-    Private Sub UpdateDetailContent(ele As IDescarga)
-        Try
-            EnsureDetailContentPanel()
-            If detailContentPanel Is Nothing Then Return
-
-            detailTitleLabel.Text = ele.DescargaNombre
-
-            Dim st As Estado = ele.DescargaEstado()
-            Dim pct As Decimal = ele.DescargaPorcentaje()
-            Dim size As Long = ele.DescargaTamanoBytes()
-            Dim done As String = "-"
-            If size > 0 Then
-                done = PintarTamano(Math.Ceiling(pct * size / 100)) & " / " & PintarTamano(size)
-            End If
-
-            Dim fic As Fichero = TryCast(ele, Fichero)
-            Dim ruta As String = "-"
-            If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.RutaRelativa) Then ruta = fic.RutaRelativa
-
-            Dim captions() As String = {
-                Language.GetText("Status"),
-                Language.GetText("Progress"),
-                Language.GetText("Size"),
-                Language.GetText("Speed"),
-                Language.GetText("Remaining"),
-                Language.GetText("Detail_Path")
-            }
-            ' 空字符串统一显示为 "-",避免详情出现空白行(速度/剩余在未下载时本就无值)。
-            Dim speedTxt As String = PintarVelocidadDescarga(ele)
-            If String.IsNullOrEmpty(speedTxt) Then speedTxt = "-"
-            Dim remainTxt As String = ele.DescargaTiempoEstimadoDescarga()
-            If String.IsNullOrEmpty(remainTxt) Then remainTxt = "-"
-
-            Dim values() As String = {
-                EstadoDisplayText(st),
-                pct.ToString("F2") & "%",
-                done,
-                speedTxt,
-                remainTxt,
-                ruta
-            }
-
-            For i As Integer = 0 To Math.Min(captions.Length, detailRows.Count) - 1
-                detailRows(i).Key.Text = captions(i)
-                detailRows(i).Value.Text = values(i)
-                ' 失败态用语义色标注,与列表"状态"列的着色保持一致
-                If i = 0 AndAlso st = Estado.Erroneo Then
-                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("ErrorFore")
-                ElseIf i = 0 AndAlso st = Estado.Completado Then
-                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("SuccessFore")
-                Else
-                    detailRows(i).Value.ForeColor = ThemeManager.GetColor("Fore")
-                End If
-            Next
-
-            If detailProgressBar IsNot Nothing Then
-                Dim p As Integer = CInt(Math.Floor(pct))
-                If p < 0 Then p = 0
-                If p > 100 Then p = 100
-                Try
-                    detailProgressBar.Value = p
-                Catch
-                End Try
-            End If
-
-            detailContentPanel.Visible = True
-            If detailLabel IsNot Nothing Then detailLabel.Visible = False
-            LayoutDetailContent()
-        Catch ex As Exception
-            Log.WriteDebug("UpdateDetailContent failed: " & Log.SafeException(ex))
-        End Try
-    End Sub
-
-    ''' <summary>回到空态:显示引导文案(Detail_Empty + Detail_EmptyHint),隐藏结构化面板。
-    ''' 主/副两行通过换行拼进同一个 detailLabel,不新增控件。</summary>
-    Private Sub ShowDetailEmptyState()
-        Try
-            If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed Then
-                detailContentPanel.Visible = False
-            End If
-            If detailLabel Is Nothing OrElse detailLabel.IsDisposed Then Return
-            detailLabel.Visible = True
-            Dim main As String = Language.GetText("Detail_Empty")
-            Dim hint As String = Language.GetText("Detail_EmptyHint")
-            Dim text As String = main
-            If Not String.IsNullOrEmpty(hint) AndAlso Not String.Equals(hint, "Detail_EmptyHint") Then
-                text = main & vbCrLf & vbCrLf & hint
-            End If
-            If detailLabel.Text <> text Then detailLabel.Text = text
-        Catch ex As Exception
-            Log.WriteDebug("ShowDetailEmptyState failed: " & Log.SafeException(ex))
-        End Try
-    End Sub
+    ' 实现已移至 Forms/Main.DetailPanel.vb（Partial 同类纯平移，无逻辑改动）。
+    ' 本 Region 仅留索引；Designer 不受影响（运行时控件，无 Handles 绑定）。
 
 #End Region
 
@@ -2072,8 +1866,7 @@ Public Class Main
     Private Sub WakeQuotaFailedItems()
         Dim woken As Integer = 0
         Dim pend As New Generic.List(Of Fichero)
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
                     If fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
@@ -2081,9 +1874,7 @@ Public Class Main
                     End If
                 Next
             Next
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
         For Each fic As Fichero In pend
             ' P0-1:配额唤醒保留断点,不删 .part。
             fic.ResetearDescarga(True)
@@ -2135,16 +1926,13 @@ Public Class Main
 
     Private Function CollectErroneoFiles() As Generic.List(Of Fichero)
         Dim res As New Generic.List(Of Fichero)
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
                     If fic.DescargaEstado = Estado.Erroneo Then res.Add(fic)
                 Next
             Next
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
         Return res
     End Function
 
@@ -2726,15 +2514,12 @@ Public Class Main
     ''' <remarks></remarks>
     Friend Sub AgregarPaquete(ByVal Paquete As Paquete, AgregadoDesdeServidorWeb As Boolean)
 
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             Me.ListaPaquetes.Add(Paquete)
             If String.IsNullOrEmpty(Paquete.Nombre) Then
                 Paquete.Nombre = Language.GetText("Package") & " #" & Me.ListaPaquetes.Count.ToString
             End If
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
         Log.WriteError("Package added: " & Paquete.Nombre)
 
         ReordenarPrioridadPaquetes(True)
@@ -2754,12 +2539,9 @@ Public Class Main
     ''' </summary>
     ''' <remarks></remarks>
     Private Sub GuardarFicheroDescargas()
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             Paquete.GuardarEnFichero(Me.ListaPaquetes)
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
 
         UltimoGuardadoFichero = Now
     End Sub
@@ -2820,12 +2602,9 @@ Public Class Main
 
                     If Config.CheckUpdates Then
 
-                        Mutex.NumeroConexionesMaxima.WaitOne()
-                        Try
+                        SyncLock Mutex.NumeroConexionesMaxima
                             Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
-                        Finally
-                            Mutex.NumeroConexionesMaxima.ReleaseMutex()
-                        End Try
+                        End SyncLock
                         If Not String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) Then
                             ActivarUpdateButton()
                             ' "永不提醒"只针对特定版本:已跳过的版本不再弹窗,新版本仍会提醒
@@ -2878,10 +2657,11 @@ Public Class Main
         Try
 
             Log.WriteWarning("Starting worker bgwActualizadorDatosDisco")
+            ' 验信息并行泵：在途 HTTP 可被 Abort 打断（SendJSON ct 穿透），退出时统一取消。
+            Dim verifyCts As New System.Threading.CancellationTokenSource()
+            Try
             While Not worker.CancellationPending
 
-				Dim FicheroActualizar As Fichero = Nothing
-				Dim PaqueteDelFicheroActualizar As Paquete = Nothing
                 Dim TiempoDormir As Integer = 250
 
                 ' v2.5 beta: 配额期内不做新文件信息校验(每次校验=一次 API 调用,会延长惩罚窗口)。
@@ -2889,60 +2669,10 @@ Public Class Main
                 If quotaHoldVerify Then TiempoDormir = 5000
 
                 If Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify Then
-
-                    Mutex.ListaDescargas.WaitOne()
-                    Try
-                        For Each paq As Paquete In Me.ListaPaquetes
-                            For Each fic As Fichero In paq.ListaFicheros
-                                If fic.DescargaProcesada = False And fic.DescargaEstado <> Estado.Erroneo Then
-                                	FicheroActualizar = fic
-                                	PaqueteDelFicheroActualizar = paq
-                                    Exit Try
-                                End If
-                            Next
-                        Next
-                    Finally
-                        Mutex.ListaDescargas.ReleaseMutex()
-                    End Try
-
-                    If FicheroActualizar IsNot Nothing Then
-                        Log.WriteInfo("Updating file info " & FicheroActualizar.FileID)
-                        TiempoDormir = 50
-                        Dim Err As Conexion.TipoError = Conexion.TipoError.SinErrores
-                        FicheroActualizar.ActualizarInformacionFichero(Config, Err, False)
-                        If Err = Conexion.TipoError.UsuarioInvalido Then
-                            ' Si el usuario está mal no vamos a pedir lo mismo 1000 veces seguidas, 
-                            ' abortamos hasta que se cambie el usuario
-                            NecesitaCambiarUsuarioYPassword = True
-                            Log.WriteWarning("Error retrieving file info " & FicheroActualizar.FileID & ": " & Err.ToString)
-                        ElseIf Err = Conexion.TipoError.SinErrores Then
-                            ' Guardamos!!
-                            PeticionGuardadoFichero = Now
-                            
-                        	If FicheroActualizar.DescargaProcesada And PaqueteDelFicheroActualizar.PendienteNombrePaquete Then
-                        		PaqueteDelFicheroActualizar.PendienteNombrePaquete = false
-                        		PaqueteDelFicheroActualizar.Nombre = FicheroActualizar.ObtenerNombreSinExtension
-                        		If PaqueteDelFicheroActualizar.CrearSubdirectorio Then
-                        			Try
-                        				PaqueteDelFicheroActualizar.RutaLocal = System.IO.Path.Combine(PaqueteDelFicheroActualizar.RutaLocal, PaqueteDelFicheroActualizar.Nombre)
-                        				System.IO.Directory.CreateDirectory(PaqueteDelFicheroActualizar.RutaLocal)
-		                            	For Each fic As Fichero In PaqueteDelFicheroActualizar.ListaFicheros
-		                            		If Not fic.DescargaComenzada Then
-		                            			fic.RutaLocal = PaqueteDelFicheroActualizar.RutaLocal
-		                            		End If
-		                            	Next
-		                            Catch ex As Exception
-	                            	Log.WriteError("Error while creating directory for package " & PaqueteDelFicheroActualizar.Nombre & ": " & ex.ToString)
-	                            	' 后台线程(DoWork)不能直接弹窗:无属主窗体会藏到主窗体后面,用户会以为卡死。
-	                            	' 走 SafeShowError 编组回 UI 线程显示
-	                            	SafeShowError("Error creating directory: " & ex.Message)
-	                            End Try			                            	
-                            	End if
-                            End If                            
-                        Else
-                            Log.WriteWarning("Error retrieving file info " & FicheroActualizar.FileID & ": " & Err.ToString)
-                        End If
-                    End If
+                    ' 原来单 worker 串行逐个验：几百文件的文件夹 × 每次 API 往返 = 十几分钟"转圈"。
+                    ' 现跨包最多 4 并发；同包靠投递序号保命名确定性（与串行时代"首个验完命名"一致）。
+                    PumpVerifyQueue(verifyCts.Token)
+                    If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
 
 
                     ' Miramos si hay que guardar el fichero de downloads
@@ -2968,14 +2698,154 @@ Public Class Main
 
                     End If
                 End If
-                System.Threading.Thread.Sleep(TiempoDormir)
+                    System.Threading.Thread.Sleep(TiempoDormir)
             End While
+            Finally
+                ' 退出时打断在途校验 HTTP（Abort 穿透），最多等 5 秒，不卡关闭流程
+                Try
+                    verifyCts.Cancel()
+                Catch
+                End Try
+                Try
+                    Dim pending As New Generic.List(Of System.Threading.Tasks.Task)
+                    For Each job As VerifyJob In _verifyInflight.Values
+                        If job.Task IsNot Nothing Then pending.Add(job.Task)
+                    Next
+                    If pending.Count > 0 Then System.Threading.Tasks.Task.WaitAll(pending.ToArray(), 5000)
+                Catch
+                End Try
+                _verifyInflight.Clear()
+                Try
+                    verifyCts.Dispose()
+                Catch
+                End Try
+            End Try
             Log.WriteWarning("Stopping worker bgwActualizadorDatosDisco")
         Catch ex As Exception
             Log.WriteError("Error in worker bgwActualizadorDatosDisco: " & ex.ToString)
             SafeShowError(ex.Message) ' 完整堆栈已写入上一行日志,给用户只看消息
         Finally
             bgwActualizadorDatosDiscoCompleted = True
+        End Try
+    End Sub
+
+    Private Const VerifyMaxParallel As Integer = 4
+
+    Private Class VerifyJob
+        Public Fic As Fichero
+        Public Paq As Paquete
+        Public Seq As Long
+        Public Err As Conexion.TipoError = Conexion.TipoError.SinErrores
+        Public Fault As Exception = Nothing
+        Public Task As System.Threading.Tasks.Task = Nothing
+    End Class
+
+    Private _verifyInflight As New Generic.Dictionary(Of Fichero, VerifyJob)
+    Private _verifySeq As Long = 0
+
+    ''' <summary>
+    ''' 验信息泵：挑新文件投递到池线程，收割已完成并串行后处理。
+    ''' 投递按列表顺序编号；包命名只认"同包最早投递且无更早在途者"的完成，
+    ''' 与串行时代"首个验完命名"结果一致。字典只在 worker 线程碰，无需加锁。
+    ''' </summary>
+    Private Sub PumpVerifyQueue(ByVal ct As System.Threading.CancellationToken)
+        Try
+            If _verifyInflight.Count > 0 Then
+                For Each job As VerifyJob In New Generic.List(Of VerifyJob)(_verifyInflight.Values)
+                    If job.Task IsNot Nothing AndAlso job.Task.IsCompleted Then
+                        _verifyInflight.Remove(job.Fic)
+                        ProcessVerifyResult(job)
+                    End If
+                Next
+            End If
+            If _verifyInflight.Count >= VerifyMaxParallel Then Return
+            Dim picked As VerifyJob = Nothing
+            SyncLock Mutex.ListaDescargas
+                For Each paq As Paquete In Me.ListaPaquetes
+                    For Each fic As Fichero In paq.ListaFicheros
+                        If fic.DescargaProcesada = False AndAlso fic.DescargaEstado <> Estado.Erroneo AndAlso Not _verifyInflight.ContainsKey(fic) Then
+                            picked = New VerifyJob()
+                            picked.Fic = fic
+                            picked.Paq = paq
+                            picked.Seq = _verifySeq
+                            _verifySeq += 1
+                            _verifyInflight(fic) = picked
+                            Exit For
+                        End If
+                    Next
+                    If picked IsNot Nothing Then Exit For
+                Next
+            End SyncLock
+            If picked Is Nothing Then Return
+            Log.WriteInfo("Updating file info " & picked.Fic.FileID)
+            Dim jobRef As VerifyJob = picked
+            picked.Task = System.Threading.Tasks.Task.Run(Sub()
+                                                              Try
+                                                                  Dim e As Conexion.TipoError = Conexion.TipoError.SinErrores
+                                                                  jobRef.Fic.ActualizarInformacionFichero(Config, e, False, ct)
+                                                                  jobRef.Err = e
+                                                              Catch ex As Exception
+                                                                  jobRef.Fault = ex
+                                                              End Try
+                                                          End Sub)
+        Catch ex As Exception
+            Log.WriteError("PumpVerifyQueue failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>单个验完的后处理（worker 线程串行执行）：与原来单文件分支完全相同的语义。</summary>
+    Private Sub ProcessVerifyResult(ByVal job As VerifyJob)
+        Try
+            If job.Fault IsNot Nothing Then
+                If TypeOf job.Fault Is OperationCanceledException Then
+                    Log.WriteDebug("Verify aborted for " & job.Fic.FileID)
+                Else
+                    Log.WriteError("Error retrieving file info " & job.Fic.FileID & ": " & Log.SafeException(job.Fault))
+                End If
+                Return
+            End If
+            Dim Err As Conexion.TipoError = job.Err
+            If Err = Conexion.TipoError.UsuarioInvalido Then
+                ' Si el usuario está mal no vamos a pedir lo mismo 1000 veces seguidas,
+                ' abortamos hasta que se cambie el usuario
+                NecesitaCambiarUsuarioYPassword = True
+                Log.WriteWarning("Error retrieving file info " & job.Fic.FileID & ": " & Err.ToString)
+            ElseIf Err = Conexion.TipoError.SinErrores Then
+                ' Guardamos!!
+                PeticionGuardadoFichero = Now
+
+                Dim canRename As Boolean = True
+                For Each other As VerifyJob In _verifyInflight.Values
+                    If other.Paq Is job.Paq AndAlso other.Seq < job.Seq Then
+                        canRename = False
+                        Exit For
+                    End If
+                Next
+                If job.Fic.DescargaProcesada AndAlso job.Paq.PendienteNombrePaquete AndAlso canRename Then
+                    job.Paq.PendienteNombrePaquete = False
+                    job.Paq.Nombre = job.Fic.ObtenerNombreSinExtension
+                    If job.Paq.CrearSubdirectorio Then
+                        Try
+                            job.Paq.RutaLocal = System.IO.Path.Combine(job.Paq.RutaLocal, job.Paq.Nombre)
+                            System.IO.Directory.CreateDirectory(job.Paq.RutaLocal)
+                            For Each fic As Fichero In job.Paq.SnapshotFicheros()
+                                If Not fic.DescargaComenzada Then
+                                    fic.RutaLocal = job.Paq.RutaLocal
+                                End If
+                            Next
+                        Catch ex As Exception
+                            Log.WriteError("Error while creating directory for package " & job.Paq.Nombre & ": " & ex.ToString)
+                            ' 后台线程(DoWork)不能直接弹窗:无属主窗体会藏到主窗体后面,用户会以为卡死。
+                            ' 走 SafeShowError 编组回 UI 线程显示
+                            SafeShowError("Error creating directory: " & ex.Message)
+                        End Try
+                    End If
+                End If
+            Else
+                Log.WriteWarning("Error retrieving file info " & job.Fic.FileID & ": " & Err.ToString)
+            End If
+        Catch ex As Exception
+            Log.WriteError("ProcessVerifyResult failed: " & Log.SafeException(ex))
         End Try
     End Sub
 
@@ -3009,16 +2879,30 @@ Public Class Main
                 Dim VelocidadGlobal As Decimal = 0
 
                 If worker.CancellationPending Then Exit While
-                Mutex.ListaDescargas.WaitOne()
-                Try
+                ' 卡顿治理：先短锁拷贝包与文件引用（指针拷贝，O(包+文件)），逐文件的重活
+                '（Downloader 属性读取、ETA 字符串格式化，各自只短取细锁）在锁外执行；
+                ' 最后短锁聚合计数。全局锁持有时间从"几百个文件的全程"降为两次浅拷贝+纯字段读取，
+                ' 下载 worker 不再被 430ms 节拍挡在锁外。快照与实时列表最多差一个节拍，
+                ' 计数类 UI 本就按节拍刷新，可接受。
+                Dim snapshot As New Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero)))
+                SyncLock Mutex.ListaDescargas
+                    For Each paq As Paquete In Me.ListaPaquetes
+                        snapshot.Add(New KeyValuePair(Of Paquete, Generic.List(Of Fichero))(paq, paq.SnapshotFicheros()))
+                    Next
+                End SyncLock
+                For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
+                    For Each fic As Fichero In kv.Value
+                        fic.ActualizarDatosDescarga()
+                    Next
+                Next
+                SyncLock Mutex.ListaDescargas
                     Me.NumDescargasActivas = 0
                     Me.NumDescargasEnCola = 0
                     Me.NumDescargasErroneas = 0
                     Me.NumDescargasCompletadas = 0
-                    For Each paq As Paquete In Me.ListaPaquetes
-                        For Each fic As Fichero In paq.ListaFicheros
-
-                            fic.ActualizarDatosDescarga()
+                    For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
+                        Dim paq As Paquete = kv.Key
+                        For Each fic As Fichero In kv.Value
                             If fic.EstadoDescarga = Estado.Descargando Or _
                                fic.EstadoDescarga = Estado.CreandoLocal Or _
                                fic.EstadoDescarga = Estado.Verificando Then
@@ -3038,9 +2922,9 @@ Public Class Main
                         paq.ActualizarDatosDescarga()
                         VelocidadGlobal += paq.DescargaVelocidadKBs()
                     Next
-                Finally
-                    Mutex.ListaDescargas.ReleaseMutex()
-                End Try
+                End SyncLock
+
+                CheckDownloadNotifications(snapshot)
 
                 If worker.CancellationPending Then Exit While
 
@@ -3132,6 +3016,94 @@ Public Class Main
 
 
 
+    ''' <summary>
+    ''' 完成/失败跃迁检测（跑在 430ms 后台循环，无需加锁：所用字段仅本循环读写）。
+    ''' 包完成弹一次；文件失败按 tick 合并（单条/汇总），60 秒内已弹 ≥3 条则只记日志防刷屏。
+    ''' 任何异常只记 Debug，绝不能掀翻刷新循环。
+    ''' </summary>
+    Private Sub CheckDownloadNotifications(ByVal snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
+        Try
+            Dim now As Date = Now
+            While _recentBalloonTimes.Count > 0 AndAlso now.Subtract(_recentBalloonTimes(0)).TotalSeconds > 60
+                _recentBalloonTimes.RemoveAt(0)
+            End While
+
+            Dim newStates As New Generic.Dictionary(Of Fichero, Estado)
+            Dim newFailures As New Generic.List(Of Fichero)
+            For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
+                For Each fic As Fichero In kv.Value
+                    Dim st As Estado = fic.EstadoDescarga
+                    newStates(fic) = st
+                    If _lastFileEstado.ContainsKey(fic) AndAlso _lastFileEstado(fic) <> Estado.Erroneo AndAlso st = Estado.Erroneo Then
+                        newFailures.Add(fic)
+                    End If
+                Next
+            Next
+            _lastFileEstado = newStates
+
+            Dim stillComplete As New Generic.Dictionary(Of Paquete, Boolean)
+            For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
+                If kv.Value.Count = 0 Then Continue For
+                Dim allDone As Boolean = True
+                For Each fic As Fichero In kv.Value
+                    If fic.EstadoDescarga <> Estado.Completado Then
+                        allDone = False
+                        Exit For
+                    End If
+                Next
+                If allDone Then
+                    stillComplete(kv.Key) = True
+                    If Not _notifiedPackages.ContainsKey(kv.Key) Then
+                        _notifiedPackages(kv.Key) = True
+                        _recentBalloonTimes.Add(now)
+                        ShowBalloonTip(Language.GetText("Notify_PackageDone_Title"), _
+                            Language.GetText("Notify_PackageDone_Body").Replace("%N%", kv.Key.Nombre), ToolTipIcon.Info)
+                    End If
+                End If
+            Next
+            _notifiedPackages = stillComplete
+
+            If newFailures.Count = 1 AndAlso _recentBalloonTimes.Count < 3 Then
+                Dim fic As Fichero = newFailures(0)
+                _recentBalloonTimes.Add(now)
+                ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
+                    fic.NombreFichero & vbCrLf & DownloadAdvice.Describe(fic.DescripcionError, fic.FailedByQuota, fic.EsErrorPermanente), ToolTipIcon.Warning)
+            ElseIf newFailures.Count > 1 AndAlso _recentBalloonTimes.Count < 3 Then
+                _recentBalloonTimes.Add(now)
+                ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
+                    Language.GetText("Notify_FailedMany_Body").Replace("%N%", newFailures.Count.ToString()), ToolTipIcon.Warning)
+            ElseIf newFailures.Count > 0 Then
+                Log.WriteWarning(newFailures.Count.ToString() & " new download failures suppressed from balloon (flood guard).")
+            End If
+        Catch ex As Exception
+            Log.WriteDebug("CheckDownloadNotifications failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>托盘气泡（调用方可为后台线程，内部编组到 UI）。超长截断，窗体销毁中直接丢弃。</summary>
+    Private Sub ShowBalloonTip(ByVal title As String, ByVal text As String, ByVal icon As ToolTipIcon)
+        Try
+            If Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
+            If Me.InvokeRequired Then
+                Me.BeginInvoke(New Action(Of String, String, ToolTipIcon)(AddressOf ShowBalloonTip), title, text, icon)
+                Return
+            End If
+            If String.IsNullOrEmpty(text) Then Return
+            If text.Length > 250 Then text = text.Substring(0, 250) & "..."
+            IconoMinimizado.ShowBalloonTip(10000, title, text, icon)
+        Catch ex As Exception
+            Log.WriteDebug("ShowBalloonTip failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub IconoMinimizado_BalloonTipClicked(sender As Object, e As EventArgs) Handles IconoMinimizado.BalloonTipClicked
+        Try
+            RestaurarVentana()
+        Catch ex As Exception
+            Log.WriteDebug("BalloonTipClicked restore failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
     Private Sub bgwActualizadorListaDescargas_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwActualizadorListaDescargas.RunWorkerCompleted
         bgwActualizadorListaDescargasCompleted = True
         ' 看门狗:非关闭流程中的 worker 结束=异常穿透(内层已尽力自保),3 秒后自救重启。
@@ -3191,19 +3163,19 @@ Public Class Main
 
         ' Reset de descargas erroneas
         If ResetearErrores Then
-            Mutex.ListaDescargas.WaitOne()
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each Fichero As Fichero In paq.ListaFicheros
-                    If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                        If Fichero.FailedByQuota Then
-                            If Not quotaHold Then ColaReseteo.Add(Fichero)
-                        ElseIf Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then
-                            ColaReseteo.Add(Fichero)
+            SyncLock Mutex.ListaDescargas
+                For Each paq As Paquete In Me.ListaPaquetes
+                    For Each Fichero As Fichero In paq.ListaFicheros
+                        If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
+                            If Fichero.FailedByQuota Then
+                                If Not quotaHold Then ColaReseteo.Add(Fichero)
+                            ElseIf Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then
+                                ColaReseteo.Add(Fichero)
+                            End If
                         End If
-                    End If
+                    Next
                 Next
-            Next
-            Mutex.ListaDescargas.ReleaseMutex()
+            End SyncLock
             For Each Fichero In ColaReseteo
                 ' P0-1:自愈保留断点续传,不删 .part/不清分块(否则大文件超时后无限重下)。
                 Fichero.ResetearDescarga(True)
@@ -3213,35 +3185,35 @@ Public Class Main
         End If
 
 
-        Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
 
-                If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not quotaHold Then
-                    ColaDescarga.Add(Fichero)
-                ElseIf Fichero.DescargaEstado = Estado.Pausado And Not Fichero.PausaIndividual Then
-                    ColaDescargaPausa.Add(Fichero)
-                ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
-                    ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
-                    NumFicherosDescargando += 1
-                    Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
-                    If NumConAbiertas = 0 Then
-                        NumConAbiertas = configConexionesPorFichero ' Todavía no está descargando pero empezará en breve
+                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not quotaHold Then
+                        ColaDescarga.Add(Fichero)
+                    ElseIf Fichero.DescargaEstado = Estado.Pausado And Not Fichero.PausaIndividual Then
+                        ColaDescargaPausa.Add(Fichero)
+                    ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
+                        ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
+                        NumFicherosDescargando += 1
+                        Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
+                        If NumConAbiertas = 0 Then
+                            NumConAbiertas = configConexionesPorFichero ' Todavía no está descargando pero empezará en breve
+                        End If
+                        NumConexionesAbiertas += NumConAbiertas
+                    ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
+                        NumFicherosDescargando += 1
+                        NumConexionesAbiertas += configConexionesPorFichero
                     End If
-                    NumConexionesAbiertas += NumConAbiertas
-                ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
-                    NumFicherosDescargando += 1
-                    NumConexionesAbiertas += configConexionesPorFichero
-                End If
 
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
 
         Dim ConexionesPorAbrir As Integer
-        Mutex.NumeroConexionesMaxima.WaitOne()
-        ConexionesPorAbrir = Me.NumeroConexionesMaxima - NumConexionesAbiertas
-        Mutex.NumeroConexionesMaxima.ReleaseMutex()
+        SyncLock Mutex.NumeroConexionesMaxima
+            ConexionesPorAbrir = Me.NumeroConexionesMaxima - NumConexionesAbiertas
+        End SyncLock
         Dim FicherosPorAbrir As Integer = Config.DescargasSimultaneas - NumFicherosDescargando
 
         'If (ColaDescargaPausa.Count > 0 Or ColaDescarga.Count > 0) And ConexionesPorAbrir > 0 Then
@@ -3275,8 +3247,7 @@ Public Class Main
 
     Private Sub ForzarDescarga(Fichero As Fichero)
         Log.WriteInfo("Forcing download" & Fichero.NombreFichero)
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             If Fichero.DescargaEstado = Estado.Pausado Then
                 Fichero.Resume()
             ElseIf Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada Then
@@ -3289,65 +3260,63 @@ Public Class Main
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             End If
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
     Private Sub QuitarDescargasIndividuales()
-        Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
-                Fichero.DescargaIndividual = False
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
+                    Fichero.DescargaIndividual = False
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
     End Sub
 
     Private Sub PonerFicherosEnPausa()
-        Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
-                If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or Fichero.DescargaEstado = Estado.CreandoLocal Then
-                    Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
-                    Fichero.Pause()
-                End If
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
+                    If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or Fichero.DescargaEstado = Estado.CreandoLocal Then
+                        Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
+                        Fichero.Pause()
+                    End If
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
     End Sub
     Private Sub QuitarPausasIndividuales()
-        Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
-                Fichero.PausaIndividual = False
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
+                    Fichero.PausaIndividual = False
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
     End Sub
     Private Sub PonerFicheroEnPausa(ByVal Fichero As Fichero)
-        Mutex.ListaDescargas.WaitOne()
-        If Fichero.DescargaEstado = Estado.Descargando Or Fichero.DescargaEstado = Estado.CreandoLocal Then
-            Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
-            Fichero.PausaIndividual = True
-            Fichero.Pause()
-            ThrottledStreamController.GetController.Abortar(Fichero.FileID)
-        End If
-        Mutex.ListaDescargas.ReleaseMutex()
+        SyncLock Mutex.ListaDescargas
+            If Fichero.DescargaEstado = Estado.Descargando Or Fichero.DescargaEstado = Estado.CreandoLocal Then
+                Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
+                Fichero.PausaIndividual = True
+                Fichero.Pause()
+                ThrottledStreamController.GetController.Abortar(Fichero.FileID)
+            End If
+        End SyncLock
     End Sub
 
     Private Sub PararDescargaFicheros()
-        Mutex.ListaDescargas.WaitOne()
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each Fichero As Fichero In paq.ListaFicheros
-                If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or _
-                   Fichero.DescargaEstado = Estado.Pausado Or _
-                   Fichero.DescargaEstado = Estado.CreandoLocal Then
-                    Log.WriteInfo("Stopping file " & Fichero.NombreFichero)
-                    Fichero.Stop()
-                End If
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each Fichero As Fichero In paq.ListaFicheros
+                    If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or _
+                       Fichero.DescargaEstado = Estado.Pausado Or _
+                       Fichero.DescargaEstado = Estado.CreandoLocal Then
+                        Log.WriteInfo("Stopping file " & Fichero.NombreFichero)
+                        Fichero.Stop()
+                    End If
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
     End Sub
 
     Private Sub EsperarParadaDescargasYWorkers()
@@ -3358,8 +3327,7 @@ Public Class Main
         While Not TodosFinalizados
 
             TodosFinalizados = True
-            Mutex.ListaDescargas.WaitOne()
-            Try
+            SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each Fichero As Fichero In paq.ListaFicheros
                         ' B2-⑩:关闭必须等瞬态(此前只等 Descargando/Pausado,CreandoLocal/
@@ -3375,9 +3343,7 @@ Public Class Main
                         End If
                     Next
                 Next
-            Finally
-                Mutex.ListaDescargas.ReleaseMutex()
-            End Try
+            End SyncLock
 
             If Not bgwActualizadorDatosDiscoCompleted Then TodosFinalizados = False
             If Not bgwComprobarMaxConexionesCompleted Then TodosFinalizados = False
@@ -3402,8 +3368,7 @@ Public Class Main
         Dim HayErroneos As Boolean = False
         Dim HayCola As Boolean = False
 
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
@@ -3420,9 +3385,7 @@ Public Class Main
 
                 Next
             Next
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
 
         If HayCola And TodosCompletadosOErroneos And Not HayErroneos Then
             If Not Config.ResetearErrores Or Not HayErroneos Then
@@ -3472,18 +3435,18 @@ Public Class Main
     ''' <remarks>Se debe llamar a esta función cada vez que se modifica la lista de paquetes y descarga</remarks>
     Private Sub ReordenarPrioridadPaquetes(RefrescarFicheros As Boolean)
         Dim i As Integer = 0
-        Mutex.ListaDescargas.WaitOne()
-        For Each paquete As Paquete In Me.ListaPaquetes
-            i += 1
-            paquete.SetDescargaPrioridad = i
-            If paquete.ListaFicheros IsNot Nothing Then
-                For Each fichero As Fichero In paquete.ListaFicheros
-                    i += 1
-                    fichero.SetDescargaPrioridad = i
-                Next
-            End If
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        SyncLock Mutex.ListaDescargas
+            For Each paquete As Paquete In Me.ListaPaquetes
+                i += 1
+                paquete.SetDescargaPrioridad = i
+                If paquete.ListaFicheros IsNot Nothing Then
+                    For Each fichero As Fichero In paquete.ListaFicheros
+                        i += 1
+                        fichero.SetDescargaPrioridad = i
+                    Next
+                End If
+            Next
+        End SyncLock
         If RefrescarFicheros Then
             RefreshListaDescargas(RefrescarFicheros)
         End If
@@ -3561,8 +3524,7 @@ Public Class Main
             Dim targett As Fichero = CType(Target, Fichero)
 
             ' Comprobamos que forman parte del mismo paquete
-            Mutex.ListaDescargas.WaitOne()
-            Try
+            SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
 
                     Dim indSource As Integer = paq.ListaFicheros.FindIndex(Function(x)
@@ -3582,17 +3544,14 @@ Public Class Main
                     End If
 
                 Next
-            Finally
-                Mutex.ListaDescargas.ReleaseMutex()
-            End Try
+            End SyncLock
 
         ElseIf TypeOf (Source) Is Paquete And TypeOf (Target) Is Paquete Then
 
             Dim sourcet As Paquete = CType(Source, Paquete)
             Dim targett As Paquete = CType(Target, Paquete)
 
-            Mutex.ListaDescargas.WaitOne()
-            Try
+            SyncLock Mutex.ListaDescargas
                 Dim indSource As Integer = Me.ListaPaquetes.FindIndex(Function(x)
                                                                           Return x.DescargaPrioridad = sourcet.DescargaPrioridad
                                                                       End Function)
@@ -3608,9 +3567,7 @@ Public Class Main
                     Me.ListaPaquetes.Insert(If(TargetLocation = DropTargetLocation.BelowItem, indTarget + 1, indTarget), sourcet)
                     Return True
                 End If
-            Finally
-                Mutex.ListaDescargas.ReleaseMutex()
-            End Try
+            End SyncLock
 
         End If
         Return False
@@ -3635,47 +3592,47 @@ Public Class Main
                 Dim i As Integer = 0
                 Dim Encontrado As Boolean = False
 
-                Mutex.ListaDescargas.WaitOne()
-                For Each paq As Paquete In Me.ListaPaquetes
-                    If paq.DescargaPrioridad = Prioridad And i > 0 Then
-                        Encontrado = True
-                        Exit For
-                    End If
-                    i += 1
-                Next
-                If Encontrado Then
-                    Dim paqTemp As Paquete = Me.ListaPaquetes(i - 1)
-                    Me.ListaPaquetes(i - 1) = CType(selobject, Paquete)
-                    Me.ListaPaquetes(i) = paqTemp
-                    ReordenarPrioridadPaquetes(True)
-                    ObjetoASeleccionar = Me.ListaPaquetes(i - 1)
-                End If
-                Mutex.ListaDescargas.ReleaseMutex()
-
-            ElseIf TypeOf (selobject) Is Fichero Then
-                Dim Prioridad As Integer = CType(selobject, Fichero).DescargaPrioridad
-
-                Mutex.ListaDescargas.WaitOne()
-                For Each paq As Paquete In Me.ListaPaquetes
-                    Dim i As Integer = 0
-                    Dim Encontrado As Boolean = False
-                    For Each file As Fichero In paq.ListaFicheros
-                        If file.DescargaPrioridad = Prioridad And i > 0 Then
+                SyncLock Mutex.ListaDescargas
+                    For Each paq As Paquete In Me.ListaPaquetes
+                        If paq.DescargaPrioridad = Prioridad And i > 0 Then
                             Encontrado = True
                             Exit For
                         End If
                         i += 1
                     Next
                     If Encontrado Then
-                        Dim ficTemp As Fichero = paq.ListaFicheros(i - 1)
-                        paq.ListaFicheros(i - 1) = CType(selobject, Fichero)
-                        paq.ListaFicheros(i) = ficTemp
+                        Dim paqTemp As Paquete = Me.ListaPaquetes(i - 1)
+                        Me.ListaPaquetes(i - 1) = CType(selobject, Paquete)
+                        Me.ListaPaquetes(i) = paqTemp
                         ReordenarPrioridadPaquetes(True)
-                        ObjetoASeleccionar = paq.ListaFicheros(i - 1)
-                        Exit For
+                        ObjetoASeleccionar = Me.ListaPaquetes(i - 1)
                     End If
-                Next
-                Mutex.ListaDescargas.ReleaseMutex()
+                End SyncLock
+
+            ElseIf TypeOf (selobject) Is Fichero Then
+                Dim Prioridad As Integer = CType(selobject, Fichero).DescargaPrioridad
+
+                SyncLock Mutex.ListaDescargas
+                    For Each paq As Paquete In Me.ListaPaquetes
+                        Dim i As Integer = 0
+                        Dim Encontrado As Boolean = False
+                        For Each file As Fichero In paq.ListaFicheros
+                            If file.DescargaPrioridad = Prioridad And i > 0 Then
+                                Encontrado = True
+                                Exit For
+                            End If
+                            i += 1
+                        Next
+                        If Encontrado Then
+                            Dim ficTemp As Fichero = paq.ListaFicheros(i - 1)
+                            paq.ListaFicheros(i - 1) = CType(selobject, Fichero)
+                            paq.ListaFicheros(i) = ficTemp
+                            ReordenarPrioridadPaquetes(True)
+                            ObjetoASeleccionar = paq.ListaFicheros(i - 1)
+                            Exit For
+                        End If
+                    Next
+                End SyncLock
 
             End If
         Next
@@ -3697,27 +3654,28 @@ Public Class Main
             If TypeOf (selobject) Is Paquete Then
                 Dim Prioridad As Integer = CType(selobject, Paquete).DescargaPrioridad
 
-                Mutex.ListaDescargas.WaitOne()
-                Dim numPaquetes As Integer = Me.ListaPaquetes.Count - 1
-                Dim i As Integer = 0
-                Dim Encontrado As Boolean = False
-                For Each paq As Paquete In Me.ListaPaquetes
-                    If paq.DescargaPrioridad = Prioridad And i < numPaquetes Then
-                        Encontrado = True
-                        Exit For
+                Dim paqSeleccionar As Paquete = Nothing
+                SyncLock Mutex.ListaDescargas
+                    Dim numPaquetes As Integer = Me.ListaPaquetes.Count - 1
+                    Dim i As Integer = 0
+                    Dim Encontrado As Boolean = False
+                    For Each paq As Paquete In Me.ListaPaquetes
+                        If paq.DescargaPrioridad = Prioridad And i < numPaquetes Then
+                            Encontrado = True
+                            Exit For
+                        End If
+                        i += 1
+                    Next
+                    If Encontrado Then
+                        Dim paqTemp As Paquete = Me.ListaPaquetes(i + 1)
+                        Me.ListaPaquetes(i + 1) = CType(selobject, Paquete)
+                        Me.ListaPaquetes(i) = paqTemp
+                        paqSeleccionar = Me.ListaPaquetes(i + 1)
                     End If
-                    i += 1
-                Next
-                If Encontrado Then
-                    Dim paqTemp As Paquete = Me.ListaPaquetes(i + 1)
-                    Me.ListaPaquetes(i + 1) = CType(selobject, Paquete)
-                    Me.ListaPaquetes(i) = paqTemp
-                    Dim paqSeleccionar As Paquete = Me.ListaPaquetes(i + 1)
-                    Mutex.ListaDescargas.ReleaseMutex()
+                End SyncLock
+                If paqSeleccionar IsNot Nothing Then
                     ReordenarPrioridadPaquetes(True)
                     ListaDescargas.SelectedObject = paqSeleccionar
-                Else
-                    Mutex.ListaDescargas.ReleaseMutex()
                 End If
 
 
@@ -3725,27 +3683,27 @@ Public Class Main
                 Dim Prioridad As Integer = CType(selobject, Fichero).DescargaPrioridad
 
                 Dim FicheroASeleccionar As Fichero = Nothing
-                Mutex.ListaDescargas.WaitOne()
-                For Each paq As Paquete In Me.ListaPaquetes
-                    Dim numFicheros As Integer = paq.ListaFicheros.Count - 1
-                    Dim i As Integer = 0
-                    Dim Encontrado As Boolean = False
-                    For Each file As Fichero In paq.ListaFicheros
-                        If file.DescargaPrioridad = Prioridad And i < numFicheros Then
-                            Encontrado = True
+                SyncLock Mutex.ListaDescargas
+                    For Each paq As Paquete In Me.ListaPaquetes
+                        Dim numFicheros As Integer = paq.ListaFicheros.Count - 1
+                        Dim i As Integer = 0
+                        Dim Encontrado As Boolean = False
+                        For Each file As Fichero In paq.ListaFicheros
+                            If file.DescargaPrioridad = Prioridad And i < numFicheros Then
+                                Encontrado = True
+                                Exit For
+                            End If
+                            i += 1
+                        Next
+                        If Encontrado Then
+                            Dim ficTemp As Fichero = paq.ListaFicheros(i + 1)
+                            paq.ListaFicheros(i + 1) = CType(selobject, Fichero)
+                            paq.ListaFicheros(i) = ficTemp
+                            FicheroASeleccionar = paq.ListaFicheros(i + 1)
                             Exit For
                         End If
-                        i += 1
                     Next
-                    If Encontrado Then
-                        Dim ficTemp As Fichero = paq.ListaFicheros(i + 1)
-                        paq.ListaFicheros(i + 1) = CType(selobject, Fichero)
-                        paq.ListaFicheros(i) = ficTemp
-                        FicheroASeleccionar = paq.ListaFicheros(i + 1)
-                        Exit For
-                    End If
-                Next
-                Mutex.ListaDescargas.ReleaseMutex()
+                End SyncLock
 
                 If FicheroASeleccionar IsNot Nothing Then
                     ReordenarPrioridadPaquetes(True)
@@ -3800,7 +3758,7 @@ Public Class Main
         Dim paqueteAEliminar As Paquete = Nothing
         Dim ficheroAEliminar As Fichero = Nothing
 
-        Mutex.ListaDescargas.WaitOne()
+        SyncLock Mutex.ListaDescargas
         Try
             For Each paq As Paquete In Me.ListaPaquetes
                 If paq.DescargaPrioridad = Objeto.DescargaPrioridad Then
@@ -3835,7 +3793,7 @@ Public Class Main
             Next
         End If
         PeticionGuardadoFichero = Now
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
         ReordenarPrioridadPaquetes(RefrescarFicheros)
 
 
@@ -3891,23 +3849,23 @@ Public Class Main
 
 #Region "Funciones control remoto"
 
-    Friend Function ControlRemotoObtenerVelocidad() As Decimal?
+    Public Function ControlRemotoObtenerVelocidad() As Decimal? Implements IDownloaderService.ControlRemotoObtenerVelocidad
         Return Me.VelocidadGlobalDescarga
     End Function
 
-    Friend Function ControlRemotoObtenerDescargasActivas() As Integer?
+    Public Function ControlRemotoObtenerDescargasActivas() As Integer? Implements IDownloaderService.ControlRemotoObtenerDescargasActivas
         Return Me.NumDescargasActivas
     End Function
 
-    Friend Function ControlRemotoObtenerDescargasCompletadas() As Integer?
+    Public Function ControlRemotoObtenerDescargasCompletadas() As Integer? Implements IDownloaderService.ControlRemotoObtenerDescargasCompletadas
         Return Me.NumDescargasCompletadas
     End Function
 
-    Friend Function ControlRemotoObtenerDescargasErroneas() As Integer?
+    Public Function ControlRemotoObtenerDescargasErroneas() As Integer? Implements IDownloaderService.ControlRemotoObtenerDescargasErroneas
         Return Me.NumDescargasErroneas
     End Function
 
-    Friend Function ControlRemotoObtenerDescargasEnCola() As Integer?
+    Public Function ControlRemotoObtenerDescargasEnCola() As Integer? Implements IDownloaderService.ControlRemotoObtenerDescargasEnCola
         Return Me.NumDescargasEnCola
     End Function
 
@@ -3915,14 +3873,20 @@ Public Class Main
         Return Me.EstadoAplicacion
     End Function
 
-    Friend Sub ControlRemotoDescargar()
+    ' IDownloaderService 实现：Web 层只经接口取状态，不再依赖 Main.TipoEstadoAplicacion。
+    ' 成员顺序与 TipoEstadoAplicacion 一致（Descargando=0/Pausa=1/Parado=2），CType 直接映射。
+    Public Function ControlRemotoObtenerEstadoSvc() As DownloaderEstado Implements IDownloaderService.ControlRemotoObtenerEstado
+        Return CType(Me.EstadoAplicacion, DownloaderEstado)
+    End Function
+
+    Public Sub ControlRemotoDescargar() Implements IDownloaderService.ControlRemotoDescargar
         btnPlay_Click(Nothing, Nothing)
     End Sub
-    Friend Sub ControlRemotoParar()
+    Public Sub ControlRemotoParar() Implements IDownloaderService.ControlRemotoParar
         btnStop_Click(Nothing, Nothing)
     End Sub
 
-    Friend Function ControlRemotoAgregarLinks(ByVal Links As String, ByVal NombrePaquete As String, ByVal CrearDirectorio As Boolean) As String
+    Public Function ControlRemotoAgregarLinks(ByVal Links As String, ByVal NombrePaquete As String, ByVal CrearDirectorio As Boolean) As String Implements IDownloaderService.ControlRemotoAgregarLinks
         Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(Links)
         If URLs.Count = 0 Then
             Return Language.GetText("No valid URLs have been inserted")
@@ -4162,20 +4126,25 @@ Public Class Main
             Dim d As New RefreshListaDescargasCallback(AddressOf RefreshListaDescargas)
             Me.Invoke(d, New Object() {SetObjects})
         Else
-            Mutex.ListaDescargas.WaitOne()
-            Try
+            SyncLock Mutex.ListaDescargas
                 If SetObjects Then
                     ListaDescargas.SetObjects(Me.ListaPaquetes)
                     ApplyNavRoots()
                     ListaDescargas.BuildList()
                 End If
 
-                ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                ' 卡顿治理：430ms 节拍全量 RefreshObjects 时挂起重绘，一次性刷完再放行，
+                ' 否则几百行每 tick 逐行重绘闪烁 + 吃 UI 线程。只包列表控件，
+                ' UpdateNavCounts/UpdateDetailPanel 是别的控件，不受影响。
+                ListaDescargas.BeginUpdate()
+                Try
+                    ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                Finally
+                    ListaDescargas.EndUpdate()
+                End Try
                 UpdateNavCounts()
                 UpdateDetailPanel()
-            Finally
-                Mutex.ListaDescargas.ReleaseMutex()
-            End Try
+            End SyncLock
 
         End If
     End Sub
@@ -4362,8 +4331,7 @@ Public Class Main
 
 
     Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String, ByVal Success As Boolean, ByVal ErrorMessage As String)
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
                     If fic.FileID = Code Then
@@ -4371,9 +4339,7 @@ Public Class Main
                     End If
                 Next
             Next
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
 #End Region
@@ -4455,16 +4421,16 @@ Public Class Main
     End Sub
 
     Private Sub LimpiarCompletados()
-        Mutex.ListaDescargas.WaitOne()
         Dim listaFicherosEliminar As New Generic.List(Of Fichero)
-        For Each paq As Paquete In Me.ListaPaquetes
-            For Each fic As Fichero In paq.ListaFicheros
-                If fic.EstadoDescarga = Estado.Completado Then
-                    listaFicherosEliminar.Add(fic)
-                End If
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.EstadoDescarga = Estado.Completado Then
+                        listaFicherosEliminar.Add(fic)
+                    End If
+                Next
             Next
-        Next
-        Mutex.ListaDescargas.ReleaseMutex()
+        End SyncLock
         For Each fic As Fichero In listaFicherosEliminar
             Log.WriteDebug("Deleting file " & fic.NombreFichero)
             Eliminar(fic, False, False)

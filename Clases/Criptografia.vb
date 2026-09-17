@@ -42,7 +42,18 @@ Public Class Criptografia
             Try
                 Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(encryptedData), legacyEntropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
                 Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
-            Catch
+            Catch ex As Exception
+                ' P0-4/P0-5：DPAPI 解密失败不要静默置空。 genuine 的 DPAPI blob（base64 可解但
+                ' Unprotect 失败，如换机器/换账户恢复配置）记 Warning，由调用方提示用户重填；
+                ' 非 base64 输入多为尚未迁移的明文旧值（留给调用方明文回退），不记日志免刷屏。
+                ' 注意：Log.Redact 不调 DPAPI，此处记日志无递归。
+                Try
+                    If Not String.IsNullOrEmpty(encryptedData) Then
+                        Convert.FromBase64String(encryptedData)
+                        Log.WriteWarning("DecryptString_DPAPI: DPAPI decrypt failed with current and legacy entropy (cross-machine/user restore or corrupted value); returning empty, caller should prompt for re-entry: " & Log.SafeException(ex))
+                    End If
+                Catch
+                End Try
                 Return New SecureString()
             End Try
         End Try
@@ -638,7 +649,9 @@ Public Class Criptografia
             End Get
         End Property
 
-        Public ReadOnly Property IsPartialBlockOkay() As Boolean Implements Org.BouncyCastle.Crypto.IBlockCipher.IsPartialBlockOkay
+        ' BouncyCastle 2.x 从 IBlockCipher 移除了 IsPartialBlockOkay（恒 True 的能力查询，
+        ' CTR/Seek 逻辑本就按整块处理），保留为普通成员供内部语义自述，不再挂 Implements。
+        Public ReadOnly Property IsPartialBlockOkay() As Boolean
             Get
                 Return True
             End Get
@@ -663,9 +676,11 @@ Public Class Criptografia
             Return counter.Length
         End Function
 
-        Public Sub Reset() Implements Org.BouncyCastle.Crypto.IBlockCipher.Reset
+        ' BouncyCastle 2.x 删除了 IBlockCipher.Reset（连 AesEngine 的具体实现一并移除，
+        ' 上游认定无状态清理语义）。此处仅复位自有 IV→counter；底层 AES 无块间状态，
+        ' 每次 Init 已重建工作密钥，行为与旧版一致。
+        Public Sub Reset()
             Array.Copy(IV, 0, counter, 0, counter.Length)
-            cipher.Reset()
         End Sub
 
         ''' <summary>

@@ -2,18 +2,24 @@
 
 **言語**：[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko-KR.md)
 
-> クラシックな MEGA ダウンローダーを再び利用可能にします。v1.8 のソースコードを逆コンパイルして修正したもので、60 以上の修正が完了しています。
+> クラシックな MEGA ダウンローダーを再び利用可能にします。v1.8 のソースコードを逆コンパイルして修正したもので、修正は継続中です。詳細は [CHANGELOG](CHANGELOG.md) をご覧ください。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
 
 > ⭐ このプロジェクトが役に立ったら、ぜひ右上の Star で応援をお願いします！
+
+## スクリーンショット
+
+| ライトテーマ | ダークテーマ |
+| --- | --- |
+| ![メインウィンドウ（ライトテーマ）](screenshots/main-light.png) | ![メインウィンドウ（ダークテーマ）](screenshots/main-dark.png) |
 
 ---
 
@@ -23,7 +29,7 @@ MegaDownloader は、スペインの開発者 **Andres Soliño** によって作
 
 このリポジトリは、その復活プロジェクトです。v1.8を逆コンパイルしてソースコードを取得し、それを基に修正とリファクタリングを行っています。
 
-**現在のバージョン：v2.5.1**。完全な変更履歴は [CHANGELOG](CHANGELOG.ja-JP.md) をご覧ください。
+**現在のバージョン：v2.5.2**。完全な変更履歴は [CHANGELOG](CHANGELOG.md) をご覧ください。
 
 > ⚠️ **法的声明**：本プロジェクトは、サードパーティが公開したソフトウェアの逆コンパイルに基づいており、その目的は互換性の問題を修正して使用可能性を回復することのみです。原著者が本リポジトリが自身の権利を侵害しているとお考えの場合は、Issue を通じてご連絡ください。対応させていただきます。
 
@@ -31,9 +37,9 @@ MegaDownloader は、スペインの開発者 **Andres Soliño** によって作
 
 ## クイックスタート
 
-1. [Releases](../../../releases) からダウンロードしてください。以下の2つの選択肢から1つを選んでください：
-   - **`MegaDownloader-Revival-win-x86.zip`** —— ポータブル版。任意のディレクトリに解凍し、`MegaDownloader.exe` をダブルクリックしてください
-   - **`MegaDownloader.exe`** —— 単一ファイル版。12個の依存DLLが組み込まれているため、ダウンロード後、解凍せずにダブルクリックしてください
+1. [Releases](../../releases) からダウンロードしてください。以下の2つの選択肢から1つを選んでください：
+   - **`MegaDownloader-Revival-win-x86.zip`** —— インストール不要版（管理者権限不要）。任意のディレクトリに解凍し、`MegaDownloader.exe` をダブルクリックしてください。注意：設定とダウンロードキューは `%LOCALAPPDATA%\MegaDownloader\` に保存され、プログラムのフォルダにはありません
+   - **`MegaDownloader.exe`** —— 単一ファイル版。15個の依存DLLが組み込まれているため、ダウンロード後、解凍せずにダブルクリックしてください
 2. MEGAのリンクをコピーすると、プログラムがクリップボードの内容を自動的に認識します
 3. ツールバーの **リンクを追加** をクリックして手動で貼り付けるか、リンクをメインウィンドウにドラッグ＆ドロップすることも可能です
 4. **設定** でダウンロード先、同時ダウンロード数、速度制限を設定します
@@ -101,7 +107,7 @@ mega://enc2?abcDEFgh-IjklMNop
 
 ### 環境要件
 
-- Visual Studio 2019 / 2022
+- Visual Studio 2013 以降（ソリューションは VS2013 形式で、新しいバージョンでも開けます）
 - .NET Framework 4.8 SDK（Visual Studio とともにインストールされます）
 - Windows 7 SP1 以降
 
@@ -152,7 +158,7 @@ MegaDownloader/
 └── MegaDownloader.sln
 ```
 
-完全なディレクトリツリーとファイルの用途については、[CONTRIBUTING](CONTRIBUTING.ja-JP.md)を参照してください。
+完全なディレクトリツリーとファイルの用途については、[CONTRIBUTING](CONTRIBUTING.md)を参照してください。
 
 ---
 
@@ -173,7 +179,7 @@ MegaDownloader/
 | Magyar | `hu-HU-Language.xml` |
 | Română | `ro-RO-Language.xml` |
 
-言語を追加したり、既存の翻訳を改善したりするには、[CONTRIBUTING](CONTRIBUTING.ja-JP.md)を参照してください。
+言語を追加したり、既存の翻訳を改善したりするには、[CONTRIBUTING](CONTRIBUTING.md)を参照してください。
 
 ---
 
@@ -181,20 +187,20 @@ MegaDownloader/
 
 | ドキュメント | 内容 |
 | --- | --- |
-| [CHANGELOG](CHANGELOG.ja-JP.md) | 完全なバージョン履歴と各バージョンの修正詳細 |
-| [CONTRIBUTING](CONTRIBUTING.ja-JP.md) | 貢献プロセス、コーディングスタイル、リリースプロセス |
+| [CHANGELOG](CHANGELOG.md) | 完全なバージョン履歴と各バージョンの修正詳細 |
+| [CONTRIBUTING](CONTRIBUTING.md) | 貢献プロセス、コーディングスタイル、リリースプロセス |
 
-このドキュメントは複数の言語で提供されています。すべての言語版は手動でメンテナンスされています。一つの言語を更新した際は、他の言語も合わせて更新してください：
+README と CONTRIBUTING は各言語で手動メンテナンスしています。更新時は他言語も同期してください。CHANGELOG は簡体字中国語版のみメンテナンスしています：
 
-| 言語 | README | CHANGELOG | CONTRIBUTING | |
-| --- | --- | --- | --- | --- |
-| 英語 | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | 手動メンテナンス |
-| 簡体字中国語 | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **公式ソース** |
-| 繁体字中国語 | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | 手動メンテナンス |
-| 日本語 | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | 手動メンテナンス |
-| 韓国語 | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | 手動メンテナンス |
+| 言語 | README | CHANGELOG | CONTRIBUTING |
+| --- | --- | --- | --- |
+| 英語 | `README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 簡体字中国語 | `README.zh-CN.md` | `CHANGELOG.md` | `CONTRIBUTING.zh-CN.md` |
+| 繁体字中国語 | `README.zh-TW.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 日本語 | `README.ja-JP.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 韓国語 | `README.ko-KR.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
 
-> 簡体字中国語は公式ソースです。ソースファイル自体が簡体字中国語版のため、別途 `README.zh-CN.md` は存在しません。
+> リポジトリルートの `README.md` は英語版です。すべての翻訳は `docs/` にあります。簡体字中国語が公式ソースです。
 
 ---
 

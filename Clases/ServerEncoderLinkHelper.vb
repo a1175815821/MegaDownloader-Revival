@@ -130,7 +130,7 @@ Public Class ServerEncoderLinkHelper
 		End Try
 	End Function
 	
-	Public Shared Function ServerDecode(ByVal link As String, ByRef Config As Configuracion, byref Exc As Exception) As Generic.List(Of String)
+	Public Shared Function ServerDecode(ByVal link As String, ByRef Config As Configuracion, byref Exc As Exception, Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Generic.List(Of String)
 		Dim Helper As New ELCAccountHelper(Config)
 		Dim linkBackup As String = link
 		Dim LinkList As New Generic.List(Of String)
@@ -203,7 +203,7 @@ Public Class ServerEncoderLinkHelper
                 If URLExtractor.EsUrlAcortador(URL2) Then
                     URL2 = Conexion.ObtenerUrlDesdeAcortador(URL2)
                 End If
-                Dim Res As Conexion.Respuesta = Conexion.SendPOST(URL2, param)
+                Dim Res As Conexion.Respuesta = Conexion.SendPOST(URL2, param, ct:=ct)
 
                 If Res.Excepcion IsNot Nothing Then
                     Throw New ApplicationException("Error contacting the server to decode string [" & URL & "]", Res.Excepcion)

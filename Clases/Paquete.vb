@@ -34,25 +34,32 @@ Public Class Paquete
     Private TiempoEstimadoDescarga As String
 
     Private Function HayFicheros() As Boolean
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             Return ListaFicheros IsNot Nothing AndAlso ListaFicheros.Count > 0
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
     End Function
 
     Public Sub AgregarFichero(ByVal Fichero As Fichero)
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             If ListaFicheros Is Nothing Then
                 ListaFicheros = New Generic.List(Of Fichero)
             End If
             ListaFicheros.Add(Fichero)
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
+
+    ''' <summary>
+    ''' 返回本包文件引用的快照，供 430ms 后台刷新循环使用：短锁拷贝后，
+    ''' 逐文件的重活（Downloader 属性读取、ETA 格式化）在锁外执行，
+    ''' 不再把全局 ListaDescargas 锁 holds 住几百个文件的全程。
+    ''' 快照与实时列表最多差一个刷新周期，计数类 UI 本就按节拍刷新，可接受。
+    ''' </summary>
+    Public Function SnapshotFicheros() As Generic.List(Of Fichero)
+        SyncLock Mutex.ListaDescargas
+            If ListaFicheros Is Nothing Then Return New Generic.List(Of Fichero)
+            Return New Generic.List(Of Fichero)(ListaFicheros)
+        End SyncLock
+    End Function
 
     Public Sub ActualizarDatosDescarga()
 
@@ -76,8 +83,7 @@ Public Class Paquete
             Dim Total As Long = 0
             Dim TotalDesc As Long = 0
 
-            Mutex.ListaDescargas.WaitOne()
-            Try
+            SyncLock Mutex.ListaDescargas
                 For Each fichero As Fichero In ListaFicheros
                     Total += fichero.DescargaTamanoBytes
                     TotalDesc += CLng(fichero.DescargaTamanoBytes * (fichero.DescargaPorcentaje / 100))
@@ -103,9 +109,7 @@ Public Class Paquete
                             HayErroneos = True
                     End Select
                 Next
-            Finally
-                Mutex.ListaDescargas.ReleaseMutex()
-            End Try
+            End SyncLock
             If HayDescargando Then
                 EstadoDescarga = Estado.Descargando
             ElseIf HayPausados Then
@@ -214,17 +218,14 @@ Public Class Paquete
 
         Dim XML As XmlDocument = Nothing
         Dim recoveredFromBackup As Boolean = False
-        Mutex.GuardarDownloadList.WaitOne()
-        Try
+        SyncLock Mutex.GuardarDownloadList
             If Not AtomicFile.TryLoadXml(Fichero, XML, recoveredFromBackup) Then
                 Return New Generic.List(Of Paquete)
             End If
             If recoveredFromBackup Then
                 Log.WriteWarning("Download list restored from backup file.")
             End If
-        Finally
-            Mutex.GuardarDownloadList.ReleaseMutex()
-        End Try
+        End SyncLock
 
         Dim l As New Generic.List(Of Paquete)
 
@@ -240,8 +241,7 @@ Public Class Paquete
 
 
     Private Shared Sub MarcarFicherosComoParados(ByRef ListaPaquetes As Generic.List(Of Paquete))
-        Mutex.ListaDescargas.WaitOne()
-        Try
+        SyncLock Mutex.ListaDescargas
             For Each Paquete As Paquete In ListaPaquetes
                 For Each Fichero As Fichero In Paquete.ListaFicheros
                     If Fichero.DescargaEstado = Estado.Descargando Or _
@@ -257,9 +257,7 @@ Public Class Paquete
                     ThrottledStreamController.GetController.SetMaxSpeed(Fichero.FileID, CLng(Fichero.LimiteVelocidad) * 1024L)
                 Next
             Next
-        Finally
-            Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
     Private Shared _LastSavedXML As String = Nothing
@@ -277,7 +275,7 @@ Public Class Paquete
             XML = GuardarXML(ListaPaquetes, True)
             Log.WriteDebug("Saving download list")
 
-            Mutex.GuardarDownloadList.WaitOne()
+            SyncLock Mutex.GuardarDownloadList
             Try
                 AtomicFile.SaveXml(XML, Fichero)
                 _LastSavedXML = previousSaved
@@ -287,9 +285,8 @@ Public Class Paquete
             Catch ex As Exception
                 Log.WriteError("Error saving download list XML: " & Log.SafeException(ex))
                 _LastSavedXML = previousSaved
-            Finally
-                Mutex.GuardarDownloadList.ReleaseMutex()
             End Try
+            End SyncLock
 
         End If
 

@@ -77,9 +77,9 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   消息提示窗体
 │   └── PropiedadesDescarga.vb      #   下载属性窗体
 ├── docs/                           # 项目文档
-│   ├── README*.md                   #   项目说明（5 种语言）
-│   ├── CHANGELOG*.md                #   变更日志（5 种语言）
-│   └── CONTRIBUTING*.md             #   贡献指南（5 种语言）
+│   ├── README*.md                   #   项目说明（5 种语言，根 README.md 为英文）
+│   ├── CHANGELOG.md                 #   变更日志（仅简体中文）
+│   └── CONTRIBUTING*.md             #   贡献指南（英文＋简体中文）
 ├── MegaDownloader.sln              # VS 解决方案
 ├── MegaDownloader.vbproj           # VS 工程
 ├── app.config                      # .NET 运行时配置
@@ -213,8 +213,8 @@ git push origin feature/你的功能名称
 
 文档采用手动翻译模式，无自动翻译流程：
 
-- 每种语言的文档都是人工维护的：英文（`docs/README.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING.md`）、简体中文（`docs/*.zh-CN.md`，权威源）、繁中/日/韩对应文件
-- 改文档时请同步更新所有语言版本，保持内容一致
+- README 维护五个语言版本（`README.md`、`docs/README.*.md`），CONTRIBUTING 只维护英文与简体中文。**CHANGELOG 只维护简体中文版**（`docs/CHANGELOG.md`），不要再建翻译副本；非中文读者可自行机翻
+- 改 README 或 CONTRIBUTING 时请同步更新所维护的语言版本，保持内容一致
 - 想改进文档措辞 → 直接改对应语言的文件，或提 PR
 - 想新增一门语言 → 复制英文（或中文）文档为新语言文件，并更新各文档顶部的语言导航链接与语言对照表
 
@@ -256,11 +256,11 @@ git push origin feature/你的功能名称
 ## 发布流程（仅维护者）
 
 1. 确认所有测试通过，`Debug` 与 `Release` 配置都能构建
-2. 更新 `docs/CHANGELOG.zh-CN.md`，追加新版本章节，并同步更新其他语言的 CHANGELOG
+2. 更新 `docs/CHANGELOG.md`（仅简体中文），追加新版本章节
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 撰写中英双语的发布说明（中英对照，先写中文再写英文，参考往期 `release-notes-*.md` 的结构）
+6. 用简体中文撰写发布说明（参考往期 `release-notes-*.md` 的结构）
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash

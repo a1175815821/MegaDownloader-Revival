@@ -1,4 +1,4 @@
-﻿Imports System.Runtime.Remoting
+Imports System.Runtime.Remoting
 Imports System.Runtime.Remoting.Channels
 Imports System.Threading
 Imports System.Security.Permissions
@@ -166,8 +166,7 @@ Public NotInheritable Class ApplicationInstanceManager
         ' Cannot remote with mpress, arrrgh!! :(
         Dim PathFile As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Internal")
 
-        Mutex.MEGAUriParameters.WaitOne()
-        Try
+        SyncLock Mutex.MEGAUriParameters
             If Not System.IO.Directory.Exists(PathFile) Then
                 System.IO.Directory.CreateDirectory(PathFile)
             End If
@@ -176,9 +175,7 @@ Public NotInheritable Class ApplicationInstanceManager
                 ' One message per line so concurrent second-instance launches do not glue args together
                 t.WriteLine(String.Join("|", InstanceProxy.CommandLineArgs))
             End Using
-        Finally
-            Mutex.MEGAUriParameters.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
 
@@ -190,8 +187,7 @@ Public NotInheritable Class ApplicationInstanceManager
                                              "MegaDownloader/Internal/Buffer.dat")
         If File.Exists(PathLog) Then
             If _getParametersLastCheck = Date.MinValue OrElse File.GetLastWriteTimeUtc(PathLog) > _getParametersLastCheck.ToUniversalTime Then
-                Mutex.MEGAUriParameters.WaitOne()
-                Try
+                SyncLock Mutex.MEGAUriParameters
                     Dim args As New Generic.List(Of String)
                     Dim rawLines As New Generic.List(Of String)
                     Using t As New StreamReader(PathLog)
@@ -249,9 +245,7 @@ Public NotInheritable Class ApplicationInstanceManager
                         End If
                     End If
 
-                Finally
-                    Mutex.MEGAUriParameters.ReleaseMutex()
-                End Try
+                End SyncLock
             End If
         End If
         Return False

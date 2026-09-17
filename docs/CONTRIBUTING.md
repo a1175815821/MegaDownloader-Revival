@@ -77,9 +77,9 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   Message dialog form
 │   └── PropiedadesDescarga.vb      #   Download properties form
 ├── docs/                           # Project documentation
-│   ├── README*.md                   #   Project readme (5 languages)
-│   ├── CHANGELOG*.md                #   Changelog (5 languages)
-│   └── CONTRIBUTING*.md             #   Contributing guide (5 languages)
+│   ├── README*.md                   #   Project readme (5 languages, root README.md is English)
+│   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
+│   └── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
 ├── MegaDownloader.sln              # VS solution
 ├── MegaDownloader.vbproj           # VS project
 ├── app.config                      # .NET runtime configuration
@@ -213,8 +213,8 @@ This project maintains **two independent multilingual systems** — one for docu
 
 Documentation is translated by hand — there is no automatic translation pipeline:
 
-- Every language version is hand-maintained: English (`docs/README.md`, `docs/CHANGELOG.md`, `docs/CONTRIBUTING.md`), Simplified Chinese (`docs/*.zh-CN.md`, authoritative source), plus the Traditional Chinese / Japanese / Korean counterparts
-- When you update docs, please update all language versions to keep them in sync
+- README is hand-maintained in five languages (`README.md`, `docs/README.*.md`); CONTRIBUTING in English and Simplified Chinese only. **CHANGELOG is maintained in Simplified Chinese only** (`docs/CHANGELOG.md`) — do not create translated copies; non-Chinese readers can use machine translation
+- When you update README or CONTRIBUTING, please update all maintained language versions to keep them in sync
 - To improve wording, edit the file of the corresponding language directly, or open a PR
 - To add a language, copy the English (or Chinese) document to the new language file, then update the language navigation links at the top of each document and the language table
 
@@ -256,11 +256,11 @@ When filing a bug, please include the following in the Issue:
 ## Release process (maintainers only)
 
 1. Confirm all tests pass and that both `Debug` and `Release` build
-2. Update `docs/CHANGELOG.zh-CN.md` with the new version section, and sync the CHANGELOG in the other languages
+2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
 3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
-6. Write bilingual release notes (Chinese + English; see the structure of previous `release-notes-*.md` files)
+6. Write the release notes in Simplified Chinese (see the structure of previous `release-notes-*.md` files)
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash

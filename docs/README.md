@@ -2,18 +2,24 @@
 
 **Languages**: **English** · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
-> Restoring the classic MEGA Downloader to working order. Based on a decompiled version of v1.8 source code, with over 60 fixes implemented.
+> Restoring the classic MEGA Downloader to working order. Based on a decompiled version of v1.8 source code, with ongoing fixes — see [CHANGELOG](CHANGELOG.md).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
 
 > ⭐ If this project helps you, please consider giving it a Star in the top right!
+
+## Screenshots
+
+| Light theme | Dark theme |
+| --- | --- |
+| ![Main window (light theme)](screenshots/main-light.png) | ![Main window (dark theme)](screenshots/main-dark.png) |
 
 ---
 
@@ -23,7 +29,7 @@ MegaDownloader is a MEGA cloud storage download manager created by Spanish devel
 
 This repository is a project to revive it: we decompiled v1.8 to obtain the source code, and have since fixed and refactored it based on that foundation.
 
-**Current version: v2.5.1**. See [CHANGELOG](CHANGELOG.md) for the complete change log.
+**Current version: v2.5.2**. See [CHANGELOG](CHANGELOG.md) for the complete change log.
 
 > ⚠️ **Legal Notice**: This project is derived from the decompilation of third-party published software, with the sole purpose of fixing compatibility issues to restore its usability. If the original author believes this repository infringes upon their rights, please contact us via an Issue, and we will cooperate to resolve the matter.
 
@@ -31,9 +37,9 @@ This repository is a project to revive it: we decompiled v1.8 to obtain the sour
 
 ## Quick Start
 
-1. Download from [Releases](../../../releases)—choose one of the following:
-   - **`MegaDownloader-Revival-win-x86.zip`** —— Portable version. Extract to any directory and double-click `MegaDownloader.exe`
-   - **`MegaDownloader.exe`** —— Single-file version. The 12 required DLLs are already embedded; simply double-click after downloading—no need to unzip
+1. Download from [Releases](../../releases)—choose one of the following:
+   - **`MegaDownloader-Revival-win-x86.zip`** —— No-install version (no admin rights needed). Extract to any directory and double-click `MegaDownloader.exe`. Note: settings and the download queue live in `%LOCALAPPDATA%\MegaDownloader\`, not beside the exe, so copying the folder elsewhere does not carry them over
+   - **`MegaDownloader.exe`** —— Single-file version. The 15 required DLLs are already embedded; simply double-click after downloading—no need to unzip
 2. Copy the MEGA link; the program will automatically detect the clipboard content
 3. You can also click **Add Link** on the toolbar to paste manually, or drag the link into the main window
 4. Configure the download directory, number of concurrent downloads, and speed limit in **Settings**
@@ -101,7 +107,7 @@ mega://enc2?abcDEFgh-IjklMNop
 
 ### System Requirements
 
-- Visual Studio 2019 / 2022
+- Visual Studio 2013 or newer (the solution is in VS2013 format and opens in any recent version)
 - .NET Framework 4.8 SDK (installed with Visual Studio)
 - Windows 7 SP1 or later
 
@@ -186,17 +192,17 @@ To add a language or improve an existing translation, see [CONTRIBUTING](CONTRIB
 | [CHANGELOG](CHANGELOG.md) | Complete version history and details of fixes in each version |
 | [CONTRIBUTING](CONTRIBUTING.md) | Contribution process, coding style, and release process |
 
-This documentation is available in multiple languages. All versions are maintained by hand — when you update one language, please update the others as well:
+README and CONTRIBUTING are maintained in every language by hand — if you update one, please update the others as well. CHANGELOG is maintained in Simplified Chinese only; non-Chinese readers can use machine translation on it:
 
-| Language | README | CHANGELOG | CONTRIBUTING | |
-| --- | --- | --- | --- | --- |
-| English | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | Manually maintained |
-| Simplified Chinese | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **Authoritative Source** |
-| Traditional Chinese | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | Manually maintained |
-| Japanese | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | Manually maintained |
-| Korean | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | Manually maintained |
+| Language | README | CHANGELOG | CONTRIBUTING |
+| --- | --- | --- | --- |
+| English | `README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| Simplified Chinese | `README.zh-CN.md` | `CHANGELOG.md` | `CONTRIBUTING.zh-CN.md` |
+| Traditional Chinese | `README.zh-TW.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| Japanese | `README.ja-JP.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| Korean | `README.ko-KR.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
 
-> Simplified Chinese is the authoritative source; the source file itself is the Simplified Chinese version, so no separate `README.zh-CN.md` exists.
+> The repository-root `README.md` is English; all translations live under `docs/`. Simplified Chinese is the authoritative source.
 
 ---
 

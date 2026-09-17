@@ -2,7 +2,7 @@
 
 **语言**：[English](README.md) · **简体中文** · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
-> 让经典 MEGA 下载器重新可用。基于 v1.8 反编译源码修复而成，已完成 60+ 项修复。
+> 让经典 MEGA 下载器重新可用。基于 v1.8 反编译源码修复而成，修复持续进行中，见 [CHANGELOG](CHANGELOG.md)。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
@@ -15,6 +15,12 @@
 
 > ⭐ 如果这个项目对你有帮助，欢迎点右上角 Star 支持一下！
 
+## 截图
+
+| 浅色主题 | 深色主题 |
+| --- | --- |
+| ![主界面（浅色主题）](screenshots/main-light.png) | ![主界面（深色主题）](screenshots/main-dark.png) |
+
 ---
 
 ## 这是什么
@@ -23,7 +29,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 网盘下
 
 本仓库是它的复活计划：反编译 v1.8 拿到源码，在其基础上修复与重构。
 
-**当前版本：v2.5.1**。完整变更历史见 [CHANGELOG](CHANGELOG.md)。
+**当前版本：v2.5.2**。完整变更历史见 [CHANGELOG](CHANGELOG.md)。
 
 > ⚠️ **法律声明**：本项目源自对第三方已发布软件的反编译，目的仅在于修复兼容性问题以恢复其可用性。若原作者认为本仓库侵犯了其权益，请通过 Issue 联系，我们将配合处理。
 
@@ -32,8 +38,8 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 网盘下
 ## 快速开始
 
 1. 从 [Releases](../../releases) 下载，二选一：
-   - **`MegaDownloader-Revival-win-x86.zip`** —— 绿色版。解压到任意目录，双击 `MegaDownloader.exe`
-   - **`MegaDownloader.exe`** —— 单文件版。12 个依赖 DLL 已内嵌，下载后直接双击，无需解压
+   - **`MegaDownloader-Revival-win-x86.zip`** —— 免安装版（无需管理员权限）。解压到任意目录，双击 `MegaDownloader.exe`。注意：设置与下载队列保存在 `%LOCALAPPDATA%\MegaDownloader\`，不在程序目录下，整文件夹拷走不会带走配置
+   - **`MegaDownloader.exe`** —— 单文件版。15 个依赖 DLL 已内嵌，下载后直接双击，无需解压
 2. 复制 MEGA 链接，程序自动识别剪贴板内容
 3. 也可点工具栏 **添加链接** 手动粘贴，或把链接拖进主窗口
 4. 在 **设置** 中配置下载目录、并发数、限速
@@ -101,7 +107,7 @@ mega://enc2?abcDEFgh-IjklMNop
 
 ### 环境要求
 
-- Visual Studio 2019 / 2022
+- Visual Studio 2013 或更高版本（解决方案为 VS2013 格式，任意新版均可打开）
 - .NET Framework 4.8 SDK（随 Visual Studio 安装）
 - Windows 7 SP1 或更高
 
@@ -154,7 +160,7 @@ MegaDownloader/
 └── MegaDownloader.sln
 ```
 
-完整的目录树与文件用途说明见 [CONTRIBUTING](CONTRIBUTING.md)。
+完整的目录树与文件用途说明见 [CONTRIBUTING](CONTRIBUTING.zh-CN.md)。
 
 ---
 
@@ -175,7 +181,7 @@ MegaDownloader/
 | Magyar | `hu-HU-Language.xml` |
 | Română | `ro-RO-Language.xml` |
 
-想加一门语言或改进现有翻译，见 [CONTRIBUTING](CONTRIBUTING.md)。
+想加一门语言或改进现有翻译，见 [CONTRIBUTING](CONTRIBUTING.zh-CN.md)。
 
 ---
 
@@ -184,19 +190,19 @@ MegaDownloader/
 | 文档 | 内容 |
 | --- | --- |
 | [CHANGELOG](CHANGELOG.md) | 完整版本历史与每版修复明细 |
-| [CONTRIBUTING](CONTRIBUTING.md) | 贡献流程、代码风格、发布流程 |
+| [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 
-本文档提供多种语言。**所有语言版本均为手动维护**，更新某一语言时请同步更新其他语言：
+README 与 CONTRIBUTING 为各语言手动维护，更新时请同步。CHANGELOG 仅维护简体中文版：
 
-| 语言 | README | CHANGELOG | CONTRIBUTING | |
-| --- | --- | --- | --- | --- |
-| English | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | 手动维护 |
-| 简体中文 | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **权威源** |
-| 繁體中文 | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | 手动维护 |
-| 日本語 | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | 手动维护 |
-| 한국어 | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | 手动维护 |
+| 语言 | README | CHANGELOG | CONTRIBUTING |
+| --- | --- | --- | --- |
+| English | `README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 简体中文 | `README.zh-CN.md` | `CHANGELOG.md` | `CONTRIBUTING.zh-CN.md` |
+| 繁體中文 | `README.zh-TW.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 日本語 | `README.ja-JP.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 한국어 | `README.ko-KR.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
 
-> 简体中文是权威源，本文件本身就是简体中文版，所以不存在单独的 `README.zh-CN.md`。
+> 仓库根目录的 `README.md` 为英文版，所有翻译位于 `docs/` 下。简体中文是权威源。
 
 ---
 

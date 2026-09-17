@@ -457,4 +457,12 @@ B 是同行下载数。]]></Text>
   <Text key="Folder_Reading"><![CDATA[正在读取文件夹，请稍候…]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[正在读取文件夹…已解析 %N% 项]]></Text>
   <Text key="Reset column widths"><![CDATA[恢复默认列宽]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[下载完成]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[任务包“%N%”已下载完成，点击查看。]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[下载失败]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[最近有 %N% 个任务失败，点击查看。]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[未知错误，详情请看日志。]]></Text>
+  <Text key="Advice_Quota"><![CDATA[MEGA 传输配额用尽，稍后自动恢复；换 IP 或代理后点“立即重试”可马上继续。]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[链接已失效或被禁止，重试也无法恢复，建议删除该任务。]]></Text>
+  <Text key="Advice_Connection"><![CDATA[连接出错，正在自动重试，无需操作。]]></Text>
 </Language>

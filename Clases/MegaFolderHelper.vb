@@ -47,7 +47,7 @@ Public Class MegaFolderHelper
         URLExtractor.CheckFileIDAndFileKey(FolderID, FolderKey)
 
         jsonRQ = "[{""a"":""f"",""c"":1,""r"":1}]"
-        res = Conexion.SendJSON(Conexion.Get_MEGA_API_Url("") & "&n=" & FolderID, jsonRQ)
+        res = Conexion.SendJSON(Conexion.Get_MEGA_API_Url("") & "&n=" & FolderID, jsonRQ, ct:=ct)
 
         If res.Excepcion IsNot Nothing Then
             Dim wex As System.Net.WebException = TryCast(res.Excepcion, System.Net.WebException)

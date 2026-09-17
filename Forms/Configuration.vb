@@ -121,8 +121,8 @@ Public Class Configuration
 
 
         Dim ListaPrioridadExtraccion As New Generic.Dictionary(Of String, String)
-        ListaPrioridadExtraccion(SharpCompress.PriorityExtension.Priority.PriorityType.Normal.ToString) = Language.GetText("Priority_Normal")
-        ListaPrioridadExtraccion(SharpCompress.PriorityExtension.Priority.PriorityType.Low.ToString) = Language.GetText("Priority_Low")
+        ListaPrioridadExtraccion(DescompresionPriority.Normal.ToString) = Language.GetText("Priority_Normal")
+        ListaPrioridadExtraccion(DescompresionPriority.Low.ToString) = Language.GetText("Priority_Low")
         comboPrioridad.DataSource = New BindingSource(ListaPrioridadExtraccion, Nothing)
         comboPrioridad.DisplayMember = "Value"
         comboPrioridad.ValueMember = "Key"
@@ -250,6 +250,22 @@ Public Class Configuration
         chkServidorWeb_CheckedChanged(Nothing, Nothing)
         chkServidorStreaming_CheckedChanged(Nothing, Nothing)
         chkReintentarError_CheckedChanged(Nothing, Nothing)
+
+        ' P0-4：DPAPI 口令换机/换账户恢复后解密失败，需用户重填。仅所用功能启用时弹窗，
+        ' 否则只留日志（Configuracion 读盘时已记 Warning），避免打扰未用该功能的用户。
+        Try
+            Dim needReentry As New Generic.List(Of String)
+            If Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy Then needReentry.Add("代理口令 Proxy password")
+            If Config.ServidorStreamingPasswordNeedsReentry AndAlso Config.ServidorStreamingActivo Then needReentry.Add("流媒体口令 Streaming password")
+            If needReentry.Count > 0 Then
+                MessageBox.Show("以下口令无法在本机解密（配置可能从备份恢复到了其他机器/账户），请重新输入，否则相关功能会连接失败：" & vbCrLf & _
+                    " * " & String.Join(vbCrLf & " * ", needReentry.ToArray()) & vbCrLf & _
+                    "The password(s) cannot be decrypted on this machine/user (config may have been restored from backup). Please re-enter, otherwise the feature will fail to connect: " & String.Join(", ", needReentry.ToArray()), _
+                    Language.GetText("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End If
+        Catch ex As Exception
+            Log.WriteError("Password re-entry prompt failed: " & ex.ToString)
+        End Try
 
         ' 应用主题到设置窗体本身
         Try
@@ -535,6 +551,7 @@ Public Class Configuration
         Config.ResetearErroresPeriodoMinutos = PeriodoReintentosError
         Config.UsarProxy = chkProxy.Checked
         Config.ProxyPassword = txtProxyPassword.Text
+        Config.ProxyPasswordNeedsReentry = False
         Config.ProxyUser = txtProxyName.Text
         Config.ProxyPort = ProxyPort
         Config.ProxyIP = txtProxyIP.Text
@@ -543,6 +560,7 @@ Public Class Configuration
         Config.ServidorStreamingActivo = chkStreamingServer.Checked
         Config.ServidorStreamingPuerto = servidorStreamingPuerto
         Config.ServidorStreamingPassword = txtStreamingPassword.Text
+        Config.ServidorStreamingPasswordNeedsReentry = False
 
 
         Config.ServidorWebActivo = chkServidorWeb.Checked
@@ -567,9 +585,9 @@ Public Class Configuration
             Log.SetLogLevel = Config.NivelLog
         End If
 
-        If [Enum].IsDefined(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), comboPrioridad.SelectedValue) Then
-            Config.PrioridadDescompresion = CType([Enum].Parse(GetType(SharpCompress.PriorityExtension.Priority.PriorityType), CType(comboPrioridad.SelectedItem, KeyValuePair(Of String, String)).Key), SharpCompress.PriorityExtension.Priority.PriorityType)
-            SharpCompress.PriorityExtension.Priority.DecompressionPriority = Config.PrioridadDescompresion
+        If [Enum].IsDefined(GetType(DescompresionPriority), comboPrioridad.SelectedValue) Then
+            Config.PrioridadDescompresion = CType([Enum].Parse(GetType(DescompresionPriority), CType(comboPrioridad.SelectedItem, KeyValuePair(Of String, String)).Key), DescompresionPriority)
+            DescompresionThrottle.DecompressionPriority = Config.PrioridadDescompresion
         End If
 
         If [Enum].IsDefined(GetType(ConfiguracionUI.ThemeModeType), comboTheme.SelectedValue) Then

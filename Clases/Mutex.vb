@@ -1,13 +1,13 @@
 ' 注意:本类名为 Mutex,会遮蔽 System.Threading.Mutex。
-' 在本文件之外若同时需要两者,可用 Imports 别名:
-'     Imports ThreadingMutex = System.Threading.Mutex
-' 此处保留类名以减少全项目改动的风险;字段类型已用完整命名 System.Threading.Mutex 避免歧义。
+' 第三批第 11 项:全部互斥已由内核 Mutex 改为 SyncLock/Monitor 轻量锁。
+' 字段现为普通 Object 锁对象(仅进程内、Monitor 可重入、SyncLock 自带 Try/Finally)，
+' 类名保留以避免全项目改名风险;新增锁请直接用 New Object() 并以 SyncLock 使用。
 Public Class Mutex
-    Public Shared NumeroConexionesMaxima As New System.Threading.Mutex()
-    Public Shared GuardarConfig As New System.Threading.Mutex()
-    Public Shared GuardarDownloadList As New System.Threading.Mutex()
-    Public Shared ListaDescargas As New System.Threading.Mutex()
-    Public Shared FicheroDownloader As New System.Threading.Mutex()
-    Public Shared DeletingFiles As New System.Threading.Mutex()
-    Public Shared MEGAUriParameters As New System.Threading.Mutex()
+    Public Shared NumeroConexionesMaxima As New Object()
+    Public Shared GuardarConfig As New Object()
+    Public Shared GuardarDownloadList As New Object()
+    Public Shared ListaDescargas As New Object()
+    Public Shared FicheroDownloader As New Object()
+    Public Shared DeletingFiles As New Object()
+    Public Shared MEGAUriParameters As New Object()
 End Class

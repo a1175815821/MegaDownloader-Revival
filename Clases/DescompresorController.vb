@@ -1,9 +1,10 @@
 Imports System.ComponentModel
-Imports SharpCompress.Archive
-Imports SharpCompress.Archive.IArchiveEntryExtensions
-Imports SharpCompress.Reader
-Imports SharpCompress.Archive.Rar.RarArchiveExtensions
-Imports SharpCompress.Reader.Rar
+Imports SharpCompress.Archives
+Imports SharpCompress.Archives.IArchiveEntryExtensions
+Imports SharpCompress.Readers
+Imports SharpCompress.Archives.Rar
+Imports SharpCompress.Archives.Zip
+Imports SharpCompress.Readers.Rar
 Imports SharpCompress.Common
 Imports System.IO
 
@@ -17,18 +18,15 @@ Public Class DescompresorController
     End Class
 
 #Region "Región Shared"
-    Friend Shared Mutex As New System.Threading.Mutex()
+    Friend Shared Mutex As New Object()
 
     Private Shared _Controller As DescompresorController
     Public Shared Function GetController() As DescompresorController
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             If _Controller Is Nothing Then
                 _Controller = New DescompresorController
             End If
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
         Return _Controller
     End Function
 
@@ -61,8 +59,7 @@ Public Class DescompresorController
 
 
     Private Sub New()
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             _colaElementos = New Generic.Dictionary(Of String, QueueItem)()
             _codigoElementoActual = Nothing
             _pathElementoActual = Nothing
@@ -74,32 +71,23 @@ Public Class DescompresorController
                 .Add("tar")
                 .Add("zip")
             End With
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
     Public Sub RequestCancel()
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             _cancelRequested = True
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Sub
 
     Private Function IsCancelRequested() As Boolean
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             Return _cancelRequested
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Function
 
     Private Function PonerElementoAProcesar() As Boolean
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             If Not String.IsNullOrEmpty(_pathElementoActual) Or _colaElementos.Count = 0 Then
                 Return False ' Ya hay un elemento procesando o la cola está vacía
             Else
@@ -110,20 +98,15 @@ Public Class DescompresorController
                 _colaElementos.Remove(_codigoElementoActual)
                 Return True
             End If
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Function
 
     Private Sub ProcesarElemento(ByRef Cancel As Boolean)
-        Try
-            Mutex.WaitOne()
+        SyncLock Mutex
             If String.IsNullOrEmpty(Me._pathElementoActual) Then
                 Exit Sub
             End If
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
 
         Log.WriteInfo("Extracting '" & _codigoElementoActual & "'")
         Dim Sw As New System.Diagnostics.Stopwatch
@@ -135,13 +118,10 @@ Public Class DescompresorController
 
         If Not ObtenerNombres(_pathElementoActual, Directorio, Fichero, FicheroSinExtension, False, 0) Then
             ' Elemento inválido
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Me._pathElementoActual = Nothing
                 Me._passwordElementoActual = Nothing
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
 
             Log.WriteWarning("Decompressor: invalid element, discarding: '" & _codigoElementoActual & "'")
 
@@ -202,14 +182,11 @@ Public Class DescompresorController
         RaiseEvent DescompresionFinalizada(_codigoElementoActual, extractOk, extractErrorMessage)
 
         ' Hemos terminado
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             Me._pathElementoActual = Nothing
             Me._passwordElementoActual = Nothing
             Me._codigoElementoActual = Nothing
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
 
 
     End Sub
@@ -262,12 +239,9 @@ Public Class DescompresorController
     ' Tamaño total de los ficheros dentro del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_TamanoTotal As System.Nullable(Of Long)
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _TamanoTotal
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
@@ -275,72 +249,54 @@ Public Class DescompresorController
     ' Tamaño total de los ficheros ya descomprimidos completamente dentro del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_TamanoTotalExtraido As System.Nullable(Of Long)
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _TamanoTotalExtraido
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
     ' Ruta del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_Ruta As String
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _pathElementoActual
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
     ' Codigo del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_Codigo As String
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _codigoElementoActual
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
     ' Tamaño total del fichero que se está descomprimiendo
     Public ReadOnly Property EleActual_FicActTamano As System.Nullable(Of Long)
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _FicActTamanoTotal
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
     ' Bytes extraidos del fichero que se está descomprimiendo
     Public ReadOnly Property EleActual_FicActExtraido As System.Nullable(Of Long)
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _FicActExtraido
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
     ' Nombre del fichero que se está descomprimiendo
     Public ReadOnly Property EleActual_FicActNombre As String
         Get
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 Return _FicActNombre
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
         End Get
     End Property
 
@@ -389,34 +345,43 @@ Public Class DescompresorController
             End If
 
             ' Comprobamos si ya existe en la cola
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 For Each key As String In _colaElementos.Keys
                     If _colaElementos(key).Path = Path Then
                         Log.WriteInfo("File '" & Path & "' for element '" & Code & "' is already in queue.")
                         Return False
                     End If
                 Next
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
 
             Log.WriteInfo("Adding to decompression queue element '" & Code & "' (file '" & Path & "')")
 
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 ' 同一 Code 重复入队时更新既有条目(索引器赋值"存在即更新"):
                 ' 此前重复项被静默跳过却仍返回 True,上游状态会卡在"正在解压"且进度条不动
                 _colaElementos(Code) = New QueueItem With {.Path = Path, .CreateDirectory = CrearDirectorio, .Password = Password}
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
 
             Return True
         Else
             Return False
         End If
 
+    End Function
+
+    ''' <summary>
+    ''' 同步解压单个压缩包（不支持队列/取消/进度事件）：成功返回 ""，失败返回错误描述。
+    ''' 供回归测试（Tests/DescompresorTests）及无需后台队列的调用方使用。
+    ''' </summary>
+    Public Shared Function ExtractArchiveSync(ByVal archivePath As String, ByVal outputDir As String, ByVal password As String) As String
+        Try
+            Dim d As New Descompressor(archivePath, outputDir, password)
+            d.Extract()
+            If d.Exception IsNot Nothing Then Return d.Exception.Message
+            Return ""
+        Catch ex As Exception
+            Return ex.Message
+        End Try
     End Function
 
     Public Shared Sub DescompresorController_DoWork(sender As Object, e As DoWorkEventArgs)
@@ -446,16 +411,13 @@ Public Class DescompresorController
     End Sub
 
     Public Function GetCola() As Generic.List(Of String)
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             Dim l As New Generic.List(Of String)
             For Each key As String In _colaElementos.Keys
                 l.Add(_colaElementos(key).Path)
             Next
             Return l
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Function
 
     ''' <summary>
@@ -464,12 +426,9 @@ Public Class DescompresorController
     ''' <returns></returns>
     ''' <remarks></remarks>
     Public Function Ocupado() As Boolean
-        Mutex.WaitOne()
-        Try
+        SyncLock Mutex
             Return Not String.IsNullOrEmpty(_pathElementoActual) Or _colaElementos.Count > 0
-        Finally
-            Mutex.ReleaseMutex()
-        End Try
+        End SyncLock
     End Function
 
 #End Region
@@ -498,14 +457,27 @@ Public Class DescompresorController
             If String.IsNullOrEmpty(Password) Then Password = Nothing ' Evitamos string.empty
         End Sub
 
+        Private Shared Function ReaderOpts(ByVal Password As String) As ReaderOptions
+            Dim opts As New ReaderOptions()
+            If Not String.IsNullOrEmpty(Password) Then opts.Password = Password
+            Return opts
+        End Function
+
+        Private Shared Function ExtractOpts() As ExtractionOptions
+            Dim opts As New ExtractionOptions()
+            opts.ExtractFullPath = True
+            opts.Overwrite = True
+            Return opts
+        End Function
+
         Private Shared Function getIArchive(PathFichero As String, Password As String) As IArchive
 
             If PathFichero.ToUpper.EndsWith(".RAR") Then
-                Return SharpCompress.Archive.Rar.RarArchive.Open(PathFichero, password:=Password)
+                Return RarArchive.OpenArchive(PathFichero, ReaderOpts(Password))
             ElseIf PathFichero.ToUpper.EndsWith(".ZIP") Then
-                Return SharpCompress.Archive.Zip.ZipArchive.Open(PathFichero, password:=Password)
+                Return ZipArchive.OpenArchive(PathFichero, ReaderOpts(Password))
             Else
-                Return ArchiveFactory.Open(PathFichero)
+                Return ArchiveFactory.OpenArchive(PathFichero, ReaderOpts(Nothing))
             End If
 
         End Function
@@ -528,14 +500,15 @@ Public Class DescompresorController
 
                     If archive.IsComplete Then
 
-                        If TypeOf archive Is SharpCompress.Archive.Rar.RarArchive AndAlso _
-                              CType(archive, SharpCompress.Archive.Rar.RarArchive).IsMultipartVolume() AndAlso _
-                              Not CType(archive, SharpCompress.Archive.Rar.RarArchive).IsFirstVolume() Then
+                        Dim rar As IRarArchive = TryCast(archive, IRarArchive)
+                        If rar IsNot Nothing AndAlso _
+                              rar.IsMultipartVolume() AndAlso _
+                              Not rar.IsFirstVolume() Then
                             Exit Sub
                         End If
 
 
-                        If (archive.IsSolid Or Not String.IsNullOrEmpty(Password)) And TypeOf archive Is SharpCompress.Archive.Rar.RarArchive Then
+                        If (archive.IsSolid Or Not String.IsNullOrEmpty(Password)) And rar IsNot Nothing Then
 
                             ' No nos sirve el ArchiveFactory... debemos usar el reader, pero solo para ficheros solidos RAR
                             ' Debemos pasar la lista con todos los part... pero como hemos comprobado antes
@@ -570,13 +543,12 @@ Public Class DescompresorController
 
                                 If ListaFicheros.Count = 1 Then
 
-                                    Using reader As IReader = RarReader.Open(ListaFicheros(0), Password)
+                                    Using reader As IReader = RarReader.OpenReader(ListaFicheros(0), ReaderOpts(Password))
                                        
                                         Dim c As DescompresorController = DescompresorController.GetController
                                         Try
 
-                                            Mutex.WaitOne()
-                                            Try
+                                            SyncLock Mutex
                                                 c._TamanoTotal = 0
                                                 c._FicActTamanoTotal = 0
                                                 c._TamanoTotalExtraido = 0
@@ -586,9 +558,7 @@ Public Class DescompresorController
                                                     c._TamanoTotal += entry.Size
                                                 Next
                                                 EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
-                                            Finally
-                                                Mutex.ReleaseMutex()
-                                            End Try
+                                            End SyncLock
 
                                             While reader.MoveToNextEntry
                                                 If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
@@ -600,16 +570,20 @@ Public Class DescompresorController
                                                     c._FicActExtraido = 0
 
                                                     WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
+                                                    ' 新版无 CompressedBytesRead 流式事件：按条目结算进度，
+                                                    ' 再按解压优先级让出（旧 ListeningStream.Read 内 Sleep 的替代）。
+                                                    c._FicActExtraido = reader.Entry.Size
+                                                    DescompresionThrottle.ApplyThrottle()
                                                 End If
                                             End While
                                         Finally
-                                            Mutex.WaitOne()
-                                            c._TamanoTotal = Nothing
-                                            c._FicActTamanoTotal = Nothing
-                                            c._TamanoTotalExtraido = Nothing
-                                            c._FicActExtraido = Nothing
-                                            c._FicActNombre = Nothing
-                                            Mutex.ReleaseMutex()
+                                            SyncLock Mutex
+                                                c._TamanoTotal = Nothing
+                                                c._FicActTamanoTotal = Nothing
+                                                c._TamanoTotalExtraido = Nothing
+                                                c._FicActExtraido = Nothing
+                                                c._FicActNombre = Nothing
+                                            End SyncLock
                                            
                                         End Try
 
@@ -617,12 +591,11 @@ Public Class DescompresorController
 
 
                                 Else
-                                    Using reader As IReader = RarReader.Open(ListaFicheros)
+                                    Using reader As IReader = RarReader.OpenReader(ListaFicheros, ReaderOpts(Nothing))
                                  
                                         Dim c As DescompresorController = DescompresorController.GetController
                                         Try
-                                            Mutex.WaitOne()
-                                            Try
+                                            SyncLock Mutex
                                                 c._TamanoTotal = 0
                                                 c._FicActTamanoTotal = 0
                                                 c._TamanoTotalExtraido = 0
@@ -632,9 +605,7 @@ Public Class DescompresorController
                                                     c._TamanoTotal += entry.Size
                                                 Next
                                                 EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
-                                            Finally
-                                                Mutex.ReleaseMutex()
-                                            End Try
+                                            End SyncLock
 
                                             While reader.MoveToNextEntry
                                                 If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
@@ -646,16 +617,20 @@ Public Class DescompresorController
                                                     c._FicActExtraido = 0
 
                                                     WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
+                                                    ' 新版无 CompressedBytesRead 流式事件：按条目结算进度，
+                                                    ' 再按解压优先级让出（旧 ListeningStream.Read 内 Sleep 的替代）。
+                                                    c._FicActExtraido = reader.Entry.Size
+                                                    DescompresionThrottle.ApplyThrottle()
                                                 End If
                                             End While
                                         Finally
-                                            Mutex.WaitOne()
-                                            c._TamanoTotal = Nothing
-                                            c._FicActTamanoTotal = Nothing
-                                            c._TamanoTotalExtraido = Nothing
-                                            c._FicActExtraido = Nothing
-                                            c._FicActNombre = Nothing
-                                            Mutex.ReleaseMutex()
+                                            SyncLock Mutex
+                                                c._TamanoTotal = Nothing
+                                                c._FicActTamanoTotal = Nothing
+                                                c._TamanoTotalExtraido = Nothing
+                                                c._FicActExtraido = Nothing
+                                                c._FicActNombre = Nothing
+                                            End SyncLock
                                           
                                         End Try
 
@@ -676,14 +651,9 @@ Public Class DescompresorController
 
                         Else
 
-                            'AddHandler archive.FilePartExtractionBegin, AddressOf archive_FilePartExtractionBegin
-                            AddHandler archive.CompressedBytesRead, AddressOf archive_CompressedBytesRead
-                            AddHandler archive.EntryExtractionBegin, AddressOf archive_EntryExtractionBegin
                             Dim c As DescompresorController = DescompresorController.GetController
                             Try
-
-                                Mutex.WaitOne()
-                                Try
+                                SyncLock Mutex
                                     c._TamanoTotal = 0
                                     c._FicActTamanoTotal = 0
                                     c._TamanoTotalExtraido = 0
@@ -693,9 +663,7 @@ Public Class DescompresorController
                                         c._TamanoTotal += entry.Size
                                     Next
                                     EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
-                                Finally
-                                    Mutex.ReleaseMutex()
-                                End Try
+                                End SyncLock
 
                                 Dim entryKeys As New Generic.List(Of String)
                                 For Each entry As IArchiveEntry In archive.Entries
@@ -711,20 +679,24 @@ Public Class DescompresorController
                                     End If
                                     If Not entry.IsDirectory Then
                                         c._FicActNombre = entry.Key
+                                        ' 新版无 EntryExtractionBegin/CompressedBytesRead 事件：
+                                        ' 沿用 reader 分支的记账方式，按条目推进。
+                                        c._TamanoTotalExtraido += c._FicActTamanoTotal
+                                        c._FicActTamanoTotal = entry.Size
+                                        c._FicActExtraido = 0
                                         WriteSafeEntry(entry, PathExtraccion)
+                                        c._FicActExtraido = entry.Size
+                                        DescompresionThrottle.ApplyThrottle()
                                     End If
                                 Next
                             Finally
-                                Mutex.WaitOne()
-                                c._TamanoTotal = Nothing
-                                c._FicActTamanoTotal = Nothing
-                                c._TamanoTotalExtraido = Nothing
-                                c._FicActExtraido = Nothing
-                                c._FicActNombre = Nothing
-                                Mutex.ReleaseMutex()
-                                'RemoveHandler archive.FilePartExtractionBegin, AddressOf archive_FilePartExtractionBegin
-                                RemoveHandler archive.CompressedBytesRead, AddressOf archive_CompressedBytesRead
-                                RemoveHandler archive.EntryExtractionBegin, AddressOf archive_EntryExtractionBegin
+                                SyncLock Mutex
+                                    c._TamanoTotal = Nothing
+                                    c._FicActTamanoTotal = Nothing
+                                    c._TamanoTotalExtraido = Nothing
+                                    c._FicActExtraido = Nothing
+                                    c._FicActNombre = Nothing
+                                End SyncLock
                             End Try
 
 
@@ -796,16 +768,13 @@ Public Class DescompresorController
             ' ⑩:把 Pass1 已算出的解压后总量发布到控制器,解压窗不再全程显示 " -"。
             ' CLI 无逐字节回调,已解字节只能显示 0/总量(托管分支才有细粒度);结束后按惯例清回 Nothing。
             Dim c As DescompresorController = DescompresorController.GetController
-            Mutex.WaitOne()
-            Try
+            SyncLock Mutex
                 c._TamanoTotal = totalUncompressed
                 c._FicActTamanoTotal = 0
                 c._TamanoTotalExtraido = 0
                 c._FicActExtraido = 0
                 c._FicActNombre = PathFichero
-            Finally
-                Mutex.ReleaseMutex()
-            End Try
+            End SyncLock
 
             Try
                 ' ---- Pass 2: extract ----
@@ -828,16 +797,13 @@ Public Class DescompresorController
 
                 RunSevenZip(cli, args.ToString(), checkCancel:=True)
             Finally
-                Mutex.WaitOne()
-                Try
+                SyncLock Mutex
                     c._TamanoTotal = Nothing
                     c._FicActTamanoTotal = Nothing
                     c._TamanoTotalExtraido = Nothing
                     c._FicActExtraido = Nothing
                     c._FicActNombre = Nothing
-                Finally
-                    Mutex.ReleaseMutex()
-                End Try
+                End SyncLock
             End Try
         End Sub
 
@@ -991,7 +957,7 @@ Public Class DescompresorController
             If Not String.IsNullOrEmpty(parentDir) Then
                 Directory.CreateDirectory(parentDir)
             End If
-            entry.WriteToFile(dest, SharpCompress.Common.ExtractOptions.Overwrite)
+            entry.WriteToFile(dest, ExtractOpts())
         End Sub
 
         Private Shared Sub WriteSafeEntry(ByVal reader As IReader, ByVal extractionRoot As String, ByVal entryKey As String)
@@ -1000,29 +966,7 @@ Public Class DescompresorController
             If Not String.IsNullOrEmpty(parentDir) Then
                 Directory.CreateDirectory(parentDir)
             End If
-            reader.WriteEntryToFile(dest, SharpCompress.Common.ExtractOptions.Overwrite)
-        End Sub
-
-        Private Sub archive_CompressedBytesRead(sender As Object, e As CompressedBytesReadEventArgs)
-            Dim c As DescompresorController = DescompresorController.GetController
-            Mutex.WaitOne()
-            c._FicActExtraido = e.CompressedBytesRead
-            Mutex.ReleaseMutex()
-            'Dim percentage As String = If(FicActTamanoTotal.HasValue, CreatePercentage(e.CompressedBytesRead, FicActTamanoTotal.Value).ToString(), "Unknown")
-            'Console.WriteLine("Read Compressed File Entry Bytes: {0} ({1}%) " & " - Total: " & (TamanoTotalExtraido.Value + FicActExtraido.Value) & " / " & TamanoTotal & " ({2}%)", e.CompressedBytesRead, percentage, CInt(100 * (TamanoTotalExtraido.Value + FicActExtraido.Value) / TamanoTotal))
-        End Sub
-
-
-
-        Private Sub archive_EntryExtractionBegin(sender As Object, e As ArchiveExtractionEventArgs(Of IArchiveEntry))
-            Dim c As DescompresorController = DescompresorController.GetController
-            Mutex.WaitOne()
-            c._TamanoTotalExtraido += c._FicActTamanoTotal
-            c._FicActTamanoTotal = e.Item.Size
-            c._FicActExtraido = 0
-            Mutex.ReleaseMutex()
-            'Console.WriteLine("Initializing File Entry Extraction: " + e.Item.FilePath + "; size: " & e.Item.Size)
-            'Console.WriteLine("Extracted: " & TamanoTotalExtraido & " / " & TamanoTotal)
+            reader.WriteEntryToFile(dest, ExtractOpts())
         End Sub
 
         'Private Function CreatePercentage(n As Long, d As Long) As Integer

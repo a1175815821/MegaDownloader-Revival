@@ -2,18 +2,24 @@
 
 **언어**：[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · **한국어**
 
-> 고전 MEGA 다운로더를 다시 사용할 수 있게 합니다. v1.8 역컴파일 소스를 기반으로 수정되었으며, 60개 이상의 수정이 완료되었습니다.
+> 고전 MEGA 다운로더를 다시 사용할 수 있게 합니다. v1.8 역컴파일 소스를 기반으로 수정되며, 수정이 계속되고 있습니다. 자세한 내용은 [CHANGELOG](CHANGELOG.md)를 참조하십시오.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
 
 > ⭐ 이 프로젝트가 도움이 되었다면 오른쪽 위 Star를 눌러 응원해 주세요!
+
+## 스크린샷
+
+| 라이트 테마 | 다크 테마 |
+| --- | --- |
+| ![메인 창(라이트 테마)](screenshots/main-light.png) | ![메인 창(다크 테마)](screenshots/main-dark.png) |
 
 ---
 
@@ -23,7 +29,7 @@ MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 클라�
 
 이 저장소는 부활 계획입니다. v1.8을 역컴파일하여 얻은 소스를 기반으로 수정 및 리팩터링했습니다.
 
-**현재 버전: v2.5.1**. 전체 변경 내역은 [CHANGELOG](CHANGELOG.ko-KR.md)를 참조하십시오.
+**현재 버전: v2.5.2**. 전체 변경 내역은 [CHANGELOG](CHANGELOG.md)를 참조하십시오.
 
 > ⚠️ **법적 고지**: 이 프로젝트는 이미 배포된 타사 소프트웨어의 역컴파일에서 비롯되었으며, 목적은 호환성 문제를 수정하여 사용 가능성을 복원하는 데에만 있습니다. 원작자가 이 저장소가 권리를 침해한다고 판단하면 Issue를 통해 연락해 주십시오. 협조하여 처리하겠습니다.
 
@@ -31,9 +37,9 @@ MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 클라�
 
 ## 빠른 시작
 
-1. [Releases](../../../releases)에서 다운로드, 둘 중 하나 선택:
-   - **`MegaDownloader-Revival-win-x86.zip`** —— 포터블 버전. 임의의 디렉터리에 압축 해제 후 `MegaDownloader.exe`를 더블클릭
-   - **`MegaDownloader.exe`** —— 단일 파일 버전. 12개의 종속 DLL이 내장되어 있어 다운로드 후 압축 해제 없이 바로 더블클릭
+1. [Releases](../../releases)에서 다운로드, 둘 중 하나 선택:
+   - **`MegaDownloader-Revival-win-x86.zip`** —— 무설치 버전(관리자 권한 불필요). 임의의 디렉터리에 압축 해제 후 `MegaDownloader.exe`를 더블클릭. 참고: 설정과 다운로드 큐는 `%LOCALAPPDATA%\MegaDownloader\`에 저장되며 프로그램 폴더에 있지 않음
+   - **`MegaDownloader.exe`** —— 단일 파일 버전. 15개의 종속 DLL이 내장되어 있어 다운로드 후 압축 해제 없이 바로 더블클릭
 2. MEGA 링크를 복사하면 프로그램이 클립보드 내용을 자동으로 인식합니다
 3. 도구 모음의 **링크 추가**를 클릭하여 수동으로 붙여넣거나, 링크를 주 창으로 드래그할 수도 있습니다
 4. **설정**에서 다운로드 디렉터리, 동시 연결 수, 속도 제한을 구성합니다
@@ -101,7 +107,7 @@ mega://enc2?abcDEFgh-IjklMNop
 
 ### 환경 요구 사항
 
-- Visual Studio 2019 / 2022
+- Visual Studio 2013 이상(솔루션은 VS2013 형식이며 최신 버전에서 열 수 있음)
 - .NET Framework 4.8 SDK(Visual Studio 설치 시 포함)
 - Windows 7 SP1 이상
 
@@ -154,7 +160,7 @@ MegaDownloader/
 └── MegaDownloader.sln
 ```
 
-전체 디렉터리 트리와 파일 용도 설명은 [CONTRIBUTING](CONTRIBUTING.ko-KR.md)을 참조하십시오.
+전체 디렉터리 트리와 파일 용도 설명은 [CONTRIBUTING](CONTRIBUTING.md)을 참조하십시오.
 
 ---
 
@@ -175,7 +181,7 @@ MegaDownloader/
 | Magyar | `hu-HU-Language.xml` |
 | Română | `ro-RO-Language.xml` |
 
-언어를 추가하거나 기존 번역을 개선하려면 [CONTRIBUTING](CONTRIBUTING.ko-KR.md)을 참조하십시오.
+언어를 추가하거나 기존 번역을 개선하려면 [CONTRIBUTING](CONTRIBUTING.md)을 참조하십시오.
 
 ---
 
@@ -183,20 +189,20 @@ MegaDownloader/
 
 | 문서 | 내용 |
 | --- | --- |
-| [CHANGELOG](CHANGELOG.ko-KR.md) | 전체 버전 기록 및 버전별 수정 내역 |
-| [CONTRIBUTING](CONTRIBUTING.ko-KR.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
+| [CHANGELOG](CHANGELOG.md) | 전체 버전 기록 및 버전별 수정 내역 |
+| [CONTRIBUTING](CONTRIBUTING.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
 
-이 문서는 여러 언어로 제공됩니다. **모든 언어 버전은 수동으로 유지 관리됩니다**, 하나의 언어를 업데이트할 때 다른 언어도 함께 업데이트하십시오:
+README와 CONTRIBUTING은 각 언어로 수동 유지관리합니다. 업데이트 시 다른 언어도 함께 동기화하십시오. CHANGELOG는 간체 중국어 버전만 유지관리합니다:
 
-| 언어 | README | CHANGELOG | CONTRIBUTING | |
-| --- | --- | --- | --- | --- |
-| English | `docs/README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` | 수동 유지 관리 |
-| 간체 중국어 | `docs/README.zh-CN.md` | `CHANGELOG.zh-CN.md` | `CONTRIBUTING.zh-CN.md` | **공식 원본** |
-| 번체 중국어 | `docs/README.zh-TW.md` | `CHANGELOG.zh-TW.md` | `CONTRIBUTING.zh-TW.md` | 수동 유지 관리 |
-| 일본어 | `docs/README.ja-JP.md` | `CHANGELOG.ja-JP.md` | `CONTRIBUTING.ja-JP.md` | 수동 유지 관리 |
-| 한국어 | `docs/README.ko-KR.md` | `CHANGELOG.ko-KR.md` | `CONTRIBUTING.ko-KR.md` | 수동 유지 관리 |
+| 언어 | README | CHANGELOG | CONTRIBUTING |
+| --- | --- | --- | --- |
+| English | `README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 간체 중국어 | `README.zh-CN.md` | `CHANGELOG.md` | `CONTRIBUTING.zh-CN.md` |
+| 번체 중국어 | `README.zh-TW.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 일본어 | `README.ja-JP.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| 한국어 | `README.ko-KR.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
 
-> 간체 중국어가 공식 원본이며, 원본 파일 자체가 간체 중국어 버전이므로 별도의 `README.zh-CN.md`가 없습니다.
+> 저장소 루트의 `README.md`는 영어 버전이며, 모든 번역은 `docs/`에 있습니다. 간체 중국어가 공식 원본입니다.
 
 ---
 

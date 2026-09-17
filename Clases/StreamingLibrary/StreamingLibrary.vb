@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Xml
 
 Public Class StreamingLibrary
@@ -38,17 +38,14 @@ Public Class StreamingLibrary
 
         Dim Xml As XmlDocument = Nothing
         Dim recovered As Boolean = False
-        Mutex.GuardarConfig.WaitOne()
-        Try
+        SyncLock Mutex.GuardarConfig
             If Not AtomicFile.TryLoadXml(Fichero, Xml, recovered) Then
                 Exit Sub
             End If
             If recovered Then
                 Log.WriteWarning("Streaming library restored from backup.")
             End If
-        Finally
-            Mutex.GuardarConfig.ReleaseMutex()
-        End Try
+        End SyncLock
 
         SyncLock _sync
             _LibraryElementList = New List(Of LibraryElement)
@@ -84,14 +81,13 @@ Public Class StreamingLibrary
 
         Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
 
-        Mutex.GuardarConfig.WaitOne()
+        SyncLock Mutex.GuardarConfig
         Try
             AtomicFile.SaveXml(Xml, Fichero)
         Catch ex As Exception
             Log.WriteError("Error saving streaming library: " & Log.SafeException(ex))
-        Finally
-            Mutex.GuardarConfig.ReleaseMutex()
         End Try
+        End SyncLock
 
     End Sub
 

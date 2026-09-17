@@ -40,7 +40,7 @@ Public Class URLProcessor
                     Dim ELC_exc As Exception = Nothing
                     Dim decoded As Generic.List(Of String) = Nothing
                     Try
-                        decoded = ServerEncoderLinkHelper.ServerDecode(URL, Config, ELC_exc)
+                        decoded = ServerEncoderLinkHelper.ServerDecode(URL, Config, ELC_exc, ct)
                     Catch ex As Exception
                         ELC_exc = ex
                     End Try

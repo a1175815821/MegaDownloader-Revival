@@ -110,8 +110,17 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="BouncyCastle.Crypto">
-      <HintPath>Resources\DLLs\BouncyCastle.Crypto.dll</HintPath>
+    <Reference Include="BouncyCastle.Cryptography">
+      <HintPath>Resources\DLLs\BouncyCastle.Cryptography.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces">
+      <HintPath>Resources\DLLs\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Encoding.CodePages">
+      <HintPath>Resources\DLLs\System.Text.Encoding.CodePages.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>Resources\DLLs\System.Threading.Tasks.Extensions.dll</HintPath>
     </Reference>
     <Reference Include="F5Lib">
       <HintPath>Resources\DLLs\F5Lib.dll</HintPath>
@@ -214,6 +223,9 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Clases\IDescarga.vb" />
+    <Compile Include="Clases\IDownloaderService.vb" />
+    <Compile Include="Clases\DescompresionPriority.vb" />
+    <Compile Include="Clases\DownloadAdvice.vb" />
     <Compile Include="Clases\InternalConfiguration.vb" />
     <Compile Include="Clases\Language.vb" />
     <Compile Include="Clases\Log.vb" />
@@ -278,6 +290,9 @@
     </Compile>
     <Compile Include="Forms\Main.vb">
       <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Main.DetailPanel.vb">
+      <DependentUpon>Main.vb</DependentUpon>
     </Compile>
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -432,7 +447,10 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\DLLs\BouncyCastle.Crypto.dll" />
+    <EmbeddedResource Include="Resources\DLLs\BouncyCastle.Cryptography.dll" />
+    <EmbeddedResource Include="Resources\DLLs\Microsoft.Bcl.AsyncInterfaces.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Text.Encoding.CodePages.dll" />
+    <EmbeddedResource Include="Resources\DLLs\System.Threading.Tasks.Extensions.dll" />
     <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
     <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
     <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />

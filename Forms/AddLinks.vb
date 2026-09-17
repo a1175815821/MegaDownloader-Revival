@@ -307,6 +307,12 @@ Public Class AddLinks
         Public ReadOnly CancelSource As New System.Threading.CancellationTokenSource()
         Private ReadOnly lbl As New Label()
         Private ReadOnly bar As New ProgressBar()
+        ' 卡住可感知：解析主体是同步阻塞 I/O（单次 60s+），计数可能几分钟不动。
+        ' 用 1s 滴答刷"已用秒数"，转圈 freeze 时用户能区分"还活着"与"死了"，取消键也敢点。
+        ' 后缀纯数字+s，无需进语言系统。
+        Private ReadOnly _started As Date = Now
+        Private _lastCount As Integer = 0
+        Private WithEvents _elapsedTimer As New System.Windows.Forms.Timer()
 
         <System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet:=System.Runtime.InteropServices.CharSet.Unicode)>
         Private Shared Sub SetWindowTheme(hWnd As IntPtr, appName As String, idList As String)
@@ -343,11 +349,21 @@ Public Class AddLinks
             ThemeManager.ApplyTheme(Me)
             ApplyProgressTheme()
             SetCount(0)
+            Try
+                _elapsedTimer.Interval = 1000
+                _elapsedTimer.Start()
+            Catch
+            End Try
         End Sub
 
         Protected Overrides Sub Dispose(disposing As Boolean)
             Try
                 If disposing Then
+                    Try
+                        _elapsedTimer.Stop()
+                    Catch
+                    End Try
+                    _elapsedTimer.Dispose()
                     Try
                         CancelSource.Cancel()
                     Catch
@@ -392,11 +408,28 @@ Public Class AddLinks
                 Me.BeginInvoke(New Action(Of Integer)(AddressOf SetCount), n)
                 Return
             End If
-            If n <= 0 Then
-                lbl.Text = Language.GetText("Folder_Reading")
+            _lastCount = n
+            RenderLabel()
+        End Sub
+
+        Private Sub _elapsedTimer_Tick(sender As Object, e As EventArgs) Handles _elapsedTimer.Tick
+            Try
+                If Me.IsDisposed OrElse Me.Disposing Then Return
+                RenderLabel()
+            Catch
+            End Try
+        End Sub
+
+        Private Sub RenderLabel()
+            Dim base As String
+            If _lastCount <= 0 Then
+                base = Language.GetText("Folder_Reading")
             Else
-                lbl.Text = Language.GetText("Folder_Reading_Count").Replace("%N%", n.ToString())
+                base = Language.GetText("Folder_Reading_Count").Replace("%N%", _lastCount.ToString())
             End If
+            Dim secs As Long = CLng(Now.Subtract(_started).TotalSeconds)
+            If secs < 0 Then secs = 0
+            lbl.Text = base & " (" & secs & "s)"
         End Sub
     End Class
 
