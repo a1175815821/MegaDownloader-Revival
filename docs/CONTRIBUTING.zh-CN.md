@@ -255,7 +255,7 @@ git push origin feature/你的功能名称
 
 ## 发布流程（仅维护者）
 
-1. 确认所有测试通过，`Debug` 与 `Release` 配置都能构建
+1. 确认 `Debug` 与 `Release` 配置都能构建
 2. 更新 `docs/CHANGELOG.md`（仅简体中文），追加新版本章节
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`

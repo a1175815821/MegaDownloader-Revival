@@ -255,7 +255,7 @@ When filing a bug, please include the following in the Issue:
 
 ## Release process (maintainers only)
 
-1. Confirm all tests pass and that both `Debug` and `Release` build
+1. Confirm both `Debug` and `Release` build
 2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
 3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)

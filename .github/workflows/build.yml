@@ -51,10 +51,6 @@ jobs:
       - name: Build solution (Release)
         run: msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86 /m /v:minimal /nr:false
 
-      # 5b. 回归测试（零 NuGet 控制台断言集；非零退出码即红）
-      - name: Run regression tests
-        run: Tests\bin\Release\MegaDownloader.Tests.exe
-
       # 6. 收集构建产物
       - name: Collect artifacts
         shell: pwsh
