@@ -956,6 +956,13 @@ Public Class FileDownloader
             ' file.Size=0(远端探活失败)时 GetDataPart 会抛 "Must specify size",
             ' 掩盖上一步已通过 FileDownloadFailed 报告的真实错误(连接失败/404 等),必须前置短路
             If file.Size > 0 AndAlso file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
+                SyncLock MutexFile
+                    ' 终结前必须先关复用流：VerifyMegaMetaMac 以 FileShare.Read 打开 .part，
+                    ' 而常驻写句柄权限是 Write（读共享不包含写），不关则 open 必报
+                    ' sharing violation（v2.5.1 每次写完即关故无此问题；常驻流是 v2.5.2 引入的）。
+                    ' 关流自带 Flush(True)，落盘语义不变。
+                    ClosePartStream()
+                End SyncLock
                 If Not System.IO.File.Exists(FicheroPART) Then
                     Throw New ApplicationException("Download reported finished but partial file is missing.")
                 End If

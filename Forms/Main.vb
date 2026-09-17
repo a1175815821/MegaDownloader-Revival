@@ -81,53 +81,8 @@ Public Class Main
                         g.FillRectangle(br, New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
                     End Using
                 End If
-                ' 文案压顶：填充从左往右盖，满格时会盖住先画的 % 文案（OLV 调 Render 与画文本
-                ' 的先后在不同路径下不一致）。此处用 renderer 自带 Font/TextBrush 按列对齐把文案
-                ' 重画在最上层；若 OLV 随后又画一次（同字体同位置），像素一致，无副作用。
-                DrawPercentTextOnTop(g, r, cur)
             Catch ex As Exception
                 MyBase.Render(g, r)
-            End Try
-        End Sub
-
-        Private Sub DrawPercentTextOnTop(ByVal g As Drawing.Graphics, ByVal r As Drawing.Rectangle, ByVal cur As Double)
-            Try
-                Dim txt As String = cur.ToString("F2") & "%"
-                Dim fnt As Drawing.Font = Me.Font
-                If fnt Is Nothing AndAlso Me.ListView IsNot Nothing Then
-                    fnt = Me.ListView.Font
-                End If
-                If fnt Is Nothing Then Return
-                Dim textR As New Drawing.Rectangle(r.X + 4, r.Y, r.Width - 8, r.Height)
-                If textR.Width <= 0 OrElse textR.Height <= 0 Then Return
-                Dim sf As New Drawing.StringFormat()
-                Try
-                    sf.Alignment = Drawing.StringAlignment.Near
-                    sf.LineAlignment = Drawing.StringAlignment.Center
-                    sf.Trimming = Drawing.StringTrimming.EllipsisCharacter
-                    Try
-                        If Me.Column IsNot Nothing Then
-                            Select Case Me.Column.TextAlign
-                                Case HorizontalAlignment.Center
-                                    sf.Alignment = Drawing.StringAlignment.Center
-                                Case HorizontalAlignment.Right
-                                    sf.Alignment = Drawing.StringAlignment.Far
-                            End Select
-                        End If
-                    Catch
-                    End Try
-                    If Me.TextBrush IsNot Nothing Then
-                        g.DrawString(txt, fnt, Me.TextBrush, textR, sf)
-                    ElseIf Me.ListView IsNot Nothing Then
-                        Using br As New Drawing.SolidBrush(Me.ListView.ForeColor)
-                            g.DrawString(txt, fnt, br, textR, sf)
-                        End Using
-                    End If
-                Finally
-                    sf.Dispose()
-                End Try
-            Catch
-                ' 文案画失败不影响条本身（外层已有兜底），静默吞掉
             End Try
         End Sub
     End Class
@@ -461,6 +416,21 @@ Public Class Main
             Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
             Config.GuardarXML(False)
         End If
+
+        ' 进度数字列(IndiceColumnaPorcentajeTexto)已并入条形列:每次启动强制隐藏一次,
+        ' 压住老用户持久化里的可见状态(右键列菜单当次仍可手动恢复,重启后继续隐藏)。
+        Try
+            If ListaDescargas IsNot Nothing AndAlso ListaDescargas.AllColumns IsNot Nothing _
+                AndAlso ListaDescargas.AllColumns.Count > 5 _
+                AndAlso ListaDescargas.AllColumns(5).IsVisible Then
+                ListaDescargas.AllColumns(5).IsVisible = False
+                ListaDescargas.RebuildColumns()
+                Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
+                Config.GuardarXML(False)
+            End If
+        Catch ex As Exception
+            Log.WriteError("HidePctTextColumn failed: " & ex.ToString)
+        End Try
 
         If Not CheckMEGAConditions() Then Exit Sub
         CheckVersionStatistics()
@@ -1051,6 +1021,9 @@ Public Class Main
                                               End Try
                                           End Function
         ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).TextAlign = HorizontalAlignment.Right
+        ' 进度数字列已并入条形列(IndiceColumnaPorcentaje)，不再单独展示，默认隐藏
+        ' （右键列菜单仍可手动恢复；启动后段有强制隐藏兜底，压住老持久化状态）。
+        ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).IsVisible = False
 
 
 
@@ -2109,8 +2082,9 @@ Public Class Main
                 End Try
             Next
             ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复);Restante 默认隐藏
+            ' 进度数字列(5, IndiceColumnaPorcentajeTexto)已并入条形列(6),不再单独成列
             ListaDescargas.AllColumns(2).IsVisible = False
-            ListaDescargas.AllColumns(5).IsVisible = True
+            ListaDescargas.AllColumns(5).IsVisible = False
             ListaDescargas.AllColumns(9).IsVisible = False
             ListaDescargas.AllColumns(1).FillsFreeSpace = True
             For i As Integer = 0 To 9
