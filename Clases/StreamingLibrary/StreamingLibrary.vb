@@ -25,6 +25,20 @@ Public Class StreamingLibrary
         End SyncLock
     End Function
 
+    ' Elements() deliberately hands back a copy, so mutating through it is a silent no-op
+    ' that SaveXML would then persist as "nothing changed". Callers must use these instead.
+    Public Sub AddElement(ByVal element As LibraryElement)
+        SyncLock _sync
+            _LibraryElementList.Add(element)
+        End SyncLock
+    End Sub
+
+    Public Function RemoveElement(ByVal element As LibraryElement) As Boolean
+        SyncLock _sync
+            Return _LibraryElementList.Remove(element)
+        End SyncLock
+    End Function
+
     Public Function GetIDandIncrement() As Integer
         SyncLock _sync
             Dim n As Integer = _NextID

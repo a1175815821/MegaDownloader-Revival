@@ -732,8 +732,28 @@ Public Class DescompresorController
                 Throw New ApplicationException("No 7-Zip executable available to extract .7z archives.")
             End If
 
+            ' Both passes need the password: a header-encrypted archive (-mhe=on) cannot
+            ' even be listed without it, so Pass 1 used to fail with exit code 255 no
+            ' matter how correct the configured password was.
+            ' Quoted because Windows argv splitting would otherwise break a password
+            ' containing spaces into several arguments.
+            Dim passwordArg As String = ""
+            If Not String.IsNullOrEmpty(Password) Then
+                If Password.Contains(""""c) Then
+                    ' 7-Zip CLI argument quoting cannot express a double quote inside a
+                    ' password reliably — reject instead of silently mis-decrypting.
+                    Throw New NotSupportedException("7z passwords containing double quotes are not supported.")
+                End If
+                If Password.EndsWith("\"c) Then
+                    ' A trailing backslash would escape our own closing quote under
+                    ' Windows argv rules, swallowing the rest of the command line.
+                    Throw New NotSupportedException("7z passwords ending with a backslash are not supported.")
+                End If
+                passwordArg = " -p""" & Password & """"
+            End If
+
             ' ---- Pass 1: list entries and validate them against path traversal ----
-            Dim listing As String = RunSevenZip(cli, "l -ba -slt -- """ & PathFichero & """", checkCancel:=True)
+            Dim listing As String = RunSevenZip(cli, "l -ba -slt" & passwordArg & " -- """ & PathFichero & """", checkCancel:=True)
             Dim entryKeys As New Generic.List(Of String)
             Dim archiveFullPath As String = IO.Path.GetFullPath(PathFichero)
             ' P1-1:7z CLI 路径此前只校验条目数与路径穿越,50GiB 体积上限被绕过。
@@ -778,22 +798,14 @@ Public Class DescompresorController
 
             Try
                 ' ---- Pass 2: extract ----
-                If Not String.IsNullOrEmpty(Password) AndAlso Password.Contains(""""c) Then
-                    ' 7-Zip CLI argument quoting cannot express a double quote inside a
-                    ' password reliably — reject instead of silently mis-decrypting.
-                    Throw New NotSupportedException("7z passwords containing double quotes are not supported.")
-                End If
-
+                ' -p<password>: no space after -p; no -p at all means "no password",
+                ' and an empty -p would make 7-Zip prompt (impossible headless).
                 Dim args As New System.Text.StringBuilder()
                 args.Append("x -y -bd -sccUTF-8 -o""")
                 args.Append(PathExtraccion)
-                args.Append(""" ")
-                If Not String.IsNullOrEmpty(Password) Then
-                    ' -p<password>: no space after -p; no -p at all means "no password",
-                    ' and an empty -p would make 7-Zip prompt (impossible headless).
-                    args.Append("-p").Append(Password).Append(" ")
-                End If
-                args.Append("-- """).Append(PathFichero).Append(""""c)
+                args.Append("""")
+                args.Append(passwordArg)
+                args.Append(" -- """).Append(PathFichero).Append(""""c)
 
                 RunSevenZip(cli, args.ToString(), checkCancel:=True)
             Finally
@@ -901,16 +913,24 @@ Public Class DescompresorController
             psi.CreateNoWindow = True
             psi.RedirectStandardOutput = True
             psi.RedirectStandardError = True
+            ' Give the CLI an immediate EOF on stdin. A header-encrypted archive with no
+            ' password configured makes 7-Zip prompt for one; with an inherited (possibly
+            ' still open) stdin it would block forever, and because stdout is drained with
+            ' ReadToEnd before the cancellation loop below, the cancel check would never run.
+            psi.RedirectStandardInput = True
             psi.StandardOutputEncoding = System.Text.Encoding.UTF8
             psi.StandardErrorEncoding = System.Text.Encoding.UTF8
 
-            ' Never log the raw arguments: they can carry "-p<password>".
-            Dim safeArgs As String = System.Text.RegularExpressions.Regex.Replace(arguments, "-p\S+", "-p[redacted]")
+            ' Never log the raw arguments: they can carry "-p<password>". The quoted
+            ' alternative must come first so a password containing spaces is redacted
+            ' whole instead of only up to its first space.
+            Dim safeArgs As String = System.Text.RegularExpressions.Regex.Replace(arguments, "-p(?:""[^""]*""|\S+)", "-p[redacted]")
             Log.WriteInfo("7z CLI: " & IO.Path.GetFileName(cliPath) & " " & safeArgs)
 
             Using proc As New Process()
                 proc.StartInfo = psi
                 proc.Start()
+                proc.StandardInput.Close()
 
                 ' Read stderr asynchronously to avoid the classic pipe deadlock:
                 ' if 7-Zip fills the stderr buffer while we are still blocked on

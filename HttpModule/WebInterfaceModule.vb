@@ -33,7 +33,11 @@ Public Class WebInterfaceModule
 
 
     Public XmlTemplateData As Xml.XmlDocument = Nothing
-    Private _RespuestaAjax As String = ""
+    ' Per-request state. The HttpServer framework dispatches each request on a
+    ' thread-pool thread inside an isolated ExecutionContext, so AsyncLocal keeps
+    ' concurrent requests from overwriting each other's response (a plain instance
+    ' field is shared by every request because the module is constructed once).
+    Private Shared _RespuestaAjaxLocal As New System.Threading.AsyncLocal(Of String)
 
     ' 登录口令校验。旧实现存无盐 MD5——同样的哈希可被彩虹表直接反查。
     ' 现改为：每次启动生成随机 salt，内存中仅保留 PBKDF2 派生值；salt 是
@@ -172,7 +176,7 @@ Public Class WebInterfaceModule
     End Function
 
 #Region "Funciones varias privadas"
-    Private _Error As String
+    Private Shared _ErrorLocal As New System.Threading.AsyncLocal(Of String)
     Private Function IsPostBack(ByRef request As HttpServer.IHttpRequest) As Boolean
         Return request.Method = "POST"
     End Function
@@ -181,7 +185,7 @@ Public Class WebInterfaceModule
 
     Private Sub ResetRequestVar(ByRef request As HttpServer.IHttpRequest)
         If Not IsPostBack(request) Then ' Pedimos datos; si es un POST, es que enviamos al servidor
-            _Error = ""
+            _ErrorLocal.Value = ""
         End If
     End Sub
 
@@ -339,56 +343,56 @@ Public Class WebInterfaceModule
 #Region "Proceso páginas"
 
     Private Function ProcesoStatus(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
-        _RespuestaAjax = "<span class='StatusMuyImportante'><strong>" & Language.GetText("Status") & "</strong>: "
+        _RespuestaAjaxLocal.Value = "<span class='StatusMuyImportante'><strong>" & Language.GetText("Status") & "</strong>: "
         Select Case Downloader.ControlRemotoObtenerEstado
             Case DownloaderEstado.Descargando
-                _RespuestaAjax &= "<span class='iconPlay'>" & Language.GetText("Downloading") & "</span>"
+                _RespuestaAjaxLocal.Value &= "<span class='iconPlay'>" & Language.GetText("Downloading") & "</span>"
             Case DownloaderEstado.Parado
-                _RespuestaAjax &= "<span class='iconPause'>" & Language.GetText("Stopped") & "</span>"
+                _RespuestaAjaxLocal.Value &= "<span class='iconPause'>" & Language.GetText("Stopped") & "</span>"
             Case DownloaderEstado.Pausa
-                _RespuestaAjax &= "<span class='iconPause'>" & Language.GetText("Paused") & "</span>"
+                _RespuestaAjaxLocal.Value &= "<span class='iconPause'>" & Language.GetText("Paused") & "</span>"
 
         End Select
-        _RespuestaAjax &= "</span><br/>" & vbNewLine
-        _RespuestaAjax &= "<span class='StatusImportante'><strong>" & Language.GetText("Speed") & "</strong>: "
+        _RespuestaAjaxLocal.Value &= "</span><br/>" & vbNewLine
+        _RespuestaAjaxLocal.Value &= "<span class='StatusImportante'><strong>" & Language.GetText("Speed") & "</strong>: "
         Dim v As Decimal? = Downloader.ControlRemotoObtenerVelocidad
         If v.HasValue Then
-            _RespuestaAjax &= PintarVelocidadDescarga(v.Value)
+            _RespuestaAjaxLocal.Value &= PintarVelocidadDescarga(v.Value)
         Else
-            _RespuestaAjax &= "-"
+            _RespuestaAjaxLocal.Value &= "-"
         End If
-        _RespuestaAjax &= "</span><br/>" & vbNewLine
-        _RespuestaAjax &= "<span class='StatusImportante'><strong>" & Language.GetText("Active downloads") & "</strong>: "
+        _RespuestaAjaxLocal.Value &= "</span><br/>" & vbNewLine
+        _RespuestaAjaxLocal.Value &= "<span class='StatusImportante'><strong>" & Language.GetText("Active downloads") & "</strong>: "
         Dim da As Integer? = Downloader.ControlRemotoObtenerDescargasActivas
         If da.HasValue Then
-            _RespuestaAjax &= da.Value.ToString
+            _RespuestaAjaxLocal.Value &= da.Value.ToString
         Else
-            _RespuestaAjax &= "-"
+            _RespuestaAjaxLocal.Value &= "-"
         End If
-        _RespuestaAjax &= "</span><br/>" & vbNewLine
-        _RespuestaAjax &= "<span><strong>" & Language.GetText("Queued, error, completed") & "</strong>: <span style='white-space:nowrap;'>"
+        _RespuestaAjaxLocal.Value &= "</span><br/>" & vbNewLine
+        _RespuestaAjaxLocal.Value &= "<span><strong>" & Language.GetText("Queued, error, completed") & "</strong>: <span style='white-space:nowrap;'>"
         Dim dec As Integer? = Downloader.ControlRemotoObtenerDescargasEnCola
         Dim de As Integer? = Downloader.ControlRemotoObtenerDescargasErroneas
         Dim dc As Integer? = Downloader.ControlRemotoObtenerDescargasCompletadas
         If dec.HasValue Then
-            _RespuestaAjax &= dec.Value.ToString & " / "
+            _RespuestaAjaxLocal.Value &= dec.Value.ToString & " / "
         Else
-            _RespuestaAjax &= "- / "
+            _RespuestaAjaxLocal.Value &= "- / "
         End If
         If de.HasValue Then
-            _RespuestaAjax &= de.Value.ToString & " / "
+            _RespuestaAjaxLocal.Value &= de.Value.ToString & " / "
         Else
-            _RespuestaAjax &= "- / "
+            _RespuestaAjaxLocal.Value &= "- / "
         End If
         If dc.HasValue Then
-            _RespuestaAjax &= dc.Value.ToString
+            _RespuestaAjaxLocal.Value &= dc.Value.ToString
         Else
-            _RespuestaAjax &= "-"
+            _RespuestaAjaxLocal.Value &= "-"
         End If
-        _RespuestaAjax &= "</span></span><br/>" & vbNewLine
-        _RespuestaAjax &= "<span><strong>" & Language.GetText("Hour") & "</strong>: "
-        _RespuestaAjax &= Now.ToString("HH:mm:ss")
-        _RespuestaAjax &= "</span>"
+        _RespuestaAjaxLocal.Value &= "</span></span><br/>" & vbNewLine
+        _RespuestaAjaxLocal.Value &= "<span><strong>" & Language.GetText("Hour") & "</strong>: "
+        _RespuestaAjaxLocal.Value &= Now.ToString("HH:mm:ss")
+        _RespuestaAjaxLocal.Value &= "</span>"
 
         Return True
     End Function
@@ -417,23 +421,23 @@ Public Class WebInterfaceModule
 
     Private Function ProcesoStop(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If Not IsPostBack(request) OrElse Not ValidateCsrf(request, session) Then
-            _RespuestaAjax = "<span class='error'>Forbidden</span>"
+            _RespuestaAjaxLocal.Value = "<span class='error'>Forbidden</span>"
             Return True
         End If
         Downloader.ControlRemotoParar()
         System.Threading.Thread.Sleep(400)
-        _RespuestaAjax = Language.GetText("Download stopped")
+        _RespuestaAjaxLocal.Value = Language.GetText("Download stopped")
         Return True
     End Function
 
     Private Function ProcesoPlay(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If Not IsPostBack(request) OrElse Not ValidateCsrf(request, session) Then
-            _RespuestaAjax = "<span class='error'>Forbidden</span>"
+            _RespuestaAjaxLocal.Value = "<span class='error'>Forbidden</span>"
             Return True
         End If
         Downloader.ControlRemotoDescargar()
         System.Threading.Thread.Sleep(400)
-        _RespuestaAjax = Language.GetText("Download started")
+        _RespuestaAjaxLocal.Value = Language.GetText("Download started")
         Return True
     End Function
 
@@ -477,7 +481,7 @@ Public Class WebInterfaceModule
     End Function
 
     Private Function ProcesoAddLinks(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
-        _RespuestaAjax = ErrorAjax(Language.GetText("Invalid links")) ' Por defecto mostramos un error, si va bien lo cambiamos
+        _RespuestaAjaxLocal.Value = ErrorAjax(Language.GetText("Invalid links")) ' Por defecto mostramos un error, si va bien lo cambiamos
         If request.Param IsNot Nothing Then
             If request.Param.Item("links") IsNot Nothing And _
                request.Param.Item("pckname") IsNot Nothing And _
@@ -491,15 +495,15 @@ Public Class WebInterfaceModule
                 System.Threading.Thread.Sleep(400)
 
                 If String.IsNullOrEmpty(links) Then
-                    _RespuestaAjax = ErrorAjax(Language.GetText("Invalid links"))
+                    _RespuestaAjaxLocal.Value = ErrorAjax(Language.GetText("Invalid links"))
                 ElseIf createdirpck = "true" And String.IsNullOrEmpty(pckname) Then
-                    _RespuestaAjax = ErrorAjax(Language.GetText("Invalid package name"))
+                    _RespuestaAjaxLocal.Value = ErrorAjax(Language.GetText("Invalid package name"))
                 Else
                     Dim respuesta As String = Downloader.ControlRemotoAgregarLinks(links, pckname, createdirpck = "true")
                     If String.IsNullOrEmpty(respuesta) Then
-                        _RespuestaAjax = Language.GetText("Links added successfully")
+                        _RespuestaAjaxLocal.Value = Language.GetText("Links added successfully")
                     Else
-                        _RespuestaAjax = ErrorAjax(respuesta)
+                        _RespuestaAjaxLocal.Value = ErrorAjax(respuesta)
                     End If
 
                 End If
@@ -514,7 +518,7 @@ Public Class WebInterfaceModule
 #Region "Pintado"
 
     Private Function PintarComun(ByRef str As String) As String
-        Return str.Replace(CONST_CONTENT, "").Replace(CONST_ERROR, _Error).Replace(CONST_HEAD, "").Replace(CONST_JAVASCRIPT, "").Replace(CONST_TITLE, "")
+        Return str.Replace(CONST_CONTENT, "").Replace(CONST_ERROR, _ErrorLocal.Value).Replace(CONST_HEAD, "").Replace(CONST_JAVASCRIPT, "").Replace(CONST_TITLE, "")
     End Function
 
     Private Function PintarPaginaLogin() As String
@@ -573,12 +577,12 @@ Public Class WebInterfaceModule
 
 
     Private Function CargarAjax() As String
-        Return _RespuestaAjax
+        Return If(_RespuestaAjaxLocal.Value, "")   ' the old field defaulted to "", keep that
     End Function
 
 
     Private Sub SetError(ByVal msj As String)
-        _Error = "<br/><div class='error'>" & msj & "</div><br/>"
+        _ErrorLocal.Value = "<br/><div class='error'>" & msj & "</div><br/>"
     End Sub
 
     Private Function ErrorAjax(msj As String) As String

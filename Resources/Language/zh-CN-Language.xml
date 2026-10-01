@@ -51,7 +51,6 @@
   <Text key="Add link"><![CDATA[添加连接]]></Text>
   <Text key="Add links"><![CDATA[添加连接]]></Text>
   <Text key="Open"><![CDATA[打开]]></Text>
-  <Text key="Close"><![CDATA[关闭]]></Text>
   <Text key="Configuration"><![CDATA[设定]]></Text>
   <Text key="See error"><![CDATA[查看错误]]></Text>
   <Text key="See links"><![CDATA[查看连接]]></Text>
@@ -71,7 +70,6 @@
   <Text key="Hour"><![CDATA[时]]></Text>
   <Text key="Queued, error, completed"><![CDATA[队列, 错误与完成]]></Text>
   <Text key="active downloads"><![CDATA[启用下载]]></Text>
-  <Text key="Active downloads"><![CDATA[启用下载]]></Text>
   <Text key="Error information"><![CDATA[错误信息]]></Text>
   <Text key="New version available"><![CDATA[新版本可用]]></Text>
   <Text key="New version do you want to download it? Recommended!"><![CDATA[有 MegaDownloader 的新版本。建议你更新它。
@@ -115,6 +113,9 @@
   <Text key="Stopped"><![CDATA[已停止]]></Text>
   <Text key="Error capital leters"><![CDATA[错误]]></Text>
   <Text key="Error"><![CDATA[错误]]></Text>
+  <Text key="Warning"><![CDATA[警告]]></Text>
+  <Text key="See extraction queue"><![CDATA[查看解压队列]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[管理媒体库]]></Text>
   <Text key="Extracting"><![CDATA[解压中]]></Text>
   <Text key="Downloading"><![CDATA[下载中]]></Text>
   <Text key="Completed"><![CDATA[已完成]]></Text>
@@ -264,7 +265,6 @@
   <Text key="Connection number values are incorrect or too high"><![CDATA[连接值不正确或太高。]]></Text>
   <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[重试次数必须设定，且它的数值必须介于 %A 与 %B。]]></Text>
   <Text key="Invalid proxy configuration"><![CDATA[无效代理设定。]]></Text>
-  <Text key="Invalid speed limit"><![CDATA[无效速度限制。]]></Text>
   <Text key="Invalid server port"><![CDATA[服务器端口无效。它的数值必须介于 1024 y 65535 (建议为 49152 y 65535)。]]></Text>
   <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[工作逾时数值必须介于 0 与 %A。如果数值为 0 则表示不中断。]]></Text>
   <Text key="The template path is not valid"><![CDATA[模板路径无效。]]></Text>
@@ -276,7 +276,6 @@
   <Text key="Download started"><![CDATA[下载已成功启动]]></Text>
   <Text key="Download stopped"><![CDATA[下载已成功停止]]></Text>
   <Text key="Invalid links"><![CDATA[无效连接]]></Text>
-  <Text key="Invalid package name"><![CDATA[无效封装名称]]></Text>
   <Text key="Links added successfully"><![CDATA[连接已成功添加]]></Text>
   <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[如果无指定任何用户和密码，下载将会以匿名用户身份。]]></Text>
   <Text key="User and password is not used yet"><![CDATA[此时不使用帐号与密码（如果你维持空白）。所有下载将以匿名用户来下载。此功能未来将会启用。]]></Text>
@@ -359,7 +358,6 @@ B 是同行下载数。]]></Text>
   <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[这是你的 ELC 连接。你也可以按下「储存文件」创建一个 ELC 文件。]]></Text>
   <Text key="Please select a valid ELC account"><![CDATA[请选取一个有效的 ELC 帐号。]]></Text>
   <Text key="There is an ELC being processed, please wait"><![CDATA[ELC 文件处理中，请稍候。]]></Text>
-  <Text key="Loading..."><![CDATA[载入中...]]></Text>
   <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[未设定 ELC 帐号。请前往「设定」→「ELC 帐号」新增一个 ELC 帐号。]]></Text>
   <Text key="Save file"><![CDATA[储存文件]]></Text>
   <Text key="ELC file"><![CDATA[ELC 文件]]></Text>
@@ -465,4 +463,5 @@ B 是同行下载数。]]></Text>
   <Text key="Advice_Quota"><![CDATA[MEGA 传输配额用尽，稍后自动恢复；换 IP 或代理后点“立即重试”可马上继续。]]></Text>
   <Text key="Advice_Permanent"><![CDATA[链接已失效或被禁止，重试也无法恢复，建议删除该任务。]]></Text>
   <Text key="Advice_Connection"><![CDATA[连接出错，正在自动重试，无需操作。]]></Text>
+  <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[要为以下 ELC 账户导入配置吗？]]></Text>
 </Language>

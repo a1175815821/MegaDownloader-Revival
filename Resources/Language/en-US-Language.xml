@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="en-US" name="English" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Loading...]]></Text>
   <Text key="Loading please wait"><![CDATA[Loading, please wait...]]></Text>
@@ -51,7 +51,6 @@
   <Text key="Add link"><![CDATA[Add link]]></Text>
   <Text key="Add links"><![CDATA[Add links]]></Text>
   <Text key="Open"><![CDATA[Open]]></Text>
-  <Text key="Close"><![CDATA[Close]]></Text>
   <Text key="Configuration"><![CDATA[Configuration]]></Text>
   <Text key="See error"><![CDATA[See error]]></Text>
   <Text key="See links"><![CDATA[See links]]></Text>
@@ -71,7 +70,6 @@
   <Text key="Hour"><![CDATA[Hour]]></Text>
   <Text key="Queued, error, completed"><![CDATA[Queued, erroneous and completed]]></Text>
   <Text key="active downloads"><![CDATA[active downloads]]></Text>
-  <Text key="Active downloads"><![CDATA[Active downloads]]></Text>
   <Text key="Error information"><![CDATA[Error information]]></Text>
   <Text key="New version available"><![CDATA[New version available]]></Text>
   <Text key="New version do you want to download it? Recommended!">
@@ -125,6 +123,9 @@ If you exit now, the extracted files can be corrupted and you will have to extra
   <Text key="Stopped"><![CDATA[Stopped]]></Text>
   <Text key="Error capital leters"><![CDATA[ERROR]]></Text>
   <Text key="Error"><![CDATA[Error]]></Text>
+  <Text key="Warning"><![CDATA[Warning]]></Text>
+  <Text key="See extraction queue"><![CDATA[See extraction queue]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[Manage Streaming Library]]></Text>
   <Text key="Extracting"><![CDATA[Extracting]]></Text>
   <Text key="Downloading"><![CDATA[Downloading]]></Text>
   <Text key="Completed"><![CDATA[Completed]]></Text>
@@ -289,7 +290,6 @@ In order to launch VLC easily, enter the VLC installation path in the 'VLC path'
   <Text key="Connection number values are incorrect or too high"><![CDATA[Connection values are incorrect or too high.]]></Text>
   <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[The retry period must be specified, and its value must be between %A and %B.]]></Text>
   <Text key="Invalid proxy configuration"><![CDATA[Invalid proxy configuration.]]></Text>
-  <Text key="Invalid speed limit"><![CDATA[Invalid speed limit.]]></Text>
   <Text key="Invalid server port"><![CDATA[Server port is not valid. It must have a value between 1024 y 65535 (recommended between 49152 y 65535).]]></Text>
   <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[The time out value session must be between 0 and %A. A value of 0 means that session is not interrupted.]]></Text>
   <Text key="The template path is not valid"><![CDATA[The template path is not valid.]]></Text>
@@ -304,7 +304,6 @@ Error details:
   <Text key="Download started"><![CDATA[Download started successfully]]></Text>
   <Text key="Download stopped"><![CDATA[Download stopped successfully]]></Text>
   <Text key="Invalid links"><![CDATA[Invalid links]]></Text>
-  <Text key="Invalid package name"><![CDATA[Invalid package name]]></Text>
   <Text key="Links added successfully"><![CDATA[Links added successfully]]></Text>
   <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[If no user and password is specified, downloads will be made as an anonymous user.]]></Text>
   <Text key="User and password is not used yet"><![CDATA[At this moment the user and password is not used (leave it in blank if you want). All downloads are made as an anonymous user. In the future this fields may be used.]]></Text>
@@ -392,9 +391,7 @@ Remember to save the configuration or the changes will be discarded.]]>
   <Text key="Created and designed by %NAME"><![CDATA[Created and designed by %NAME]]></Text>
   <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME for helping with MEGA criptographic system.]]></Text>
   <Text key="All users that have collaborated"><![CDATA[All users who have collaborated testing the application.]]></Text>
-  <Text key="Translator credits" 
-        comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"
-        ><![CDATA[]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[]]></Text>
 
 
 
@@ -415,7 +412,6 @@ Note: The community has to give the 'ELC' account data (URL, user, API-Key).]]>
   <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[This is your ELC link. You can also create an ELC file clicking on 'Save file'.]]></Text>
   <Text key="Please select a valid ELC account"><![CDATA[Please select a valid ELC account.]]></Text>
   <Text key="There is an ELC being processed, please wait"><![CDATA[There is an ELC being processed, please wait.]]></Text>
-  <Text key="Loading..."><![CDATA[Loading...]]></Text>
   <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[No ELC accounts configured. Go to Configuration in order to add an ELC account.]]></Text>
   <Text key="Save file"><![CDATA[Save file]]></Text>
   <Text key="ELC file"><![CDATA[ELC file]]></Text>

@@ -4886,9 +4886,11 @@ Public Class Main
         If (frm Is Nothing) Then
 
             ' Si tenemos abierta la pantalla de "ver links", seguramente copiemos los links así que no queremos que salte
+            ' ToastForm deliberately NOT listed: it is a 2-second notification with no links
+            ' in it, and blocking on it silently swallowed whatever the user copied right
+            ' after adding a package (which is exactly when the toast is showing).
             Dim formsDiscarded As New Generic.List(Of Type)
             formsDiscarded.Add(GetType(PantallaMsg))
-            formsDiscarded.Add(GetType(ToastForm))
             formsDiscarded.Add(GetType(ELCForm))
             formsDiscarded.Add(GetType(EncodeLinksForm))
             For Each t As Type In formsDiscarded

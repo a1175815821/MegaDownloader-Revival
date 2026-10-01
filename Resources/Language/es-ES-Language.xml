@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <Language id="es-ES" name="Español" app="MegaDownloader">
   <Text key="Loading..."><![CDATA[Cargando...]]></Text>
   <Text key="Loading please wait"><![CDATA[Cargando, por favor espere...]]></Text>
@@ -51,7 +51,6 @@
   <Text key="Add link"><![CDATA[Agregar enlace]]></Text>
   <Text key="Add links"><![CDATA[Agregar enlaces]]></Text>
   <Text key="Open"><![CDATA[Abrir]]></Text>
-  <Text key="Close"><![CDATA[Close]]></Text>
   <Text key="Configuration"><![CDATA[Configuración]]></Text>
   <Text key="See error"><![CDATA[Ver error]]></Text>
   <Text key="See links"><![CDATA[Ver links]]></Text>
@@ -71,7 +70,6 @@
   <Text key="Hour"><![CDATA[Hour]]></Text>
   <Text key="Queued, error, completed"><![CDATA[En cola, erroneas y completadas]]></Text>
   <Text key="active downloads"><![CDATA[descargas activas]]></Text>
-  <Text key="Active downloads"><![CDATA[Descargas activas]]></Text>
   <Text key="Error information"><![CDATA[Información del error]]></Text>
   <Text key="New version available"><![CDATA[Nueva versión disponible]]></Text>
   <Text key="New version do you want to download it? Recommended!">
@@ -280,7 +278,6 @@ Para lanzar el VLC de forma fácil, introduzca la ruta donde esta instalado el V
   <Text key="Connection number values are incorrect or too high"><![CDATA[Los valores de conexiones por fichero o descargas simultaneas no son correctos o son demasiado altos.]]></Text>
   <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Debe especificar el periodo de reintento de descarga en caso de error, y este debe tener un valor entre %A y %B minutos.]]></Text>
   <Text key="Invalid proxy configuration"><![CDATA[Configuración de proxy no válida.]]></Text>
-  <Text key="Invalid speed limit"><![CDATA[Límite de velocidad no válido.]]></Text>
   <Text key="Invalid server port"><![CDATA[El puerto del servidor web no es válido. Debe tener un valor entre 1024 y 65535 (aunque es recomendable que esté entre 49152 y 65535).]]></Text>
   <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[El valor para interrumpir sesión debe estar entre 0 y %B. Un valor 0 significa que no se interrumpe nunca sesión.]]></Text>
   <Text key="The template path is not valid"><![CDATA[La ruta de la plantilla del servidor web no es válida.]]></Text>
@@ -296,7 +293,6 @@ Detalle del error:
   <Text key="Download started"><![CDATA[Descargas iniciadas correctamente]]></Text>
   <Text key="Download stopped"><![CDATA[Descargas detenidas correctamente]]></Text>
   <Text key="Invalid links"><![CDATA[Enlaces no válidos]]></Text>
-  <Text key="Invalid package name"><![CDATA[Nombre del paquete no válido]]></Text>
   <Text key="Links added successfully"><![CDATA[Enlaces agregados correctamente]]></Text>
   <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Si no especifica usuario y contraseña, las descargas se realizarán con un usuario anónimo.]]></Text>
   <Text key="User and password is not used yet"><![CDATA[Actualmente no se usa el usuario y password para descargar, todas las descargas son anónimas. Puede dejar en blanco estos campos si lo desea, en el futuro puede que se usen.]]></Text>
@@ -381,9 +377,7 @@ Haga click en 'Ayuda' para leerlas.]]>
   <Text key="Created and designed by %NAME"><![CDATA[Creado y diseñado por %NAME]]></Text>
   <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME por su ayuda con el sistema criptográfico de MEGA.]]></Text>
   <Text key="All users that have collaborated"><![CDATA[A todos los testers que han colaborado probando el programa.]]></Text>
-  <Text key="Translator credits"
-        comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"
-        ><![CDATA[]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[]]></Text>
 
 
 
@@ -404,7 +398,6 @@ Nota: Consulta en la comunidad los datos de la cuenta 'ELC' que debes introducir
   <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[Este es tu enlace ELC. También puedes crear un fichero ELC con la opción 'Guardar fichero'.]]></Text>
   <Text key="Please select a valid ELC account"><![CDATA[Por favor, seleccione una cuenta ELC válida.]]></Text>
   <Text key="There is an ELC being processed, please wait"><![CDATA[Hay un ELC siendo procesado, por favor espere.]]></Text>
-  <Text key="Loading..."><![CDATA[Cargando...]]></Text>
   <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[No hay ninguna cuenta ELC configurada, para agregarla vaya a 'Configuración'.]]></Text>
   <Text key="Save file"><![CDATA[Guardar fichero]]></Text>
   <Text key="ELC file"><![CDATA[Fichero ELC]]></Text>
@@ -507,7 +500,31 @@ Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen m�
   <Text key="Folder_Reading"><![CDATA[Leyendo la carpeta, por favor espere...]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[Leyendo la carpeta... %N% elementos procesados]]></Text>
   <Text key="Reset column widths"><![CDATA[Restablecer columnas]]></Text>
-
-
+  <Text key="A web server password is required to allow LAN access"><![CDATA[Se requiere una contraseña del servidor web para permitir el acceso LAN.]]></Text>
+  <Text key="Advice_Connection"><![CDATA[Errores de conexión. Reintentando automáticamente — no se requiere ninguna acción.]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[El enlace está muerto o el acceso está prohibido. Reintentar no servirá — elimine la tarea.]]></Text>
+  <Text key="Advice_Quota"><![CDATA[Cuota de transferencia de MEGA agotada. Las descargas se reanudarán automáticamente; cambie la IP o el proxy y use «Reintentar ahora» para continuar de inmediato.]]></Text>
+  <Text key="Allow LAN access"><![CDATA[Permitir acceso LAN]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[El archivo está incompleto: falta uno o más volúmenes.]]></Text>
+  <Text key="Bind IP (empty = all)"><![CDATA[IP de enlace (vacío = todas)]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[No se pudo guardar la configuración. Compruebe el espacio en disco y los permisos.]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[El formato DLC ya no es compatible (el servicio dcrypt.it se suspendió). Utilice archivos .elc.]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC creado correctamente.]]></Text>
+  <Text key="ELC file is empty"><![CDATA[El archivo ELC está vacío.]]></Text>
+  <Text key="Invalid input data"><![CDATA[Datos de entrada no válidos.]]></Text>
+  <Text key="Invalid IP address format"><![CDATA[Formato de dirección IP no válido]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[Gestionar biblioteca de streaming]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[Descarga fallida]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[%N% tareas fallidas recientemente. Haga clic para revisarlas.]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[El paquete "%N%" terminó de descargarse. Haga clic para verlo.]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[Descarga completada]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[Error desconocido. Consulte el registro para más detalles.]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[Solo se admiten archivos .elc y .dlc al arrastrar y soltar.]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[Abrir &ELC]]></Text>
+  <Text key="See extraction queue"><![CDATA[Ver cola de extracción]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[Demasiados intentos de inicio de sesión, inténtelo de nuevo más tarde.]]></Text>
+  <Text key="URL is mandatory"><![CDATA[La URL es obligatoria.]]></Text>
+  <Text key="VLC could not be started"><![CDATA[No se pudo iniciar VLC. Compruebe que VLC está instalado y que su ruta está configurada.]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[La ruta de VLC no es válida.]]></Text>
+  <Text key="Warning"><![CDATA[Advertencia]]></Text>
 </Language>
-

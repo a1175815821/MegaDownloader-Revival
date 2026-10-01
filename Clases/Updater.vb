@@ -62,14 +62,15 @@ Public Class Updater
         Return Version.MSD
 #Else
         Try
-            Dim rKey As RegistryKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\MegaDownloader", False)
-            If rKey IsNot Nothing _
-               AndAlso rKey.GetValue("Installer") IsNot Nothing _
-               AndAlso CStr(rKey.GetValue("Installer")) = "1" Then
-                Return Version.Installer
-            Else
-                Return Version.Binary
-            End If
+            Using rKey As RegistryKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\MegaDownloader", False)
+                If rKey IsNot Nothing _
+                   AndAlso rKey.GetValue("Installer") IsNot Nothing _
+                   AndAlso CStr(rKey.GetValue("Installer")) = "1" Then
+                    Return Version.Installer
+                Else
+                    Return Version.Binary
+                End If
+            End Using
         Catch ex As Security.SecurityException
             Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry. Installation check not possible, assume binaries.")
             Return Version.Binary

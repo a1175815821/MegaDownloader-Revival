@@ -12,20 +12,46 @@ Public Class Criptografia
 #Region "Criptografía interna"
 
 
-    ' DPAPI application-specific entropy. Derived from the assembly identity so the
-    ' literal is not present in source. Note: DPAPI security primarily relies on the
-    ' CurrentUser scope; the entropy only isolates this app from other apps running
-    ' under the same user. An attacker who can run code as the user can bypass DPAPI
-    ' regardless of the entropy value.
-    Shared entropy As Byte() = DeriveAppEntropy()
-    ' Legacy entropy retained solely for decrypting data persisted by versions prior
-    ' to the derivation change. New encryptions always use the derived entropy above.
-    Private Shared legacyEntropy As Byte() = System.Text.Encoding.Unicode.GetBytes("G*SNAfhHW5A¿Amck+XMLCM6M#$xEK;9q")
+    ' DPAPI application-specific entropy. This MUST stay derived from a value that never
+    ' changes between releases: it used to come from AssemblyName.FullName, which embeds
+    ' the version, so every bump silently invalidated the credentials, download-queue
+    ' links and streaming-library links written by the previous release (they decrypted
+    ' to empty strings with no prompt). Keeping the value out of source bought nothing —
+    ' DPAPI relies on the CurrentUser scope, and anyone who can run code as the user can
+    ' bypass it regardless of the entropy.
+    Private Const AppIdentity As String = "MegaDownloader"
 
-    Private Shared Function DeriveAppEntropy() As Byte()
+    ' Entropy used by v1.9 .. v2.3.0, before it was derived from the assembly identity.
+    Private Const PreDerivationEntropyLiteral As String = "G*SNAfhHW5A¿Amck+XMLCM6M#$xEK;9q"
+
+    ' Releases that derived their entropy from AssemblyName.FullName, from the introduction
+    ' of that scheme (v2.4.0) to the last one that shipped it (v2.5.3). Their data is still
+    ' on users' disks. Do NOT add later releases here — they write with the stable entropy.
+    Private Shared ReadOnly versionDerivedReleases As String() = {
+        "2.4.0.0", "2.4.1.0", "2.4.2.0", "2.4.3.0", "2.4.4.0", "2.4.5.0", "2.4.6.0", "2.4.7.0",
+        "2.5.0.0", "2.5.1.0", "2.5.2.0", "2.5.3.0"}
+
+    Shared entropy As Byte() = DeriveEntropy(AppIdentity)
+
+    ' Decryption candidates, most likely first. VB runs shared field initialisers in textual
+    ' declaration order, so this must stay below entropy/versionDerivedReleases.
+    Private Shared ReadOnly decryptionEntropies As Byte()() = BuildDecryptionEntropyChain()
+
+    Private Shared Function DeriveEntropy(ByVal identity As String) As Byte()
         Using sha As New SHA256Managed()
-            Return sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(System.Reflection.Assembly.GetExecutingAssembly().GetName().FullName))
+            Return sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(identity))
         End Using
+    End Function
+
+    Private Shared Function BuildDecryptionEntropyChain() As Byte()()
+        Dim chain As New Generic.List(Of Byte())
+        chain.Add(entropy)
+        For Each release As String In versionDerivedReleases
+            ' AssemblyName.FullName layout for a culture-neutral, non-strong-named assembly.
+            chain.Add(DeriveEntropy(AppIdentity & ", Version=" & release & ", Culture=neutral, PublicKeyToken=null"))
+        Next
+        chain.Add(System.Text.Encoding.Unicode.GetBytes(PreDerivationEntropyLiteral))
+        Return chain.ToArray()
     End Function
 
     Public Shared Function EncryptString_DPAPI(input As System.Security.SecureString) As String
@@ -34,29 +60,37 @@ Public Class Criptografia
     End Function
 
     Public Shared Function DecryptString_DPAPI(encryptedData As String) As SecureString
+        ' Empty is the most common input by far (unset account/password fields), so
+        ' short-circuit it instead of walking the whole entropy chain.
+        If String.IsNullOrEmpty(encryptedData) Then Return New SecureString()
+
+        Dim blob As Byte()
         Try
-            Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(encryptedData), entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
-            Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
+            blob = Convert.FromBase64String(encryptedData)
         Catch
-            ' Fall back to the legacy entropy for data persisted by previous versions.
-            Try
-                Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(encryptedData), legacyEntropy, System.Security.Cryptography.DataProtectionScope.CurrentUser)
-                Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
-            Catch ex As Exception
-                ' P0-4/P0-5：DPAPI 解密失败不要静默置空。 genuine 的 DPAPI blob（base64 可解但
-                ' Unprotect 失败，如换机器/换账户恢复配置）记 Warning，由调用方提示用户重填；
-                ' 非 base64 输入多为尚未迁移的明文旧值（留给调用方明文回退），不记日志免刷屏。
-                ' 注意：Log.Redact 不调 DPAPI，此处记日志无递归。
-                Try
-                    If Not String.IsNullOrEmpty(encryptedData) Then
-                        Convert.FromBase64String(encryptedData)
-                        Log.WriteWarning("DecryptString_DPAPI: DPAPI decrypt failed with current and legacy entropy (cross-machine/user restore or corrupted value); returning empty, caller should prompt for re-entry: " & Log.SafeException(ex))
-                    End If
-                Catch
-                End Try
-                Return New SecureString()
-            End Try
+            ' Not base64: a plaintext value left by a version that predates encryption.
+            ' Callers have their own plaintext fallback, so stay quiet to avoid log spam.
+            Return New SecureString()
         End Try
+
+        For i As Integer = 0 To decryptionEntropies.Length - 1
+            Try
+                Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(blob, decryptionEntropies(i), System.Security.Cryptography.DataProtectionScope.CurrentUser)
+                If i > 0 Then
+                    Log.WriteDebug("DecryptString_DPAPI: value was written by an older release (entropy #" & i & "); it is re-encrypted with the current entropy on the next save.")
+                End If
+                Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
+            Catch
+                ' Not this entropy; keep walking the chain. The catch must stay broad —
+                ' callers rely on this function never throwing.
+            End Try
+        Next
+
+        ' P0-4/P0-5：DPAPI 解密失败不要静默置空。A genuine blob that no known entropy can
+        ' open (config restored onto another machine/user account, or corrupted) is logged
+        ' so callers such as DecryptPasswordField can turn it into a re-entry prompt.
+        Log.WriteWarning("DecryptString_DPAPI: DPAPI decrypt failed with the current entropy and all " & (decryptionEntropies.Length - 1) & " historical ones (cross-machine/user restore or corrupted value); returning empty, caller should prompt for re-entry")
+        Return New SecureString()
     End Function
 
     Public Shared Function ToSecureString(input As String) As SecureString
@@ -381,6 +415,13 @@ Public Class Criptografia
     Friend Shared Function GetInstaceCipher(ByVal pKey As String) As SicSeekableBlockCipher
         Dim b64Dec As Byte() = B64Decode(pKey)
         Dim intKey As Integer() = ByteArrayToIntArray(b64Dec)
+        ' A MEGA file key is 8 words (key + nonce + MetaMAC); the expression below indexes
+        ' up to intKey(7) unconditionally. ExtraerFileKey only enforces a minimum of 40
+        ' characters, so a 40..42 character key decodes to 7 words and used to die with a
+        ' bare IndexOutOfRangeException here.
+        If intKey.Length < 8 Then
+            Throw New FormatException("Invalid MEGA file key: expected 8 key words, got " & intKey.Length & " (the link appears to be truncated or corrupted).")
+        End If
         Dim keyNOnce As Integer() = New Integer() {intKey(0) Xor intKey(4), intKey(1) Xor intKey(5), intKey(2) Xor intKey(6), intKey(3) Xor intKey(7), intKey(4), intKey(5)}
         Dim key As Byte() = IntArrayToBytesArray(New Integer() {keyNOnce(0), keyNOnce(1), keyNOnce(2), keyNOnce(3)})
         Dim iv As Byte() = IntArrayToBytesArray(New Integer() {keyNOnce(4), keyNOnce(5), 0, 0})
@@ -397,8 +438,11 @@ Public Class Criptografia
         Dim key As Byte()
         If intKey.Length = 4 Then
             key = IntArrayToBytesArray(New Integer() {intKey(0), intKey(1), intKey(2), intKey(3)})
-        Else
+        ElseIf intKey.Length >= 8 Then
             key = IntArrayToBytesArray(New Integer() {intKey(0) Xor intKey(4), intKey(1) Xor intKey(5), intKey(2) Xor intKey(6), intKey(3) Xor intKey(7)})
+        Else
+            ' 5..7 words: the Else branch above would index past the end of the array.
+            Throw New FormatException("Invalid MEGA key: expected 4 or at least 8 key words, got " & intKey.Length & ".")
         End If
 
         Dim iv As Byte() = IntArrayToBytesArray(New Integer() {0, 0, 0, 0})
@@ -555,6 +599,13 @@ Public Class Criptografia
     End Function
 
     Private Shared Function B64Decode(pData As String) As Byte()
+        ' base64url without padding: a length of %4 == 1 cannot be produced by any real
+        ' encoder. Without this guard "(2 - len*3) And 3" evaluates to 3 and the two-char
+        ' "==".Substring(3) throws a bare ArgumentOutOfRangeException. URLExtractor applies
+        ' the same guard to enc?/fenc? links; plain mega.nz keys had none.
+        If pData Is Nothing OrElse (pData.Length Mod 4) = 1 Then
+            Throw New FormatException("Invalid base64url input (length " & If(pData Is Nothing, -1, pData.Length) & "); the link appears to be truncated or corrupted.")
+        End If
         pData &= "==".Substring((2 - pData.Length * 3) And 3)
         pData = pData.Replace("-", "+").Replace("_", "/").Replace(",", "")
         Return Convert.FromBase64String(pData)
@@ -585,6 +636,10 @@ Public Class Criptografia
     End Function
 
     Public Shared Function base64urldecodeBytes(ByVal pData As String) As Byte()
+        ' Same %4 == 1 guard as B64Decode; see the note there.
+        If pData Is Nothing OrElse (pData.Length Mod 4) = 1 Then
+            Throw New FormatException("Invalid base64url input (length " & If(pData Is Nothing, -1, pData.Length) & ").")
+        End If
         pData &= "==".Substring((2 - pData.Length * 3) And 3)
         pData = pData.Replace("-", "+").Replace("_", "/").Replace(",", "")
         Dim bytes() As Byte = Convert.FromBase64String(pData)
@@ -733,6 +788,14 @@ Public Class Criptografia
         Dim keyWithoutN As String = pKey
         If keyWithoutN.Contains("=###n=") Then
             keyWithoutN = keyWithoutN.Substring(0, keyWithoutN.IndexOf("=###n="))
+        End If
+
+        ' Check the shape before decoding: B64Decode throws on a structurally impossible
+        ' base64url length, but this function's contract is to report "cannot verify"
+        ' rather than to throw at its callers on the download path.
+        If (keyWithoutN.Length Mod 4) = 1 Then
+            Log.WriteWarning("VerifyMegaMetaMac: key length " & keyWithoutN.Length & " is not valid base64url; skipping end-to-end verification for " & filePath)
+            Return False
         End If
 
         Dim b64Dec As Byte() = B64Decode(keyWithoutN)

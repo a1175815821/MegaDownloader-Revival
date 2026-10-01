@@ -59,12 +59,21 @@ Public Class MegaFolderHelper
             Throw New ApplicationException("Error getting file list from shared folder - " & res.Excepcion.ToString)
         End If
 
-        If IsNumeric(res.Mensaje) Then
-            If Conexion.IsQuotaErrorText(CStr(res.Mensaje)) Then
+        ' MEGA reports API errors as a bracketed array ("[-9]", "[-17]"), so the brackets
+        ' must come off before IsNumeric (IsNumeric("[-9]") is False, which made this whole
+        ' branch dead) and before GetErrorFromMegaResponse (its Select Case matches the bare
+        ' code). res.Mensaje is left untouched — the deserialisation below trims its own.
+        Dim body As String = If(res.Mensaje, String.Empty).Trim()
+        If body.StartsWith("[") Then body = body.Substring(1)
+        If body.EndsWith("]") Then body = body.Substring(0, body.Length - 1)
+        body = body.Trim()
+
+        If IsNumeric(body) Then
+            If Conexion.IsQuotaErrorText(body) Then
                 MegaQuotaManager.ReportQuota()
                 Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA) while reading folder.")
             End If
-            Throw MEGA_ErrorHandler.GetErrorFromMegaResponse(res.Mensaje, "getting file list from shared folder")
+            Throw MEGA_ErrorHandler.GetErrorFromMegaResponse(body, "getting file list from shared folder")
         End If
 
         Dim FileList As FileListResponse

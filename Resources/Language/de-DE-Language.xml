@@ -21,7 +21,6 @@
   <Text key="Add link"><![CDATA[Link hinzufügen]]></Text>
   <Text key="Add links"><![CDATA[Fügen Sie Links]]></Text>
   <Text key="Open"><![CDATA[Öffnen]]></Text>
-  <Text key="Close"><![CDATA[Schließen]]></Text>
   <Text key="Configuration"><![CDATA[Konfiguration]]></Text>
   <Text key="See error"><![CDATA[Siehe Fehler]]></Text>
   <Text key="See links"><![CDATA[Siehe Links]]></Text>
@@ -41,7 +40,6 @@
   <Text key="Hour"><![CDATA[Stunde]]></Text>
   <Text key="Queued, error, completed"><![CDATA[Warteschlange, fehlerhafte und abgeschlossen]]></Text>
   <Text key="active downloads"><![CDATA[aktiven Downloads]]></Text>
-  <Text key="Active downloads"><![CDATA[Aktive Downloads]]></Text>
   <Text key="Error information"><![CDATA[Fehlerinformationen]]></Text>
   <Text key="New version available"><![CDATA[Neue Version verfügbar]]></Text>
   <Text key="New version do you want to download it? Recommended!"><![CDATA[Es gibt eine neue Version von MegaDownloader. 
@@ -171,7 +169,6 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Connection number values are incorrect or too high"><![CDATA[Anschluss Werte sind falsch oder zu hoch.]]></Text>
   <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Die Wiederholungs-Zeit angegeben werden muss, und ihr Wert muss zwischen %A und %B sein]]></Text>
   <Text key="Invalid proxy configuration"><![CDATA[Ungültige Proxy-Konfiguration.]]></Text>
-  <Text key="Invalid speed limit"><![CDATA[Ungültige Geschwindigkeitsbegrenzung.]]></Text>
   <Text key="Invalid server port"><![CDATA[Server-Port ist nicht gültig. Es muss einen Wert zwischen 1024 y 65535 (empfohlen zwischen 49152 y 65535).]]></Text>
   <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[Der Timeout-Wert Sitzung muss zwischen 0 und %A sein Ein Wert von 0 bedeutet, dass keine Sitzung wird unterbrochen.]]></Text>
   <Text key="The template path is not valid"><![CDATA[Die Vorlage Pfad ist nicht gültig.]]></Text>
@@ -182,7 +179,6 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Download started"><![CDATA[Laden erfolgreich gestartet]]></Text>
   <Text key="Download stopped"><![CDATA[Laden erfolgreich beendet]]></Text>
   <Text key="Invalid links"><![CDATA[Ungültige Links]]></Text>
-  <Text key="Invalid package name"><![CDATA[Ungültiger Paketname]]></Text>
   <Text key="Links added successfully"><![CDATA[Links erfolgreich hinzugefügt]]></Text>
   <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Wenn kein Benutzer und Passwort angegeben wird, Downloads als anonymer Benutzer vorgenommen werden.]]></Text>
   <Text key="User and password is not used yet"><![CDATA[In diesem Augenblick der Benutzer und Passwort wird nicht verwendet (lassen Sie es in leer, wenn Sie möchten). Alle Downloads sind als anonymer Benutzer. In der Zukunft wird diese Felder können verwendet werden.]]></Text>
@@ -262,18 +258,6 @@ Remember to save the configuration or the changes will be discarded.]]>
   <Text key="The DLC has no valid Mega links"><![CDATA[The DLC/ELC doesn't have any valid MEGA link.]]></Text>
   <Text key="Force download"><![CDATA[Force download]]></Text>
 
-  <Text key="About"><![CDATA[About MegaDownloader]]></Text>
-  <Text key="Thanks for using this app"><![CDATA[Thanks for using this non-official download application for MEGA.CO.NZ]]></Text>
-  <Text key="Thanks to"><![CDATA[Thanks to]]></Text>
-  <Text key="Legal text"><![CDATA[MegaDownloader is not related with Mega.co.nz - All trademarks are property of their respective owners.]]></Text>
-
-  <Text key="Created and designed by %NAME"><![CDATA[Created and designed by %NAME]]></Text>
-  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME for helping with MEGA criptographic system.]]></Text>
-  <Text key="All users that have collaborated"><![CDATA[All users who have collaborated testing the application.]]></Text>
-  <Text key="Translator credits"
-        comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"
-        ><![CDATA[]]></Text>
-
 
 
   <Text key="ELC"><![CDATA[ELC]]></Text>
@@ -323,4 +307,123 @@ If you mark another account as default, the previous default account will be unm
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[A&ktualisierung]]></Text>
   <Text key="Check for updates"><![CDATA[Automatisch aktualisierung]]></Text>
+  <Text key="&amp;Hide links inside an image"><![CDATA[&Links in einem Bild verstecken]]></Text>
+  <Text key="&amp;Retrieve links from an image"><![CDATA[&Links aus einem Bild extrahieren]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>
+  <Text key="A web server password is required to allow LAN access"><![CDATA[Zum Aktivieren des LAN-Zugriffs ist ein Webserver-Passwort erforderlich.]]></Text>
+  <Text key="Add"><![CDATA[Hinzufügen]]></Text>
+  <Text key="AddLinks_CueBanner"><![CDATA[MEGA-Links hier einfügen, einen pro Zeile...]]></Text>
+  <Text key="AddLinks_LinkCount"><![CDATA[%N% Link(s)]]></Text>
+  <Text key="Advice_Connection"><![CDATA[Verbindungsfehler. Automatischer Neuversuch — keine Aktion erforderlich.]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[Der Link ist tot oder der Zugriff ist verboten. Wiederholen hilft nicht — Aufgabe entfernen.]]></Text>
+  <Text key="Advice_Quota"><![CDATA[MEGA-Transferkontingent erschöpft. Downloads werden automatisch fortgesetzt; ändern Sie IP oder Proxy und nutzen Sie "Jetzt erneut versuchen" für sofortige Fortsetzung.]]></Text>
+  <Text key="Allow LAN access"><![CDATA[LAN-Zugriff erlauben]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[Das Archiv ist unvollständig: Eines oder mehrere Teile fehlen.]]></Text>
+  <Text key="Bind IP (empty = all)"><![CDATA[IP binden (leer = alle)]]></Text>
+  <Text key="Collaborate"><![CDATA[Mitwirken]]></Text>
+  <Text key="Config_SearchHint"><![CDATA[Einstellungen durchsuchen (Proxy, Design, VLC...)]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[Konfiguration konnte nicht gespeichert werden. Prüfen Sie Speicherplatz und Berechtigungen.]]></Text>
+  <Text key="Detail_Empty"><![CDATA[Wählen Sie eine Aufgabe, um Details zu sehen]]></Text>
+  <Text key="Detail_EmptyHint"><![CDATA[oder Links hierher ziehen / Strg+V drücken]]></Text>
+  <Text key="Detail_Path"><![CDATA[Pfad]]></Text>
+  <Text key="Detail_Title"><![CDATA[Details]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[Das DLC-Format wird nicht mehr unterstützt (der dcrypt.it-Dienst wurde eingestellt). Bitte verwenden Sie stattdessen .elc-Dateien.]]></Text>
+  <Text key="Download VLC"><![CDATA[VLC herunterladen]]></Text>
+  <Text key="E-mail"><![CDATA[E-Mail]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC erfolgreich erstellt.]]></Text>
+  <Text key="ELC file is empty"><![CDATA[Die ELC-Datei ist leer.]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[UR&Ls kodieren]]></Text>
+  <Text key="Encode Url"><![CDATA[URLs kodieren]]></Text>
+  <Text key="Encoded Url"><![CDATA[Kodierte URL]]></Text>
+  <Text key="Folder_Reading"><![CDATA[Ordner wird gelesen, bitte warten...]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[Ordner wird gelesen... %N% Elemente verarbeitet]]></Text>
+  <Text key="Hide links inside an image"><![CDATA[Links in einem Bild verstecken]]></Text>
+  <Text key="Invalid input data"><![CDATA[Ungültige Eingabedaten.]]></Text>
+  <Text key="Invalid IP address format"><![CDATA[Ungültiges IP-Adressformat]]></Text>
+  <Text key="Manage Streaming &amp;Library"><![CDATA[&Bibliothek verwalten]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[Streaming-Bibliothek verwalten]]></Text>
+  <Text key="MEGA Url"><![CDATA[MEGA-URL-Link]]></Text>
+  <Text key="Missing VLC Path"><![CDATA[VLC-Pfad nicht definiert. Sie können ihn auf dem Bildschirm 'Konfiguration' im Tab 'Streaming' festlegen.]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[Download fehlgeschlagen]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[%N% Aufgaben sind kürzlich fehlgeschlagen. Klicken zum Prüfen.]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[Paket "%N%" wurde fertig heruntergeladen. Klicken zum Anzeigen.]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[Download abgeschlossen]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[Unbekannter Fehler. Details im Protokoll prüfen.]]></Text>
+  <Text key="OLV_EmptyList"><![CDATA[MEGA-Links hierher ziehen, oder einen kopieren — die Zwischenablage-Überwachung übernimmt ihn]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[Nur .elc- und .dlc-Dateien werden per Drag & Drop unterstützt.]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[&ELC öffnen]]></Text>
+  <Text key="Overview_Active"><![CDATA[Aktiv]]></Text>
+  <Text key="Overview_Failed"><![CDATA[Fehlgeschlagen]]></Text>
+  <Text key="Overview_Progress"><![CDATA[Warteschlangen-Fortschritt]]></Text>
+  <Text key="Overview_Queued"><![CDATA[In Warteschlange]]></Text>
+  <Text key="Overview_Remaining"><![CDATA[Verbleibende Zeit]]></Text>
+  <Text key="Overview_Speed"><![CDATA[Gesamtgeschwindigkeit]]></Text>
+  <Text key="Overview_Title"><![CDATA[Aufgabenübersicht]]></Text>
+  <Text key="Paste your MEGA Url(s) and the encoded Url(s) will appear under the Encoded Url box."><![CDATA[Geben Sie die URL(s) von MEGA ein, und die kodierte(n) URL(s) erscheinen im Feld 'Kodierte URL'.]]></Text>
+  <Text key="Quick_ExtractQueue"><![CDATA[Entpack-Warteschlange]]></Text>
+  <Text key="Quick_Logs"><![CDATA[Protokolle]]></Text>
+  <Text key="Quick_StreamingLibrary"><![CDATA[Streaming-Bibliothek]]></Text>
+  <Text key="Quick_Title"><![CDATA[Schnellzugriffe]]></Text>
+  <Text key="Quota_Banner"><![CDATA[MEGA-Transferkontingent überschritten (keine genaue Erholungszeit angegeben). Automatisch pausiert, erneuter Versuch in %T%.]]></Text>
+  <Text key="Quota_Error"><![CDATA[MEGA-Transferkontingent überschritten. Downloads sind pausiert und werden automatisch fortgesetzt. Wenn Sie IP oder Proxy bereits geändert haben, nutzen Sie "Jetzt erneut versuchen".]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[MEGA-Kontingent wiederhergestellt, Downloads automatisch fortgesetzt.]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[Jetzt erneut versuchen]]></Text>
+  <Text key="Quota_Status"><![CDATA[Kontingent: erneut in %T%]]></Text>
+  <Text key="Remove all failed"><![CDATA[Alle Fehlgeschlagenen entfernen]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[%N% fehlgeschlagene(n) Element(e) aus der Liste entfernen?]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[Auch die lokalen .part-Dateien dieser fehlgeschlagenen Elemente löschen?]]></Text>
+  <Text key="Reset column widths"><![CDATA[Spaltenbreiten zurücksetzen]]></Text>
+  <Text key="Retrieve links from an image"><![CDATA[Links aus einem Bild extrahieren]]></Text>
+  <Text key="Retry all failed"><![CDATA[Alle Fehlgeschlagenen erneut versuchen]]></Text>
+  <Text key="See extraction queue"><![CDATA[Entpack-Warteschlange anzeigen]]></Text>
+  <Text key="See Streaming &amp;Library"><![CDATA[Bibliothek an&sehen]]></Text>
+  <Text key="Start"><![CDATA[Starten]]></Text>
+  <Text key="Start VLC"><![CDATA[VLC starten]]></Text>
+  <Text key="Steganograph&amp;y"><![CDATA[Steganogra&phie]]></Text>
+  <Text key="Stop"><![CDATA[Stopp]]></Text>
+  <Text key="Streaming"><![CDATA[Streaming]]></Text>
+  <Text key="Streaming configuration"><![CDATA[Streaming-Konfiguration]]></Text>
+  <Text key="Streaming configuration text"><![CDATA[Der Streaming-Server ermöglicht es, Online-Videos von MEGA.CO.NZ anzusehen.
+
+Um den Streaming-Server zu verwenden, aktivieren Sie die Option 'Streaming-Server verwenden' und wählen Sie einen Port.
+Er muss einen Wert zwischen 1024 und 65535 haben (empfohlen zwischen 49152 und 65535).
+Sie können einen beliebigen wählen, sofern er nicht von einem anderen Programm genutzt wird. Standardmäßig ist der Port 54321.
+
+Sobald der Streaming-Server aktiviert ist, können Sie im Menü die Option 'Streaming' / 'Online ansehen' wählen.
+Geben Sie den MEGA-Link ein und ein neuer Streaming-Link wird erzeugt. Dieser Link muss in einen Multimedia-Player eingegeben werden, um das Video anzusehen.
+
+Beachten Sie, dass MegaDownloader kein Multimedia-Player ist. Diese Option überträgt die Daten von MEGA per Streaming, aber zum Ansehen von Video und Ton benötigen Sie einen Player, zum Beispiel den VLC Player.
+Um VLC einfach starten zu können, geben Sie den VLC-Installationspfad in der Option 'VLC-Pfad' auf diesem Bildschirm ein.]]></Text>
+  <Text key="Streaming Info"><![CDATA[Geben Sie die Video-URL in das Textfeld 'MEGA-URL-Link' ein.
+
+Im Textfeld 'Streaming-URL-Link' wird eine Adresse erzeugt. Sie können diese Adresse in jedem Player verwenden, der Streaming unterstützt, um die Wiedergabe zu starten.
+
+Wenn Sie den VLC Player installiert haben und sein Pfad in der Konfiguration von MegaDownloader definiert ist, klicken Sie auf 'VLC starten', um das Video anzusehen.
+
+Bitte beachten Sie, dass es einige Sekunden dauern kann, bevor das Streaming beginnt.]]></Text>
+  <Text key="Streaming server not activated"><![CDATA[Streaming-Server nicht aktiviert. Sie können diese Funktion auf dem Bildschirm 'Konfiguration' im Tab 'Streaming' aktivieren.]]></Text>
+  <Text key="Streaming Url"><![CDATA[Streaming-URL-Link]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[Paket hinzugefügt: %N%]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[Zu viele Anmeldeversuche, bitte später erneut versuchen.]]></Text>
+  <Text key="Update"><![CDATA[Aktualisieren]]></Text>
+  <Text key="Update prompt hint"><![CDATA[Ja = Jetzt aktualisieren / Nein = Später erinnern / Abbrechen = Für diese Version nie mehr erinnern]]></Text>
+  <Text key="URL is mandatory"><![CDATA[Die URL ist obligatorisch.]]></Text>
+  <Text key="Use streaming server"><![CDATA[Streaming-Server verwenden]]></Text>
+  <Text key="VLC Configuration"><![CDATA[VLC-Konfiguration]]></Text>
+  <Text key="VLC could not be started"><![CDATA[VLC konnte nicht gestartet werden. Bitte prüfen Sie, dass VLC installiert und sein Pfad konfiguriert ist.]]></Text>
+  <Text key="VLC Path"><![CDATA[VLC-Pfad]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[Der VLC-Pfad ist ungültig.]]></Text>
+  <Text key="Warning"><![CDATA[Warnung]]></Text>
+  <Text key="Watch &amp;Online"><![CDATA[&Online ansehen]]></Text>
+  <Text key="Watch Online"><![CDATA[Online ansehen]]></Text>
+  <Text key="Watch Online help link"><![CDATA[Hinweis zu 'Online ansehen']]></Text>
+  <Text key="Watch Online Note"><![CDATA[Mit der Option 'Online ansehen' können Sie Online-Videos ansehen.
+
+Wenn der Link eine gültige Videodatei ist (avi, mkv, flv, mp4 usw.), können Sie sie mit dem VLC Player ansehen.
+
+Sie müssen den Streaming-Server aktiviert und den VLC-Player-Pfad definiert haben.
+Sie können diese Funktion auf dem Bildschirm 'Konfiguration' im Tab 'Streaming' aktivieren.
+
+Nach der Konfiguration klicken Sie auf die Schaltfläche 'Online ansehen', um das Video auf Ihrem PC per Streaming anzusehen.]]></Text>
+  <Text key="Web server and streaming server ports must be different"><![CDATA[Der Port des Streaming-Servers und der Port des Webservers dürfen nicht identisch sein.]]></Text>
 </Language>

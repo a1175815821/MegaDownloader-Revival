@@ -39,6 +39,10 @@ Public Class StreamingModule
             If Not String.IsNullOrEmpty(Me._Config.ServidorStreamingPassword) Then
                 If request.Param.Item("p") Is Nothing OrElse Not Criptografia.FixedTimeEquals(Criptografia.Utf8BytesOrNull(request.Param.Item("p").Value), _
                                                                                               Criptografia.Utf8BytesOrNull(Me._Config.ServidorStreamingPassword)) Then
+                    ' 403 而非 200:密码是 query 参数而非质询式认证,401 需要
+                    ' WWW-Authenticate 头才有意义;403 让播放器/浏览器按真正的
+                    ' 错误处理,而不是把 "Error: Access denied" 文本当媒体数据
+                    response.Status = HttpStatusCode.Forbidden
                     ComprimirRespuesta(request, response, "Error: Access denied")
                     Return True
                 End If
@@ -171,16 +175,44 @@ Public Class StreamingModule
                 Try
                     response.SendHeaders()
 
+                    Dim finishAfterSend As Boolean = False
                     'While DownloadIndex < InfoFichero.Tamano And ClientConnected(response)
                     While DownloadIndex < content And ClientConnected(response)
 
                         currentPackageSize = Stream.Read(readBytes, 0, PackageSize)
 
+                        ' EOF 防护:上游流提前结束(MEGA 节点/代理截断响应)时 Read=0。
+                        ' 旧代码以零长 Buffer 空转发,DownloadIndex 永不推进 → 死循环占满线程,
+                        ' 直到客户端断开;ClientConnected 反射降级为"视为已连接"时永不停止。
+                        ' 已送达字节正常交付,在当前位置干净收尾。
+                        If currentPackageSize = 0 Then
+                            Log.WriteWarning("StreamingModule: upstream ended early (" & DownloadIndex & "/" & content & " bytes sent); finishing response.")
+                            Exit While
+                        End If
+
                         ' Forzamos a que haya bloques de 16 bytes
                         Dim diff As Integer = oCipher.GetBlockSize - currentPackageSize Mod oCipher.GetBlockSize
                         If diff <> oCipher.GetBlockSize Then
                             If DownloadIndex + currentPackageSize < content Then
-                                currentPackageSize += Stream.Read(readBytes, currentPackageSize, diff)
+                                ' 凑齐 16 字节边界:循环读满 diff。旧代码单次 Read 不足 diff(EOF 落在
+                                ' 块中间)时留下非 16 倍数长度,ProcessBlock 固定写满 16 字节会写穿
+                                ' Buffer 越界崩溃。EOF 则回退到 16 字节边界,已收数据照常发送,
+                                ' 补不齐的 <16 字节尾巴(EOF 后拿不到)丢弃。
+                                Dim need As Integer = diff
+                                Do
+                                    ' currentPackageSize 随补齐递增,直接作为续写偏移;
+                                    ' need 逐轮缩短,读满即停
+                                    Dim got As Integer = Stream.Read(readBytes, currentPackageSize, need)
+                                    If got = 0 Then
+                                        Log.WriteWarning("StreamingModule: upstream ended mid-block (" & DownloadIndex & "/" & content & " bytes sent); truncating buffered " & currentPackageSize & " bytes to a 16-byte boundary.")
+                                        currentPackageSize = currentPackageSize And Not 15
+                                        finishAfterSend = True
+                                        Exit Do
+                                    End If
+                                    currentPackageSize += got
+                                    need -= got
+                                Loop While need > 0
+                                If currentPackageSize = 0 Then Exit While
                             Else
                                 currentPackageSize += diff
                             End If
@@ -204,6 +236,9 @@ Public Class StreamingModule
                         response.SendBody(Buffer)
 
                         DownloadIndex += currentPackageSize
+
+                        ' 块中间 EOF:已按 16 字节边界发完最后一段,到此收尾
+                        If finishAfterSend Then Exit While
 
                     End While
                 Catch ex As Exception
@@ -242,6 +277,10 @@ Public Class StreamingModule
         FileSize As Long) As Boolean
         rangeStart = 0
         rangeEnd = 0
+        ' bytes=0-0 单字节探测标志:两端显式为 0。必须与 "bytes=N-" 开区间(端点未指定)区分——
+        ' 下文 requestRangeEnd=0 时补 FileSize-1 的默认逻辑曾把 0-0 误当开区间,content 被算成
+        ' 整个文件,而上游只按对齐块取了 16 字节,主循环 Read=0 后无限空转发(必现死循环)。
+        Dim singleByteProbe As Boolean = False
 
         If Not String.IsNullOrEmpty(request.Headers("Range")) Then
             Dim mRange = rxRange.Match(request.Headers("Range"))
@@ -254,6 +293,10 @@ Public Class StreamingModule
                 End If
                 If hasEnd Then
                     Long.TryParse(mRange.Groups(2).Value, rangeEnd)
+                End If
+                ' 0-0:两端都显式给出了值且均为 0(RFC 7233 单字节探测),不是"未指定"
+                If hasStart AndAlso hasEnd AndAlso rangeStart = 0 AndAlso rangeEnd = 0 Then
+                    singleByteProbe = True
                 End If
                 ' RFC 7233 此前不支持的形式:
                 '   bytes=-N  后缀区间 = 最后 N 个字节
@@ -310,7 +353,8 @@ Public Class StreamingModule
                 rangeEnd = Math.Min(rangeStart + 15, FileSize - 1)
             End If
         End If
-        requestRangeEnd = (If(requestRangeEnd > 0, requestRangeEnd, FileSize - 1))
+        ' bytes=0-0:端点显式为 0,不是"未指定",不能补 FileSize-1;content=1 才符合单字节探测语义
+        requestRangeEnd = (If(singleByteProbe OrElse requestRangeEnd > 0, requestRangeEnd, FileSize - 1))
 
         If rangeStart > FileSize - 1 Then rangeStart = FileSize - 1
         If rangeEnd > FileSize - 1 Then rangeEnd = FileSize - 1

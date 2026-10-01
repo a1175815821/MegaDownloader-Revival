@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.4 | 2026-10-01 | 流媒体死循环根治；DPAPI 熵稳定不再随升级丢数据；9 语言补译 |
 | 2.5.3 | 2026-09-18 | 补丁版：下完误报失败、终结共享冲突、进度条叠字三连修 |
 | 2.5.2 | 2026-09-17 | 回归风险治理三批落地：依赖升级、落盘节流、锁替换、口令加固 |
 | 2.5.1 | 2026-09-14 | 补丁版：断点续传保得住、限速单位修正、两批审计跟进修复 |
@@ -109,14 +110,54 @@
 
 ---
 
-## [Unreleased]
+## [2.5.4] - 2026-10-01
 
-### 🐛 进度列回退：% 独立列 + 条形列各干各的
+两批合并发布：2.5.3 之后落地的静默修复集（升级丢口令/队列、7z 头加密、文件夹熔断失效等 P0/P1/P2）+ 流媒体在线观看根治 + 全语言翻译补齐。一句话：**升级不再丢数据，在线观看不再卡死，界面不再蹦英文**。
 
-([Main.vb](../Forms/Main.vb))
+### 🔐 P0：升级即静默丢数据
 
-- 条上叠字方案回退：条形列恢复为只画条不画字；`%` 文案由独立数字列负责，两列并排展示，互不覆盖
-- 启动时把隐藏期落盘的数字列翻回可见（右键列菜单仍可手动隐藏）；条形列默认宽度回 80
+([Criptografia.vb](../Clases/Criptografia.vb))
+
+- DPAPI 熵原由 `AssemblyName.FullName` 派生（内含版本号）→ 每次版本 bump 熵即变，上一版保存的账号口令、下载队列链接、流媒体库链接全部解成空串且无任何提示。改为固定 `AppIdentity` 派生；解密侧轮询 12 个历史版本熵（2.4.0→2.5.3），旧值下次保存自动用新熵重加密；空值短路 + 非 base64（明文旧值）静默回退，真·解不开才记 Warning
+
+### 🐛 P1：用户可感知的功能失效
+
+([StreamingModule.vb](../HttpModule/StreamingModule.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [Conexion.vb](../Clases/Conexion.vb) / [Configuration.vb](../Forms/Configuration.vb) / [StreamingLibraryManager.vb](../Clases/StreamingLibrary/StreamingLibraryManager.vb))
+
+- 在线观看三处死循环/越界：上游提前 EOF 时零长转发把线程占满；EOF 落在 16 字节块中间时 `ProcessBlock` 写穿缓冲区越界崩溃；`bytes=0-0` 单字节探测被当成开区间把 content 补成整文件长度，进而触发 Read=0 死循环（2.4.5 修过一次但未修干净）。此前 QuickTime/DLNA 类播放器一探测即卡死
+- 7z 头部加密档案列目录不带密码 → 口令再正确也 exit 255；口令含空格被 Windows argv 拆分（改 `-p"…"` 引号包裹，含引号/尾反斜杠显式拒绝）；子进程 stdin 未关闭 → 7-Zip 弹口令提示永久阻塞且取消检查失效
+- MEGA 文件夹 API 错误码返回带括号形式 `[-9]`，`IsNumeric` 恒 False 使整段分支成死代码 → 配额熔断与错误映射全失效；先剥括号再判
+- 代理地址填 `http://1.2.3.4` 会拼成 `http://http//1.2.3.4`（主机名真叫 http）→ 所有请求无提示失败；新增 `NormalizeProxyHost` 剥离 scheme/空白/尾斜杠（保留 `[::1]`）；端口校验 `=0` 改 `<1`
+- 畸形 MEGA 密钥三处裸崩（base64url 长度 %4==1 越界、5..7 word 密钥索引越界、40..42 字符密钥取 intKey(7)）统一改为带说明的 FormatException；MetaMAC 校验路径记 Warning 跳过不抛
+- 流媒体库 `Elements()` 返回副本，直接对返回值增删全是静默 no-op → 条目永不落盘；新增带锁 `AddElement`/`RemoveElement`，单例首次初始化加锁、加载完才发布
+
+### 🔒 P2：并发串扰与体验修复
+
+([WebInterfaceModule.vb](../HttpModule/WebInterfaceModule.vb) / [StreamingLibraryModule.vb](../HttpModule/StreamingLibraryModule.vb) / [ServidorWebController.vb](../Clases/ServidorWebController.vb) / [Main.vb](../Forms/Main.vb) / [Updater.vb](../Clases/Updater.vb))
+
+- 流媒体与远程控制服务 cookie 同名 `Sd_session`，浏览器按 host 隔离导致两边互相顶掉登录态 → 流媒体改 `Sd_streaming`
+- AJAX 响应与错误状态改 `AsyncLocal`：模块单实例下并发请求互相覆盖响应文本
+- ToastForm 移出剪贴板监控排除列表：2 秒气泡显示期内用户复制的链接此前被静默吞掉
+- Updater 注册表键补 `Using`（句柄泄漏）
+- 进度列回退：条形列恢复只画条不画字，`%` 由独立数字列负责，两列并排互不覆盖；启动时把隐藏期落盘的数字列翻回可见，条形列默认宽度回 80
+
+### 🔐 安全加固
+
+([StreamingModule.vb](../HttpModule/StreamingModule.vb) / [StreamingLibraryModule.vb](../HttpModule/StreamingLibraryModule.vb))
+
+- 流媒体密码错误返回 403 而非 200：密码是 query 参数非质询式认证，播放器/浏览器按真正的错误处理，不再把 "Error: Access denied" 文本当媒体数据
+- 流媒体库登录加防爆破：失败锁定（60 秒窗口 10 次）+ 并发闸（4 个），与 Web 界面登录对齐
+
+### 🌍 语言包
+
+- 9 个语言文件补齐 567 条缺失翻译：德/意各 96 条、法/匈各 70 条、葡/罗/繁中各 69 条、西 27 条、简中 1 条——本地化界面不再混入成段英文
+- 10 个文件清理 44 条历史重复死条目（运行时只读文档顺序第一条，删除的均为永不可达条目：en-US/简中各 1 条 `active downloads`，西/法/匈/葡/罗/繁中各 5 条，德/意各 12 条）；按运行时取值逐键断言零行为变化
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.4.0`；`docs/version.xml` → `2.5.4.0`；README 当前版本 → v2.5.4
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.4`
+- 自本版起 DPAPI 熵为固定派生，后续版本 bump 不再影响存量密文（v2.4.0→2.5.3 历史熵保留在解密链中）
 
 ---
 

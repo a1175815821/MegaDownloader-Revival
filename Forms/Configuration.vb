@@ -434,7 +434,7 @@ Public Class Configuration
         Dim ProxyPort As Integer = 0
         Integer.TryParse(txtProxyPort.Text, ProxyPort)
 
-        If chkProxy.Checked And (ProxyPort = 0 Or ProxyPort > 65535 Or String.IsNullOrEmpty(txtProxyIP.Text)) Then
+        If chkProxy.Checked And (ProxyPort < 1 Or ProxyPort > 65535 Or String.IsNullOrEmpty(txtProxyIP.Text.Trim())) Then
             MessageBox.Show(Language.GetText("Invalid proxy configuration"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
         End If

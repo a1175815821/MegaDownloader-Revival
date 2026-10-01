@@ -78,7 +78,10 @@ Public Class ServidorWebController
             Try
                 _WebServerStreaming = New HttpServer.HttpServer()
                 _WebServerStreaming.ServerName = "Streaming"
-                _WebServerStreaming.SessionCookieName = "Sd_session"
+                ' Must differ from the remote controller's cookie name: both servers bind
+                ' 127.0.0.1 and browsers scope cookies by host, not by port, so a shared
+                ' name made the two sessions overwrite each other and forced re-login.
+                _WebServerStreaming.SessionCookieName = "Sd_streaming"
                 _WebServerStreaming.Add(New MegaDownloader.StreamingModule(Config))
                 _WebServerStreaming.Add(New MegaDownloader.StreamingLibraryModule(Downloader, Config))
                 _WebServerStreaming.Start(System.Net.IPAddress.Loopback, Config.ServidorStreamingPuerto)

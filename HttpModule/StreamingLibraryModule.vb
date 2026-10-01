@@ -72,7 +72,7 @@ Public Class StreamingLibraryModule
     End Function
 
 #Region "Funciones varias privadas"
-    Private _Error As String
+    Private Shared _ErrorLocal As New System.Threading.AsyncLocal(Of String)
     Private Function IsPostBack(ByRef request As HttpServer.IHttpRequest) As Boolean
         Return request.Method = "POST"
     End Function
@@ -95,7 +95,7 @@ Public Class StreamingLibraryModule
 
     Private Sub ResetRequestVar(ByRef request As HttpServer.IHttpRequest)
         If Not IsPostBack(request) Then ' Pedimos datos; si es un POST, es que enviamos al servidor
-            _Error = ""
+            _ErrorLocal.Value = ""
         End If
     End Sub
 
@@ -173,7 +173,7 @@ Public Class StreamingLibraryModule
             Case PaginaAjax
                 responseBody.Append(CargarAjax)
             Case PaginaLogin
-                responseBody.Append(TemplateLogin.Replace("%ERROR%", _Error))
+                responseBody.Append(TemplateLogin.Replace("%ERROR%", _ErrorLocal.Value))
         End Select
 
         ComprimirRespuesta(request, response, responseBody.ToString)
@@ -213,18 +213,58 @@ Public Class StreamingLibraryModule
     End Function
 
 
+    ' 登录限速:与 WebInterfaceModule 对齐。此前本页密码 POST 无任何限制,
+    ' 虽然服务只监听 127.0.0.1,本机任意进程仍可无限速爆破流媒体库口令。
+    ' 两道闸:并发上限(防打满线程池) + 滑动窗口内的失败锁定。
+    Private Shared ReadOnly _LoginRateLock As New Object
+    Private Shared ReadOnly _LoginFailures As New List(Of Date)
+    Private Shared _ActiveLogins As Integer = 0
+    Private Const MaxConcurrentLogins As Integer = 4
+    Private Const MaxLoginFailuresPerWindow As Integer = 10
+    Private Const LoginFailureWindowSeconds As Integer = 60
+
+    ''' <summary>失败锁定窗口检查:窗口内失败次数达到上限则拒绝服务</summary>
+    Private Shared Function LoginLockedOut() As Boolean
+        SyncLock _LoginRateLock
+            Dim cutoff As Date = Now.AddSeconds(-LoginFailureWindowSeconds)
+            _LoginFailures.RemoveAll(Function(d) d < cutoff)
+            Return _LoginFailures.Count >= MaxLoginFailuresPerWindow
+        End SyncLock
+    End Function
+
+    Private Shared Sub RecordLoginFailure()
+        SyncLock _LoginRateLock
+            _LoginFailures.Add(Now)
+        End SyncLock
+    End Sub
+
     Private Function ProcesoLogin(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef session As HttpServer.Sessions.IHttpSession) As Boolean
         If request.Param IsNot Nothing Then
-            If request.Param.Item("Password") IsNot Nothing And IsPostBack(request) Then
-                If Criptografia.FixedTimeEquals(Criptografia.Utf8BytesOrNull(request.Param.Item("Password").Value), _
-                                                Criptografia.Utf8BytesOrNull(Me.Config.ServidorStreamingPassword)) Then
-                    session("Logueado") = "1"
-                    session("LoginDate") = Now
-                    response.Redirect(PaginaMain)
-                    Return False
-                Else
-                    SetError(Language.GetText("Invalid password"))
+            If request.Param.Item("Password") IsNot Nothing AndAlso IsPostBack(request) Then
+                ' 限速:锁定期内或并发超限时直接拒绝,不执行口令比较
+                If LoginLockedOut() Then
+                    SetError(Language.GetText("Too many login attempts, please try again later"))
+                    Return True
                 End If
+                If System.Threading.Interlocked.Increment(_ActiveLogins) > MaxConcurrentLogins Then
+                    System.Threading.Interlocked.Decrement(_ActiveLogins)
+                    SetError(Language.GetText("Too many login attempts, please try again later"))
+                    Return True
+                End If
+                Try
+                    If Criptografia.FixedTimeEquals(Criptografia.Utf8BytesOrNull(request.Param.Item("Password").Value), _
+                                                    Criptografia.Utf8BytesOrNull(Me.Config.ServidorStreamingPassword)) Then
+                        session("Logueado") = "1"
+                        session("LoginDate") = Now
+                        response.Redirect(PaginaMain)
+                        Return False
+                    Else
+                        RecordLoginFailure()
+                        SetError(Language.GetText("Invalid password"))
+                    End If
+                Finally
+                    System.Threading.Interlocked.Decrement(_ActiveLogins)
+                End Try
             End If
         End If
         Return True
@@ -232,7 +272,7 @@ Public Class StreamingLibraryModule
 
 
     Private Sub SetError(ByVal msj As String)
-        _Error = "<br/><div class='error'>" & msj & "</div><br/>"
+        _ErrorLocal.Value = "<br/><div class='error'>" & msj & "</div><br/>"
     End Sub
 
 
@@ -375,6 +415,11 @@ Public Class StreamingLibraryModule
 
                     If Not StreamingHelper.WatchOnline(Config.VLCPath, request.Param.Item("URL").Value) Then
                         PrepareAjaxResponse("VLC could not be loaded")
+                    Else
+                        ' The page script evaluates the body and reads .error off it, so an
+                        ' empty success body throws a JS TypeError. Send the same success
+                        ' envelope the Delete action already uses.
+                        PrepareAjaxResponse("")
                     End If
                     Return True
 

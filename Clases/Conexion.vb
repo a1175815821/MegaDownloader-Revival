@@ -66,11 +66,27 @@ Public Class Conexion
 
     Public Shared Sub SetProxy(Config As Configuracion)
         _UsarProxy = Config.UsarProxy
-        _ProxyIP = Config.ProxyIP
+        _ProxyIP = NormalizeProxyHost(Config.ProxyIP)
         _ProxyPort = Config.ProxyPort
         _ProxyUser = Config.ProxyUser
         _ProxyPassword = Config.ProxyPassword
     End Sub
+
+    ''' <summary>
+    ''' Reduces a user-entered proxy address to the bare host WebProxy(String, Int32) expects.
+    ''' That overload prepends "http://" itself, so "http://1.2.3.4" used to become
+    ''' "http://http//1.2.3.4:port" — a host literally named "http" — and every request then
+    ''' failed with no hint that the field format was at fault. Surrounding whitespace and a
+    ''' trailing slash are also rejected by the Uri parser, so they are trimmed here too.
+    ''' Bracketed IPv6 ("[::1]") is preserved untouched.
+    ''' </summary>
+    Private Shared Function NormalizeProxyHost(ByVal value As String) As String
+        If String.IsNullOrEmpty(value) Then Return value
+        Dim host As String = value.Trim()
+        Dim schemeAt As Integer = host.IndexOf("://", StringComparison.Ordinal)
+        If schemeAt >= 0 Then host = host.Substring(schemeAt + 3)
+        Return host.Trim().TrimEnd("/"c, "\"c)
+    End Function
 
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest
         System.Net.ServicePointManager.SecurityProtocol = Net.SecurityProtocolType.Tls12

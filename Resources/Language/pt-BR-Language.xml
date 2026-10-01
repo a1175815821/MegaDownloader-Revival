@@ -22,7 +22,6 @@
     <Text key="Add link"><![CDATA[Adicionar link]]></Text>
     <Text key="Add links"><![CDATA[Adicionar links]]></Text>
     <Text key="Open"><![CDATA[Abrir]]></Text>
-    <Text key="Close"><![CDATA[Fechar]]></Text>
     <Text key="Configuration"><![CDATA[Configuração]]></Text>
     <Text key="See error"><![CDATA[Ver erro]]></Text>
     <Text key="See links"><![CDATA[Ver links]]></Text>
@@ -42,7 +41,6 @@
     <Text key="Hour"><![CDATA[Hora]]></Text>
     <Text key="Queued, error, completed"><![CDATA[Enfileirados, com erro e completados]]></Text>
     <Text key="active downloads"><![CDATA[downloads ativos]]></Text>
-    <Text key="Active downloads"><![CDATA[Downloads ativos]]></Text>
     <Text key="Error information"><![CDATA[Informação do Erro]]></Text>
     <Text key="New version available"><![CDATA[Nova versão disponível]]></Text>
     <Text key="New version do you want to download it? Recommended!"><![CDATA[Há uma nova versão do MegaDownloader. É recomendado atualizá-lo. Você quer atualizar?]]></Text>
@@ -238,7 +236,6 @@ Para abrir o VLC facilmente, insira o diretório do mesmo na parte 'Dir. do VLC'
     <Text key="Connection number values are incorrect or too high"><![CDATA[Valores de conexão são incorretos ou muito altos.]]></Text>
     <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[O período de tentativas deve ser especificado, e o valor deve ficar entre %A e %B.]]></Text>
     <Text key="Invalid proxy configuration"><![CDATA[Configurações de proxy inválidas.]]></Text>
-    <Text key="Invalid speed limit"><![CDATA[Limite de velocidade inválido.]]></Text>
     <Text key="Invalid server port"><![CDATA[A porta do servidor não é válida. Deve ser um valor entre 1024 e 65535 (recomenda-se entre 49152 e 65535).]]></Text>
     <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[O valor para interromper a sessão deve estar entre 0 e %A. Se o valor estiver 0, a sessão não será interrompida. ]]></Text>
     <Text key="The template path is not valid"><![CDATA[O diretório do template não é válido.]]></Text>
@@ -252,7 +249,6 @@ Mensagem: %ERROR%]]>
     <Text key="Download started"><![CDATA[Download começado com sucesso]]></Text>
     <Text key="Download stopped"><![CDATA[Download parado com sucesso]]></Text>
     <Text key="Invalid links"><![CDATA[Links inválidos]]></Text>
-    <Text key="Invalid package name"><![CDATA[Nome do pacote inválido]]></Text>
     <Text key="Links added successfully"><![CDATA[Links adicionados com sucesso]]></Text>
     <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Se o usuário e a senha não forem especificados, os downloads serão feitos anonimamente.]]></Text>
     <Text key="User and password is not used yet"><![CDATA[Neste momento, o usuário e a senha não são usados (se preferir, deixe em branco). Todos os downloads são feitos anonimamente. No futuro, esses campos podem ser usados.]]></Text>
@@ -351,7 +347,6 @@ Observação: A comunidade deve dar os dados da conta 'RCL' (URL, usuário, API-
     <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[Você também pode criar um arquivo RCL clicando em 'Salvar arquivo'.]]></Text>
     <Text key="Please select a valid ELC account"><![CDATA[Por favor, selecione uma conta RCL válida.]]></Text>
     <Text key="There is an ELC being processed, please wait"><![CDATA[Há um RCL sendo processado, por favor aguarde.]]></Text>
-    <Text key="Loading..."><![CDATA[Carregando...]]></Text>
     <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[Nenhuma conta RCL configurada. Acesse a página de Configurações e adicione uma conta RCL.]]></Text>
     <Text key="Save file"><![CDATA[Salvar arquivo]]></Text>
     <Text key="ELC file"><![CDATA[Arquivo RCL]]></Text>
@@ -375,4 +370,73 @@ Se você marcar outra conta como padrão, a conta anterior será desmarcada.]]>
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
     <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
     <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
-  </Language>
+  <Text key="&amp;Hide links inside an image"><![CDATA[&Ocultar links dentro de uma imagem]]></Text>
+  <Text key="&amp;Retrieve links from an image"><![CDATA[&Extrair links de uma imagem]]></Text>
+  <Text key="A web server password is required to allow LAN access"><![CDATA[É necessária uma senha do servidor web para permitir o acesso pela LAN.]]></Text>
+  <Text key="Add"><![CDATA[Adicionar]]></Text>
+  <Text key="AddLinks_CueBanner"><![CDATA[Cole os links do MEGA aqui, um por linha...]]></Text>
+  <Text key="AddLinks_LinkCount"><![CDATA[%N% link(s)]]></Text>
+  <Text key="Advice_Connection"><![CDATA[Erros de conexão. Tentando novamente automaticamente — nenhuma ação necessária.]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[O link está morto ou o acesso é proibido. Tentar novamente não ajudará — remova a tarefa.]]></Text>
+  <Text key="Advice_Quota"><![CDATA[Cota de transferência do MEGA esgotada. Os downloads serão retomados automaticamente; troque o IP ou o proxy e use "Tentar novamente agora" para continuar imediatamente.]]></Text>
+  <Text key="Allow LAN access"><![CDATA[Permitir acesso pela LAN]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[O arquivo está incompleto: falta um ou mais volumes.]]></Text>
+  <Text key="Bind IP (empty = all)"><![CDATA[Vincular IP (vazio = todos)]]></Text>
+  <Text key="Config_SearchHint"><![CDATA[Pesquisar configurações (proxy, tema, VLC...)]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[Não foi possível salvar a configuração. Verifique o espaço em disco e as permissões.]]></Text>
+  <Text key="Detail_Empty"><![CDATA[Selecione uma tarefa para ver os detalhes]]></Text>
+  <Text key="Detail_EmptyHint"><![CDATA[ou arraste links aqui / pressione Ctrl+V]]></Text>
+  <Text key="Detail_Path"><![CDATA[Caminho]]></Text>
+  <Text key="Detail_Title"><![CDATA[Detalhes]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[O formato DLC não é mais suportado (o serviço dcrypt.it foi descontinuado). Use arquivos .elc.]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC criado com sucesso.]]></Text>
+  <Text key="ELC file is empty"><![CDATA[O arquivo ELC está vazio.]]></Text>
+  <Text key="Folder_Reading"><![CDATA[Lendo a pasta, aguarde...]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[Lendo a pasta... %N% itens processados]]></Text>
+  <Text key="Hide links inside an image"><![CDATA[Ocultar links dentro de uma imagem]]></Text>
+  <Text key="Invalid input data"><![CDATA[Dados de entrada inválidos.]]></Text>
+  <Text key="Invalid IP address format"><![CDATA[Formato de endereço IP inválido]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[Gerenciar biblioteca de streaming]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[Falha no download]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[%N% tarefas falharam recentemente. Clique para revisar.]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[O pacote "%N%" terminou de baixar. Clique para visualizar.]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[Download concluído]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[Erro desconhecido. Verifique o log para detalhes.]]></Text>
+  <Text key="OLV_EmptyList"><![CDATA[Arraste links do MEGA para cá, ou copie um — o monitoramento da área de transferência captura]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[Apenas arquivos .elc e .dlc são suportados por arrastar e soltar.]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[Abrir &ELC]]></Text>
+  <Text key="Overview_Active"><![CDATA[Ativos]]></Text>
+  <Text key="Overview_Failed"><![CDATA[Falharam]]></Text>
+  <Text key="Overview_Progress"><![CDATA[Progresso da fila]]></Text>
+  <Text key="Overview_Queued"><![CDATA[Na fila]]></Text>
+  <Text key="Overview_Remaining"><![CDATA[Tempo restante]]></Text>
+  <Text key="Overview_Speed"><![CDATA[Velocidade total]]></Text>
+  <Text key="Overview_Title"><![CDATA[Visão geral de tarefas]]></Text>
+  <Text key="Quick_ExtractQueue"><![CDATA[Fila de extração]]></Text>
+  <Text key="Quick_Logs"><![CDATA[Logs]]></Text>
+  <Text key="Quick_StreamingLibrary"><![CDATA[Biblioteca de streaming]]></Text>
+  <Text key="Quick_Title"><![CDATA[Atalhos]]></Text>
+  <Text key="Quota_Banner"><![CDATA[Cota de transferência do MEGA excedida (sem tempo exato de recuperação). Pausado automaticamente, nova tentativa em %T%.]]></Text>
+  <Text key="Quota_Error"><![CDATA[Cota de transferência do MEGA excedida. Os downloads estão pausados e serão retomados automaticamente. Se você já trocou o IP ou o proxy, use "Tentar novamente agora".]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[Cota do MEGA recuperada, downloads retomados automaticamente.]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[Tentar novamente agora]]></Text>
+  <Text key="Quota_Status"><![CDATA[Cota: nova tentativa em %T%]]></Text>
+  <Text key="Remove all failed"><![CDATA[Remover todas com falha]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[Remover %N% item(ns) com falha da lista?]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[Excluir também os arquivos .part locais desses itens com falha?]]></Text>
+  <Text key="Reset column widths"><![CDATA[Redefinir larguras das colunas]]></Text>
+  <Text key="Retrieve links from an image"><![CDATA[Extrair links de uma imagem]]></Text>
+  <Text key="Retry all failed"><![CDATA[Repetir todas com falha]]></Text>
+  <Text key="See extraction queue"><![CDATA[Ver fila de extração]]></Text>
+  <Text key="Start"><![CDATA[Iniciar]]></Text>
+  <Text key="Stop"><![CDATA[Parar]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[Pacote adicionado: %N%]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[Muitas tentativas de login, tente novamente mais tarde.]]></Text>
+  <Text key="Update"><![CDATA[Atualizar]]></Text>
+  <Text key="Update prompt hint"><![CDATA[Sim = Atualizar agora / Não = Lembrar depois / Cancelar = Nunca lembrar desta versão]]></Text>
+  <Text key="URL is mandatory"><![CDATA[A URL é obrigatória.]]></Text>
+  <Text key="VLC could not be started"><![CDATA[Não foi possível iniciar o VLC. Verifique se o VLC está instalado e se o caminho dele está configurado.]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[O caminho do VLC não é válido.]]></Text>
+  <Text key="Warning"><![CDATA[Aviso]]></Text>
+  <Text key="Steganograph&amp;y"><![CDATA[Esteganogra&fia]]></Text>
+</Language>

@@ -6,11 +6,21 @@ Imports System.Text.RegularExpressions
 Public Class StreamingLibraryManager
 	
 	Private Shared _StreamingLibrary As StreamingLibrary
+	Private Shared ReadOnly _StreamingLibraryLock As New Object
 	
 	Public Shared Function StreamingLibrary() As StreamingLibrary
 		If _StreamingLibrary Is Nothing Then
-			_StreamingLibrary = New StreamingLibrary
-			_StreamingLibrary.LoadXML()
+			' First touch can come from concurrent HTTP threads; without this two instances
+			' get built and one is discarded, splitting a single operation across both.
+			SyncLock _StreamingLibraryLock
+				If _StreamingLibrary Is Nothing Then
+					Dim instance As New StreamingLibrary
+					instance.LoadXML()
+					' Publish only once fully loaded, so no other thread can observe a
+					' half-initialised instance.
+					_StreamingLibrary = instance
+				End If
+			End SyncLock
 		End If
 		Return _StreamingLibrary
 	End Function
@@ -46,7 +56,7 @@ Public Class StreamingLibraryManager
 		End If
 		
 		e.ID = StreamingLibrary.GetIDandIncrement.ToString
-		StreamingLibrary.Elements.Add(e)
+		StreamingLibrary.AddElement(e)
 		StreamingLibrary.SaveXML()
 		Return e
 	End Function
@@ -81,7 +91,7 @@ Public Class StreamingLibraryManager
 	Public Shared Sub RemoveElement(ID As String)
 		Dim l As IEnumerable(Of LibraryElement) = From e As LibraryElement In StreamingLibrary.Elements Where e.ID = ID
 		If l.Count > 0 Then
-			StreamingLibrary.Elements.Remove(l.ToArray(0))
+			StreamingLibrary.RemoveElement(l.ToArray(0))
 			StreamingLibrary.SaveXML()
 		End If
 	End Sub
@@ -154,7 +164,7 @@ Public Class StreamingLibraryManager
 					
 					ele.ID = StreamingLibrary.GetIDandIncrement.ToString()
 					ele.LastModification = Now
-					StreamingLibrary.Elements.Add(ele)
+					StreamingLibrary.AddElement(ele)
 					Imported += 1
 				Next
 				StreamingLibrary.SaveXML()
