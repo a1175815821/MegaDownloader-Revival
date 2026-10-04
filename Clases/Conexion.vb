@@ -343,6 +343,35 @@ Public Class Conexion
 
     Friend Const patternGetFileName As String = "MEGA.*?""n""\s*:\s*""(?<FileName>.*?)"""
 
+    ''' <summary>
+    ''' 从解密后的节点 attribute(形如 MEGA{"n":"文件名",...})中提取文件名。
+    ''' 旧正则遇到文件名含转义引号(\" )会提前截断,\uXXXX 也原样透出;
+    ''' 这里先走 JSON 解析(Newtonsoft 已引用),失败再回退历史正则,行为只增不减。
+    ''' 空/解析不出返回 Nothing,由调用方按原逻辑跳过或报错。
+    ''' </summary>
+    Friend Shared Function ExtractNameFromFileInfo(ByVal fileInfoDec As String) As String
+        If String.IsNullOrEmpty(fileInfoDec) Then Return Nothing
+        Try
+            Dim jsonStart As Integer = fileInfoDec.IndexOf("{"c)
+            If jsonStart >= 0 Then
+                Dim obj As Newtonsoft.Json.Linq.JObject = Newtonsoft.Json.Linq.JObject.Parse(fileInfoDec.Substring(jsonStart))
+                Dim n As Newtonsoft.Json.Linq.JToken = obj("n")
+                If n IsNot Nothing Then
+                    Dim name As String = CStr(n)
+                    If Not String.IsNullOrEmpty(name) Then Return name
+                End If
+            End If
+        Catch
+            ' 解析失败走下面的正则回退
+        End Try
+        Try
+            Dim ex As New System.Text.RegularExpressions.Regex(patternGetFileName)
+            If ex.IsMatch(fileInfoDec) Then Return ex.Match(fileInfoDec).Groups("FileName").Value
+        Catch
+        End Try
+        Return Nothing
+    End Function
+
     ''' <summary>v2.5 beta: 仅识别 API 配额语义(-17 / EOVERQUOTA),不做 "509" 文本匹配。</summary>
     Friend Shared Function IsQuotaErrorText(s As String) As Boolean
         If String.IsNullOrEmpty(s) Then Return False
@@ -471,10 +500,9 @@ Public Class Conexion
                 Return Info
             End If
 
-            Dim ex As New System.Text.RegularExpressions.Regex(patternGetFileName)
-            If ex.IsMatch(FileInfoDec) Then
-                Dim m As System.Text.RegularExpressions.Match = ex.Match(FileInfoDec)
-                Info.Nombre = m.Groups("FileName").Value
+            Dim nodeName As String = ExtractNameFromFileInfo(FileInfoDec)
+            If Not String.IsNullOrEmpty(nodeName) Then
+                Info.Nombre = nodeName
                 Info.URL = Download
                 Info.Tamano = 0
                 Long.TryParse(FileSize, Info.Tamano)

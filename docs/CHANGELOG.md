@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.5 | 2026-10-04 | 文件夹包命名修复(issue #4)；文件名转义解析；Dispose 清理 |
 | 2.5.4 | 2026-10-01 | 流媒体死循环根治；DPAPI 熵稳定不再随升级丢数据；9 语言补译 |
 | 2.5.3 | 2026-09-18 | 补丁版：下完误报失败、终结共享冲突、进度条叠字三连修 |
 | 2.5.2 | 2026-09-17 | 回归风险治理三批落地：依赖升级、落盘节流、锁替换、口令加固 |
@@ -107,6 +108,32 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.5] - 2026-10-04
+
+补丁版，一句话：**文件夹分享不再"吃"名字，多文件包不再被首个文件名"吞"进子目录**。
+
+### 🐛 文件夹分享与包命名修复(issue #4)
+
+([Main.vb](../Forms/Main.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb))
+
+- 多文件包(文件夹分享/批量添加且不填包名)不再取首个验完的文件名当包名建子目录——此前所有文件被搬进以一个文件名命名的文件夹，原相对子目录被拍平、留下空目录；只有单文件包保留按文件名命名
+- 单文件分支搬移时保留 `RutaRelativa`，`/file/单文件` 这类带子路径的不再被拍平
+- 文件夹首层子目录名丢失：`FillFolderStructure` 把根的直接子文件夹路径误置 `""`，文件被拍平到根；现在只有根自己置 `""`，`SubA/SubB` 完整保留（与递归分支语义对齐）
+
+### 🔧 文件名解析与资源释放
+
+([Conexion.vb](../Clases/Conexion.vb) / [Fichero.vb](../Clases/Fichero.vb))
+
+- 文件名提取改走 JSON 解析（新增 `ExtractNameFromFileInfo`，失败回退历史正则）：文件名含转义引号 `\"` 不再被截断，`\uXXXX` 正常解码；常规名字与原来逐字一致
+- `Fichero.Dispose` 去掉 `WorkerSupportsCancellation=False` 下必抛的 `CancelAsync` 调用（取消靠 `_StartupCancelled` 标志），关闭/释放不再刷异常日志
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.5.0`；`docs/version.xml` → `2.5.5.0`；README 当前版本 → v2.5.5（5 个翻译同步到 2.5.5）
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.5`
 
 ---
 

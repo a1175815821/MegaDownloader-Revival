@@ -1,9 +1,5 @@
 Public Class MegaFolderHelper
 
-    ' B3-⑧:文件名正则单例。大文件夹逐节点 New Regex(数千次),改共享 Compiled 实例。
-    ' Regex 实例读方法线程安全;原构造无 IgnoreCase,此处保持大小写敏感以保行为一致。
-    Private Shared ReadOnly rxFileName As New System.Text.RegularExpressions.Regex(Conexion.patternGetFileName, System.Text.RegularExpressions.RegexOptions.Compiled)
-
     Public Class FileListResponse
         Public e As String
         Public ok As Object
@@ -177,12 +173,9 @@ Public Class MegaFolderHelper
                     Continue For
                 End Try
 
-                Dim FolderName As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
+                Dim FolderName As String = Conexion.ExtractNameFromFileInfo(PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey))
 
-                If Not String.IsNullOrEmpty(FolderName) AndAlso rxFileName.IsMatch(FolderName) Then
-                    Dim m As System.Text.RegularExpressions.Match = rxFileName.Match(FolderName)
-                    FolderName = m.Groups("FileName").Value
-                Else
+                If String.IsNullOrEmpty(FolderName) Then
                     NoteSkipped(fileN.h, True, skippedFiles, skippedFolders, firstSkipped)
                     Continue For
                 End If
@@ -253,11 +246,9 @@ Public Class MegaFolderHelper
                     Continue For
                 End Try
 
-                Dim FileInfoDec As String = PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey)
+                Dim FileInfoDec As String = Conexion.ExtractNameFromFileInfo(PreSharedKeyManager.DecryptFileInfo(fileN.a, FileKey))
                 Try
-                    If Not String.IsNullOrEmpty(FileInfoDec) AndAlso rxFileName.IsMatch(FileInfoDec) Then
-                        Dim m As System.Text.RegularExpressions.Match = rxFileName.Match(FileInfoDec)
-                        FileInfoDec = m.Groups("FileName").Value
+                    If Not String.IsNullOrEmpty(FileInfoDec) Then
 
 
                         '' Ya tenemos el FileID y el FileKey
@@ -413,8 +404,15 @@ Public Class MegaFolderHelper
                 Dim progressed As Boolean = False
                 For Each nodeId As String In remaining.ToList()
                     Dim parent As String = unprocessed(nodeId).Value
-                    If String.IsNullOrEmpty(parent) OrElse parent = id Then
+                    If String.Equals(nodeId, id, StringComparison.Ordinal) Then
+                        ' 共享根自己:文件直挂其下时 path 为 "",不占名。
                         final(nodeId) = ""
+                        remaining.Remove(nodeId)
+                        progressed = True
+                    ElseIf String.IsNullOrEmpty(parent) OrElse parent = id Then
+                        ' 根的直接子文件夹:路径应为自己的名字(此前误置 "",
+                        ' 导致首层目录名丢失、文件被拍平到根)。
+                        final(nodeId) = PathGuard.SanitizeFileName(unprocessed(nodeId).Key, "folder")
                         remaining.Remove(nodeId)
                         progressed = True
                     ElseIf final.ContainsKey(parent) Then

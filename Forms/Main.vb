@@ -2839,23 +2839,56 @@ Public Class Main
                     End If
                 Next
                 If job.Fic.DescargaProcesada AndAlso job.Paq.PendienteNombrePaquete AndAlso canRename Then
+                    ' Issue #4: 多文件包(文件夹/批量)不得取首个文件名当包名建子目录,
+                    ' 否则"一个文件名变成文件夹,所有文件挤进去",且原相对子目录被拍平、留下空目录。
+                    ' 只有单文件包才保留历史行为(无名包按文件名命名)。
+                    Dim filesInPack As Integer = 0
+                    Try
+                        filesInPack = job.Paq.SnapshotFicheros().Count
+                    Catch
+                        filesInPack = 0
+                    End Try
                     job.Paq.PendienteNombrePaquete = False
-                    job.Paq.Nombre = job.Fic.ObtenerNombreSinExtension
-                    If job.Paq.CrearSubdirectorio Then
-                        Try
-                            job.Paq.RutaLocal = System.IO.Path.Combine(job.Paq.RutaLocal, job.Paq.Nombre)
-                            System.IO.Directory.CreateDirectory(job.Paq.RutaLocal)
-                            For Each fic As Fichero In job.Paq.SnapshotFicheros()
-                                If Not fic.DescargaComenzada Then
-                                    fic.RutaLocal = job.Paq.RutaLocal
-                                End If
-                            Next
-                        Catch ex As Exception
-                            Log.WriteError("Error while creating directory for package " & job.Paq.Nombre & ": " & ex.ToString)
-                            ' 后台线程(DoWork)不能直接弹窗:无属主窗体会藏到主窗体后面,用户会以为卡死。
-                            ' 走 SafeShowError 编组回 UI 线程显示
-                            SafeShowError("Error creating directory: " & ex.Message)
-                        End Try
+                    If filesInPack = 1 Then
+                        Dim singleName As String = job.Fic.ObtenerNombreSinExtension
+                        If String.IsNullOrEmpty(singleName) Then singleName = Language.GetText("New package")
+                        job.Paq.Nombre = singleName
+                        If job.Paq.CrearSubdirectorio Then
+                            Try
+                                job.Paq.RutaLocal = System.IO.Path.Combine(job.Paq.RutaLocal, job.Paq.Nombre)
+                                System.IO.Directory.CreateDirectory(job.Paq.RutaLocal)
+                                For Each fic As Fichero In job.Paq.SnapshotFicheros()
+                                    If Not fic.DescargaComenzada Then
+                                        Dim rel As String = If(fic.RutaRelativa, String.Empty)
+                                        If String.IsNullOrEmpty(rel) Then
+                                            fic.RutaLocal = job.Paq.RutaLocal
+                                        Else
+                                            Try
+                                                fic.RutaLocal = PathGuard.GetSafePathUnderRoot(job.Paq.RutaLocal, rel, allowRoot:=True)
+                                                System.IO.Directory.CreateDirectory(fic.RutaLocal)
+                                            Catch
+                                                fic.RutaLocal = job.Paq.RutaLocal
+                                            End Try
+                                        End If
+                                    End If
+                                Next
+                            Catch ex As Exception
+                                Log.WriteError("Error while creating directory for package " & job.Paq.Nombre & ": " & ex.ToString)
+                                ' 后台线程(DoWork)不能直接弹窗:无属主窗体会藏到主窗体后面,用户会以为卡死。
+                                ' 走 SafeShowError 编组回 UI 线程显示
+                                SafeShowError("Error creating directory: " & ex.Message)
+                            End Try
+                        End If
+                    Else
+                        ' 多文件包:包名不再跟随首个文件,文件保持 FinishAddPackage 时
+                        ' 已按 RutaRelativa 落好的位置,不再搬移/拍平。
+                        If String.IsNullOrEmpty(job.Paq.Nombre) Then
+                            Try
+                                job.Paq.Nombre = Language.GetText("New package")
+                            Catch
+                                job.Paq.Nombre = "New package"
+                            End Try
+                        End If
                     End If
                 End If
             Else

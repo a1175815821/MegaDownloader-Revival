@@ -915,7 +915,9 @@ Public Class Fichero
 				' resolution), RunWorkerCompleted never fires and the worker leaks.
 				Try
 					If Me.bgArranque IsNot Nothing Then
-						If Me.bgArranque.IsBusy Then Me.bgArranque.CancelAsync()
+						' bgArranque.WorkerSupportsCancellation=False,调 CancelAsync 必抛
+						' InvalidOperationException;取消靠入口处的 _StartupCancelled 标志,
+						' 这里只释放不取消。
 						Me.bgArranque.Dispose()
 						Me.bgArranque = Nothing
 					End If
