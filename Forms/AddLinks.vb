@@ -518,9 +518,28 @@ Public Class AddLinks
             .CrearSubdirectorio = chkCrearDirectorio.Checked
             .PendienteNombrePaquete = String.IsNullOrEmpty(txtNombre.Text)
 
+            ' 散装多文件(所有条目都无相对子目录)+勾选创建目录+包名空:自动用"新建包"
+            ' 建子目录,否则多文件无名包会直接散落下载目录(此前取首个文件名建目录即 issue #4)。
+            ' 文件夹分享(任一 Path 非空)保持现状,不额外套顶层;单文件走验名流程。
+            If .PendienteNombrePaquete AndAlso .CrearSubdirectorio AndAlso URLs2 IsNot Nothing AndAlso URLs2.Count > 1 Then
+                Dim allFlat As Boolean = True
+                For Each fu As URLProcessor.FileURL In URLs2
+                    If Not String.IsNullOrEmpty(fu.Path) Then
+                        allFlat = False
+                        Exit For
+                    End If
+                Next
+                If allFlat Then
+                    Dim autoName As String = Language.GetText("New package")
+                    If String.IsNullOrEmpty(autoName) Then autoName = "New package"
+                    .Nombre = autoName
+                    .PendienteNombrePaquete = False
+                End If
+            End If
+
             ' Creamos el directorio
-            If .CrearSubdirectorio And Not String.IsNullOrEmpty(txtNombre.Text) Then
-                Dim packageSegment As String = PathGuard.SanitizeFileName(txtNombre.Text, "package")
+            If .CrearSubdirectorio And Not String.IsNullOrEmpty(.Nombre) Then
+                Dim packageSegment As String = PathGuard.SanitizeFileName(.Nombre, "package")
                 .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
                 System.IO.Directory.CreateDirectory(.RutaLocal)
             End If

@@ -136,6 +136,7 @@ Ha megváltoztatod a beállítást "Automatikus kimásolás", akkor alkalmazni k
   <Text key="Turn off computer when finished"><![CDATA[PC kikapcsolása a befejezéskor]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Letöltés indítása a program indításakor]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[Hiba esetén mindent töltsön le újra]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Kvóta-áttörés mód (klasszikus újrapróbálkozás)]]></Text>
   <Text key="Important note about connections"><![CDATA[Kapcsolatok megjegyzése]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Egyidejű letöltések száma]]></Text>
   <Text key="Number of connections per file"><![CDATA[Egyidejű fájlkapcsolatok száma]]></Text>

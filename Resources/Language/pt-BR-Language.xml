@@ -140,6 +140,7 @@ Se você mudar a opção 'Extração automática', ela será aplicada para todos
     <Text key="Turn off computer when finished"><![CDATA[Desligar o PC quando terminar]]></Text>
     <Text key="Start downloading when application starts"><![CDATA[Começar a baixar quando abrir o aplicativo]]></Text>
     <Text key="In case of error, retry the download each"><![CDATA[Em caso de erro, baixar cada arquivo a cada]]></Text>
+    <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Superação de cota (repetição clássica)]]></Text>
     <Text key="Important note about connections"><![CDATA[Observação importante sobre conexões]]></Text>
     <Text key="Number of parallel downloads"><![CDATA[Número de downloads paralelos]]></Text>
     <Text key="Number of connections per file"><![CDATA[Número de conexões por arquivo]]></Text>

@@ -123,6 +123,7 @@ Do vous voulez le télécharger?]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Arrêter l'ordinateur une fois terminé]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Lancer le téléchargement au demarrage]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[En cas d'erreur, reprendre le téléchargement]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Contournement de quota (réessai classique)]]></Text>
   <Text key="Important note about connections"><![CDATA[Note importante sur les connexions]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Nombre de téléchargements simultanés]]></Text>
   <Text key="Number of connections per file"><![CDATA[Nombre de connexions par fichier]]></Text>

@@ -120,6 +120,7 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Computer ausschalten, wenn Sie fertig]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Starten Sie den Download, wenn die Anwendung startet]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[Im Falle eines Fehlers, wiederholen Sie den Download jedes]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Quota-Durchbruch-Modus (klassisch, Dauerretry)]]></Text>
   <Text key="Important note about connections"><![CDATA[Wichtiger Hinweis zu den Anschlüssen]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Anzahl der parallelen Downloads]]></Text>
   <Text key="Number of connections per file"><![CDATA[Anzahl der Verbindungen pro Datei]]></Text>

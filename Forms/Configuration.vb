@@ -185,6 +185,7 @@ Public Class Configuration
         End If
 
         chkReintentarError.Checked = Config.ResetearErrores
+        chkQuotaBreak.Checked = Config.QuotaBreakthroughMode
         If Config.ResetearErrores Then
             txtPeriodoReintento.Text = Config.ResetearErroresPeriodoMinutos.ToString
         End If
@@ -301,6 +302,7 @@ Public Class Configuration
         Me.Label12.Text = Language.GetText("minutes")
         Me.Label19.Text = Language.GetText("minutes")
         Me.chkReintentarError.Text = Language.GetText("In case of error, retry the download each")
+        Me.chkQuotaBreak.Text = Language.GetText("Quota breakthrough mode (legacy persistent retry)")
         Me.LinkLabel1.Text = Language.GetText("Important note about connections")
         Me.Label10.Text = Language.GetText("Number of parallel downloads") & ":"
         Me.Label9.Text = Language.GetText("Number of connections per file") & ":"
@@ -544,6 +546,7 @@ Public Class Configuration
         Config.ConexionesPorFichero = ConFic
         Config.DescargasSimultaneas = DescSim
         Config.ResetearErrores = chkReintentarError.Checked
+        Config.QuotaBreakthroughMode = chkQuotaBreak.Checked
         Config.ApagarPC = chkApagarPC.Checked
         Config.CheckUpdates = chkCheckUpdates.Checked
         Config.MantenerUltimaConfiguracion = chkUltimaConfig.Checked
@@ -614,6 +617,7 @@ Public Class Configuration
         End If
 
         Conexion.SetProxy(Config)
+        MegaQuotaManager.SetBreakthroughMode(Config.QuotaBreakthroughMode)
         Configuracion.RegisterInStartup(Config.IniciarConWindows)
 
         ' ③:同 Configuracion,全局限速 KB→B。

@@ -139,6 +139,7 @@
   <Text key="Turn off computer when finished"><![CDATA[任務完成後關閉電腦]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[執行本程式時開始下載]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[如有錯誤，重新嘗試下載每隔]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[配額突破模式（舊版持續重試）]]></Text>
   <Text key="Important note about connections"><![CDATA[連接的重要注意事項]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[同時下載的數量]]></Text>
   <Text key="Number of connections per file"><![CDATA[每個檔案的連線數]]></Text>

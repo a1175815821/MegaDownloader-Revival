@@ -39,8 +39,29 @@ Public NotInheritable Class MegaQuotaManager
     }
     Private Shared ReadOnly _levelDecay As TimeSpan = TimeSpan.FromHours(24)
 
+    ''' <summary>配额突破模式(旧版行为,可选,默认关):命中配额只记日志,不熔断不升级。
+    ''' 此时配额失败走普通瞬时错误链路(chunk 重连 -&gt; 30 次停 -&gt; 失败自愈按
+    ''' ResetearErrores 周期复活),即 v1.8 的持续重试。由设置界面开关,Config 持久化。</summary>
+    Private Shared _breakthroughMode As Boolean = False
+
+    Public Shared Sub SetBreakthroughMode(ByVal enabled As Boolean)
+        SyncLock _lock
+            If _breakthroughMode <> enabled Then
+                _breakthroughMode = enabled
+                Log.WriteWarning("MEGA quota breakthrough mode " & If(enabled, "enabled (no quarantine on 509/-17).", "disabled (circuit-breaker active)."))
+            End If
+        End SyncLock
+    End Sub
+
+    Public Shared Function IsBreakthroughMode() As Boolean
+        SyncLock _lock
+            Return _breakthroughMode
+        End SyncLock
+    End Function
+
     Public Shared Function IsQuarantined() As Boolean
         SyncLock _lock
+            If _breakthroughMode Then Return False
             If Not _quotaUntilUtc.HasValue Then Return False
             If DateTime.UtcNow >= _quotaUntilUtc.Value Then
                 _quotaUntilUtc = Nothing
@@ -52,6 +73,7 @@ Public NotInheritable Class MegaQuotaManager
 
     Public Shared Function GetRemaining() As TimeSpan?
         SyncLock _lock
+            If _breakthroughMode Then Return Nothing
             If Not _quotaUntilUtc.HasValue Then Return Nothing
             Dim remaining As TimeSpan = _quotaUntilUtc.Value - DateTime.UtcNow
             If remaining.TotalSeconds <= 0 Then
@@ -68,6 +90,8 @@ Public NotInheritable Class MegaQuotaManager
     ''' 也避免熔断期内自激延长导致"明明换 IP 能下却一直被中止"。</summary>
     Public Shared Sub ReportQuota(Optional hintSeconds As Long = 0)
         SyncLock _lock
+            ' 突破模式:只记不隔离,调用方走普通瞬时错误链(重连/自愈),不进熔断升级。
+            If _breakthroughMode Then Return
             Dim nowUtc As DateTime = DateTime.UtcNow
             ' 同一配额事件去重:已在熔断期内,不升级档位、不刷新 _lastHitUtc、不延长等待
             ' (hint 明确要求更久才延长)。_lastHitUtc 不刷新很关键,否则并发命中会把

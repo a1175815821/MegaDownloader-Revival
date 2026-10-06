@@ -31,7 +31,7 @@ MegaDownloader is a MEGA cloud storage download manager created by Spanish devel
 
 This repository is a project to revive it: we decompiled v1.8 to obtain the source code, and have since fixed and refactored it based on that foundation.
 
-**Current version: v2.5.5**. See [CHANGELOG](docs/CHANGELOG.md) for the complete change log.
+**Current version: v2.5.6**. See [CHANGELOG](docs/CHANGELOG.md) for the complete change log.
 
 > ⚠️ **Legal Notice**: This project is derived from the decompilation of third-party published software, with the sole purpose of fixing compatibility issues to restore its usability. If the original author believes this repository infringes upon their rights, please contact us via an Issue, and we will cooperate to resolve the matter.
 
@@ -90,6 +90,7 @@ mega://enc2?abcDEFgh-IjklMNop
 | Stegano | Encoding and decoding of images and videos using steganography |
 | Automatic Decompression | Based on SharpCompress; supports RAR / 7Z / ZIP |
 | Quota Circuit Breaker | Automatically pauses and displays a countdown when MEGA quota is exhausted; automatically resumes upon expiration (v2.5) |
+| Quota Breakthrough Mode | Optional legacy persistent retry on MEGA quota exhaustion instead of circuit-breaking; off by default (v2.5.6) |
 | Failure Self-Healing | Scheduled automatic retries for failed tasks; permanently failed tasks are automatically excluded (v2.5) |
 | Multilingual Interface | Supports 10 languages, expandable |
 | Dark/Light Themes | Follows system settings or can be switched manually; Auto mode adjusts in real time |

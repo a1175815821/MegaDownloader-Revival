@@ -186,6 +186,7 @@ If you change the option 'Automatic extraction', it will apply to all files in t
   <Text key="Turn off computer when finished"><![CDATA[Turn off computer when finished]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Start downloading when application starts]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[In case of error, retry the download each]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Quota breakthrough mode (legacy persistent retry)]]></Text>
   <Text key="Important note about connections"><![CDATA[Important note about connections]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Number of parallel downloads]]></Text>
   <Text key="Number of connections per file"><![CDATA[Number of connections per file]]></Text>

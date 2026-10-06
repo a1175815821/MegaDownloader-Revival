@@ -138,6 +138,7 @@ Dacă schimbi opțiunea de "extragere automată", se va aplica la toate fișiere
   <Text key="Turn off computer when finished"><![CDATA[Oprește computerul când termini]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Descărcă la pornirea aplicației]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[În caz de eroare, încercă din nou să descarci]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Depăşire cotă (reîncercare clasică)]]></Text>
   <Text key="Important note about connections"><![CDATA[Notă importantă despre conexiuni]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Numărul de descărcări paralele]]></Text>
   <Text key="Number of connections per file"><![CDATA[Numărul de conexiuni pe fișier]]></Text>

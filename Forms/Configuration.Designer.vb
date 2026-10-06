@@ -35,6 +35,7 @@ Partial Class Configuration
         Me.Label12 = New System.Windows.Forms.Label()
         Me.txtPeriodoReintento = New System.Windows.Forms.TextBox()
         Me.chkReintentarError = New System.Windows.Forms.CheckBox()
+        Me.chkQuotaBreak = New System.Windows.Forms.CheckBox()
         Me.LinkLabel1 = New System.Windows.Forms.LinkLabel()
         Me.txtDescSimult = New System.Windows.Forms.TextBox()
         Me.Label10 = New System.Windows.Forms.Label()
@@ -266,6 +267,17 @@ Partial Class Configuration
         Me.chkReintentarError.TabIndex = 5
         Me.chkReintentarError.Text = "En caso de error, reintentar la descarga cada"
         Me.chkReintentarError.UseVisualStyleBackColor = True
+        '
+        'chkQuotaBreak
+        '
+        Me.chkQuotaBreak.AutoSize = True
+        Me.chkQuotaBreak.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.chkQuotaBreak.Location = New System.Drawing.Point(9, 83)
+        Me.chkQuotaBreak.Name = "chkQuotaBreak"
+        Me.chkQuotaBreak.Size = New System.Drawing.Size(250, 17)
+        Me.chkQuotaBreak.TabIndex = 11
+        Me.chkQuotaBreak.Text = "Superar cuota (reintento clásico)"
+        Me.chkQuotaBreak.UseVisualStyleBackColor = True
         '
         'LinkLabel1
         '
@@ -574,6 +586,7 @@ Partial Class Configuration
         Me.ConexionGroup.Controls.Add(Me.Label10)
         Me.ConexionGroup.Controls.Add(Me.txtPeriodoReintento)
         Me.ConexionGroup.Controls.Add(Me.chkReintentarError)
+        Me.ConexionGroup.Controls.Add(Me.chkQuotaBreak)
         Me.ConexionGroup.Controls.Add(Me.Label9)
         Me.ConexionGroup.Controls.Add(Me.txtConFic)
         Me.ConexionGroup.Controls.Add(Me.txtDescSimult)
@@ -1312,6 +1325,7 @@ Partial Class Configuration
     Friend WithEvents Label12 As System.Windows.Forms.Label
     Friend WithEvents txtPeriodoReintento As System.Windows.Forms.TextBox
     Friend WithEvents chkReintentarError As System.Windows.Forms.CheckBox
+    Friend WithEvents chkQuotaBreak As System.Windows.Forms.CheckBox
     Friend WithEvents chkShowPassword As System.Windows.Forms.CheckBox
     Friend WithEvents txtProxyPort As System.Windows.Forms.TextBox
     Friend WithEvents Label14 As System.Windows.Forms.Label

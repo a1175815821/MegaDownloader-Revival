@@ -64,6 +64,10 @@ Public Class Fichero
 	Public EstadoDescarga As Estado
 	
 	Public MarcadoParaBorrarFicheroLocal As Boolean
+
+	''' <summary>删盘时顺带清理空目录用的包上下文(Eliminar 在 Stop 前写入,
+	''' DisposeFichero 在异步删盘后消费一次即清)。平时始终为 Nothing。</summary>
+	Public LimpiezaPaquete As Paquete = Nothing
 	
 	Private WithEvents Downloader As FileDownloader
 	
@@ -423,8 +427,9 @@ Public Class Fichero
 			AddHandler Me.Downloader.Completed, AddressOf downloader_Completed
 			AddHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
 			AddHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
-			AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
-			AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
+		AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
+		AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
+		AddHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
 
             Me.Downloader.setBufferAndPackageSize(worker.Config.TamanoBufferKB * 1024, worker.Config.TamanoPaqueteKB * 1024)
 
@@ -547,6 +552,22 @@ Public Class Fichero
 	
 	Private Sub downloader_FileLocalCreated(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		Me.EstadoDescarga = Estado.Descargando
+	End Sub
+
+	''' <summary>下载器落盘终名回写(重名时为 "name (2).ext" 这类真实名)。
+	''' 故意不取任何锁:事件在 FileDownloader.MutexFile 锁外同步触发,而
+	''' ActualizarDatosDescarga 的锁序是反方向(FicheroDownloader -&gt; 下载器内部锁),
+	''' 取锁即 AB-BA 死锁;字符串引用赋值原子,与其它 handler 直接赋值同规矩。</summary>
+	Private Sub downloader_FileRenamed(ByVal sender As System.Object, ByVal e As FileRenamedEventArgs)
+		Try
+			If e Is Nothing OrElse String.IsNullOrEmpty(e.FileName) Then Return
+			If Not String.Equals(Me.NombreFichero, e.FileName, StringComparison.Ordinal) Then
+				Log.WriteInfo("Final file name for " & Me.FileID & ": " & e.FileName)
+				Me.NombreFichero = e.FileName
+			End If
+		Catch ex As Exception
+			Log.WriteError("downloader_FileRenamed failed: " & Log.SafeException(ex))
+		End Try
 	End Sub
 	
 	Private Sub downloader_FileDownloadFailed(ByVal sender As System.Object, ByVal e As System.Exception)
@@ -684,8 +705,9 @@ Public Class Fichero
 				RemoveHandler Me.Downloader.Completed, AddressOf downloader_Completed
 				RemoveHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
 				RemoveHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
-				RemoveHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
-				RemoveHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
+			RemoveHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
+			RemoveHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
+			RemoveHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
 				
 				Me.Downloader.Dispose()
 				

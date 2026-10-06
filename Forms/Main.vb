@@ -903,7 +903,26 @@ Public Class Main
         Dim ColNombre As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(ListaDescargas.AllColumns(IndiceColumnaNombre))
         ColNombre.AspectGetter = Function(ele As IDescarga)
                                      If TypeOf ele Is Fichero Then
-                                         Return System.IO.Path.Combine(CType(ele, Fichero).RutaRelativa, ele.DescargaNombre)
+                                         Dim ficN As Fichero = CType(ele, Fichero)
+                                         Dim relN As String = If(ficN.RutaRelativa, String.Empty)
+                                         If Not ficN.DescargaProcesada Then
+                                             ' 验名前 NombreFichero 是整串 URL,先显示短 FileID,验完自动刷出真名
+                                             Dim fidN As String = ""
+                                             Try
+                                                 fidN = ficN.FileID
+                                             Catch
+                                                 fidN = ""
+                                             End Try
+                                             If Not String.IsNullOrEmpty(fidN) Then Return System.IO.Path.Combine(relN, fidN)
+                                         End If
+                                         Dim nmN As String = ""
+                                         Try
+                                             nmN = ele.DescargaNombre
+                                         Catch
+                                             nmN = ""
+                                         End Try
+                                         If String.IsNullOrEmpty(nmN) Then Return relN
+                                         Return System.IO.Path.Combine(relN, nmN)
                                      Else
                                          Return ele.DescargaNombre
                                      End If
@@ -2542,6 +2561,8 @@ Public Class Main
         ReordenarPrioridadPaquetes(True)
 
         GuardarFicheroDescargas()
+        ' 新包自动展开,否则列表永远只见"封装"行、文件名藏在里面需逐个点开。
+        ExpandPaquete(Paquete)
         ' P0-4 UI:任务入库后给一次非打断确认(之前只有日志,用户不知道"加上没")。
         ' Web 推送且主窗最小化时不弹(用户不在跟前,状态栏/托盘已有其它反馈位)。
         If Not (AgregadoDesdeServidorWeb AndAlso Me.WindowState = FormWindowState.Minimized) Then
@@ -2549,6 +2570,21 @@ Public Class Main
         End If
         If Not AgregadoDesdeServidorWeb Then RestaurarVentana()
    
+    End Sub
+
+    ''' <summary>在 UI 线程展开指定包(Web 推送走后台线程,必须编组;关闭中直接跳过)。</summary>
+    Private Sub ExpandPaquete(ByVal Paquete As Paquete)
+        Try
+            If Paquete Is Nothing OrElse Me.IsDisposed OrElse Not Me.IsHandleCreated Then Return
+            If ListaDescargas.InvokeRequired Then
+                Me.Invoke(New Action(Of Paquete)(AddressOf ExpandPaquete), Paquete)
+                Return
+            End If
+            If Me.IsDisposed OrElse ListaDescargas.IsDisposed Then Return
+            ListaDescargas.Expand(Paquete)
+        Catch ex As Exception
+            Log.WriteError("ExpandPaquete failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     ''' <summary>
@@ -3212,14 +3248,22 @@ Public Class Main
         quotaHoldPrev = quotaHold
 
         ' Reset de descargas erroneas
-        If ResetearErrores Then
+        ' 突破模式下配额失败项不依赖自愈开关(否则关掉自愈=突破模式静默失效);
+        ' 普通失败仍只跟自愈开关,用户关掉就不再碰。
+        If ResetearErrores OrElse MegaQuotaManager.IsBreakthroughMode() Then
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each Fichero As Fichero In paq.ListaFicheros
                         If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
                             If Fichero.FailedByQuota Then
-                                If Not quotaHold Then ColaReseteo.Add(Fichero)
-                            ElseIf Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then
+                                If MegaQuotaManager.IsBreakthroughMode() Then
+                                    ' 突破模式:无熔断,按普通失败的自愈节拍复活(旧版行为)。
+                                    ' 禁止紧循环:此前无时间门,每调度节拍复活一次,锤得比旧版凶数百倍。
+                                    If Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then ColaReseteo.Add(Fichero)
+                                ElseIf Not quotaHold Then
+                                    ColaReseteo.Add(Fichero)
+                                End If
+                            ElseIf ResetearErrores AndAlso (Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now) Then
                                 ColaReseteo.Add(Fichero)
                             End If
                         End If
@@ -3851,35 +3895,91 @@ Public Class Main
         If TypeOf (Objeto) Is Fichero Then
             Dim fic As Fichero = CType(Objeto, Fichero)
             Select Case Objeto.DescargaEstado
-                Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo
+                Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.CreandoLocal
                     AddHandler fic.CancellationComplete, AddressOf DisposeFichero
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
+                    If BorrarFicheros Then fic.LimpiezaPaquete = paqueteAEliminar
                     fic.Stop()
                     Log.WriteDebug("File download stopped " & fic.NombreFichero)
                 Case Else
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                     fic.BorrarFicheroLocal()
                     fic.Dispose()
+                    If BorrarFicheros Then LimpiarDirectoriosVacios(paqueteAEliminar, New Fichero() {fic})
             End Select
 
         ElseIf TypeOf (Objeto) Is Paquete Then
 
-            For Each fic As Fichero In CType(Objeto, Paquete).ListaFicheros
+            Dim paqObj As Paquete = CType(Objeto, Paquete)
+            Dim limpios As New Generic.List(Of Fichero)
+            For Each fic As Fichero In paqObj.ListaFicheros
                 Select Case fic.DescargaEstado
-                    Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo
+                    Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.CreandoLocal
                         AddHandler fic.CancellationComplete, AddressOf DisposeFichero
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
+                        If BorrarFicheros Then fic.LimpiezaPaquete = paqObj
                         fic.Stop()
                         Log.WriteDebug("File download stopped " & fic.NombreFichero)
                     Case Else
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                         fic.BorrarFicheroLocal()
                         fic.Dispose()
+                        If BorrarFicheros Then limpios.Add(fic)
                 End Select
             Next
-            CType(Objeto, Paquete).ListaFicheros.Clear()
+            If BorrarFicheros Then LimpiarDirectoriosVacios(paqObj, limpios)
+            paqObj.ListaFicheros.Clear()
         End If
 
+    End Sub
+
+    ''' <summary>删盘后顺手清理变空的目录:从各文件所在目录向上,空则删;
+    ''' 绝不越过包根;包根本身仅当 CrearSubdirectorio(程序自建)且已空才删,
+    ''' 用户自选下载目录(未建子目录)永远保留。只删空目录,有文件/子目录即停。</summary>
+    Private Sub LimpiarDirectoriosVacios(ByVal paquete As Paquete, ByVal ficheros As Generic.IEnumerable(Of Fichero))
+        Try
+            If paquete Is Nothing OrElse String.IsNullOrWhiteSpace(paquete.RutaLocal) Then Return
+            Dim sep As Char = System.IO.Path.DirectorySeparatorChar
+            Dim pkgRoot As String = System.IO.Path.GetFullPath(paquete.RutaLocal).TrimEnd(sep, System.IO.Path.AltDirectorySeparatorChar)
+            Dim dirs As New Generic.List(Of String)()
+            If ficheros IsNot Nothing Then
+                For Each f As Fichero In ficheros
+                    Try
+                        If f Is Nothing OrElse String.IsNullOrWhiteSpace(f.RutaLocal) Then Continue For
+                        Dim d As String = System.IO.Path.GetFullPath(f.RutaLocal).TrimEnd(sep, System.IO.Path.AltDirectorySeparatorChar)
+                        If d.Equals(pkgRoot, StringComparison.OrdinalIgnoreCase) OrElse d.StartsWith(pkgRoot & sep, StringComparison.OrdinalIgnoreCase) Then
+                            If Not dirs.Contains(d, StringComparer.OrdinalIgnoreCase) Then dirs.Add(d)
+                        End If
+                    Catch
+                    End Try
+                Next
+            End If
+            ' 深的先删,父目录随后变空才能继续删
+            dirs.Sort(New Comparison(Of String)(Function(x As String, y As String) y.Length.CompareTo(x.Length)))
+            For Each d As String In dirs
+                Try
+                    If Not d.Equals(pkgRoot, StringComparison.OrdinalIgnoreCase) AndAlso
+                       System.IO.Directory.Exists(d) AndAlso
+                       System.IO.Directory.GetFileSystemEntries(d).Length = 0 Then
+                        System.IO.Directory.Delete(d)
+                        Log.WriteInfo("Deleted empty directory: " & d)
+                    End If
+                Catch
+                End Try
+            Next
+            Try
+                If paquete.CrearSubdirectorio AndAlso
+                   System.IO.Directory.Exists(pkgRoot) AndAlso
+                   System.IO.Directory.GetFileSystemEntries(pkgRoot).Length = 0 Then
+                    System.IO.Directory.Delete(pkgRoot)
+                    Log.WriteInfo("Deleted empty package directory: " & pkgRoot)
+                End If
+            Catch ex As Exception
+                Log.WriteWarning("Could not delete empty package directory " & pkgRoot & ": " & Log.SafeException(ex))
+            End Try
+        Catch ex As Exception
+            Log.WriteWarning("LimpiarDirectoriosVacios failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Sub DisposeFichero(ByVal sender As System.Object, ByVal e As System.EventArgs)
@@ -3889,6 +3989,11 @@ Public Class Main
                 Log.WriteDebug("Download file stopped " & fic.NombreFichero & ", pending delete")
                 If fic.MarcadoParaBorrarFicheroLocal Then
                     fic.BorrarFicheroLocal()
+                End If
+                Dim paqLimpieza As Paquete = fic.LimpiezaPaquete
+                fic.LimpiezaPaquete = Nothing
+                If paqLimpieza IsNot Nothing Then
+                    LimpiarDirectoriosVacios(paqLimpieza, New Fichero() {fic})
                 End If
                 fic.Dispose()
             End If

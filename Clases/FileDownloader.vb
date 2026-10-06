@@ -410,6 +410,10 @@ Public Class FileDownloader
     Public Event FileDownloadStopped As EventHandler
     ''' <summary>Occurs when a file download has been completed successfully</summary>
     Public Event FileDownloadSucceeded As EventHandler
+    ''' <summary>Occurs when the .part file is renamed to its final name on disk.
+    ''' The final name may differ from the requested name ("name (2).ext" on collision, GUID after 9999 tries).
+    ''' Raised synchronously right after the rename, always before FileDownloadSucceeded.</summary>
+    Public Event FileRenamed(ByVal sender As Object, ByVal e As FileRenamedEventArgs)
     ''' <summary>Occurs when a file download has been completed unsuccessfully</summary>
     Public Event FileDownloadFailed(ByVal sender As Object, ByVal e As Exception)
     ''' <summary>Occurs when a chunk download has been completed unsuccessfully</summary>
@@ -742,9 +746,11 @@ Public Class FileDownloader
                     If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForEmpty) Then
                         Throw New ApplicationException("MEGA MetaMAC verification failed for empty file " & file.Name & ".")
                     End If
+                    Dim finalNameEmpty As String = ""
                     SyncLock MutexFile
-                        RenamePartToReal(FicheroPART, FicheroReal)
+                        finalNameEmpty = RenamePartToReal(FicheroPART, FicheroReal)
                     End SyncLock
+                    If Not String.IsNullOrEmpty(finalNameEmpty) Then RaiseEvent FileRenamed(Me, New FileRenamedEventArgs(finalNameEmpty))
                     Log.WriteWarning("File downloaded successfully")
                     fireEventFromBgw([Event].FileDownloadSucceeded)
                 Catch emptyEx As Exception
@@ -991,12 +997,14 @@ Public Class FileDownloader
                     End If
                 End If
 
+                Dim finalName As String = ""
                 SyncLock MutexFile
                     ' 重命名前关闭复用流：Windows 下打开中的文件无法 Rename，
                     ' 且关闭前已由每次 FlushToDisk 的 Flush(True) 保证落盘，语义不变。
                     ClosePartStream()
-                    RenamePartToReal(FicheroPART, FicheroReal)
+                    finalName = RenamePartToReal(FicheroPART, FicheroReal)
                 End SyncLock
+                If Not String.IsNullOrEmpty(finalName) Then RaiseEvent FileRenamed(Me, New FileRenamedEventArgs(finalName))
                 Log.WriteWarning("File downloaded successfully")
                 fireEventFromBgw([Event].FileDownloadSucceeded)
             End If
@@ -1024,50 +1032,54 @@ Public Class FileDownloader
     ''' <summary>
     ''' B1-③:把 FicheroPART 重命名为成品(含 "file (i)" 冲突消解),供正常终结与空文件短路共用。
     ''' 调用方必须已持有 Me.MutexFile(与原内联代码的加锁位置一致)。
+    ''' 返回终局文件名(非全路径,无事可做返回 "");调用方出锁后凭此 Raise FileRenamed。
     ''' </summary>
-    Private Sub RenamePartToReal(ByVal FicheroPART As String, ByVal FicheroReal As String)
-        If System.IO.File.Exists(FicheroPART) Then
+    Private Function RenamePartToReal(ByVal FicheroPART As String, ByVal FicheroReal As String) As String
+        If Not System.IO.File.Exists(FicheroPART) Then Return ""
 
-            If Not System.IO.File.Exists(FicheroReal) Then
-                Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal)
-                FileSystem.Rename(FicheroPART, FicheroReal)
-            Else
+        Dim finalReal As String = FicheroReal
+        If Not System.IO.File.Exists(FicheroReal) Then
+            Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal)
+            FileSystem.Rename(FicheroPART, FicheroReal)
+        Else
 
-                ' File exists, create someone like "file (2).txt"
+            ' File exists, create someone like "file (2).txt"
 
-                Dim extension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(FicheroReal.LastIndexOf("."c) + 1), "")
-                Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
+            Dim extension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(FicheroReal.LastIndexOf("."c) + 1), "")
+            Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
 
-                Dim i As Integer = 1
-                Dim renamed As Boolean = False
-                Do
-                    i += 1
-                    Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
-                    If Not System.IO.File.Exists(FicheroReal2) Then
-                        Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
-                        FileSystem.Rename(FicheroPART, FicheroReal2)
-                        renamed = True
-                        Exit Do
-                    End If
-
-                    If i > 9999 Then
-                        Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                        PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
-                        Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
-                        FileSystem.Rename(FicheroPART, uniqueName)
-                        renamed = True
-                        Exit Do
-                    End If
-                Loop
-                If Not renamed Then
-                    Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
+            Dim i As Integer = 1
+            Dim renamed As Boolean = False
+            Do
+                i += 1
+                Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
+                If Not System.IO.File.Exists(FicheroReal2) Then
+                    Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
+                    FileSystem.Rename(FicheroPART, FicheroReal2)
+                    finalReal = FicheroReal2
+                    renamed = True
+                    Exit Do
                 End If
 
+                If i > 9999 Then
+                    Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
+                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
+                    Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
+                    FileSystem.Rename(FicheroPART, uniqueName)
+                    finalReal = uniqueName
+                    renamed = True
+                    Exit Do
+                End If
+            Loop
+            If Not renamed Then
+                Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
             End If
 
         End If
-    End Sub
+
+        Return System.IO.Path.GetFileName(finalReal)
+    End Function
 
     Private Sub bwgDownloader_ProgressChanged(ByVal sender As Object, ByVal e As ProgressChangedEventArgs) Handles bgwDownloader.ProgressChanged
         Select Case CType(e.ProgressPercentage, InvokeType)
@@ -2119,3 +2131,12 @@ Public Class FileDownloader
 
 End Class
 #End Region
+
+''' <summary>Carries the final on-disk file name chosen by FileDownloader.RenamePartToReal.</summary>
+Public Class FileRenamedEventArgs
+    Inherits EventArgs
+    Public Sub New(ByVal fileName As String)
+        Me.FileName = fileName
+    End Sub
+    Public ReadOnly FileName As String
+End Class

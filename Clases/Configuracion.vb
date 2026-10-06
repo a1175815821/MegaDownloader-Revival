@@ -21,6 +21,7 @@ Public Class Configuracion
 		Me.ConfigUI = New ConfiguracionUI
 		CargaXML()
 		Conexion.SetProxy(Me)
+		MegaQuotaManager.SetBreakthroughMode(Me.QuotaBreakthroughMode)
 		' ③:MaximumBytesPerSecond 按字节限速,此处须 KB→B(×1024),否则 1MB/s 实得 1KB/s。
 		ThrottledStreamController.GetController.SetMaxGlobalSpeed(CLng(Me.LimiteVelocidadKBs) * 1024L)
 	End Sub
@@ -56,6 +57,9 @@ Public Class Configuracion
 	Public DescargasSimultaneas As Integer
 	
 	Public ResetearErrores As Boolean
+
+	''' <summary>配额突破模式(旧版行为):命中 509/-17 不熔断,走普通瞬时错误链持续重试。默认关。</summary>
+	Public QuotaBreakthroughMode As Boolean
 
 	''' <summary>v2.5 beta 一次性迁移:老配置的 ResetearErrores=False 翻为 True(15min)。True=已迁移,不再重复覆盖用户后续手动选择。</summary>
 	Public ResetearErroresMigratedV25 As Boolean
@@ -212,6 +216,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ConexionesPorFichero")).InnerText = ConexionesPorFichero.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("QuotaBreakthroughMode")).InnerText = QuotaBreakthroughMode.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresMigratedV25")).InnerText = ResetearErroresMigratedV25.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV26")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV25")).InnerText = ColumnUIDefaultsMigratedV26.ToString
@@ -389,6 +394,7 @@ Public Class Configuracion
 		AnalizarPortapapeles = False
 		'PermitirSkins = True
 		ResetearErrores = False
+		QuotaBreakthroughMode = False
 		UsarProxy = False
 		ApagarPC = False
         ComenzarDescargando = True
@@ -405,6 +411,7 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "AnalizarPortapapeles", "false"), AnalizarPortapapeles)
 		'Boolean.TryParse(LeerNodo(Xml, "PermitirSkins", "true"), PermitirSkins)
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "true"), ResetearErrores)
+		Boolean.TryParse(LeerNodo(Xml, "QuotaBreakthroughMode", "false"), QuotaBreakthroughMode)
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErroresMigratedV25", "false"), ResetearErroresMigratedV25)
 		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV26", "false"), ColumnUIDefaultsMigratedV26)
 		Dim migratedV25Alias As Boolean = False

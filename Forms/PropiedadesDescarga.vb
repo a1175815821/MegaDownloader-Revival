@@ -205,9 +205,26 @@ Public Class PropiedadesDescarga
         Else
             Dim p As Paquete = CType(_Descarga, Paquete)
 
+            Dim newRoot As String = txtRuta.Text
+            Dim rootChanged As Boolean = (newRoot <> p.RutaLocal)
+            If rootChanged Then
+                ' 无效路径直接拒收,不再把垃圾写进队列(文案沿用 AddLinks 的 Invalid directory)
+                Try
+                    System.IO.Directory.CreateDirectory(newRoot)
+                Catch ex As Exception
+                    MessageBox.Show(Language.GetText("Invalid directory"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                    Exit Sub
+                End Try
+            End If
             For Each f As Fichero In p.ListaFicheros
-                If txtRuta.Text <> f.RutaLocal And Not f.DescargaComenzada Then
-                    f.RutaLocal = txtRuta.Text
+                ' 仅包根真变了才搬移未开下文件,且按 RutaRelativa 保留相对结构;
+                ' 此前逐文件比 txtRuta <> f.RutaLocal,包内但凡有子目录、哪怕只改限速点确定也会被拍平到包根。
+                If rootChanged And Not f.DescargaComenzada Then
+                    Try
+                        f.RutaLocal = PathGuard.GetSafePathUnderRoot(newRoot, If(f.RutaRelativa, String.Empty), allowRoot:=True)
+                    Catch ex As Exception
+                        Log.WriteError("PropiedadesDescarga: invalid relocated path, keeping old one for " & f.FileID & ": " & Log.SafeException(ex))
+                    End Try
                 End If
                 If p.DescargaExtraccionAutomatica <> chkUnZip.Checked Then
                     f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked

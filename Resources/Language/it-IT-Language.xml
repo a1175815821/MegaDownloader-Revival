@@ -116,6 +116,7 @@
   <Text key="Turn off computer when finished"><![CDATA[Arresto PC automaticamente]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Avviare scaricare all'avvio dell'applicazione]]></Text>
   <Text key="In case of error, retry the download each"><![CDATA[In caso di errore, avviare il download di ogni]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Superamento quota (ripetizione classica)]]></Text>
   <Text key="Important note about connections"><![CDATA[Nota importante sulle connessioni]]></Text>
   <Text key="Number of parallel downloads"><![CDATA[Molti download simultanei]]></Text>
   <Text key="Number of connections per file"><![CDATA[Molte connessioni per file]]></Text>

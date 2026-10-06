@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.6 | 2026-10-06 | 配额突破模式回归；散装建目录；真名回写；删盘收空目录 |
 | 2.5.5 | 2026-10-04 | 文件夹包命名修复(issue #4)；文件名转义解析；Dispose 清理 |
 | 2.5.4 | 2026-10-01 | 流媒体死循环根治；DPAPI 熵稳定不再随升级丢数据；9 语言补译 |
 | 2.5.3 | 2026-09-18 | 补丁版：下完误报失败、终结共享冲突、进度条叠字三连修 |
@@ -108,6 +109,37 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.6] - 2026-10-06
+
+补丁版，一句话：**配额可选突破（旧版行为回归），散装多文件自动建"新建包"目录，删盘连空目录一起收**。
+
+### ✨ 配额突破模式(issue #5,可选,默认关)
+
+([MegaQuotaManager.vb](../Clases/MegaQuotaManager.vb) / [Configuracion.vb](../Clases/Configuracion.vb) / [Configuration.vb](../Forms/Configuration.vb))
+
+- 设置(连接组)新增"配额突破模式"复选框：打开后命中 509/-17 只记日志不熔断，配额失败走普通瞬时错误链（chunk 重连→停→失败自愈按周期复活），即 v1.8 的持续重试行为；横幅/倒计时不再出现
+- 突破模式下配额失败项按自愈周期复活（与普通失败同节拍，禁止紧循环），且不依赖自愈开关；普通失败仍只跟自愈开关
+- 熔断器其余语义不变，关闭即零行为变化；开关即时生效且持久化到配置，10 语言文案同步
+
+### 🐛 下载列表与落盘修复
+
+([AddLinks.vb](../Forms/AddLinks.vb) / [FileDownloader.vb](../Clases/FileDownloader.vb) / [Fichero.vb](../Clases/Fichero.vb) / [Main.vb](../Forms/Main.vb) / [PropiedadesDescarga.vb](../Forms/PropiedadesDescarga.vb))
+
+- 散装多文件（无相对子目录）+ 勾选创建目录 + 包名空：自动用"新建包"建子目录；文件夹分享、单文件、填名三条路径不动
+- 下载完成真名回写：新增 `FileRenamed` 事件，重名 `name (2).ext` 落盘后回写队列，删盘/MD5/解压拿到的都是真名；此前删的是原名（删错或删空）
+- 删除补 `CreandoLocal` 进异步分支：起步期删除不再因句柄占用失败
+- 新包自动展开，列表不再只见"封装"行；验名前显示短 FileID 而非整串 URL
+- 包属性框改路径时保留相对子目录（此前点确定即拍平）；无效路径拒收
+- 删盘后顺手清理变空的子目录与包目录（仅空目录、封顶包根、用户自选目录永保；只删列表不动盘）
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.6.0`；`docs/version.xml` → `2.5.6.0`；README 当前版本 → v2.5.6（5 个翻译同步）
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.6`
+- README 特性表 6 语言同步新增"配额突破模式"行
 
 ---
 
