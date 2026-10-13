@@ -365,6 +365,8 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[要為下列 ELC 帳戶匯入設定嗎？]]></Text>
   <Text key="ELC created successfully"><![CDATA[ELC 建立成功。]]></Text>
   <Text key="ELC file is empty"><![CDATA[ELC 檔案是空的。]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[讀取共用資料夾時 MEGA 傳回了無法識別的回應，連結可能已刪除、私有或金鑰錯誤，請先確認該連結在瀏覽器裡能正常開啟。技術細節：%DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[讀取共用資料夾時連不上 MEGA（網路錯誤）。請檢查網路、防火牆/VPN/Proxy 設定後重試；如所在地區限制 mega.nz，請在「設定」裡設定 Proxy 或使用 VPN，並確認瀏覽器能開啟 https://mega.nz 。技術細節：%DETAIL%]]></Text>
   <Text key="Folder_Reading"><![CDATA[正在讀取資料夾，請稍候...]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[正在讀取資料夾…已解析 %N% 個項目]]></Text>
   <Text key="Hide links inside an image"><![CDATA[在圖片中隱藏連結]]></Text>

@@ -464,5 +464,7 @@ B 是同行下载数。]]></Text>
   <Text key="Advice_Quota"><![CDATA[MEGA 传输配额用尽，稍后自动恢复；换 IP 或代理后点“立即重试”可马上继续。]]></Text>
   <Text key="Advice_Permanent"><![CDATA[链接已失效或被禁止，重试也无法恢复，建议删除该任务。]]></Text>
   <Text key="Advice_Connection"><![CDATA[连接出错，正在自动重试，无需操作。]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[读取共享文件夹时连不上 MEGA（网络错误）。请检查网络、防火墙/VPN/代理设置后重试；如所在地区限制 mega.nz，请在“设置”里配置代理或使用 VPN，并确认浏览器能打开 https://mega.nz 。技术细节：%DETAIL%]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[读取共享文件夹时 MEGA 返回了无法识别的响应，链接可能已删除、私有或密钥错误，请先确认该链接在浏览器里能正常打开。技术细节：%DETAIL%]]></Text>
   <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[要为以下 ELC 账户导入配置吗？]]></Text>
 </Language>

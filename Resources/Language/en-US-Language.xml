@@ -530,4 +530,6 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Advice_Quota"><![CDATA[MEGA transfer quota exhausted. Downloads will resume automatically; change IP or proxy and use Retry now to continue immediately.]]></Text>
   <Text key="Advice_Permanent"><![CDATA[The link is dead or access is forbidden. Retrying will not help — remove the task.]]></Text>
   <Text key="Advice_Connection"><![CDATA[Connection errors. Retrying automatically — no action needed.]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Cannot connect to MEGA to read the shared folder (network error). Check your internet connection, firewall/VPN/proxy, and try again. If mega.nz is restricted in your region, configure a proxy in Configuration or use a VPN, and make sure https://mega.nz opens in your browser. Technical detail: %DETAIL%]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA returned an unexpected response while reading the shared folder. The link may have been deleted, is private, or the key is wrong. Please verify the link opens in your browser. Technical detail: %DETAIL%]]></Text>
 </Language>

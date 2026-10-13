@@ -52,7 +52,14 @@ Public Class MegaFolderHelper
                 MegaQuotaManager.ReportQuota(If(hint.HasValue, hint.Value, 0))
                 Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (HTTP 509) while reading folder.")
             End If
-            Throw New ApplicationException("Error getting file list from shared folder - " & res.Excepcion.ToString)
+            ' Network failures (TCP connect timeout, DNS pollution/hijack, firewall/VPN/proxy)
+            ' happen before any MEGA API logic runs. Keep the technical detail in the log
+            ' and show the user an actionable message instead of a raw stack trace (issue #6).
+            Log.WriteError("RetrieveLinksFromFolder: network failure contacting MEGA API (g.api.mega.co.nz) - " & Log.SafeException(res.Excepcion) & If(res.Excepcion.InnerException IsNot Nothing, " | Inner: " & Log.SafeException(res.Excepcion.InnerException), String.Empty))
+            If IsFolderNetworkError(res.Excepcion) Then
+                Throw New ApplicationException(GetFolderNetworkErrorMessage(res.Excepcion))
+            End If
+            Throw New ApplicationException("Error getting file list from shared folder - " & Log.SafeException(res.Excepcion))
         End If
 
         ' MEGA reports API errors as a bracketed array ("[-9]", "[-17]"), so the brackets
@@ -79,7 +86,7 @@ Public Class MegaFolderHelper
                                                           FileListResponse)
         Catch ex As Exception
             Log.WriteError("RetrieveLinksFromFolder: invalid folder response: " & Log.SafeException(ex))
-            Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
+            Throw New ApplicationException(GetFolderInvalidResponseMessage(Log.SafeException(ex)))
         End Try
         If FileList Is Nothing OrElse FileList.f Is Nothing Then
             If FileList IsNot Nothing AndAlso Conexion.IsQuotaErrorText(FileList.e) Then
@@ -87,7 +94,7 @@ Public Class MegaFolderHelper
                 Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA) while reading folder.")
             End If
             Log.WriteError("RetrieveLinksFromFolder: empty file list in server response.")
-            Throw New ApplicationException("Error getting file list from shared folder - invalid server response.")
+            Throw New ApplicationException(GetFolderInvalidResponseMessage(String.Empty))
         End If
 
         Dim Results As New Generic.List(Of URLProcessor.FileURL)
@@ -392,6 +399,60 @@ Public Class MegaFolderHelper
             ' 单个 handle:key 对
             Return kField.Substring(kField.IndexOf(":"c) + 1)
         End If
+    End Function
+
+    ' Issue #6: distinguish transport failures (TCP/DNS/firewall/VPN/proxy, including
+    ' DNS pollution that resolves the MEGA API host to a non-MEGA IP and then times out
+    ' on 443) from real API errors. Transport failures get an actionable message;
+    ' everything else keeps a short one-line technical hint instead of a full stack trace.
+    Private Shared Function IsFolderNetworkError(ByVal ex As Exception) As Boolean
+        Dim current As Exception = ex
+        Dim guard As Integer = 0
+        While current IsNot Nothing AndAlso guard < 6
+            If TypeOf current Is System.Net.Sockets.SocketException Then Return True
+            If TypeOf current Is System.IO.IOException Then Return True
+            If TypeOf current Is TimeoutException Then Return True
+            Dim wex As System.Net.WebException = TryCast(current, System.Net.WebException)
+            If wex IsNot Nothing Then
+                Select Case wex.Status
+                    Case System.Net.WebExceptionStatus.ConnectFailure, System.Net.WebExceptionStatus.Timeout, System.Net.WebExceptionStatus.NameResolutionFailure, System.Net.WebExceptionStatus.ReceiveFailure, System.Net.WebExceptionStatus.SendFailure, System.Net.WebExceptionStatus.KeepAliveFailure, System.Net.WebExceptionStatus.PipelineFailure, System.Net.WebExceptionStatus.SecureChannelFailure, System.Net.WebExceptionStatus.TrustFailure
+                        Return True
+                End Select
+            End If
+            current = current.InnerException
+            guard += 1
+        End While
+        Return False
+    End Function
+
+    Private Shared Function GetFolderNetworkErrorMessage(ByVal ex As Exception) As String
+        Dim template As String = Language.GetText("Folder_NetworkError")
+        If String.IsNullOrEmpty(template) OrElse template = "Folder_NetworkError" Then
+            template = "Cannot connect to MEGA to read the shared folder (network error)." &
+                vbCrLf & "Check your internet connection, firewall/VPN/proxy, and try again." &
+                " If mega.nz is restricted in your region, configure a proxy in Configuration or use a VPN," &
+                " and make sure https://mega.nz opens in your browser." &
+                vbCrLf & "Technical detail: %DETAIL%"
+        End If
+        ' Outer WebException message alone ("unable to connect") hides the useful part
+        ' (inner SocketException carries the failed IP:port, e.g. a polluted non-MEGA IP).
+        Dim detail As String = Log.SafeException(ex)
+        If ex IsNot Nothing AndAlso ex.InnerException IsNot Nothing Then
+            detail &= " (" & Log.SafeException(ex.InnerException) & ")"
+        End If
+        Return template.Replace("%DETAIL%", detail)
+    End Function
+
+    Private Shared Function GetFolderInvalidResponseMessage(ByVal detail As String) As String
+        Dim template As String = Language.GetText("Folder_InvalidResponse")
+        If String.IsNullOrEmpty(template) OrElse template = "Folder_InvalidResponse" Then
+            template = "MEGA returned an unexpected response while reading the shared folder." &
+                " The link may have been deleted, is private, or the key is wrong." &
+                " Please verify the link opens in your browser." &
+                vbCrLf & "Technical detail: %DETAIL%"
+        End If
+        If String.IsNullOrEmpty(detail) Then detail = "invalid server response"
+        Return template.Replace("%DETAIL%", detail)
     End Function
 
     Private Shared Sub FillFolderStructure(id As String, final As Generic.Dictionary(Of String, String), unprocessed As Generic.Dictionary(Of String, KeyValuePair(Of String, String)))
