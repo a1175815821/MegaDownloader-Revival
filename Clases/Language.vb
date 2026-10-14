@@ -96,10 +96,20 @@ Public Class Language
         Dim XMLDiskFile As String = Path.Combine(LangPath, culture.Name & ".xml")
         If IO.File.Exists(XMLDiskFile) Then
             Dim xmlIdioma As New XmlDocument
-            xmlIdioma.Load(XMLDiskFile)
-            LanguageFileDisk = xmlIdioma
+            ' N-P2-2: a corrupted/truncated user language file (killed mid-seed, manual
+            ' edit with a syntax error) used to throw XmlException out of InitLanguage,
+            ' which is called from Main_Load without a Try — the app then kept running
+            ' with no main window and no error dialog (MyApplication_UnhandledException
+            ' sets ExitApplication = False). Fall back to the built-in pack instead.
+            Try
+                xmlIdioma.Load(XMLDiskFile)
+                LanguageFileDisk = xmlIdioma
 
-            Log.WriteDebug("LanguageFileDisk loaded from disk: " & LanguageFileDisk.DocumentElement.Attributes("id").Value)
+                Log.WriteDebug("LanguageFileDisk loaded from disk: " & LanguageFileDisk.DocumentElement.Attributes("id").Value)
+            Catch ex As Exception
+                Log.WriteError("User language file '" & XMLDiskFile & "' could not be loaded (" & Log.SafeException(ex) & "); using the built-in language pack.")
+                LanguageFileDisk = LanguageFileInternal
+            End Try
         Else
             LanguageFileDisk = LanguageFileInternal
 

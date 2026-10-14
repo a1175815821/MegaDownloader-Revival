@@ -323,6 +323,7 @@ B 是同行下载数。]]></Text>
   <Text key="Do you want to delete this account?"><![CDATA[你是否确定要删除这个帐号？]]></Text>
   <Text key="Account could not be deleted"><![CDATA[帐号无法被删除。]]></Text>
   <Text key="Account not found"><![CDATA[找不到帐号]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[你正在录入一个新帐号，尚未保存。要放弃输入并载入所选帐号吗？]]></Text>
   <Text key="Delete"><![CDATA[删除]]></Text>
   <Text key="Modify"><![CDATA[修改]]></Text>
   <Text key="Alias"><![CDATA[昵称]]></Text>
@@ -449,6 +450,7 @@ B 是同行下载数。]]></Text>
   <Text key="Quota_RetryNow"><![CDATA[立即重试]]></Text>
   <Text key="Quota_Recovered"><![CDATA[MEGA 配额已恢复，下载已自动继续。]]></Text>
   <Text key="Quota_Error"><![CDATA[MEGA 配额已用尽，下载已自动暂停并将在配额恢复后自动继续。如已更换 IP 或代理，可点“立即重试”。]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[读取共享文件夹时命中 MEGA 传输配额（HTTP 509 / -17）。当前为“配额突破模式”：队列不会自动暂停，请更换 IP 或代理后重试。]]></Text>
   <Text key="Retry all failed"><![CDATA[重试全部失败项]]></Text>
   <Text key="Remove all failed"><![CDATA[移除全部失败项]]></Text>
   <Text key="Remove all failed confirm"><![CDATA[确定从列表移除 %N% 个失败项吗？]]></Text>
@@ -466,5 +468,7 @@ B 是同行下载数。]]></Text>
   <Text key="Advice_Connection"><![CDATA[连接出错，正在自动重试，无需操作。]]></Text>
   <Text key="Folder_NetworkError"><![CDATA[读取共享文件夹时连不上 MEGA（网络错误）。请检查网络、防火墙/VPN/代理设置后重试；如所在地区限制 mega.nz，请在“设置”里配置代理或使用 VPN，并确认浏览器能打开 https://mega.nz 。技术细节：%DETAIL%]]></Text>
   <Text key="Folder_InvalidResponse"><![CDATA[读取共享文件夹时 MEGA 返回了无法识别的响应，链接可能已删除、私有或密钥错误，请先确认该链接在浏览器里能正常打开。技术细节：%DETAIL%]]></Text>
+  <Text key="Network_Error"><![CDATA[无法连接服务器（网络错误）。请检查网络、防火墙/VPN/代理设置后重试；如所在地区限制该服务，请在“设置”里配置代理或使用 VPN。技术细节：%DETAIL%]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[无法解析短链接，它可能已失效，或者当前网络不可达。]]></Text>
   <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[要为以下 ELC 账户导入配置吗？]]></Text>
 </Language>

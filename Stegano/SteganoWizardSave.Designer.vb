@@ -140,6 +140,7 @@
             '
             'btImageInput
             '
+            Me.btImageInput.AllowDrop = True ' R-P4-2: 输入框/浏览钮接拖拽(与输出侧对称)
             Me.btImageInput.Location = New System.Drawing.Point(391, 116)
             Me.btImageInput.Name = "btImageInput"
             Me.btImageInput.Size = New System.Drawing.Size(85, 23)
@@ -149,6 +150,7 @@
             '
             'txtImageInput
             '
+            Me.txtImageInput.AllowDrop = True ' R-P4-2: 输入框/浏览钮接拖拽(与输出侧对称)
             Me.txtImageInput.Location = New System.Drawing.Point(15, 118)
             Me.txtImageInput.Name = "txtImageInput"
             Me.txtImageInput.Size = New System.Drawing.Size(370, 20)

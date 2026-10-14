@@ -196,6 +196,23 @@ Public Class PropiedadesDescarga
         If TypeOf (_Descarga) Is Fichero Then
             Dim f As Fichero = CType(_Descarga, Fichero)
             If txtRuta.Text <> f.RutaLocal And Not f.DescargaComenzada Then
+                ' N-P2-4: the package branch below validates the path (CreateDirectory
+                ' with a friendly "Invalid directory" error); the single-file branch
+                ' accepted anything — including an emptied box — and the download only
+                ' failed later with a cryptic IO exception. Align both branches.
+                If String.IsNullOrWhiteSpace(txtRuta.Text) Then
+                    MessageBox.Show(Language.GetText("Invalid directory"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                    Exit Sub
+                End If
+                Try
+                    If Not System.IO.Directory.Exists(txtRuta.Text) Then
+                        System.IO.Directory.CreateDirectory(txtRuta.Text)
+                    End If
+                Catch ex As Exception
+                    Log.WriteError("PropiedadesDescarga: invalid single-file path: " & Log.SafeException(ex))
+                    MessageBox.Show(Language.GetText("Invalid directory"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                    Exit Sub
+                End Try
                 f.RutaLocal = txtRuta.Text
             End If
             f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked

@@ -30,27 +30,39 @@ Namespace Stegano
             req.ReadWriteTimeout = 60000
             req.AllowAutoRedirect = True
             req.MaximumAutomaticRedirections = 5
-            Using resp As Net.HttpWebResponse = CType(req.GetResponse(), Net.HttpWebResponse)
-                If resp.ContentLength > MaxRemoteImageBytes Then
-                    Throw New ApplicationException("Remote image is too large (over 64 MB).")
-                End If
-                Using src As IO.Stream = resp.GetResponseStream()
-                    Using mem As New IO.MemoryStream()
-                        Dim buf(81919) As Byte
-                        Dim total As Long = 0
-                        While True
-                            Dim n As Integer = src.Read(buf, 0, buf.Length)
-                            If n <= 0 Then Exit While
-                            total += CLng(n)
-                            If total > MaxRemoteImageBytes Then
-                                Throw New ApplicationException("Remote image is too large (over 64 MB).")
-                            End If
-                            mem.Write(buf, 0, n)
-                        End While
-                        Return mem.ToArray()
+            ' issue #6: transport failures (no internet, DNS, firewall/VPN/proxy,
+            ' timeout) become an actionable ApplicationException — the wizard's
+            ' ApplicationException branch shows it as a warning. API-level
+            ' failures (404 etc.) keep their original message.
+            Try
+                Using resp As Net.HttpWebResponse = CType(req.GetResponse(), Net.HttpWebResponse)
+                    If resp.ContentLength > MaxRemoteImageBytes Then
+                        Throw New ApplicationException("Remote image is too large (over 64 MB).")
+                    End If
+                    Using src As IO.Stream = resp.GetResponseStream()
+                        Using mem As New IO.MemoryStream()
+                            Dim buf(81919) As Byte
+                            Dim total As Long = 0
+                            While True
+                                Dim n As Integer = src.Read(buf, 0, buf.Length)
+                                If n <= 0 Then Exit While
+                                total += CLng(n)
+                                If total > MaxRemoteImageBytes Then
+                                    Throw New ApplicationException("Remote image is too large (over 64 MB).")
+                                End If
+                                mem.Write(buf, 0, n)
+                            End While
+                            Return mem.ToArray()
+                        End Using
                     End Using
                 End Using
-            End Using
+            Catch ex As Exception
+                If NetworkErrors.IsTransportError(ex) Then
+                    Log.WriteError("DownloadImageBytes: transport failure for [" & url & "] - " & Log.SafeException(ex))
+                    Throw New ApplicationException(NetworkErrors.DescribeTransportError(ex), ex)
+                End If
+                Throw
+            End Try
         End Function
 
         Public Function CreateImage(Text As String, Input As String, Output As String, Quality As Integer, Password As String) As Boolean
@@ -70,6 +82,14 @@ Namespace Stegano
 
             Try
                 If System.IO.File.Exists(Input) Then
+                    ' R-P4-1: a direct local path used to bypass the 64 MB cap that the
+                    ' URL / file:// branches enforce — a huge image went fully into
+                    ' memory (ReadAllBytes) and then through JPEG decode + re-encode,
+                    ' an easy OOM. Same limit, same shape as DownloadImageBytes.
+                    Dim fi As New IO.FileInfo(Input)
+                    If fi.Length > MaxRemoteImageBytes Then
+                        Throw New ApplicationException("Image file is too large (over 64 MB).")
+                    End If
                     ' Load file into memory first so the source file is not locked and
                     ' the backing stream stays open for the Image lifetime (FromStream requires it)
                     Dim fileBytes As Byte() = File.ReadAllBytes(Input)

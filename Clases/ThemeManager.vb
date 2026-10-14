@@ -174,20 +174,31 @@ Public NotInheritable Class ThemeManager
 
     Private Shared Sub OnUserPreferenceChanged(sender As Object, e As UserPreferenceChangedEventArgs)
         If _currentMode <> ConfiguracionUI.ThemeModeType.Auto Then Return
-        If e.Category <> UserPreferenceCategory.General AndAlso e.Category <> UserPreferenceCategory.Color Then Return
+        If e.Category <> UserPreferenceCategory.Color AndAlso e.Category <> UserPreferenceCategory.General Then Return
         Dim nextTheme As ResolvedTheme = Resolve(ConfiguracionUI.ThemeModeType.Auto)
         If nextTheme = _current Then Return
         Try
             For Each form As Form In Application.OpenForms.Cast(Of Form)().ToList()
-                If form.IsHandleCreated AndAlso Not form.IsDisposed Then
-                    If form.InvokeRequired Then
-                        form.BeginInvoke(New Action(Of Form)(AddressOf RefreshFormThemeSafe), form)
-                    Else
-                        RefreshFormThemeSafe(form)
+                ' N-P3-2: per-form guard. The loop body used to throw straight into the
+                ' outer empty Catch (e.g. InvalidOperationException from BeginInvoke when
+                ' a form's handle died between the IsHandleCreated check and the call),
+                ' aborting the whole refresh so the remaining windows kept the old
+                ' colors — light and dark mixed on screen after a system theme switch.
+                ' One bad form must not skip the rest.
+                Try
+                    If form.IsHandleCreated AndAlso Not form.IsDisposed Then
+                        If form.InvokeRequired Then
+                            form.BeginInvoke(New Action(Of Form)(AddressOf RefreshFormThemeSafe), form)
+                        Else
+                            RefreshFormThemeSafe(form)
+                        End If
                     End If
-                End If
+                Catch exForm As Exception
+                    Log.WriteDebug("ThemeManager: one form could not be refreshed, continuing with the rest: " & Log.SafeException(exForm))
+                End Try
             Next
-        Catch
+        Catch ex As Exception
+            Log.WriteDebug("ThemeManager: system theme change sweep failed: " & Log.SafeException(ex))
         End Try
     End Sub
 
@@ -236,7 +247,9 @@ Public NotInheritable Class ThemeManager
         End Try
     End Sub
 
-    Private Shared ReadOnly _themedToolTips As New Generic.HashSet(Of ToolTip)
+    ''' N-P3-3: WEAK registry — see ApplyThemeToToolTip. A strong HashSet(Of ToolTip)
+    ''' here rooted every themed tooltip for the process lifetime.
+    Private Shared ReadOnly _themedToolTips As New Generic.HashSet(Of WeakReference)
 
     ''' <summary>主题化单个 ToolTip(含懒创建)。字段扫描扫不到的调用此方法。</summary>
     Public Shared Sub ApplyThemeToToolTip(tt As ToolTip)
@@ -252,14 +265,41 @@ Public NotInheritable Class ThemeManager
             ' RC:非 OwnerDraw 下 Back/Fore 不生效,必须自绘才可见深色 tooltip。
             tt.OwnerDraw = True
             SyncLock _themedToolTips
-                If Not _themedToolTips.Contains(tt) Then
+                ' N-P3-3: the registry holds WEAK references on purpose. It used to
+                ' root every ToolTip it ever themed for the whole process lifetime
+                ' (entries were only removed on tt.Disposed, which never fired for the
+                ' lazy-created "If t Is Nothing Then t = New ToolTip" help tips nobody
+                ' disposed), so every open/close of the Configuration / Properties
+                ' window leaked one ToolTip HWND + Draw handler pair, unbounded.
+                ' Weak refs keep the "attach handlers once" semantics (an entry that
+                ' was collected is re-attached on demand) without extending lifetime.
+                PruneDeadToolTips()
+                If Not IsToolTipRegistered(tt) Then
                     AddHandler tt.Draw, AddressOf ThemedToolTip_Draw
                     AddHandler tt.Disposed, AddressOf ThemedToolTip_Disposed
-                    _themedToolTips.Add(tt)
+                    _themedToolTips.Add(New WeakReference(tt))
                 End If
             End SyncLock
         Catch
         End Try
+    End Sub
+
+    Private Shared Function IsToolTipRegistered(ByVal tt As ToolTip) As Boolean
+        For Each wr As WeakReference In _themedToolTips
+            If wr.IsAlive AndAlso Object.ReferenceEquals(wr.Target, tt) Then Return True
+        Next
+        Return False
+    End Function
+
+    Private Shared Sub PruneDeadToolTips()
+        If _themedToolTips.Count = 0 Then Return
+        Dim dead As New Generic.List(Of WeakReference)
+        For Each wr As WeakReference In _themedToolTips
+            If Not wr.IsAlive Then dead.Add(wr)
+        Next
+        For Each wr As WeakReference In dead
+            _themedToolTips.Remove(wr)
+        Next
     End Sub
 
     Private Shared Sub ThemedToolTip_Disposed(sender As Object, e As EventArgs)
@@ -267,10 +307,17 @@ Public NotInheritable Class ThemeManager
             Dim tt As ToolTip = TryCast(sender, ToolTip)
             If tt Is Nothing Then Return
             SyncLock _themedToolTips
-                If _themedToolTips.Contains(tt) Then
+                Dim toRemove As WeakReference = Nothing
+                For Each wr As WeakReference In _themedToolTips
+                    If wr.IsAlive AndAlso Object.ReferenceEquals(wr.Target, tt) Then
+                        toRemove = wr
+                        Exit For
+                    End If
+                Next
+                If toRemove IsNot Nothing Then
                     RemoveHandler tt.Draw, AddressOf ThemedToolTip_Draw
                     RemoveHandler tt.Disposed, AddressOf ThemedToolTip_Disposed
-                    _themedToolTips.Remove(tt)
+                    _themedToolTips.Remove(toRemove)
                 End If
             End SyncLock
         Catch

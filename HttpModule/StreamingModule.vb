@@ -137,13 +137,10 @@ Public Class StreamingModule
 
                 response.AddHeader("Cache-Control", "private")
 
-                response.ContentLength = content 'InfoFichero.Tamano 
+                response.ContentLength = content 'InfoFichero.Tamano
                 response.ContentType = "application/octet-stream"
-                If String.IsNullOrEmpty(request.Headers("Range")) Then
-                    response.Status = HttpStatusCode.OK
-                Else
-                    response.Status = HttpStatusCode.PartialContent
-                End If
+                ' 状态由 RangeAdjust 统一决定(含 P2-3(b) 忽略畸形 Range → 200);
+                ' 此处不再按原始请求头重复推导,否则 206/200 会与 Content-Range 不一致。
                 response.Connection = ConnectionType.Close
 
 
@@ -235,7 +232,14 @@ Public Class StreamingModule
 
                         response.SendBody(Buffer)
 
-                        DownloadIndex += currentPackageSize
+                        ' P2-3(a): advance by the bytes ACTUALLY sent. The first package
+                        ' trims up to 15 bytes from the front (requestRangeStart -
+                        ' rangeStart) and the last one is truncated to content, so
+                        ' currentPackageSize over-counts what the client received. The
+                        ' inflated DownloadIndex made the final truncation cut skip extra
+                        ' bytes, so the client got fewer bytes than the declared
+                        ' Content-Length. Buffer.Length is post-trim/truncation = sent bytes.
+                        DownloadIndex += Buffer.Length
 
                         ' 块中间 EOF:已按 16 字节边界发完最后一段,到此收尾
                         If finishAfterSend Then Exit While
@@ -277,6 +281,15 @@ Public Class StreamingModule
         FileSize As Long) As Boolean
         rangeStart = 0
         rangeEnd = 0
+        ' P2-3(b): a Range header this server cannot parse (wrong unit, garbage
+        ' syntax) must be IGNORED per RFC 7233 §3.1 — respond 200 with the full
+        ' body. Previously the un-parsed header left the 0/0 state, which then fell
+        ' through the "rangeEnd = 0" branch below: the INTERNAL range was clamped to
+        ' one 16-byte block while requestRangeEnd was defaulted to FileSize-1, so the
+        ' response promised the whole file (206 + full Content-Range) but only ~16
+        ' bytes were ever sent (upstream ended early → clean finish). Players saw a
+        ' file truncated to its declared full length.
+        Dim rangeIgnored As Boolean = False
         ' bytes=0-0 单字节探测标志:两端显式为 0。必须与 "bytes=N-" 开区间(端点未指定)区分——
         ' 下文 requestRangeEnd=0 时补 FileSize-1 的默认逻辑曾把 0-0 误当开区间,content 被算成
         ' 整个文件,而上游只按对齐块取了 16 字节,主循环 Read=0 后无限空转发(必现死循环)。
@@ -307,6 +320,9 @@ Public Class StreamingModule
                 ElseIf hasStart AndAlso Not hasEnd Then
                     rangeEnd = FileSize - 1
                 End If
+            Else
+                rangeIgnored = True
+                Log.WriteWarning("StreamingModule: ignoring unparseable Range header '" & request.Headers("Range") & "'; serving the full file (RFC 7233 §3.1).")
             End If
         End If
 
@@ -344,10 +360,11 @@ Public Class StreamingModule
             Return True
         End If
 
-        ' rangeEnd=0 的两种来源:无 Range 头(取整个文件)与 bytes=0-0 单字节探测
-        ' (后者只取一个 16 字节对齐块,避免向 MEGA 请求整个文件造成带宽放大)
+        ' rangeEnd=0 的三种来源:无 Range 头(取整个文件)、P2-3(b) 无法解析的 Range 头
+        ' (按 RFC 7233 忽略,同样取整个文件)、bytes=0-0 单字节探测(只取一个 16 字节
+        ' 对齐块)
         If rangeEnd = 0 Then
-            If String.IsNullOrEmpty(request.Headers("Range")) Then
+            If rangeIgnored OrElse String.IsNullOrEmpty(request.Headers("Range")) Then
                 rangeEnd = FileSize - 1
             Else
                 rangeEnd = Math.Min(rangeStart + 15, FileSize - 1)
@@ -369,7 +386,10 @@ Public Class StreamingModule
         response.ContentType = "application/octet-stream"
         response.AddHeader("Accept-Ranges", "bytes")
 
-        If String.IsNullOrEmpty(request.Headers("Range")) Then
+        ' P2-3(b): an ignored Range header behaves exactly like "no Range header" —
+        ' 200 + full body, no Content-Range. The caller relies on the status set
+        ' here (it must not re-derive it from the raw header).
+        If rangeIgnored OrElse String.IsNullOrEmpty(request.Headers("Range")) Then
             response.Status = HttpStatusCode.OK
         Else
             response.Status = HttpStatusCode.PartialContent

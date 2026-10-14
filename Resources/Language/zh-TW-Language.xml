@@ -287,6 +287,7 @@ B 是同行下載數。]]></Text>
   <Text key="Do you want to delete this account?"><![CDATA[你是否確定要刪除這個帳號？]]></Text>
   <Text key="Account could not be deleted"><![CDATA[帳號無法被刪除。]]></Text>
   <Text key="Account not found"><![CDATA[找不到帳號]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[你正在輸入一個新帳號，尚未儲存。要放棄輸入並載入所選帳號嗎？]]></Text>
   <Text key="Delete"><![CDATA[刪除]]></Text>
   <Text key="Modify"><![CDATA[修改]]></Text>
   <Text key="Alias"><![CDATA[暱稱]]></Text>
@@ -367,6 +368,8 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="ELC file is empty"><![CDATA[ELC 檔案是空的。]]></Text>
   <Text key="Folder_InvalidResponse"><![CDATA[讀取共用資料夾時 MEGA 傳回了無法識別的回應，連結可能已刪除、私有或金鑰錯誤，請先確認該連結在瀏覽器裡能正常開啟。技術細節：%DETAIL%]]></Text>
   <Text key="Folder_NetworkError"><![CDATA[讀取共用資料夾時連不上 MEGA（網路錯誤）。請檢查網路、防火牆/VPN/Proxy 設定後重試；如所在地區限制 mega.nz，請在「設定」裡設定 Proxy 或使用 VPN，並確認瀏覽器能開啟 https://mega.nz 。技術細節：%DETAIL%]]></Text>
+  <Text key="Network_Error"><![CDATA[無法連線伺服器（網路錯誤）。請檢查網路、防火牆/VPN/Proxy 設定後重試；如所在地區限制該服務，請在「設定」裡設定 Proxy 或使用 VPN。技術細節：%DETAIL%]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[無法解析短連結，它可能已失效，或者目前網路不可達。]]></Text>
   <Text key="Folder_Reading"><![CDATA[正在讀取資料夾，請稍候...]]></Text>
   <Text key="Folder_Reading_Count"><![CDATA[正在讀取資料夾…已解析 %N% 個項目]]></Text>
   <Text key="Hide links inside an image"><![CDATA[在圖片中隱藏連結]]></Text>
@@ -394,6 +397,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Quick_Title"><![CDATA[快速操作]]></Text>
   <Text key="Quota_Banner"><![CDATA[MEGA 傳輸配額已超出（無確切恢復時間）。已自動暫停，將於 %T% 後自動重試。]]></Text>
   <Text key="Quota_Error"><![CDATA[MEGA 傳輸配額已超出。下載已暫停並會自動恢復。若您已更換 IP 或代理，請使用「立即重試」。]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[讀取共用資料夾時命中 MEGA 傳輸配額（HTTP 509 / -17）。目前為「配額突破模式」：佇列不會自動暫停，請更換 IP 或 Proxy 後重試。]]></Text>
   <Text key="Quota_Recovered"><![CDATA[MEGA 配額已恢復，下載已自動繼續。]]></Text>
   <Text key="Quota_RetryNow"><![CDATA[立即重試]]></Text>
   <Text key="Quota_Status"><![CDATA[配額：%T% 後重試]]></Text>

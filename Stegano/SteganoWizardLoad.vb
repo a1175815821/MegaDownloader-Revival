@@ -75,11 +75,18 @@
 
 
             Catch ex As ApplicationException
+                ' R-P2-1: restore the window before showing the error. The wizard is
+                ' hidden at :62 and Main.ComprobarYAgregarLinks can throw after that
+                ' (e.g. an ELC server failure while hiding the extracted links); the
+                ' single-instance guard then blocked reopening the wizard, so the menu
+                ' looked dead until a restart.
+                RestaurarVentana()
                 MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
 
             Catch ex As Exception
                 Log.WriteError("Error trying to load stegano: " & ex.ToString)
+                RestaurarVentana()
                 MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
 
             End Try
@@ -89,9 +96,29 @@
 
         End Sub
 
+        ''' <summary>R-P2-1: make the wizard visible again after an error on the hidden
+        ''' code path (Me.Hide() at :62).</summary>
+        Private Sub RestaurarVentana()
+            Try
+                If Not Me.Visible Then
+                    Me.Show()
+                End If
+                Me.Activate()
+            Catch
+            End Try
+        End Sub
+
         Public Function IsValidUri(url As String) As Boolean
+            ' R-P3-4: RelativeOrAbsolute 对 "hello world" 这类字符串也返回 True,校验形同虚设;
+            ' 必须限定 Absolute 且只允许 http/https/file(本地图片路径)。
+            ' 照抄 SteganoWizardSave.vb:96-104(该处已硬化,本处漏改)。
+            ' 修复前 :53 的 "Input image does not exist" 弹窗不可达——
+            ' 用户填不存在的路径只会得到 "未找到隐藏链接,请检查图片和口令" 的误导提示。
             Dim validatedUri As Uri = Nothing
-            Return Uri.TryCreate(url, UriKind.RelativeOrAbsolute, validatedUri)
+            If Not Uri.TryCreate(url, UriKind.Absolute, validatedUri) Then Return False
+            Return validatedUri.Scheme = Uri.UriSchemeHttp OrElse _
+                   validatedUri.Scheme = Uri.UriSchemeHttps OrElse _
+                   validatedUri.Scheme = Uri.UriSchemeFile
         End Function
 
         Private Sub btCancel_Click(sender As Object, e As EventArgs) Handles btCancel.Click
@@ -123,7 +150,8 @@
         End Sub
 
 
-        Private Sub SteganoWizard_DragDrop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragDrop
+        ' R-P4-2: txtImageInput/btImageInput 也接拖拽(与保存向导对称;此前只有窗体空白处生效)
+        Private Sub SteganoWizard_DragDrop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragDrop, txtImageInput.DragDrop, btImageInput.DragDrop
             If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
                 ' File drag & drop
 
@@ -146,7 +174,7 @@
             End If
         End Sub
 
-        Private Sub SteganoWizard_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragEnter
+        Private Sub SteganoWizard_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragEnter, txtImageInput.DragEnter, btImageInput.DragEnter
             If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
                 ' File drag & drop
                 Dim ficheros() As String = CType(e.Data.GetData(DataFormats.FileDrop), String())

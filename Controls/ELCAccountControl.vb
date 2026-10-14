@@ -150,6 +150,19 @@ Public Partial Class ELCAccountControl
 	
 	Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgELCUsers.CellClick
 		If e.RowIndex < 0 Then Return
+		' N-P3-1: in NEW mode (user pressed "Add new" and started typing) a mis-click
+		' on the grid used to silently overwrite the five input boxes with the clicked
+		' account's data and flip the button back to "Add new" — the half-entered
+		' account was gone with no confirmation. Confirm when there is unsaved input;
+		' with an empty form, leave NEW mode without a dialog.
+		If ELCAccountAction = "NEW" Then
+			If Not String.IsNullOrEmpty(txtELCAccountURL.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountUser.Text) OrElse _
+			   Not String.IsNullOrEmpty(txtELCAccountAlias.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountKey.Text) Then
+				If MessageBox.Show(Language.GetText("ELC discard new account confirm"), Language.GetText("Note"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> Windows.Forms.DialogResult.Yes Then
+					Return
+				End If
+			End If
+		End If
 		Dim aliasName As String = CStr(dgELCUsers.Rows(e.RowIndex).Cells(0).Value)
 		'Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.EventArgs) Handles dgELCUsers.SelectionChanged
 		'	
@@ -400,6 +413,19 @@ Public Partial Class ELCAccountControl
 		Return Language.GetText("Show password explanation")
 	End Function
 
+	''' <summary>
+	''' N-P3-3: the lazy help ToolTip ("If t Is Nothing Then t = New ToolTip") is not
+	''' in any components container and was never disposed, so its HWND outlived the
+	''' control until GC (and forever while ThemeManager's registry rooted it — fixed
+	''' there as well). Release it deterministically when the control goes away.
+	''' </summary>
+	Protected Overrides Sub OnHandleDestroyed(ByVal e As EventArgs)
+		If t IsNot Nothing Then
+			t.Dispose()
+			t = Nothing
+		End If
+		MyBase.OnHandleDestroyed(e)
+	End Sub
 
 #End Region
 

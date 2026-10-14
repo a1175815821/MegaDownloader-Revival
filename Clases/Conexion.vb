@@ -67,7 +67,14 @@ Public Class Conexion
     Public Shared Sub SetProxy(Config As Configuracion)
         _UsarProxy = Config.UsarProxy
         _ProxyIP = NormalizeProxyHost(Config.ProxyIP)
+        ' P3-5(a): last line of defense before New WebProxy(host, port) — an
+        ' out-of-range port (hand-edited XML that bypassed ApplyConfigLimits) made
+        ' every request throw from the hot path. Clamp instead of failing.
         _ProxyPort = Config.ProxyPort
+        If _ProxyPort < 1 OrElse _ProxyPort > 65535 Then
+            _ProxyPort = If(_ProxyPort > 65535, 65535, 8080)
+            Log.WriteWarning("Conexion.SetProxy: proxy port " & Config.ProxyPort & " is out of range; using " & _ProxyPort & ".")
+        End If
         _ProxyUser = Config.ProxyUser
         _ProxyPassword = Config.ProxyPassword
     End Sub

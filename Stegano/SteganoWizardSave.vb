@@ -63,7 +63,13 @@ Namespace Stegano
                     Throw New ApplicationException(Language.GetText("Input image does not exist"))
                 End If
 
-                If Not IsNumeric(txtQuality.Text) OrElse CInt(txtQuality.Text) < 10 OrElse CInt(txtQuality.Text) > 100 Then
+                ' R-P3-6: IsNumeric + CInt threw a raw OverflowException (surfaced as an
+                ' English "Value was either too large or too small for an Integer."
+                ' from the generic Catch) for out-of-Int32 inputs like "99999999999".
+                ' TryParse is overflow-safe, trims stray spaces, and parses once
+                ' instead of three times.
+                Dim qualityValue As Integer = 0
+                If Not Integer.TryParse(txtQuality.Text.Trim(), qualityValue) OrElse qualityValue < 10 OrElse qualityValue > 100 Then
                     Throw New ApplicationException(Language.GetText("Invalid JPEG quality"))
                 End If
 
@@ -72,7 +78,7 @@ Namespace Stegano
                 mng.CreateImage(If(Not chkVisibleLinks.Checked, Fichero.HIDDEN_LINK, "") & txtLinks.Text, _
                                 txtImageInput.Text, _
                                 txtImageOutput.Text, _
-                                CInt(txtQuality.Text), _
+                                qualityValue, _
                                 txtPassword.Text)
 
                 MessageBox.Show(String.Format(Language.GetText("The image was created successfully in {0} ms"), Now.Subtract(start).TotalMilliseconds.ToString("F2")), Language.GetText("Save"), MessageBoxButtons.OK, MessageBoxIcon.Information)
@@ -129,7 +135,15 @@ Namespace Stegano
             Examinar.Filter = Language.GetText("Images") & " (*.jpg)|*.jpg"
 
             If Examinar.ShowDialog = Windows.Forms.DialogResult.OK Then
-                txtImageOutput.Text = Examinar.FileName
+                ' R-P3-5: the dialog still lets the user type any extension ("out.png"),
+                ' and a non-.jpg output cannot be read back (the load wizard filters
+                ' *.jpg). Force .jpg deterministically instead of silently producing
+                ' an unreadable image.
+                Dim outPath As String = Examinar.FileName
+                If Not outPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) Then
+                    outPath = IO.Path.ChangeExtension(outPath, ".jpg")
+                End If
+                txtImageOutput.Text = outPath
             End If
 
             Examinar.Dispose()
@@ -169,7 +183,9 @@ Namespace Stegano
             helpStegano_LinkClicked(Nothing, Nothing)
         End Sub
 
-        Private Sub SteganoWizard_DragDrop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragDrop
+        ' R-P4-2: txtImageInput/btImageInput 也接拖拽(此前 AllowDrop=False,拖到输入框上
+        ' 光标变禁入、窗体的 DragDrop 不会触发,只有拖到窗体空白处才生效)
+        Private Sub SteganoWizard_DragDrop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragDrop, txtImageInput.DragDrop, btImageInput.DragDrop
             If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
                 ' File drag & drop
 
@@ -215,7 +231,7 @@ Namespace Stegano
             End If
         End Sub
 
-        Private Sub SteganoWizard_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragEnter, txtImageOutput.DragEnter, btImageOutput.DragEnter
+        Private Sub SteganoWizard_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles Me.DragEnter, txtImageOutput.DragEnter, btImageOutput.DragEnter, txtImageInput.DragEnter, btImageInput.DragEnter
             If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
                 ' File drag & drop
                 Dim ficheros() As String = CType(e.Data.GetData(DataFormats.FileDrop), String())

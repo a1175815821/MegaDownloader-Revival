@@ -15,6 +15,16 @@ Public Class ServerEncoderLinkHelper
         Public SubFolderID As String
         Public SubFileID As String
 	End Class
+
+	''' <summary>issue #6: friendly message for an ELC URL shortener that could
+	''' not be resolved (dead link or unreachable network).</summary>
+	Private Shared Function GetShortLinkUnresolvedMessage() As String
+		Dim msg As String = Language.GetText("ShortLink_Unresolved")
+		If String.IsNullOrEmpty(msg) OrElse msg = "ShortLink_Unresolved" Then
+			msg = "Could not resolve the shortened link. It may be dead, or the network is unreachable."
+		End If
+		Return msg
+	End Function
 	
 	
 	
@@ -73,10 +83,23 @@ Public Class ServerEncoderLinkHelper
                 Dim URL2 As String = URL
                 If URLExtractor.EsUrlAcortador(URL2) Then
                     URL2 = Conexion.ObtenerUrlDesdeAcortador(URL2)
+                    If String.IsNullOrEmpty(URL2) Then
+                        ' issue #6: the resolver swallows its own exception and returns
+                        ' empty; without this guard SendPOST("") would surface a raw
+                        ' UriFormatException ("Invalid URI") to the user.
+                        Log.WriteError("ServerEncode: could not resolve shortened URL [" & URL & "]")
+                        Throw New ApplicationException(GetShortLinkUnresolvedMessage())
+                    End If
                 End If
                 Dim Res As Conexion.Respuesta = Conexion.SendPOST(URL2, param)
 
                 If Res.Excepcion IsNot Nothing Then
+                    ' issue #6: transport failures (no internet, DNS, firewall/VPN/proxy)
+                    ' get an actionable message; API-level errors keep the short hint.
+                    If NetworkErrors.IsTransportError(Res.Excepcion) Then
+                        Log.WriteError("ServerEncode: transport failure contacting [" & URL & "] - " & Log.SafeException(Res.Excepcion))
+                        Throw New ApplicationException(NetworkErrors.DescribeTransportError(Res.Excepcion), Res.Excepcion)
+                    End If
                     Throw New ApplicationException("Error contacting the server to encode string [" & URL & "]", Res.Excepcion)
                 End If
 
@@ -139,12 +162,22 @@ Public Class ServerEncoderLinkHelper
 					
 			' 1) Decode string and uncompress
 			If String.IsNullOrEmpty(link) Then Return LinkList
-			If link.Contains(URLExtractor.SERVERENCODEDPREFIX) Then
-				link = link.Substring(link.IndexOf(URLExtractor.SERVERENCODEDPREFIX) + URLExtractor.SERVERENCODEDPREFIX.Length)
-            End If
-            If link.Contains(URLExtractor.SERVERENCODEDPREFIX.Replace("?", "/?")) Then
-                link = link.Substring(link.IndexOf(URLExtractor.SERVERENCODEDPREFIX.Replace("?", "/?")) + URLExtractor.SERVERENCODEDPREFIX.Replace("?", "/?").Length)
-            End If
+			' P3-3: prefix stripping must be case-insensitive like the detection side
+			' (URLExtractor.vb regexes use RegexOptions.IgnoreCase and :239 compares
+			' data.ToLower). "ELC?..." / "MEGA://CONFIGELC?..." links were accepted by
+			' detection but their prefix was never stripped here, so the base64 step
+			' failed and the link could not be decoded — while the lowercase form
+			' worked. OrdinalIgnoreCase keeps the untrusted-substring semantics of the
+			' old code (strip from the prefix onwards) — only the comparison changes.
+			Dim pfxIdx As Integer = link.IndexOf(URLExtractor.SERVERENCODEDPREFIX, StringComparison.OrdinalIgnoreCase)
+			If pfxIdx >= 0 Then
+				link = link.Substring(pfxIdx + URLExtractor.SERVERENCODEDPREFIX.Length)
+			End If
+			Dim prefixSlash As String = URLExtractor.SERVERENCODEDPREFIX.Replace("?", "/?")
+			pfxIdx = link.IndexOf(prefixSlash, StringComparison.OrdinalIgnoreCase)
+			If pfxIdx >= 0 Then
+				link = link.Substring(pfxIdx + prefixSlash.Length)
+			End If
 			
 			
 			If (link.Length Mod 4) = 1 Then
@@ -202,10 +235,22 @@ Public Class ServerEncoderLinkHelper
                 Dim URL2 As String = URL
                 If URLExtractor.EsUrlAcortador(URL2) Then
                     URL2 = Conexion.ObtenerUrlDesdeAcortador(URL2)
+                    If String.IsNullOrEmpty(URL2) Then
+                        ' issue #6: same guard as ServerEncode — an unresolved short
+                        ' link must not degrade into a raw UriFormatException.
+                        Log.WriteError("ServerDecode: could not resolve shortened URL [" & URL & "]")
+                        Throw New ApplicationException(GetShortLinkUnresolvedMessage())
+                    End If
                 End If
                 Dim Res As Conexion.Respuesta = Conexion.SendPOST(URL2, param, ct:=ct)
 
                 If Res.Excepcion IsNot Nothing Then
+                    ' issue #6: transport failures (no internet, DNS, firewall/VPN/proxy)
+                    ' get an actionable message; API-level errors keep the short hint.
+                    If NetworkErrors.IsTransportError(Res.Excepcion) Then
+                        Log.WriteError("ServerDecode: transport failure contacting [" & URL & "] - " & Log.SafeException(Res.Excepcion))
+                        Throw New ApplicationException(NetworkErrors.DescribeTransportError(Res.Excepcion), Res.Excepcion)
+                    End If
                     Throw New ApplicationException("Error contacting the server to decode string [" & URL & "]", Res.Excepcion)
                 End If
 
@@ -219,7 +264,13 @@ Public Class ServerEncoderLinkHelper
                     Throw New ApplicationException("Server returned error - " & CStr(ht("e")))
                 End If
                 If Not ht.ContainsKey("d") Then
-                    Return LinkList
+                    ' N-P2-5: a response without "d" used to return an empty list with no
+                    ' exception, so the ELC link vanished silently (no log, no dialog) while
+                    ' the rest of the batch succeeded. Fail loudly instead — the outer Catch
+                    ' below turns this into Exc, which URLProcessor treats as a per-URL
+                    ' failure (logged, and surfaced when the whole batch fails).
+                    Throw New ApplicationException(Language.GetText( _
+                        "The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."))
                 End If
 
                 Password = CStr(ht("d"))
@@ -235,6 +286,14 @@ Public Class ServerEncoderLinkHelper
 					LinkList.Add("mega://" & token.trim)
 				End If
 			Next
+			
+			' N-P2-5: an empty decode result is abnormal (a valid ELC always carries at
+			' least one link). It used to be returned silently, dropping the link without
+			' any log or dialog when other links in the same batch succeeded.
+			If LinkList.Count = 0 Then
+				Throw New ApplicationException(Language.GetText( _
+					"The ELC link could not be decoded: no links were found inside. The link may be corrupted."))
+			End If
 			
 			Return LinkList
 			

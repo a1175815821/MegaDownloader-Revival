@@ -369,6 +369,7 @@ Remember to save the configuration or the changes will be discarded.]]>
   <Text key="Do you want to delete this account?"><![CDATA[Are you sure you want to delete this account?]]></Text>
   <Text key="Account could not be deleted"><![CDATA[Account could not be deleted.]]></Text>
   <Text key="Account not found"><![CDATA[Account not found]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[You were entering a new account and it has not been saved yet. Discard it and load the selected account?]]></Text>
   <Text key="Delete"><![CDATA[Delete]]></Text>
   <Text key="Modify"><![CDATA[Modify]]></Text>
   <Text key="Alias"><![CDATA[Alias]]></Text>
@@ -515,6 +516,7 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Quota_RetryNow"><![CDATA[Retry now]]></Text>
   <Text key="Quota_Recovered"><![CDATA[MEGA quota recovered, downloads resumed automatically.]]></Text>
   <Text key="Quota_Error"><![CDATA[MEGA transfer quota exceeded. Downloads are paused and will resume automatically. If you already changed IP or proxy, use "Retry now".]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[MEGA transfer quota exceeded while reading the shared folder (HTTP 509 / -17). Breakthrough mode is on: the queue is not paused automatically — change IP or proxy and try again.]]></Text>
   <Text key="Retry all failed"><![CDATA[Retry all failed]]></Text>
   <Text key="Remove all failed"><![CDATA[Remove all failed]]></Text>
   <Text key="Remove all failed confirm"><![CDATA[Remove %N% failed item(s) from the list?]]></Text>
@@ -532,4 +534,6 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Advice_Connection"><![CDATA[Connection errors. Retrying automatically — no action needed.]]></Text>
   <Text key="Folder_NetworkError"><![CDATA[Cannot connect to MEGA to read the shared folder (network error). Check your internet connection, firewall/VPN/proxy, and try again. If mega.nz is restricted in your region, configure a proxy in Configuration or use a VPN, and make sure https://mega.nz opens in your browser. Technical detail: %DETAIL%]]></Text>
   <Text key="Folder_InvalidResponse"><![CDATA[MEGA returned an unexpected response while reading the shared folder. The link may have been deleted, is private, or the key is wrong. Please verify the link opens in your browser. Technical detail: %DETAIL%]]></Text>
+  <Text key="Network_Error"><![CDATA[Cannot connect to the server (network error). Check your internet connection, firewall/VPN/proxy, and try again. If the service is restricted in your region, configure a proxy in Configuration or use a VPN. Technical detail: %DETAIL%]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Could not resolve the shortened link. It may be dead, or the network is unreachable.]]></Text>
 </Language>

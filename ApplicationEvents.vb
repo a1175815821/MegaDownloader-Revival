@@ -59,14 +59,21 @@ Namespace My
 
             Try
                 Dim d As Action(Of Boolean) = Sub(x As Boolean)
-                                                  _mainFrm.ProcessArgs(args.CommandLineArgs)
+                                                  ' P2-6: do NOT replay InstanceProxy.CommandLineArgs here.
+                                                  ' That field holds the FIRST instance's own startup arguments
+                                                  ' (assigned once at process start), so every second launch
+                                                  ' re-added the ORIGINAL links as duplicate downloads. The real
+                                                  ' arguments of the second instance are delivered through the
+                                                  ' Buffer.dat file and picked up by the 430ms GetParameters poll
+                                                  ' (Main.vb), which calls ProcessArgs — this callback only needs
+                                                  ' to focus the already-running window.
                                                   _mainFrm.Activate()
                                               End Sub
                 _mainFrm.Invoke(d, True)
             Catch ex As InvalidOperationException
                 ' Form may have been closed between the IsDisposed check and Invoke; ignore.
             Catch ex As Exception
-                Global.MegaDownloader.Log.WriteError("Error invoking ProcessArgs in SingleInstanceCallback: " & ex.ToString)
+                Global.MegaDownloader.Log.WriteError("Error invoking SingleInstanceCallback: " & ex.ToString)
             End Try
         End Sub
 

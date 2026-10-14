@@ -207,6 +207,7 @@
     <Compile Include="Clases\Cryptography\AES.vb" />
     <Compile Include="Clases\ELCAccountHelper.vb" />
     <Compile Include="Clases\MegaFolderHelper.vb" />
+    <Compile Include="Clases\NetworkErrors.vb" />
     <Compile Include="Clases\MegaURIProtocol.vb" />
     <Compile Include="Clases\MEGA_ErrorHandler.vb" />
     <Compile Include="Clases\ServerEncoderLinkHelper.vb" />

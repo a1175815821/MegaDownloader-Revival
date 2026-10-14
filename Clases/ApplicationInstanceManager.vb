@@ -122,21 +122,41 @@ Public NotInheritable Class ApplicationInstanceManager
         InstanceProxy.IsFirstInstance = False
         InstanceProxy.CommandLineArgs = Environment.GetCommandLineArgs()
 
+        ' N-P3-5: ATOMIC first-instance detection. The old flow was TOCTOU-racy:
+        ' "OpenExisting throws => I am first" has a window where two processes
+        ' starting in the same millisecond both miss the not-yet-created handle and
+        ' both run as first instance — two main windows, Buffer.dat double-written.
+        ' The createdNew out-parameter of the constructor is decided by the kernel:
+        ' the named object either already existed (second instance) or this call
+        ' created it (first instance), with no in-between state another process can
+        ' observe.
+        Dim createdNew As Boolean = False
         Try
-            ' try opening existing wait handle
-            eventWaitHandle__1 = EventWaitHandle.OpenExisting(eventName)
-        Catch
-            ' got exception = handle wasn't created yet
-            InstanceProxy.IsFirstInstance = True
+            eventWaitHandle__1 = New EventWaitHandle(False, EventResetMode.AutoReset, eventName, createdNew)
+            InstanceProxy.IsFirstInstance = createdNew
+        Catch ex As Exception
+            ' Naming violation / permissions / handle storms: fall back to the old
+            ' best-effort probe so a cosmetic failure cannot block startup.
+            Log.WriteWarning("SingleInstance: atomic handle creation failed (" & Log.SafeException(ex) & "); falling back to OpenExisting.")
+            Try
+                eventWaitHandle__1 = EventWaitHandle.OpenExisting(eventName)
+                InstanceProxy.IsFirstInstance = False
+            Catch
+                InstanceProxy.IsFirstInstance = True
+            End Try
         End Try
 
         If InstanceProxy.IsFirstInstance Then
-            ' init handle
-            eventWaitHandle__1 = New EventWaitHandle(False, EventResetMode.AutoReset, eventName)
-
-            ' register wait handle for this instance (process)
-            ThreadPool.RegisterWaitForSingleObject(eventWaitHandle__1, AddressOf WaitOrTimerCallback, callback, Timeout.Infinite, False)
-            eventWaitHandle__1.Close()
+            ' init handle — eventWaitHandle__1 was created atomically above and is
+            ' ours; register the wait, then close our reference (the registration
+            ' keeps its own). Guard Nothing for the degraded fallback path.
+            If eventWaitHandle__1 IsNot Nothing Then
+                ' register wait handle for this instance (process)
+                ThreadPool.RegisterWaitForSingleObject(eventWaitHandle__1, AddressOf WaitOrTimerCallback, callback, Timeout.Infinite, False)
+                eventWaitHandle__1.Close()
+            Else
+                Log.WriteWarning("SingleInstance: no wait handle available; cross-instance signaling disabled for this session.")
+            End If
 
             ' register shared type (used to pass data between processes)
             RegisterRemoteType(name)

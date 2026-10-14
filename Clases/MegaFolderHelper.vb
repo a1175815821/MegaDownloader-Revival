@@ -204,7 +204,8 @@ Public Class MegaFolderHelper
 
         ' 子文件夹链接: 路径表重定基为以子文件夹为根 (handle 级 BFS, 不依赖字符串前缀去除,
         ' 避免不同层级同名文件夹造成的路径误判)。解密失败的文件夹不在 htFolderEstructure 中,
-        ' 其下文件路径退化为 "" —— 与整文件夹下载时对同类节点的处理一致。
+        ' FillFolderStructure 会把它当作"真孤儿"安置为根级目录(保留其名),其子孙在后续轮次
+        ' 正常归位(N-P3-4);只有循环阻塞的节点才退化为根路径。
         Dim pathMap As Generic.Dictionary(Of String, String) = htFolders
         If Not String.IsNullOrEmpty(SubFolderID) Then
             pathMap = BuildSubfolderPaths(SubFolderID, htFolderEstructure)
@@ -405,24 +406,9 @@ Public Class MegaFolderHelper
     ' DNS pollution that resolves the MEGA API host to a non-MEGA IP and then times out
     ' on 443) from real API errors. Transport failures get an actionable message;
     ' everything else keeps a short one-line technical hint instead of a full stack trace.
+    ' Classification lives in NetworkErrors (shared with the ELC / stegano surfaces).
     Private Shared Function IsFolderNetworkError(ByVal ex As Exception) As Boolean
-        Dim current As Exception = ex
-        Dim guard As Integer = 0
-        While current IsNot Nothing AndAlso guard < 6
-            If TypeOf current Is System.Net.Sockets.SocketException Then Return True
-            If TypeOf current Is System.IO.IOException Then Return True
-            If TypeOf current Is TimeoutException Then Return True
-            Dim wex As System.Net.WebException = TryCast(current, System.Net.WebException)
-            If wex IsNot Nothing Then
-                Select Case wex.Status
-                    Case System.Net.WebExceptionStatus.ConnectFailure, System.Net.WebExceptionStatus.Timeout, System.Net.WebExceptionStatus.NameResolutionFailure, System.Net.WebExceptionStatus.ReceiveFailure, System.Net.WebExceptionStatus.SendFailure, System.Net.WebExceptionStatus.KeepAliveFailure, System.Net.WebExceptionStatus.PipelineFailure, System.Net.WebExceptionStatus.SecureChannelFailure, System.Net.WebExceptionStatus.TrustFailure
-                        Return True
-                End Select
-            End If
-            current = current.InnerException
-            guard += 1
-        End While
-        Return False
+        Return NetworkErrors.IsTransportError(ex)
     End Function
 
     Private Shared Function GetFolderNetworkErrorMessage(ByVal ex As Exception) As String
@@ -483,11 +469,29 @@ Public Class MegaFolderHelper
                     End If
                 Next
                 If Not progressed Then
-                    ' Orphans: place at relative root with sanitized name
-                    For Each nodeId As String In remaining
-                        final(nodeId) = PathGuard.SanitizeFileName(unprocessed(nodeId).Key, "folder")
+                    ' N-P3-4: no node could be placed this round. A node whose parent is
+                    ' NOT in the structure at all (that folder failed to decrypt or was
+                    ' skipped) is a true orphan: seat it at the relative root under its
+                    ' sanitized name and CONTINUE the loop — its children resolve
+                    ' normally on later rounds via the ContainsKey(parent) branch above.
+                    ' The old code placed EVERY remaining node (orphans and waiters
+                    ' alike) and exited, so every descendant of an orphan was stranded:
+                    ' with no pathMap entry its files fell back to the package root and
+                    ' the whole subtree's structure was lost.
+                    For Each nodeId In remaining.ToList()
+                        Dim orphanParent As String = unprocessed(nodeId).Value
+                        If String.IsNullOrEmpty(orphanParent) OrElse Not unprocessed.ContainsKey(orphanParent) Then
+                            final(nodeId) = PathGuard.SanitizeFileName(unprocessed(nodeId).Key, "folder")
+                            remaining.Remove(nodeId)
+                            progressed = True
+                        End If
                     Next
-                    Exit While
+                    If Not progressed Then
+                        ' Every waiter is blocked behind another waiter: cyclic or
+                        ' otherwise unplaceable structure. Give up as before.
+                        Log.WriteWarning("MegaFolderHelper: " & remaining.Count & " folder node(s) could not be placed in the structure; their files will land at the folder root.")
+                        Exit While
+                    End If
                 End If
             End While
             Return

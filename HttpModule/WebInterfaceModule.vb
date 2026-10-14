@@ -231,9 +231,12 @@ Public Class WebInterfaceModule
         End Select
 
 
-        If Not UsuarioLogueado(session) And PaginaRequiereLogueo Then
+            If Not UsuarioLogueado(session) And PaginaRequiereLogueo Then
             If PaginaAjax Then
-                Using writer As New StreamWriter(response.Body, System.Text.Encoding.UTF8, 1024, leaveOpen:=True)
+                ' R-P3-1: UTF8Encoding(False) 明确不写 BOM(照抄 StreamingLibraryModule.vb:202)。
+                ' Encoding.UTF8 静态实例带 preamble,会把 EF BB BF 写进响应体开头,
+                ' 严格 JSON 解析的前端逻辑会失败。
+                Using writer As New StreamWriter(response.Body, New System.Text.UTF8Encoding(False), 1024, leaveOpen:=True)
                     writer.Write(ErrorAjax(Language.GetText("Error, session expired")))
                     writer.Flush()
                 End Using
@@ -333,7 +336,10 @@ Public Class WebInterfaceModule
                 response.Body.Write(bytes, 0, bytes.Length)
             End Using
         Else
-            Using writer As New StreamWriter(response.Body, System.Text.Encoding.UTF8, 1024, leaveOpen:=True)
+            ' R-P3-1: UTF8Encoding(False) 明确不写 BOM(与 gzip 分支的 GetBytes 路径及
+            ' StreamingLibraryModule.vb:202 行为一致);Encoding.UTF8 静态实例会带
+            ' preamble 写入响应体。
+            Using writer As New StreamWriter(response.Body, New System.Text.UTF8Encoding(False), 1024, leaveOpen:=True)
                 writer.Write(ResponseBody)
                 writer.Flush()
             End Using

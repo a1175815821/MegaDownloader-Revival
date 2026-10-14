@@ -684,7 +684,20 @@ Public Class FileDownloader
                     If TotalSize < 0 Then
                         Throw New ApplicationException("Could not determine remote file size.")
                     End If
-                    file.Size = TotalSize
+                    ' P1-6: the persisted chunk layout belongs to the OLD file size and
+                    ' the Size setter validates the layout extent, throwing on mismatch.
+                    ' That exception used to be caught below and exit downloadFile right
+                    ' here, so the ValidateAndNormalize self-heal further down was dead
+                    ' code for size-changed files — every retry (and the 15-minute
+                    ' self-heal cycle) failed identically, forever. Rebuild the layout
+                    ' from the freshly probed size and retry the assignment.
+                    Try
+                        file.Size = TotalSize
+                    Catch exSize As InvalidOperationException
+                        Log.WriteWarning("File size changed for " & file.Name & " (now " & TotalSize & "); resetting chunk layout - " & Log.SafeException(exSize))
+                        file.SetDataPart(New DataPart(TotalSize, file.NumParts))
+                        file.Size = TotalSize
+                    End Try
                     m_currentFileSize = TotalSize
                     Log.WriteInfo("File size " & file.Name & ": " & TotalSize)
                 Catch ex As WebException
@@ -906,6 +919,17 @@ Public Class FileDownloader
                     If Now.Subtract(waitStartTime).TotalSeconds > idleLimitSeconds Then
                         Log.WriteError("Download stalled with no progress for " & idleLimitSeconds & "s for " & file.Name & "; aborting.")
                         timedOut = True
+                        ' P1-5a: cancel the chunk workers as well. The task is judged failed
+                        ' here, but without this the workers kept retrying and writing into
+                        ' the .part file; a retry reuses the same FileDownloader instance, so
+                        ' two generations could write the same regions concurrently.
+                        SyncLock Mutex
+                            For Each w As DownloaderWorker In Me.listDownloaders
+                                If w.IsBusy Then
+                                    w.CancelAsync()
+                                End If
+                            Next
+                        End SyncLock
                         Exit Do
                     End If
                 Loop
@@ -1476,7 +1500,25 @@ Public Class FileDownloader
 
             fireEventFromDownloader(worker, [Event].FileDownloadStopped)
         Catch ex As Exception
+            ' P1-5b: exceptions from the "bare zone" between the connection Try and the
+            ' download loop (cipher init/seek, GetResponseStream, ThrottledStream setup)
+            ' used to be logged only. ChunkDownloadFailed stayed False, so
+            ' RunWorkerCompleted restarted the worker IMMEDIATELY without backoff —
+            ' a persistent failure (bad key, DNS down) became a tight restart loop with
+            ' no error surfaced to the user. Mark the chunk failed and report it so the
+            ' exponential backoff and the error counting/UI path both apply.
+            ' NOTE: locals declared inside the Try block are NOT in scope here in VB,
+            ' so re-obtain the worker from sender.
             Log.WriteError("Error in Downloader.DoWork: " & ex.ToString)
+            Dim failedWorker As DownloaderWorker = TryCast(sender, DownloaderWorker)
+            If failedWorker IsNot Nothing Then
+                failedWorker.ChunkDownloadFailed = True
+                Try
+                    failedWorker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, ex)
+                Catch
+                    ' Reporting must never throw from an error path (worker may be disposing)
+                End Try
+            End If
         End Try
     End Sub
 

@@ -302,15 +302,21 @@ Public Class ThrottledStream
 
                     ' New system
                     Try
-                        Dim SleepUntil As DateTime = DateTime.Now.ToUniversalTime.AddMilliseconds(toSleep)
-                        While SleepUntil.Subtract(DateTime.Now.ToUniversalTime).TotalMilliseconds > 150
+                        ' P3-4: monotonic sleep deadline. The old code slept "until
+                        ' DateTime.UtcNow reached a wall-clock timestamp" — an NTP step
+                        ' or a manual clock change could stretch the sleep (clock jumped
+                        ' back) or erase it (clock jumped forward), leaving the speed
+                        ' limit broken for seconds or minutes afterwards. Stopwatch
+                        ' cannot jump, matching the monotonic _start used above.
+                        Dim swSleep As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
+                        While toSleep - swSleep.ElapsedMilliseconds > 150
                             Thread.Sleep(100)
-                            If _abort Then
-                                SleepUntil = DateTime.Now.ToUniversalTime
-                            End If
+                            If _abort Then Exit While
                         End While
-                        toSleep = CInt(SleepUntil.Subtract(DateTime.Now.ToUniversalTime).TotalMilliseconds)
-                        If toSleep > 0 Then Thread.Sleep(toSleep)
+                        If Not _abort Then
+                            Dim remaining As Integer = CInt(toSleep - swSleep.ElapsedMilliseconds)
+                            If remaining > 0 Then Thread.Sleep(remaining)
+                        End If
                     Catch generatedExceptionName As ThreadAbortException
                     End Try
 

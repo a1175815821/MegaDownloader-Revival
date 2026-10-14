@@ -9,6 +9,13 @@ Partial Class PropiedadesDescarga
             If disposing AndAlso components IsNot Nothing Then
                 components.Dispose()
             End If
+            ' N-P3-3: the lazy help ToolTip (PropiedadesDescarga.vb "If t Is Nothing Then
+            ' t = New ToolTip") is not in the components container and was never
+            ' disposed — its HWND survived until GC. Deterministic release here.
+            If disposing AndAlso t IsNot Nothing Then
+                t.Dispose()
+                t = Nothing
+            End If
         Finally
             MyBase.Dispose(disposing)
         End Try

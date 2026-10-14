@@ -330,7 +330,10 @@ Public Partial Class ELCForm
                     End If
                 Catch e As Exception
                     ErrorGeneratingELC = e
-                    ELCResult = String.Empty
+                    ' N-P1-1: do NOT wipe ELCResult here. A failed save (disk full, access
+                    ' denied) used to destroy the already-generated link while txtELCUrl kept
+                    ' displaying it, and the sticky ErrorGeneratingELC made the next successful
+                    ' generate show the old error and hide the new link.
                 Finally
                     BackgroundWorkerBusy = False
                 End Try
@@ -375,14 +378,18 @@ Public Partial Class ELCForm
                         Me.btnSaveFile.Enabled = True
                     End If
 					
-				Case "SaveELC"
-					Action = String.Empty
-					If ErrorGeneratingELC IsNot Nothing Then
-						MessageBox.Show(Language.GetText("Error generating ELC") & ": " & _
-							ErrorGeneratingELC.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error) 
-					Else
-						MessageBox.Show(Language.GetText("ELC created successfully"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
-					End If
+			Case "SaveELC"
+				Action = String.Empty
+				If ErrorGeneratingELC IsNot Nothing Then
+					MessageBox.Show(Language.GetText("Error generating ELC") & ": " & _
+						ErrorGeneratingELC.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+					' N-P1-1: clear the flag here too (the generate branch does it at :371);
+					' otherwise the next successful generate shows this stale error and skips
+					' updating txtELCUrl / enabling the save buttons.
+					ErrorGeneratingELC = Nothing
+				Else
+					MessageBox.Show(Language.GetText("ELC created successfully"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+				End If
 			End Select
 			
 		End If

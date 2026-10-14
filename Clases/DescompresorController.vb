@@ -118,6 +118,13 @@ Public Class DescompresorController
 
         If Not ObtenerNombres(_pathElementoActual, Directorio, Fichero, FicheroSinExtension, False, 0) Then
             ' Elemento inválido
+            ' P1-2: raise the completion event with a failure. This event is the ONLY exit
+            ' from the Descomprimiendo state (Fichero.DescompresionFinalizada), so exiting
+            ' without it left the item stuck "extracting" forever — visible in the list and
+            ' only cleared by a restart (Paquete.MarcarFicherosComoParados).
+            RaiseEvent DescompresionFinalizada(_codigoElementoActual, False, _
+                "Invalid archive path (file not found): '" & _pathElementoActual & "'")
+
             SyncLock Mutex
                 Me._pathElementoActual = Nothing
                 Me._passwordElementoActual = Nothing
@@ -155,7 +162,20 @@ Public Class DescompresorController
                 ' Cooperative cancel only — do not Thread.Abort (unsafe mid-write)
                 desc.CancelRequested = True
                 Log.WriteWarning("Decompressor: cancel requested for '" & _codigoElementoActual & "'; waiting for worker to stop.")
-                extractThread.Join(5000)
+                ' P1-3: wait until the worker has ACTUALLY stopped. A single Join(5000)
+                ' gave up while the worker could still be mid-entry, so files kept
+                ' appearing after "cancel" and the next queued item was extracted in
+                ' parallel with the cancelled one. The worker checks CancelRequested at
+                ' every entry boundary, so it normally stops within a second; the 60s cap
+                ' only bounds a pathological stall (huge single entry / disk hang).
+                Dim waitedMs As Integer = 0
+                While extractThread.IsAlive AndAlso waitedMs < 60000
+                    extractThread.Join(500)
+                    waitedMs += 500
+                End While
+                If extractThread.IsAlive Then
+                    Log.WriteError("Decompressor: worker for '" & _codigoElementoActual & "' still running after 60s of cancel; proceeding anyway.")
+                End If
                 Exit While
             End If
         End While
@@ -175,6 +195,13 @@ Public Class DescompresorController
 
         If extractOk Then
             Log.WriteInfo("Element '" & _codigoElementoActual & "' extracted in " & Sw.ElapsedMilliseconds & "ms")
+            ' P2-4: make the collision policy visible (no silent overwrites anymore).
+            If desc.CollisionsKeptOriginal > 0 Then
+                Log.WriteInfo("P2-4: " & desc.CollisionsKeptOriginal & " pre-existing file(s) in the extraction folder were kept under a ""(n)"" suffix instead of being overwritten.")
+            End If
+            If desc.OverwritesSameSize > 0 Then
+                Log.WriteInfo("P2-4: " & desc.OverwritesSameSize & " file(s) from a previous extraction of this same archive were replaced (idempotent re-extraction).")
+            End If
         Else
             Log.WriteWarning("Element '" & _codigoElementoActual & "' extraction failed or cancelled.")
         End If
@@ -447,6 +474,11 @@ Public Class DescompresorController
         Public Exception As Exception
         Public CancelRequested As Boolean
 
+        ' P2-4: collision accounting for the extraction folder. Read by the controller
+        ' thread after extractThread.Join (the join provides the happens-before edge).
+        Public OverwritesSameSize As Integer = 0
+        Public CollisionsKeptOriginal As Integer = 0
+
         Public Sub New(ByVal _Fichero As String, ByVal _PathExtraccion As String, ByVal _Password As String)
 
             PathFichero = _Fichero
@@ -466,6 +498,9 @@ Public Class DescompresorController
         Private Shared Function ExtractOpts() As ExtractionOptions
             Dim opts As New ExtractionOptions()
             opts.ExtractFullPath = True
+            ' P2-4: Overwrite stays True ONLY for the idempotent case — the destination
+            ' is resolved by ResolveEntryDestination first, which moves foreign files
+            ' out of the way (or lets a repeat extraction through). See that function.
             opts.Overwrite = True
             Return opts
         End Function
@@ -504,7 +539,11 @@ Public Class DescompresorController
                         If rar IsNot Nothing AndAlso _
                               rar.IsMultipartVolume() AndAlso _
                               Not rar.IsFirstVolume() Then
-                            Exit Sub
+                            ' P1-4: a non-first volume used to Exit Sub silently, so the
+                            ' caller saw "no exception" and reported a successful extraction
+                            ' that had not extracted a single byte (false success).
+                            Throw New ApplicationException(Language.GetText( _
+                                "This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."))
                         End If
 
 
@@ -739,15 +778,19 @@ Public Class DescompresorController
             ' containing spaces into several arguments.
             Dim passwordArg As String = ""
             If Not String.IsNullOrEmpty(Password) Then
+                ' P2-1: 7-Zip's own command-line parser cannot express a literal double
+                ' quote inside -p. Verified empirically with the bundled 7zr 26.02 via
+                ' CreateProcessW (exact .NET argument passing): neither backslash escaping
+                ' (-p"pa\"ss") nor doubled quotes (-p"pa""ss") reaches the password — both
+                ' corrupt the argument and fail. Reject with an actionable, localized
+                ' message instead of a raw exception. Trailing backslashes, on the other
+                ' hand, ARE delivered correctly with plain quoting (same test: a trailing
+                ' backslash changed the password as expected), so the old backslash
+                ' rejection was unnecessary and has been removed.
                 If Password.Contains(""""c) Then
-                    ' 7-Zip CLI argument quoting cannot express a double quote inside a
-                    ' password reliably — reject instead of silently mis-decrypting.
-                    Throw New NotSupportedException("7z passwords containing double quotes are not supported.")
-                End If
-                If Password.EndsWith("\"c) Then
-                    ' A trailing backslash would escape our own closing quote under
-                    ' Windows argv rules, swallowing the rest of the command line.
-                    Throw New NotSupportedException("7z passwords ending with a backslash are not supported.")
+                    Log.WriteWarning("Extract7z: password contains a double quote, which the 7-Zip CLI cannot express; rejecting.")
+                    Throw New ApplicationException(Language.GetText( _
+                        "The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."))
                 End If
                 passwordArg = " -p""" & Password & """"
             End If
@@ -755,11 +798,13 @@ Public Class DescompresorController
             ' ---- Pass 1: list entries and validate them against path traversal ----
             Dim listing As String = RunSevenZip(cli, "l -ba -slt" & passwordArg & " -- """ & PathFichero & """", checkCancel:=True)
             Dim entryKeys As New Generic.List(Of String)
+            Dim entrySizes As New Generic.Dictionary(Of String, Long)(StringComparer.OrdinalIgnoreCase)
             Dim archiveFullPath As String = IO.Path.GetFullPath(PathFichero)
             ' P1-1:7z CLI 路径此前只校验条目数与路径穿越,50GiB 体积上限被绕过。
             ' 此处累加各条目 Size(=解压后体积),复用同一 EnsureExtractWithinQuota。
             Dim totalUncompressed As Long = 0
             Dim inArchiveBlock As Boolean = False
+            Dim currentEntry As String = Nothing
             For Each line As String In listing.Split(New String() {vbCrLf, vbLf, vbCr}, StringSplitOptions.RemoveEmptyEntries)
                 If line.StartsWith("Path = ", StringComparison.Ordinal) Then
                     Dim entryPath As String = line.Substring(7).Trim()
@@ -773,17 +818,54 @@ Public Class DescompresorController
                         ' Relative entry key — cannot be the archive file itself.
                     End Try
                     inArchiveBlock = isArchiveItself
+                    currentEntry = If(isArchiveItself, Nothing, entryPath)
                     If Not isArchiveItself Then entryKeys.Add(entryPath)
                 ElseIf line.StartsWith("Size = ", StringComparison.Ordinal) AndAlso Not inArchiveBlock Then
                     Dim sizeVal As Long = 0
-                    If Long.TryParse(line.Substring(7).Trim(), sizeVal) AndAlso sizeVal > 0 Then
-                        totalUncompressed += sizeVal
+                    If Long.TryParse(line.Substring(7).Trim(), sizeVal) Then
+                        If sizeVal > 0 Then
+                            totalUncompressed += sizeVal
+                        End If
+                        ' P2-4: remember the per-entry size for the collision policy below.
+                        ' Zero-size entries must participate too — otherwise a foreign
+                        ' non-empty file sitting at an empty entry's path would be
+                        ' silently overwritten by the CLI's -y (the managed path
+                        ' protects it via ResolveEntryDestination).
+                        If currentEntry IsNot Nothing AndAlso Not entrySizes.ContainsKey(currentEntry) Then
+                            entrySizes(currentEntry) = sizeVal
+                        End If
                         If totalUncompressed > MaxExtractTotalBytes Then Exit For
                     End If
                 End If
             Next
             EnsureExtractWithinQuota(totalUncompressed, entryKeys.Count)
             PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
+
+            ' P2-4: same collision policy as the managed extractors — move existing
+            ' files whose size differs from the entry to "name (2).ext" so the CLI's
+            ' -y never silently replaces foreign content. A same-sized file is the
+            ' output of a previous extraction of this archive and is left for -y to
+            ' refresh (idempotent re-extraction).
+            For Each kvp In entrySizes
+                Dim dest7z As String = PathGuard.GetSafeArchiveEntryPath(PathExtraccion, kvp.Key)
+                If System.IO.File.Exists(dest7z) Then
+                    Dim fi7z As New System.IO.FileInfo(dest7z)
+                    If fi7z.Length = kvp.Value Then
+                        OverwritesSameSize += 1
+                        Log.WriteWarning("Extract7z: replacing '" & dest7z & "' with an identically sized entry (repeat extraction of the same archive).")
+                    Else
+                        Dim kept7z As String = GetNonCollidingPath(dest7z)
+                        Try
+                            System.IO.File.Move(dest7z, kept7z)
+                            CollisionsKeptOriginal += 1
+                            Log.WriteWarning("Extract7z: '" & dest7z & "' already exists with different content; keeping it as '" & kept7z & "'.")
+                        Catch ex As Exception
+                            CollisionsKeptOriginal += 1
+                            Log.WriteError("Extract7z: could not rename '" & dest7z & "' (" & Log.SafeException(ex) & "); the CLI may overwrite it (-y).")
+                        End Try
+                    End If
+                End If
+            Next
 
             ' ⑩:把 Pass1 已算出的解压后总量发布到控制器,解压窗不再全程显示 " -"。
             ' CLI 无逐字节回调,已解字节只能显示 0/总量(托管分支才有细粒度);结束后按惯例清回 Nothing。
@@ -971,8 +1053,71 @@ Public Class DescompresorController
             End If
         End Sub
 
-        Private Shared Sub WriteSafeEntry(ByVal entry As IArchiveEntry, ByVal extractionRoot As String)
+        ''' <summary>
+        ''' P2-4: resolve the final destination for an archive entry without silently
+        ''' destroying pre-existing files on disk.
+        '''  - A file of exactly the entry's size is treated as the output of a previous
+        '''    extraction of the SAME archive (an entry is written whole, so a completed
+        '''    entry always matches its size) and may be overwritten idempotently.
+        '''  - Anything else — a foreign file, or a half-written file from a cancelled
+        '''    run — is kept: it is renamed to "name (2).ext" (project convention, see
+        '''    FileDownloader.RenamePartToReal) and the extracted content takes the
+        '''    original name.
+        ''' Returns the path the entry must be WRITTEN to: the original name when the
+        ''' existing file was renamed aside (or no file existed), or the free
+        ''' "name (2).ext"-style path when the rename itself failed and the existing
+        ''' file must stay untouched.
+        ''' </summary>
+        Private Function ResolveEntryDestination(ByVal dest As String, ByVal expectedSize As System.Nullable(Of Long)) As String
+            If Not System.IO.File.Exists(dest) Then Return dest
+
+            Dim fi As New System.IO.FileInfo(dest)
+            If expectedSize.HasValue AndAlso fi.Length = expectedSize.Value Then
+                OverwritesSameSize += 1
+                Log.WriteWarning("Extraction: replacing '" & dest & "' with an identically sized entry (repeat extraction of the same archive).")
+                Return dest
+            End If
+
+            Dim kept As String = GetNonCollidingPath(dest)
+            Try
+                System.IO.File.Move(dest, kept)
+                CollisionsKeptOriginal += 1
+                Log.WriteWarning("Extraction: '" & dest & "' already exists with different content; keeping it as '" & kept & "' and extracting the archive entry under the original name.")
+                ' The rename freed the original name — that is where the entry goes.
+                ' (Returning `kept` here would overwrite the very file we just
+                ' preserved, since ExtractOpts.Overwrite is True.)
+                Return dest
+            Catch ex As Exception
+                ' Locked / ACLs / ...: do not destroy the file either — extract the
+                ' entry to the free name and leave the existing file untouched.
+                CollisionsKeptOriginal += 1
+                Log.WriteError("Extraction: could not rename '" & dest & "' (" & Log.SafeException(ex) & "); extracting to '" & kept & "' instead.")
+            End Try
+            Return kept
+        End Function
+
+        ''' <summary>First free "name (2).ext"-style path next to dest (9999 tries, then
+        ''' a short GUID suffix) — mirrors FileDownloader.RenamePartToReal.</summary>
+        Private Shared Function GetNonCollidingPath(ByVal dest As String) As String
+            Dim dir As String = IO.Path.GetDirectoryName(dest)
+            Dim name As String = IO.Path.GetFileName(dest)
+            Dim dot As Integer = name.LastIndexOf("."c)
+            Dim baseName As String = If(dot > 0, name.Substring(0, dot), name)
+            Dim ext As String = If(dot > 0, name.Substring(dot), "")
+            Dim i As Integer = 1
+            Do
+                i += 1
+                Dim candidate As String = IO.Path.Combine(dir, baseName & " (" & i & ")" & ext)
+                If Not System.IO.File.Exists(candidate) AndAlso Not System.IO.Directory.Exists(candidate) Then Return candidate
+                If i >= 9999 Then
+                    Return IO.Path.Combine(dir, baseName & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & ext)
+                End If
+            Loop
+        End Function
+
+        Private Sub WriteSafeEntry(ByVal entry As IArchiveEntry, ByVal extractionRoot As String)
             Dim dest As String = PathGuard.GetSafeArchiveEntryPath(extractionRoot, entry.Key)
+            dest = ResolveEntryDestination(dest, entry.Size)
             Dim parentDir As String = Path.GetDirectoryName(dest)
             If Not String.IsNullOrEmpty(parentDir) Then
                 Directory.CreateDirectory(parentDir)
@@ -980,8 +1125,9 @@ Public Class DescompresorController
             entry.WriteToFile(dest, ExtractOpts())
         End Sub
 
-        Private Shared Sub WriteSafeEntry(ByVal reader As IReader, ByVal extractionRoot As String, ByVal entryKey As String)
+        Private Sub WriteSafeEntry(ByVal reader As IReader, ByVal extractionRoot As String, ByVal entryKey As String)
             Dim dest As String = PathGuard.GetSafeArchiveEntryPath(extractionRoot, entryKey)
+            dest = ResolveEntryDestination(dest, reader.Entry.Size)
             Dim parentDir As String = Path.GetDirectoryName(dest)
             If Not String.IsNullOrEmpty(parentDir) Then
                 Directory.CreateDirectory(parentDir)

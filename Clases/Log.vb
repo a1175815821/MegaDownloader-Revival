@@ -93,20 +93,35 @@ Public Class Log
             If (DoFlush Or forceFlush) And _Buffer IsNot Nothing AndAlso _Buffer.Length > 0 Then
                 Dim PathLog As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Log")
 
-                If Not System.IO.Directory.Exists(PathLog) Then
-                    System.IO.Directory.CreateDirectory(PathLog)
-                End If
-                Using t As New StreamWriter(PathLog & "\Log_" & DateTime.UtcNow.ToString("yyyyMMdd") & ".txt", True)
-                    t.Write(_Buffer.ToString)
-                End Using
-                _Buffer = Nothing
-                _LastWrite = DateTime.UtcNow
+                ' N-P2-3: never let logging throw. A log file held open by another
+                ' process (notepad) or a full disk used to make WriteError itself throw
+                ' from inside background catch blocks, masking the original error and
+                ' (on raw worker threads) killing the process. Best effort: on failure
+                ' drop this batch and retry on the next write.
+                Try
+                    If Not System.IO.Directory.Exists(PathLog) Then
+                        System.IO.Directory.CreateDirectory(PathLog)
+                    End If
+                    Using t As New StreamWriter(PathLog & "\Log_" & DateTime.UtcNow.ToString("yyyyMMdd") & ".txt", True)
+                        t.Write(_Buffer.ToString)
+                    End Using
+                    _Buffer = Nothing
+                    _LastWrite = DateTime.UtcNow
 
-                ' Purge old log files once per process session.
-                If Not _purgePerformed Then
-                    _purgePerformed = True
-                    PurgeOldLogs(PathLog, RetentionDays)
-                End If
+                    ' Purge old log files once per process session.
+                    If Not _purgePerformed Then
+                        _purgePerformed = True
+                        PurgeOldLogs(PathLog, RetentionDays)
+                    End If
+                Catch ex As Exception
+                    ' Nowhere to report this — swallow and DROP this batch (re-appending
+                    ' it on the next write would grow the buffer without bound while the
+                    ' log directory stays broken; a lost log batch is the lesser evil).
+                    ' _LastWrite is refreshed so the next attempt happens after the
+                    ' regular interval instead of hammering a failing disk.
+                    _Buffer = Nothing
+                    _LastWrite = DateTime.UtcNow
+                End Try
             End If
         End SyncLock
     End Sub

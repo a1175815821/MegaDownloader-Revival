@@ -488,7 +488,17 @@ Public Class AddLinks
             If err IsNot Nothing Then
                 If TypeOf err Is MegaQuotaExceededException Then
                     Log.WriteWarning("Quota hit while reading folder: " & Log.SafeException(err))
-                    MessageBox.Show(Language.GetText("Quota_Error"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    ' N-P2-1: in breakthrough mode nothing is quarantined and the
+                    ' Retry-now banner never appears, so the standard text would promise
+                    ' pause/resume/retry mechanisms that do not exist in this mode.
+                    Dim quotaMsg As String = Language.GetText("Quota_Error")
+                    If MegaQuotaManager.IsBreakthroughMode() Then
+                        quotaMsg = Language.GetText("Quota_Error_Breakthrough")
+                        If String.IsNullOrEmpty(quotaMsg) OrElse quotaMsg = "Quota_Error_Breakthrough" Then
+                            quotaMsg = "MEGA transfer quota exceeded while reading the shared folder (HTTP 509 / -17). Breakthrough mode is on: the queue is not paused automatically - change IP or proxy and try again."
+                        End If
+                    End If
+                    MessageBox.Show(quotaMsg, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
                 Else
                     Log.WriteError("Error while adding the link: " & err.ToString)
                     MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -612,7 +622,16 @@ Public Class AddLinks
         Try
             If err IsNot Nothing Then
                 If TypeOf err Is MegaQuotaExceededException Then
-                    MessageBox.Show(Language.GetText("Quota_Error"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    ' N-P2-1: breakthrough mode has no quarantine and no Retry-now
+                    ' banner — show a message that does not promise them.
+                    Dim quotaMsgW As String = Language.GetText("Quota_Error")
+                    If MegaQuotaManager.IsBreakthroughMode() Then
+                        quotaMsgW = Language.GetText("Quota_Error_Breakthrough")
+                        If String.IsNullOrEmpty(quotaMsgW) OrElse quotaMsgW = "Quota_Error_Breakthrough" Then
+                            quotaMsgW = "MEGA transfer quota exceeded while reading the shared folder (HTTP 509 / -17). Breakthrough mode is on: the queue is not paused automatically - change IP or proxy and try again."
+                        End If
+                    End If
+                    MessageBox.Show(quotaMsgW, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
                 Else
                     Log.WriteError("Error resolving links for streaming: " & err.ToString)
                     MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)

@@ -361,7 +361,19 @@ Public Class Main
         End If
 
         ' Autodetect mega:// parameters from browser
-        MegaURIProtocol.RegisterUrlProtocol()
+        ' N-P2-6: surface a registration failure instead of discarding the return value.
+        ' On a fresh install run without admin rights (the default, manifest is
+        ' asInvoker) the HKCR write is denied and mega:// links silently do nothing;
+        ' the user had no way to learn that one elevated run is required.
+        Dim uriRegError As Exception = MegaURIProtocol.RegisterUrlProtocol()
+        If uriRegError IsNot Nothing Then
+            Log.WriteWarning("mega:// protocol registration failed: " & Log.SafeException(uriRegError))
+            Try
+                MessageBox.Show(Language.GetText("The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."), _
+                               Language.GetText("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Catch
+            End Try
+        End If
 
 
         If Config.ComenzarDescargando Then
@@ -3426,9 +3438,11 @@ Public Class Main
                     For Each Fichero As Fichero In paq.ListaFicheros
                         ' B2-⑩:关闭必须等瞬态(此前只等 Descargando/Pausado,CreandoLocal/
                         ' Verificando/解压/MD5 回补中的任务会被撕裂存盘且关后复活)。
-                        ' Pausado 为稳态,照旧等待以保持原有关机语义(有暂停项时走足超时,不在此批改动)。
+                        ' P2-2:Pausado 不再入等待集——它是稳态(下载器已被
+                        ' PararDescargaFicheros 停止,分块进度由磁盘 worker 落盘),
+                        ' 且重启时 Paquete.MarcarFicherosComoParados 会把它归一化回
+                        ' EnCola;留着它只会让每次带暂停任务的关闭都白等满超时。
                         If Fichero.DescargaEstado = Estado.Descargando Or _
-                           Fichero.DescargaEstado = Estado.Pausado Or _
                            Fichero.DescargaEstado = Estado.CreandoLocal Or _
                            Fichero.DescargaEstado = Estado.Verificando Or _
                            Fichero.DescargaEstado = Estado.Descomprimiendo Or _
@@ -3443,7 +3457,14 @@ Public Class Main
             If Not bgwComprobarMaxConexionesCompleted Then TodosFinalizados = False
             If Not bgwActualizadorListaDescargasCompleted Then TodosFinalizados = False
             If Not bgwDescompresorCompleted Then TodosFinalizados = False
-            System.Threading.Thread.Sleep(100)
+            ' P2-2: pump the message loop instead of Thread.Sleep. Sleeping on the UI
+            ' thread stopped the pump, so BackgroundWorker completions marshaled back
+            ' to the UI thread (several "Completed" flags above are set from
+            ' RunWorkerCompleted) could never fire — the loop then always burned the
+            ' full timeout with a frozen UI. DoEvents lets those handlers run so the
+            ' loop exits as soon as everything is genuinely done. Reentrancy during
+            ' shutdown is already guarded by Cerrando/_ForzarCierre in the workers.
+            System.Windows.Forms.Application.DoEvents()
 
             If Ini.AddSeconds(TimeoutSeg) < Now Then TodosFinalizados = True
         End While
@@ -3854,13 +3875,21 @@ Public Class Main
 
         SyncLock Mutex.ListaDescargas
         Try
+            ' P1-1: locate the object by reference identity, never by DescargaPrioridad.
+            ' The priority is a mutable 1..N index that ReordenarPrioridadPaquetes renumbers
+            ' after every single deletion, so in a multi-select delete (or the "remove all
+            ' failed"/"remove completed" loops) the 2nd..Nth lookups matched whatever object
+            ' had been renumbered into the stale slot — unrelated tasks got deleted (with
+            ' BorrarFicheros=True their files too) while the real targets were skipped.
+            ' SelectedObjects and the collectors hand us the live model instances, so
+            ' ReferenceEquals is exact for every caller.
             For Each paq As Paquete In Me.ListaPaquetes
-                If paq.DescargaPrioridad = Objeto.DescargaPrioridad Then
+                If ReferenceEquals(paq, Objeto) Then
                     paqueteAEliminar = paq
                     Exit Try
                 End If
                 For Each fic As Fichero In paq.ListaFicheros
-                    If Objeto.DescargaPrioridad = fic.DescargaPrioridad Then
+                    If ReferenceEquals(fic, Objeto) Then
                         ficheroAEliminar = fic
                         paqueteAEliminar = paq
                         Exit Try
@@ -4787,16 +4816,26 @@ Public Class Main
             Exit Sub
         End If
         Dim Key As String = Fichero.ExtraerFileKey(UrlNuevaVersionMegadownloader)
+        Dim LinkToAdd As String = UrlNuevaVersionMegadownloader
         If String.IsNullOrEmpty(Key) AndAlso URLExtractor.EsUrlAcortador(UrlNuevaVersionMegadownloader) Then
+            ' P2-5: resolve the short link and use the RESOLVED URL for both the key
+            ' extraction and the download. The old code assigned `url` but then
+            ' re-extracted the key from the original short link (which never contains
+            ' one), so the key stayed empty and clicking Update opened the browser
+            ' instead of queueing the download. Keep the https-only policy for the
+            ' resolved URL too.
             Dim url As String = Conexion.ObtenerUrlDesdeAcortador(UrlNuevaVersionMegadownloader)
-            Key = Fichero.ExtraerFileKey(UrlNuevaVersionMegadownloader)
+            If Not String.IsNullOrEmpty(url) AndAlso url.StartsWith("https", StringComparison.OrdinalIgnoreCase) Then
+                LinkToAdd = url
+                Key = Fichero.ExtraerFileKey(url)
+            End If
         End If
 
         If String.IsNullOrEmpty(Key) Then
             ' Parece que no es un link de mega, será un link directo al ejecutable...
             System.Diagnostics.Process.Start(UrlNuevaVersionMegadownloader)
         Else
-            AgregarLink(UrlNuevaVersionMegadownloader, "MegaDownloader v" & VersionNuevaVersionMegadownloader, True, False)
+            AgregarLink(LinkToAdd, "MegaDownloader v" & VersionNuevaVersionMegadownloader, True, False)
         End If
     End Sub
 
@@ -5043,6 +5082,11 @@ Public Class Main
                 Dim Helper As New ELCAccountHelper(Me.Config)
                 If Helper.ImportConfig(ConfigsELC, Me) Then
                     Helper.SaveToConfig(Me.Config)
+                    ' P0-1: SaveToConfig only updates the in-memory list. Without a forced
+                    ' save the imported accounts never reach disk (the background periodic
+                    ' GuardarXML(False) compares a snapshot taken before the ELCAccounts
+                    ' node is appended, so it sees "no change" and skips the write).
+                    Me.Config.GuardarXML(True)
                 End If
                 Helper.Dispose()
             End If
@@ -5118,6 +5162,8 @@ Public Class Main
                 Dim Helper As New ELCAccountHelper(Me.Config)
                 If Helper.ImportConfig(ConfigsELC, Me) Then
                     Helper.SaveToConfig(Me.Config)
+                    ' P0-1: same as ComprobarYAgregarLinks — persist imported accounts now.
+                    Me.Config.GuardarXML(True)
                 End If
                 Helper.Dispose()
             End If

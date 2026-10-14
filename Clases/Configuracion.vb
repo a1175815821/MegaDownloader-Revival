@@ -322,6 +322,11 @@ Public Class Configuracion
             SyncLock Mutex.GuardarConfig
 			Try
 				AtomicFile.SaveXml(Xml, Fichero)
+				' P0-2: clear the sticky error flag on success. Without this, one transient
+				' failure (e.g. disk full) keeps ErrorConfig non-zero forever, so every later
+				' save shows a bogus "Configuration could not be saved" and Configuration.vb
+				' then Exit-Subs away the rest of the settings application.
+				ErrorConfig = ErrorConfigClass.SinErrores
 			Catch ex As Exception
 				Log.WriteError("Error saving configuration XML: " & Log.SafeException(ex))
 				ErrorConfig = ErrorConfigClass.Fichero_No_Creado
@@ -537,7 +542,12 @@ Public Class Configuracion
 		Me.AnalizarPortapapeles = True
 		Me.HideCollaborateButton = False
 		Me.ApagarPC = False
-		Me.UsarProxy = False
+        Me.UsarProxy = False
+        ' P3-5(b): align the empty-config default with CargaXML (:407 pre-read
+        ' assignment and :428 node default "true", Forms/Configuration.vb:552 write
+        ' path). The field default was False here, so a fresh install behaved
+        ' differently from every loaded/reset configuration (inverted default).
+        Me.MantenerUltimaConfiguracion = True
         Me.ComenzarDescargando = True
         Me.CheckUpdates = True
         Me.UpdateSkipVersion = ""
@@ -588,6 +598,35 @@ Public Class Configuracion
 		If ConexionesPorFichero > MaxConnections Then ConexionesPorFichero = MaxConnections
 		If MaxConexionesGuardadas < 1 Then MaxConexionesGuardadas = 100
 		If MaxConexionesGuardadas > 10000 Then MaxConexionesGuardadas = 10000
+
+		' P3-5(a): the UI validates the ports (Forms/Configuration.vb:439/509), but a
+		' hand-edited Configuration.xml could inject out-of-range values that reached
+		' New WebProxy(host, port) (Conexion.vb:100, hot request path) and the HTTP
+		' server binders unvalidated. Clamp here — this method's stated purpose is
+		' "hand-edited XML cannot bypass UI safety limits". ProxyPort is only touched
+		' while the proxy is enabled: 0 with UsarProxy=False is the documented default
+		' ("no port configured") and must survive a fresh/reset config untouched.
+		If UsarProxy AndAlso (ProxyPort < 1 OrElse ProxyPort > 65535) Then
+			Dim fixedProxyPort As Integer = If(ProxyPort > 65535, 65535, 8080)
+			Log.WriteWarning("Proxy port " & ProxyPort & " is out of range; clamped to " & fixedProxyPort & ".")
+			ProxyPort = fixedProxyPort
+		End If
+		If ServidorStreamingPuerto < 0 Then
+			' 0 keeps its documented "not configured" meaning (empty textbox in the UI);
+			' only clearly invalid negatives are normalized.
+			Log.WriteWarning("Streaming port " & ServidorStreamingPuerto & " is negative; reset to 0 (not configured).")
+			ServidorStreamingPuerto = 0
+		ElseIf ServidorStreamingPuerto > 65535 Then
+			Log.WriteWarning("Streaming port " & ServidorStreamingPuerto & " is out of range; clamped to 65535.")
+			ServidorStreamingPuerto = 65535
+		End If
+		If ServidorWebPuerto < 0 Then
+			Log.WriteWarning("Web server port " & ServidorWebPuerto & " is negative; reset to 0 (not configured).")
+			ServidorWebPuerto = 0
+		ElseIf ServidorWebPuerto > 65535 Then
+			Log.WriteWarning("Web server port " & ServidorWebPuerto & " is out of range; clamped to 65535.")
+			ServidorWebPuerto = 65535
+		End If
 
 		If Not String.IsNullOrWhiteSpace(VLCPath) Then
 			Try
