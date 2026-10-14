@@ -175,14 +175,16 @@ Public Class DescompresorController
                 ' every entry boundary, so it normally stops within a second.
                 ' R-P1-3 follow-up: the cap was 60s, but this branch is reachable ONLY at
                 ' shutdown — RequestCancel() (Main.vb:740) and bgwDescompresor.CancelAsync()
-                ' (Main.vb:738) have no other caller — while Main's own budget is
-                ' TIMEOUT_CLOSE (default 15s, EsperarParadaDescargasYWorkers). A 60s cap
-                ' therefore guaranteed that closing mid-extraction always burned the full
-                ' timeout. 8s still covers ~8x the normal stop latency and fits the budget;
-                ' a pathological stall (huge single entry / disk hang) is logged and left
-                ' behind — bgwDescompresor and extractThread are both background threads, so
-                ' the process still exits.
-                Const cancelWaitCapMs As Integer = 8000
+                ' (Main.vb:738) have no other caller. Main's own budget is TIMEOUT_CLOSE,
+                ' which the shipped InternalConfig sets to 8s (the 15 in Main.vb:3434 is only
+                ' the pre-TryParse fallback, so it never applies). A 60s cap therefore
+                ' guaranteed that closing mid-extraction always burned the full timeout; an 8s
+                ' cap merely tied it, and this loop starts after Main's clock, so it still lost.
+                ' 5s leaves headroom for the rest of the shutdown sequence while covering ~5x
+                ' the normal stop latency. A pathological stall (huge single entry / disk hang)
+                ' is logged and left behind — bgwDescompresor and extractThread are both
+                ' background threads, so the process still exits.
+                Const cancelWaitCapMs As Integer = 5000
                 Dim waitedMs As Integer = 0
                 While extractThread.IsAlive AndAlso waitedMs < cancelWaitCapMs
                     extractThread.Join(500)

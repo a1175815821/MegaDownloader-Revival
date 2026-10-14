@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.7 | 2026-10-14 | 稳定性专项(36 项审计修复)；共享文件夹网络错误友好提示(issue #6)；文件夹分享包用真名 |
 | 2.5.6 | 2026-10-06 | 配额突破模式回归；散装建目录；真名回写；删盘收空目录 |
 | 2.5.5 | 2026-10-04 | 文件夹包命名修复(issue #4)；文件名转义解析；Dispose 清理 |
 | 2.5.4 | 2026-10-01 | 流媒体死循环根治；DPAPI 熵稳定不再随升级丢数据；9 语言补译 |
@@ -109,6 +110,88 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.7] - 2026-10-14
+
+补丁版，一句话：**稳定性专项（36 项审计修复：崩溃 / 静默丢数据 / 死锁）；共享文件夹读不出来时给人话不给堆栈；文件夹分享的包用 MEGA 上的真名，不再显示"封装 #N"**。
+
+### 🐛 崩溃、静默丢数据与死锁专项
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [Configuracion.vb](../Clases/Configuracion.vb) / [Main.vb](../Forms/Main.vb) / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [StreamingModule.vb](../HttpModule/StreamingModule.vb) / [ApplicationInstanceManager.vb](../Clases/ApplicationInstanceManager.vb))
+
+下载与解压：
+
+- ELC 账号导入后不再丢：导入即强制落盘 `Configuration.xml`（此前只改内存，重启就没了）
+- 保存成功后清掉粘滞的 `ErrorConfig`：不再弹假"配置无法保存"，也不再丢掉刚填好的设置
+- 多选删除按对象引用匹配，不再按可变的优先级序号匹配（此前会删错行 / 漏删）
+- 卡死的下载会取消分块线程；连接与下载循环之间那段裸区抛出的异常会把该分块标记为失败，走指数退避与 UI 报错，不再原地紧循环重启
+- 远端文件大小变了会重建分块布局（`ValidateAndNormalize` 的自愈此前是够不着的死代码）
+- 解压遇到同名但大小不同的既有文件，保留成 `name (2).ext`（沿用项目既有约定）并按原名写入新文件；同名同大小幂等刷新。托管路径（RAR/ZIP/TAR）与 7z CLI 预改名路径都覆盖
+- 无法解析的 `Range` 头回落到 200 全量（RFC 7233），不再发一个"声称全长 206 却只给约 16 字节"的响应；首尾包裁剪时 `DownloadIndex` 按实际发出的字节数推进
+- 第二个实例不再把第一个实例的链接当新链接重放；短链更新入队的是解析后的真实 URL
+
+运行时健壮性：
+
+- 单实例判定改为原子（`EventWaitHandle` 的 `createdNew`），关掉原先能跑出两个"第一实例"的 TOCTOU 窗口
+- MEGA 文件夹的孤儿节点挂到根之后循环继续，其后代仍能被解析（此前整棵子树被搁死在包根）
+- ToolTip 的 HWND 泄漏修掉：弱引用注册表 + `ELCAccountControl` / `PropiedadesDescarga` 中确定性释放
+- 日志 flush 不再抛异常；用户语言文件损坏时回落到内置语言包，不再静默杀掉启动
+- ELC 解码失败（缺 `d`、结果为空）大声报错，不再静默丢链接
+- 突破模式下的配额提示不再承诺该模式里并不存在的机制
+
+### 🌐 共享文件夹网络错误友好提示(issue #6)
+
+([NetworkErrors.vb](../Clases/NetworkErrors.vb) 新增 / [MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb))
+
+- 新增传输层错误分类器 `Clases/NetworkErrors.vb`：把 TCP / DNS / 防火墙 / VPN / 代理类失败（含把 MEGA API 域名解析到非 MEGA IP 的 DNS 污染）与真正的 API 错误分开
+- 传输失败给可操作的提示（查网络、防火墙 / VPN、配代理、确认浏览器能打开 `https://mega.nz`）；无效响应给一行技术线索，两者都不再甩原始堆栈
+- 新增 `Folder_NetworkError` / `Folder_InvalidResponse` 两个键
+
+### ✨ 文件夹分享的包用真名
+
+([MegaFolderHelper.vb](../Clases/MegaFolderHelper.vb) / [URLProcessor.vb](../Clases/URLProcessor.vb) / [AddLinks.vb](../Forms/AddLinks.vb) / [Main.vb](../Forms/Main.vb))
+
+- 不填包名添加文件夹分享时，主列表不再显示兜底的"封装 #N"，而是 MEGA 上那个文件夹的真名。名字一直在 `MegaFolderHelper` 里解密出来了，只是 `FillFolderStructure` 把共享根置 `""` 之后没人再读
+- `URLProcessor.FileURL` 新增 `FolderName` 把真名带出来；`GetCommonFolderName` 只在整批一致时返回，混合批次（文件夹 + 散链、两个不同文件夹）继续用兜底名而不猜
+- 共享根改用严格判据识别（自己的 `k` 字段里存在 handle 等于自身 `h` 的键值对）。原先那个 root 变量走 `ExtractKeyFromK` 的"找不到就回退第一个 key"语义，等价于"第一个 t=1 节点"，响应里万一不含共享根就会拿某个子文件夹名当包名
+- 带子目录的文件夹分享只回写显示名，不额外套一层顶层目录——落盘形状与 issue #4 之后完全一致；扁平文件夹分享本来就建目录，现在目录名从"新建包"换成真名
+- `/file/<id>` 链接刻意不带文件夹名，"单文件包按文件名命名"的既有路径不动
+- Web 推送（`ControlRemotoAgregarLinks`）在 `pckname` 为空时同样使用文件夹真名，落盘形状不变
+
+### 🩹 二次审查跟进（修上一批自己引入的回归）
+
+([Configuracion.vb](../Clases/Configuracion.vb) / [Main.vb](../Forms/Main.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [StreamingLibraryManager.vb](../Clases/StreamingLibrary/StreamingLibraryManager.vb))
+
+- **首启配置框回来了**：清 `ErrorConfig` 那条同时把"加载失败"也清了（`Fichero_No_Existe` / `Fichero_No_Valido`）。而 V26 列宽迁移在检查之前总会先存一次盘，于是全新安装永远看不到那个强制配置对话框——正是 `Configuration.vb` 专门加固过"不填账号密码不许取消"的那个框；损坏的配置也会被静默重置成默认值。现在把两件事拆开：新增 `Configuracion.LoadErrorConfig` 只记加载结果、永不被保存清掉，主窗体读它，`Configuration.vb` 继续读 `ErrorConfig` 管保存语义。第三个加载失败点（`ConexionesPorFichero = 0`）一并覆盖，它第一轮漏了
+- **关闭时不再空转**：把 `Thread.Sleep(100)` 换成裸 `Application.DoEvents()` 之后，等待循环变成热自旋，实测约 19 万次/秒，每次都要抢 `Mutex.ListaDescargas` 并遍历整个下载列表——把它正在等的那些线程饿死。改成 `DoEvents` + `Sleep(50)`：消息泵约 14 Hz（`RunWorkerCompleted` 用不完），自旋没了
+- **P0-1 的病根**：`ELCAccounts` 是在 `_LastSavedXML` 快照之后才追加进 XML 的（因为 `Account.User` / `Key` 是随机 IV 的 DPAPI 密文，参与比对会导致每 5 秒必写一次盘，`ServidorWebPassword` 同理）。副作用是账号变更对周期性 `GuardarXML(False)` 完全不可见，所以 P0-1 只能在每个导入点打强制保存的补丁，坑还留着。新增 `ELCAccountsHash()` 把 SHA-256 内容指纹加进变更检测条件；只留哈希，不留明文副本。已验证跨调用稳定，且对增 / 删 / 改 / 别名 / 默认项 / 顺序都敏感；也容得下 `SaveToConfig` 的重建窗口（Dispose + Clear + 重建，无锁，而周期保存正跑在 `bgwActualizadorDatosDisco` 上）——此时返回 `Nothing` 等下一轮重试，而不是在后台线程上抛异常。P0-1 那两处强制保存保留，用于即时落盘
+- **N-P2-5 没修透的地方**：`StreamingLibraryManager.ImportLinks` 把 `ELC_exc` 接住就扔了，Web 界面导入坏 ELC 依旧无声消失。现在在解码循环之后重新抛出，落进既有的按条 Catch：记录真实原因、保住这一批的其余链接，已解出的链接留在列表里
+- **解压取消等待上限 60 秒 → 5 秒**：这条分支只有关闭时够得着，而 Main 自己的预算是 `TIMEOUT_CLOSE`——随包发布的 InternalConfig 里是 **8 秒**（`Main.vb` 里那个 15 只是 `TryParse` 之前的兜底值，实际不生效）。60 秒必然烧满整个超时；8 秒只是打平，而且这个循环比 Main 的计时起步晚，照样输。改成 5 秒，给关闭流程的其余部分留出余量，同时仍覆盖正常停止延迟（约 1 秒）的 5 倍
+- 解压失败分支里 `_codigoElementoActual` 此前留着不清（`_pathElementoActual` 已经置 `Nothing`），现在与其他退出路径一致
+- `AddLinks` 里逐字重复两遍的 12 行突破模式配额提示抽成 `GetQuotaErrorMessage()`
+
+### 🎨 界面与协议
+
+([ThemeManager.vb](../Clases/ThemeManager.vb) / [SteganoWizardLoad.vb](../Stegano/SteganoWizardLoad.vb) / [SteganoWizardSave.vb](../Stegano/SteganoWizardSave.vb) / [ELCForm.vb](../Forms/ELCForm.vb) / [WebInterfaceModule.vb](../HttpModule/WebInterfaceModule.vb))
+
+- 主题刷新逐个窗体加保护：一个窗体出错不再让其余窗口留在旧配色上
+- 隐写向导限制本地图片上限 64 MB，输入框 / 浏览按钮支持拖放；校验加固（只收绝对的 http / https / file URI、强制 `.jpg` 输出、质量值解析防溢出）
+- ELC 新建模式下丢弃已输入内容前先确认
+- ELC 前缀剥离改为大小写不敏感（识别本来就是大小写不敏感的）；节流 sleep 改单调时钟；`Configuracion.ApplyConfigLimits` 与 `Conexion.SetProxy` 补端口钳制
+- Web 响应不再带 UTF-8 BOM
+- `mega://` 协议注册失败时给出带指引的提示，不再静默忽略
+
+### 🌍 多语言
+
+- 上一批新增的 5 个整句键在任何语言包里都不存在，`GetText` 只能返回原始英文键，中文界面因此显示英文。现已补进 en-US / zh-CN / zh-TW
+- 本轮共新增 **11 个键**（issue #6 两个、审计批四个、本次补译五个），三语同步；其余 7 个语言包按既有三级回落机制走 en-US
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.7.0`；`docs/version.xml` → `2.5.7.0`；README 当前版本 → v2.5.7（5 个翻译同步）
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.7`
 
 ---
 
