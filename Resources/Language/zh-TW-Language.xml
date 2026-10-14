@@ -418,4 +418,9 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="VLC path is not valid"><![CDATA[VLC 路徑無效。]]></Text>
   <Text key="Warning"><![CDATA[警告]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[隱寫術(&Y)]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[這個檔案不是分卷 RAR 壓縮檔的第一個分卷，單獨無法從中解壓出任何內容。請改為新增第一個分卷（part1.rar）。]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[解壓密碼裡含有英文雙引號，內建的 7-Zip 解壓器無法透過命令列傳遞這個字元。請用完整版 7-Zip 解壓該壓縮檔，或改用密碼中不含雙引號的壓縮檔。]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[ELC 連結無法解碼：伺服器沒有傳回任何資料。連結可能已損壞，或者帳戶無效。]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[ELC 連結無法解碼：其中沒有找到任何連結。連結可能已損壞。]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[mega:// 協定註冊失敗，因此從瀏覽器開啟的連結不會啟動 MegaDownloader。請以系統管理員身分執行本程式一次以完成註冊。]]></Text>
 </Language>

@@ -36,6 +36,15 @@ Public Class Configuracion
 	
 	Public ErrorConfig As ErrorConfigClass
 	
+	''' <summary>ErrorConfig mixes two different things: a failure to LOAD the file
+	''' (Fichero_No_Existe / Fichero_No_Valido) and a failure to SAVE it (Fichero_No_Creado).
+	''' P0-2 clears ErrorConfig after a successful save, which also erased the LOAD error —
+	''' and the V26 column migration (Main.vb:420-424) saves successfully BEFORE the check at
+	''' Main.vb:450, so a fresh install (or a corrupt XML) silently lost the mandatory
+	''' first-run configuration dialog. This field reflects the load result only and is never
+	''' cleared; Main.vb:450 reads this one, Configuration.vb keeps reading ErrorConfig.</summary>
+	Public LoadErrorConfig As ErrorConfigClass
+	
 	Public RutaDefecto As String
 	
 	Public ExtraerAutomaticamente As Boolean
@@ -185,6 +194,10 @@ Public Class Configuracion
 	' OuterXml 比对；此处快照其明文用于去重（Web 口令模式的复用）。
 	Private Shared _LastSavedProxyPasswordPlain As String = Nothing
 	Private Shared _LastSavedStreamingPasswordPlain As String = Nothing
+	' R-P0-1:ELCAccounts 的内容指纹(见 ELCAccountsHash)。账号节点是在去重快照 _LastSavedXML
+	' 之后才追加到 XML 的,所以账号增删改对周期性 GuardarXML(False) 完全不可见 —— P0-1 只能在
+	' 两处导入调用点补 GuardarXML(True) 兜底,陷阱本身还在。此字段让周期保存也能感知账号变更。
+	Private Shared _LastSavedELCAccountsHash As String = Nothing
 	' DPAPI 密文存储前缀：有前缀=DPAPI blob（解密失败=需重填）；无前缀=历史明文（直接沿用，
 	' 下次保存时转加密迁移）。前缀法避免 base64 启发式误判（如 8 位字母数字口令恰为合法 base64）。
 	' 注意：降级到旧版本会读到 "DPAPI:..." 原字串当密码用——升级前备份配置（release notes 已要求）。
@@ -193,6 +206,34 @@ Public Class Configuracion
 	' 由设置界面读取并提示用户重填；用户保存新值后清零。
 	Public ProxyPasswordNeedsReentry As Boolean
 	Public ServidorStreamingPasswordNeedsReentry As Boolean
+
+	''' <summary>R-P0-1:ELCAccounts 的内容指纹(SHA-256/base64)。
+	''' Account.User/Key 是随机 IV 的 DPAPI 密文,不能参与 OuterXml 去重比对(否则每次调用都
+	''' 不同、后台每 5s 必落盘 —— 与 ServidorWebPassword 后移到比对之后同理),所以这里按
+	''' 明文内容取哈希:既能感知账号的增/删/改/顺序变化,又只留哈希不留明文副本。</summary>
+	Private Function ELCAccountsHash() As String
+		Try
+			Dim sb As New System.Text.StringBuilder()
+			For Each Account As ELCAccountHelper.Account In Me.ELCAccounts
+				sb.Append(Account.Alias).Append(vbTab).Append(Account.URL).Append(vbTab).
+					Append(Criptografia.ToInsecureString(Account.User)).Append(vbTab).
+					Append(Criptografia.ToInsecureString(Account.Key)).Append(vbTab).
+					Append(If(Account.DefaultAccount, "1", "0")).Append(vbLf)
+			Next
+			Using sha As System.Security.Cryptography.SHA256 = System.Security.Cryptography.SHA256.Create()
+				Return System.Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(sb.ToString())))
+			End Using
+		Catch ex As Exception
+			' ELCAccountHelper.SaveToConfig 会先 Dispose 旧 SecureString、Clear 再重建整个列表,
+			' 全程不持锁;而本方法可能正跑在 bgwActualizadorDatosDisco 的周期保存上
+			' (Main.vb:2765 在 DoWork 内),撞上那个窗口会抛 ObjectDisposedException /
+			' InvalidOperationException。返回 Nothing 只会让下个周期多存一次盘并重试,
+			' 绝不能让异常冒出去把整次保存打掉(此处不在 GuardarXML 的 Try 覆盖范围内)。
+			Log.WriteDebug("ELCAccountsHash skipped (account list busy): " & Log.SafeException(ex))
+			Return Nothing
+		End Try
+	End Function
+
 	Public Sub GuardarXML(ByVal ForzarGuardado As Boolean)
 		ApplyConfigLimits()
 		Dim Xml As New XmlDocument
@@ -276,12 +317,16 @@ Public Class Configuracion
 		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
 		Dim curProxyPasswordPlain As String = If(ProxyPassword, "")
 		Dim curStreamingPasswordPlain As String = If(ServidorStreamingPassword, "")
-		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain OrElse _LastSavedProxyPasswordPlain Is Nothing OrElse _LastSavedProxyPasswordPlain <> curProxyPasswordPlain OrElse _LastSavedStreamingPasswordPlain Is Nothing OrElse _LastSavedStreamingPasswordPlain <> curStreamingPasswordPlain Or ForzarGuardado Then
+		Dim curELCAccountsHash As String = ELCAccountsHash()
+		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain OrElse _LastSavedProxyPasswordPlain Is Nothing OrElse _LastSavedProxyPasswordPlain <> curProxyPasswordPlain OrElse _LastSavedStreamingPasswordPlain Is Nothing OrElse _LastSavedStreamingPasswordPlain <> curStreamingPasswordPlain OrElse _LastSavedELCAccountsHash Is Nothing OrElse _LastSavedELCAccountsHash <> curELCAccountsHash Or ForzarGuardado Then
 
 			_LastSavedXML = Xml.DocumentElement.OuterXml
 			_LastSavedWebPasswordPlain = curWebPasswordPlain
 			_LastSavedProxyPasswordPlain = curProxyPasswordPlain
 			_LastSavedStreamingPasswordPlain = curStreamingPasswordPlain
+			' R-P0-1:Nothing(账号列表正被 SaveToConfig 重建)也照存,下个周期会因
+			' "_LastSavedELCAccountsHash Is Nothing" 再存一次盘 —— 方向安全,只会多写不会漏写。
+			_LastSavedELCAccountsHash = curELCAccountsHash
 
 			' B2-⑦:随机 IV 密文只写盘、不比对。加密失败返回 Nothing 时跳过该节点,
 			' 保留磁盘旧密文而非存入空值(与旧逻辑一致,只是位置后移)。
@@ -326,6 +371,8 @@ Public Class Configuracion
 				' failure (e.g. disk full) keeps ErrorConfig non-zero forever, so every later
 				' save shows a bogus "Configuration could not be saved" and Configuration.vb
 				' then Exit-Subs away the rest of the settings application.
+				' Clearing unconditionally is safe ONLY because the LOAD result now lives in
+				' LoadErrorConfig (see its declaration) - do not merge the two back together.
 				ErrorConfig = ErrorConfigClass.SinErrores
 			Catch ex As Exception
 				Log.WriteError("Error saving configuration XML: " & Log.SafeException(ex))
@@ -334,6 +381,7 @@ Public Class Configuracion
 				_LastSavedWebPasswordPlain = Nothing
 				_LastSavedProxyPasswordPlain = Nothing
 				_LastSavedStreamingPasswordPlain = Nothing
+				_LastSavedELCAccountsHash = Nothing
 			End Try
 			End SyncLock
 			
@@ -365,8 +413,10 @@ Public Class Configuracion
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
 					ErrorConfig = ErrorConfigClass.Fichero_No_Existe
+					LoadErrorConfig = ErrorConfigClass.Fichero_No_Existe
 				Else
 					ErrorConfig = ErrorConfigClass.Fichero_No_Valido
+					LoadErrorConfig = ErrorConfigClass.Fichero_No_Valido
 					Log.WriteError("Configuration file could not be loaded (primary and backup failed).")
 				End If
 				ConfiguracionDefectoVacia()
@@ -508,6 +558,9 @@ Public Class Configuracion
 		End If
 		If ConexionesPorFichero = 0 Then
 			ErrorConfig = ErrorConfigClass.Fichero_No_Valido
+			' R1: this is a LOAD-path failure too (see LoadErrorConfig) - without this line
+			' Main.vb:450 would no longer open the configuration form for this case.
+			LoadErrorConfig = ErrorConfigClass.Fichero_No_Valido
 		End If
 		
 		

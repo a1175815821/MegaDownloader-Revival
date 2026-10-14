@@ -471,4 +471,9 @@ B 是同行下载数。]]></Text>
   <Text key="Network_Error"><![CDATA[无法连接服务器（网络错误）。请检查网络、防火墙/VPN/代理设置后重试；如所在地区限制该服务，请在“设置”里配置代理或使用 VPN。技术细节：%DETAIL%]]></Text>
   <Text key="ShortLink_Unresolved"><![CDATA[无法解析短链接，它可能已失效，或者当前网络不可达。]]></Text>
   <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[要为以下 ELC 账户导入配置吗？]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[这个文件不是分卷 RAR 压缩包的第一个分卷，单独无法从中解压出任何内容。请改为添加第一个分卷（part1.rar）。]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[解压密码里含有英文双引号，内置的 7-Zip 解压器无法通过命令行传递这个字符。请用完整版 7-Zip 解压该压缩包，或改用密码中不含双引号的压缩包。]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[ELC 链接无法解码：服务器没有返回任何数据。链接可能已损坏，或者账户无效。]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[ELC 链接无法解码：其中没有找到任何链接。链接可能已损坏。]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[mega:// 协议注册失败，因此从浏览器打开的链接不会启动 MegaDownloader。请以管理员身份运行本程序一次以完成注册。]]></Text>
 </Language>

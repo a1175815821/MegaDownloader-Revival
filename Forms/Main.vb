@@ -447,7 +447,11 @@ Public Class Main
         If Not CheckMEGAConditions() Then Exit Sub
         CheckVersionStatistics()
 
-        If Config.ErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
+        ' R1: read LoadErrorConfig, NOT ErrorConfig. ErrorConfig is cleared by every
+        ' successful save (P0-2), and the V26 column migration above (line 420-424) always
+        ' saves once on a fresh/empty config before we get here - so the first-run dialog
+        ' (and the corrupt-config warning) were being skipped. LoadErrorConfig is never cleared.
+        If Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
             Log.WriteWarning("Invalid configuration, opening configuration form.")
             Dim frmName As New Configuration
             frmName.MainForm = Me
@@ -3464,7 +3468,14 @@ Public Class Main
             ' full timeout with a frozen UI. DoEvents lets those handlers run so the
             ' loop exits as soon as everything is genuinely done. Reentrancy during
             ' shutdown is already guarded by Cerrando/_ForzarCierre in the workers.
+            ' R2: DoEvents alone is NOT a wait - with an empty queue it returns immediately,
+            ' which measured ~174,000 iterations/sec here, each one taking
+            ' Mutex.ListaDescargas above and walking the whole download list. That burns a
+            ' core for the full TIMEOUT_CLOSE and starves the very threads we are waiting for
+            ' (they need the same lock, e.g. DescompresionFinalizada_EventHandler). Sleep(50)
+            ' keeps the pump - RunWorkerCompleted only needs ~20 Hz - without the spin.
             System.Windows.Forms.Application.DoEvents()
+            System.Threading.Thread.Sleep(50)
 
             If Ini.AddSeconds(TimeoutSeg) < Now Then TodosFinalizados = True
         End While

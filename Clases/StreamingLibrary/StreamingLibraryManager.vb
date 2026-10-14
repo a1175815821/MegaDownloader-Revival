@@ -205,6 +205,13 @@ Public Class StreamingLibraryManager
                         URLs2.Add(Fichero.HIDDEN_LINK & FileURL)
                     End If
                 Next
+                ' N-P2-5 follow-up: ServerDecode never throws - it swallows the failure into
+                ' ELC_exc (ByRef) and returns whatever it managed to decode, possibly nothing.
+                ' Without this check a bad ELC imported from the web interface vanished with no
+                ' trace at all, so N-P2-5's "fail loudly" only held for the URLProcessor path.
+                ' Throwing here lands in the per-link Catch below: it logs the real reason and
+                ' keeps the rest of the batch. Links already collected above stay in URLs2.
+                If ELC_exc IsNot Nothing Then Throw ELC_exc
 			Else
 				URLs2.Add(URL)
 			End If

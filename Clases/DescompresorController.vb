@@ -125,12 +125,18 @@ Public Class DescompresorController
             RaiseEvent DescompresionFinalizada(_codigoElementoActual, False, _
                 "Invalid archive path (file not found): '" & _pathElementoActual & "'")
 
+            Dim codigoDescartado As String = _codigoElementoActual
             SyncLock Mutex
                 Me._pathElementoActual = Nothing
                 Me._passwordElementoActual = Nothing
+                ' R-P1-2 follow-up: clear the code as well, matching the normal exit below.
+                ' Leaving it set meant EleActual_Codigo kept reporting an already-discarded
+                ' element while _pathElementoActual was Nothing (an invariant no other exit
+                ' path produces). Captured into a local first because the log line follows.
+                Me._codigoElementoActual = Nothing
             End SyncLock
 
-            Log.WriteWarning("Decompressor: invalid element, discarding: '" & _codigoElementoActual & "'")
+            Log.WriteWarning("Decompressor: invalid element, discarding: '" & codigoDescartado & "'")
 
             Exit Sub
         End If
@@ -166,15 +172,24 @@ Public Class DescompresorController
                 ' gave up while the worker could still be mid-entry, so files kept
                 ' appearing after "cancel" and the next queued item was extracted in
                 ' parallel with the cancelled one. The worker checks CancelRequested at
-                ' every entry boundary, so it normally stops within a second; the 60s cap
-                ' only bounds a pathological stall (huge single entry / disk hang).
+                ' every entry boundary, so it normally stops within a second.
+                ' R-P1-3 follow-up: the cap was 60s, but this branch is reachable ONLY at
+                ' shutdown — RequestCancel() (Main.vb:740) and bgwDescompresor.CancelAsync()
+                ' (Main.vb:738) have no other caller — while Main's own budget is
+                ' TIMEOUT_CLOSE (default 15s, EsperarParadaDescargasYWorkers). A 60s cap
+                ' therefore guaranteed that closing mid-extraction always burned the full
+                ' timeout. 8s still covers ~8x the normal stop latency and fits the budget;
+                ' a pathological stall (huge single entry / disk hang) is logged and left
+                ' behind — bgwDescompresor and extractThread are both background threads, so
+                ' the process still exits.
+                Const cancelWaitCapMs As Integer = 8000
                 Dim waitedMs As Integer = 0
-                While extractThread.IsAlive AndAlso waitedMs < 60000
+                While extractThread.IsAlive AndAlso waitedMs < cancelWaitCapMs
                     extractThread.Join(500)
                     waitedMs += 500
                 End While
                 If extractThread.IsAlive Then
-                    Log.WriteError("Decompressor: worker for '" & _codigoElementoActual & "' still running after 60s of cancel; proceeding anyway.")
+                    Log.WriteError("Decompressor: worker for '" & _codigoElementoActual & "' still running after " & (cancelWaitCapMs \ 1000) & "s of cancel; proceeding anyway.")
                 End If
                 Exit While
             End If

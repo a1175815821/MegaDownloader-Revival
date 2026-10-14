@@ -231,7 +231,7 @@ Public Class WebInterfaceModule
         End Select
 
 
-            If Not UsuarioLogueado(session) And PaginaRequiereLogueo Then
+        If Not UsuarioLogueado(session) And PaginaRequiereLogueo Then
             If PaginaAjax Then
                 ' R-P3-1: UTF8Encoding(False) 明确不写 BOM(照抄 StreamingLibraryModule.vb:202)。
                 ' Encoding.UTF8 静态实例带 preamble,会把 EF BB BF 写进响应体开头,
