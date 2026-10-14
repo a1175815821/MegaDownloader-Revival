@@ -4105,7 +4105,9 @@ Public Class Main
             With oPaquete
                 .Nombre = NombrePaquete
                 If String.IsNullOrEmpty(.Nombre) Then
-                    .Nombre = Language.GetText("New package")
+                    ' 文件夹分享用真名(MegaFolderHelper 展开时已解密带出),其余仍兜底"新建包"。
+                    Dim folderName As String = URLProcessor.GetCommonFolderName(expanded)
+                    .Nombre = If(String.IsNullOrEmpty(folderName), Language.GetText("New package"), folderName)
                 End If
                 .RutaLocal = Config.RutaDefecto
                 .CrearSubdirectorio = CrearDirectorio

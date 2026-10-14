@@ -531,6 +531,13 @@ Public Class AddLinks
             .CrearSubdirectorio = chkCrearDirectorio.Checked
             .PendienteNombrePaquete = String.IsNullOrEmpty(txtNombre.Text)
 
+            ' 文件夹分享的真名(MegaFolderHelper 展开时就解密带出了,此前被丢掉)。
+            ' 用户填了包名不动;单条目也不动——那种包验名后按文件名命名并建目录是既有行为。
+            Dim folderName As String = URLProcessor.GetCommonFolderName(URLs2)
+            Dim folderNamePending As Boolean = .PendienteNombrePaquete AndAlso _
+                                               Not String.IsNullOrEmpty(folderName) AndAlso _
+                                               URLs2 IsNot Nothing AndAlso URLs2.Count > 1
+
             ' 散装多文件(所有条目都无相对子目录)+勾选创建目录+包名空:自动用"新建包"
             ' 建子目录,否则多文件无名包会直接散落下载目录(此前取首个文件名建目录即 issue #4)。
             ' 文件夹分享(任一 Path 非空)保持现状,不额外套顶层;单文件走验名流程。
@@ -543,8 +550,12 @@ Public Class AddLinks
                     End If
                 Next
                 If allFlat Then
-                    Dim autoName As String = Language.GetText("New package")
-                    If String.IsNullOrEmpty(autoName) Then autoName = "New package"
+                    ' 扁平文件夹分享也走这里:目录照建,只是名字从"新建包"换成真名(落盘形状不变)。
+                    Dim autoName As String = folderName
+                    If String.IsNullOrEmpty(autoName) Then
+                        autoName = Language.GetText("New package")
+                        If String.IsNullOrEmpty(autoName) Then autoName = "New package"
+                    End If
                     .Nombre = autoName
                     .PendienteNombrePaquete = False
                 End If
@@ -555,6 +566,13 @@ Public Class AddLinks
                 Dim packageSegment As String = PathGuard.SanitizeFileName(.Nombre, "package")
                 .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
                 System.IO.Directory.CreateDirectory(.RutaLocal)
+            End If
+
+            ' 带子目录的文件夹分享:只回写显示名,不额外套顶层目录(保持 issue #4 之后的落盘行为),
+            ' 因此必须在建目录之后赋值,否则会被上面的分支当成用户填的包名建出一层来。
+            If folderNamePending AndAlso .PendienteNombrePaquete Then
+                .Nombre = folderName
+                .PendienteNombrePaquete = False
             End If
 
             Log.WriteWarning("Adding package in " & .RutaLocal)

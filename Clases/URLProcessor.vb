@@ -10,7 +10,32 @@ Public Class URLProcessor
         Public URL As String
         Public Path As String
 
+        ''' <summary>
+        ''' 来源 MEGA 文件夹的真名(子文件夹链接为子文件夹名)。非文件夹链接为空。
+        ''' 文件夹展开时就已经解密出来了,此前在 MegaFolderHelper 里被丢掉,
+        ''' 导致无名文件夹包在主列表只能显示兜底的"封装 #N"。
+        ''' </summary>
+        Public FolderName As String
+
     End Class
+
+    ''' <summary>
+    ''' 批次里所有条目共有的文件夹真名:唯一且非空才返回,混合批次/多条不同文件夹返回空串
+    ''' (此时包名继续走兜底,不猜)。
+    ''' </summary>
+    Public Shared Function GetCommonFolderName(ByVal URLs As Generic.List(Of FileURL)) As String
+        Dim common As String = String.Empty
+        If URLs Is Nothing Then Return common
+        For Each fu As FileURL In URLs
+            If fu Is Nothing OrElse String.IsNullOrEmpty(fu.FolderName) Then Return String.Empty
+            If common = String.Empty Then
+                common = fu.FolderName
+            ElseIf Not String.Equals(common, fu.FolderName, StringComparison.Ordinal) Then
+                Return String.Empty
+            End If
+        Next
+        Return common
+    End Function
 
     Public Shared Function ProcessURLs(ByVal URLs As Generic.List(Of String), ByRef Config As Configuracion, _
                                        Optional ByVal progress As IProgress(Of Integer) = Nothing, _
@@ -52,7 +77,9 @@ Public Class URLProcessor
                                 Dim SubFolderID As String = URLExtractor.ExtraerSubFolderID(FileURL)
                                 Dim SubFileID As String = URLExtractor.ExtraerSubFileID(FileURL)
                                 For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress, ct)
-                                    URLs3.Add(New FileURL(Fichero.HIDDEN_LINK & FileURL2.URL, FileURL2.Path))
+                                    Dim hidden As New FileURL(Fichero.HIDDEN_LINK & FileURL2.URL, FileURL2.Path)
+                                    hidden.FolderName = FileURL2.FolderName
+                                    URLs3.Add(hidden)
                                 Next
                             Else
                                 URLs3.Add(New FileURL(Fichero.HIDDEN_LINK & FileURL, ""))

@@ -211,6 +211,23 @@ Public Class MegaFolderHelper
             pathMap = BuildSubfolderPaths(SubFolderID, htFolderEstructure)
         End If
 
+        ' 链接指向的那个文件夹的真名(子文件夹链接=子文件夹名,整文件夹链接=共享根名)。
+        ' 名字在上面 t=1 循环里已经解密进 htFolderEstructure,此前只用于拼路径、根本身的名字被
+        ' FillFolderStructure 置 "" 后丢弃,无名文件夹包因此在主列表只能显示兜底的"封装 #N"。
+        ' 单文件链接(/file/<ID>)不带:那种包按文件名命名是既有行为,不能被文件夹名抢掉。
+        ' 整文件夹链接不用上面的 root 变量:那是 ExtractKeyFromK 的"找不到就回退第一个 key"
+        ' 语义,等价于"第一个 t=1 节点",响应里万一不含共享根自己就会指向某个子文件夹。
+        ' 这里改用严格判据(k 里存在 handle 等于自身 h 的键值对=共享根的特征),认不出就不命名。
+        Dim folderDisplayName As String = String.Empty
+        If String.IsNullOrEmpty(SubFileID) Then
+            Dim nameHandle As String = If(String.IsNullOrEmpty(SubFolderID), _
+                                          FindSelfKeyedFolderHandle(FileList.f), _
+                                          SubFolderID)
+            If Not String.IsNullOrEmpty(nameHandle) AndAlso htFolderEstructure.ContainsKey(nameHandle) Then
+                folderDisplayName = htFolderEstructure(nameHandle).Key
+            End If
+        End If
+
 
         ' Get files
         Dim fileCounter As Integer = 0
@@ -265,14 +282,16 @@ Public Class MegaFolderHelper
                         'Results.Add(New URLProcessor.FileURL(NuevoLink, path))
 
                         ' 25/1/15 Formato #N!
+                        Dim NuevoLink As String
                         If FromENCLink Then
-                            Dim NuevoLink As String = URLExtractor.GenerateEncodedURILink("N?" & fileN.h, FileKey & "=###n=" & FolderID, False, False)
-                            Results.Add(New URLProcessor.FileURL(NuevoLink, path))
+                            NuevoLink = URLExtractor.GenerateEncodedURILink("N?" & fileN.h, FileKey & "=###n=" & FolderID, False, False)
                         Else
-
-                            Dim NuevoLink As String = String.Format("https://mega.nz/#N!{0}!{1}=###n={2}", fileN.h, FileKey, FolderID)
-                            Results.Add(New URLProcessor.FileURL(NuevoLink, path))
+                            NuevoLink = String.Format("https://mega.nz/#N!{0}!{1}=###n={2}", fileN.h, FileKey, FolderID)
                         End If
+
+                        Dim resolved As New URLProcessor.FileURL(NuevoLink, path)
+                        resolved.FolderName = folderDisplayName
+                        Results.Add(resolved)
 
                     Else
                         NoteSkipped(fileN.h, False, skippedFiles, skippedFolders, firstSkipped)
@@ -400,6 +419,24 @@ Public Class MegaFolderHelper
             ' 单个 handle:key 对
             Return kField.Substring(kField.IndexOf(":"c) + 1)
         End If
+    End Function
+
+    ' 共享根的特征: t=1, 且自己的 k 字段里存在 handle 等于自身 h 的键值对
+    ' (子节点的 k 里放的是共享根的 handle, 不是自己的)。认不出返回空串, 调用方按"无名"处理。
+    ' 与 ExtractKeyFromK 的区别: 这里不做"找不到就回退第一个 key", 回退会把第一个 t=1
+    ' 子文件夹误认成根, 从而拿子文件夹名当整个分享的包名。
+    Private Shared Function FindSelfKeyedFolderHandle(ByVal nodes As Generic.List(Of FileNode)) As String
+        If nodes Is Nothing Then Return String.Empty
+        For Each fileN As FileNode In nodes
+            If fileN.t <> 1 OrElse String.IsNullOrEmpty(fileN.k) OrElse Not fileN.k.Contains(":"c) Then Continue For
+            For Each part As String In fileN.k.Split("/"c)
+                Dim colonIdx As Integer = part.IndexOf(":"c)
+                If colonIdx > 0 AndAlso part.Length > colonIdx + 1 AndAlso part.Substring(0, colonIdx) = fileN.h Then
+                    Return fileN.h
+                End If
+            Next
+        Next
+        Return String.Empty
     End Function
 
     ' Issue #6: distinguish transport failures (TCP/DNS/firewall/VPN/proxy, including
