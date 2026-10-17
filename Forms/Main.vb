@@ -368,11 +368,22 @@ Public Class Main
         Dim uriRegError As Exception = MegaURIProtocol.RegisterUrlProtocol()
         If uriRegError IsNot Nothing Then
             Log.WriteWarning("mega:// protocol registration failed: " & Log.SafeException(uriRegError))
-            Try
-                MessageBox.Show(Language.GetText("The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."), _
-                               Language.GetText("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            Catch
-            End Try
+            ' P1-1:silent 自启时绝不能弹模态框——无属主框会阻塞 Main_Load,
+            ' ComenzarDescargando/StartWebServer/ProcessArgs 全部执行不到,程序看似"不下载"。
+            If Silent Then
+                Log.WriteWarning("Silent mode: suppressing the mega:// registration warning dialog.")
+            ElseIf Not Config.NoMostrarAvisoURI Then
+                Try
+                    Dim resp As DialogResult = MessageBox.Show(Language.GetText("The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it.") & _
+                                   vbNewLine & vbNewLine & Language.GetText("Do not show this message again?"), _
+                                   Language.GetText("Warning"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+                    If resp = DialogResult.Yes Then
+                        Config.NoMostrarAvisoURI = True
+                        Config.GuardarXML(False)
+                    End If
+                Catch
+                End Try
+            End If
         End If
 
 
@@ -472,7 +483,7 @@ Public Class Main
 
         Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Me, Me.Config)
         If Not String.IsNullOrEmpty(strErrServidorWeb) Then
-            MessageBox.Show("Error starting web server: " & strErrServidorWeb, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show("Error starting web server: " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
         End If
 
 
@@ -719,9 +730,9 @@ Public Class Main
     Private Cerrando As Boolean = False
     Private Sub Main_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
         'SkinEngine.Dispose()
-        Application.DoEvents()
-
+        ' 第19项:置位必须在 DoEvents 之前,否则泵出的托盘点击会复活窗口
         Cerrando = True
+        Application.DoEvents()
 
         Dim Crono As Date = Now
 
@@ -795,6 +806,10 @@ Public Class Main
         If e.CloseReason = CloseReason.UserClosing And Not _ForzarCierre AndAlso MessageBox.Show(msjCerrar, Language.GetText("Close"), MessageBoxButtons.YesNo) = DialogResult.No Then
             e.Cancel = True
         Else
+            ' 第19项:进入关闭流程即置 Cerrando(此前要到 FormClosed 才置)。
+            ' 关闭等待循环里的 DoEvents 会派发托盘点击/Resize,把窗口重新显示出来;
+            ' 先置位后,RestaurarVentana/Resize 的守卫就能拦住"关机期复活"。
+            Cerrando = True
             Me.Visible = False
             Dim ventanaCerrando As New Cerrando
             ventanaCerrando.lblMensaje.Text = Language.GetText("Closing please wait")
@@ -849,14 +864,20 @@ Public Class Main
             Me.Visible = False
             Me.IconoMinimizado.ShowBalloonTip(5000, Me.Text, Me.IconoMinimizado.Text, Nothing)
         Else
-            Me.IconoMinimizado.Visible = False
-            Me.Visible = True
+            ' 第19项:关机期 DoEvents 泵出的 Resize 不得把已隐藏的窗口重新显示
+            If Not Cerrando Then
+                Me.IconoMinimizado.Visible = False
+                Me.Visible = True
+            End If
         End If
         LayoutQuotaBanner()
         LayoutDownloadArea()
     End Sub
 
     Private Sub RestaurarVentana()
+        ' 第19项:关机期 DoEvents 会把托盘点击派发进来,复活已隐藏的窗口。
+        ' 守卫范式同 SetStatusBar/后台 worker(:3228 一带)。
+        If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing Then Exit Sub
         If Me.WindowState = FormWindowState.Minimized Then
             Me.Visible = True
             Me.IconoMinimizado.Visible = False
@@ -2742,13 +2763,16 @@ Public Class Main
                     ' 现跨包最多 4 并发；同包靠投递序号保命名确定性（与串行时代"首个验完命名"一致）。
                     PumpVerifyQueue(verifyCts.Token)
                     If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
-
+                End If
 
                     ' Miramos si hay que guardar el fichero de downloads
                     ' Se guarda cada 5 segundos siempre O
-                    ' Si al menos han pasado 400ms sin peticiones de guardado 
-                    ' (si un proceso pide 10 veces seguidas que se guarde, solo se guardará una vez, 
+                    ' Si al menos han pasado 400ms sin peticiones de guardado
+                    ' (si un proceso pide 10 veces seguidas que se guarde, solo se guardará una vez,
                     ' no 10 veces, lo cual es innecesario)
+                    ' 落盘不受熔断/凭据待换影响(此前整段包在 If 内,60min→2h→6h 的熔断窗口里
+                    ' 队列与配置完全不落盘,窗口内崩溃/断电/强杀会丢 FailedByQuota 标记与
+                    ' 已 fsync 的分块进度,重启后重复下载再耗配额)。只有验文件信息要让路。
 
                     If UltimoGuardadoFichero.AddSeconds(5) < Now Or ( _
                        UltimoGuardadoFichero < PeticionGuardadoFichero And _
@@ -2766,7 +2790,6 @@ Public Class Main
                         UltimoGuardadoConfig = Now
 
                     End If
-                End If
                     System.Threading.Thread.Sleep(TiempoDormir)
             End While
             Finally
@@ -5225,6 +5248,8 @@ Public Class Main
         If DLCQueue.Count = 0 Then Exit Sub
         DLCProcessing = True
         Dim Thread As New System.Threading.Thread(AddressOf StartProcessDLC)
+        ' 第18项:后台线程,进程退出时不被前台线程吊住(否则队列处理中退出会挂死)
+        Thread.IsBackground = True
         DLCPath = DLCQueue.Dequeue()
         Thread.Start()
     End Sub
@@ -5276,7 +5301,19 @@ Public Class Main
         d = Sub(x As Boolean)
                 FinishProcessing()
             End Sub
-        Me.Invoke(d, True)
+        ' 第18项:窗口关闭后 handle 可能已销毁,裸 Invoke 会抛
+        ' ObjectDisposedException/InvalidOperationException 且无人接管;窗口没了直接跳过 UI。
+        Try
+            If Me.IsDisposed OrElse Not Me.IsHandleCreated Then
+                Log.WriteWarning("StartProcessDLC: form handle gone, skipping UI finish")
+                DLCProcessing = False
+            Else
+                Me.Invoke(d, True)
+            End If
+        Catch ex As Exception
+            Log.WriteWarning("StartProcessDLC: Invoke failed (" & ex.Message & "), skipping UI finish")
+            DLCProcessing = False
+        End Try
     End Sub
     Private Sub ProcessDLC()
         Try

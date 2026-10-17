@@ -67,47 +67,97 @@ Public Class StreamingForm
 
     Private PreviousURLMega As String = String.Empty
     Private ValidURLMega As Boolean = False
+    ' 第17项:解析流水号。联网解析移到线程池后是异步的,URL 快速改动时
+    ' 旧结果不得覆盖新结果;每次(重新)解析都递增,结果回 UI 时校验。
+    Private _resolveGenLock As New Object()
+    Private _resolveGeneration As Integer = 0
 
     Delegate Sub ActualizarDatosCallback()
     Private Sub ActualizarDatos()
+        If Me.IsDisposed OrElse Not Me.IsHandleCreated Then Exit Sub
+
         If Me.txtUrlMEGA.InvokeRequired Then
             Try
-                Dim d As New ActualizarDatosCallback(AddressOf ActualizarDatos)
-                Me.Invoke(d, New Object() {})
+                ' 第17项:BeginInvoke 代替阻塞 Invoke,150ms 轮询线程不再被 UI 卡住
+                Me.BeginInvoke(New ActualizarDatosCallback(AddressOf ActualizarDatos))
             Catch ex As Exception
                 ' A veces da error al cerrar la ventana
             End Try
-
-        Else
-
-            If Not Config.ServidorStreamingActivo Then
-                ValidURLMega = False
-                Exit Sub
-            End If
-
-            Dim URLMega As String = Me.txtUrlMEGA.Text
-            If URLMega <> PreviousURLMega Then
-                PreviousURLMega = URLMega
-                ValidURLMega = False
-
-                Dim StreamingLink As String = StreamingHelper.CreateStreamingLink(URLMega, Config.ServidorStreamingPuerto, Config)
-
-                If String.IsNullOrEmpty(StreamingLink) Then Exit Sub
-
-                txtUrlStreaming.Text = StreamingLink
-
-                ValidURLMega = True
-
-            End If
-
+            Exit Sub
         End If
+
+        If Not Config.ServidorStreamingActivo Then
+            ValidURLMega = False
+            Exit Sub
+        End If
+
+        Dim URLMega As String = Me.txtUrlMEGA.Text
+        If URLMega <> PreviousURLMega Then
+            PreviousURLMega = URLMega
+            ValidURLMega = False
+
+            ' 第17项:CreateStreamingLink 会走 MEGA API 解析(联网),此前在 UI 线程
+            ' 同步执行导致输入卡死;移到线程池,结果经 BeginInvoke 回 UI。
+            Dim gen As Integer
+            SyncLock _resolveGenLock
+                _resolveGeneration += 1
+                gen = _resolveGeneration
+            End SyncLock
+            Dim urlCopy As String = URLMega
+            Threading.ThreadPool.QueueUserWorkItem(
+                Sub(state As Object)
+                    Dim StreamingLink As String = String.Empty
+                    Try
+                        StreamingLink = StreamingHelper.CreateStreamingLink(urlCopy, Config.ServidorStreamingPuerto, Config)
+                    Catch ex As Exception
+                        Log.WriteError("CreateStreamingLink failed: " & ex.ToString)
+                    End Try
+                    Try
+                        If Me.IsDisposed OrElse Not Me.IsHandleCreated Then Exit Sub
+                        Me.BeginInvoke(New Action(
+                            Sub()
+                                SyncLock _resolveGenLock
+                                    If gen <> _resolveGeneration Then Exit Sub ' 过期结果丢弃
+                                End SyncLock
+                                If Not String.IsNullOrEmpty(StreamingLink) Then
+                                    txtUrlStreaming.Text = StreamingLink
+                                    ValidURLMega = True
+                                Else
+                                    ValidURLMega = False
+                                End If
+                            End Sub))
+                    Catch
+                        ' 窗口正在关闭
+                    End Try
+                End Sub)
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' 第17项:同步解析一次并应用,仅按钮点击兜底用(粘贴后立即点、后台解析
+    ''' 尚未返回时不误报)。递增流水号作废在途的后台解析结果,防旧结果覆盖。
+    ''' </summary>
+    Private Sub ResolveNow()
+        Dim URLMega As String = Me.txtUrlMEGA.Text
+        If ValidURLMega AndAlso URLMega = PreviousURLMega Then Exit Sub
+        PreviousURLMega = URLMega
+        ValidURLMega = False
+        SyncLock _resolveGenLock
+            _resolveGeneration += 1
+        End SyncLock
+        Dim StreamingLink As String = StreamingHelper.CreateStreamingLink(URLMega, Config.ServidorStreamingPuerto, Config)
+        If String.IsNullOrEmpty(StreamingLink) Then Exit Sub
+        txtUrlStreaming.Text = StreamingLink
+        ValidURLMega = True
     End Sub
 
     Private Sub btnLanzarVLC_Click(sender As System.Object, e As System.EventArgs) Handles btnLanzarVLC.Click
 
-        ' RC:ValidURLMega 靠后台 150ms 轮询,粘贴后立即点会误判。先同步算一次再判。
+        ' RC:ValidURLMega 靠后台 150ms 轮询,粘贴后立即点会误判。先算一次再判。
+        ' 第17项:解析已移后台异步跑,点击时若链接有变/尚未解析完,同步兜底一次
+        ' (仅用户主动点击触发,不随轮询冻结 UI)。
         Try
-            ActualizarDatos()
+            ResolveNow()
         Catch
         End Try
         ' RC:无效链接此前静默 Exit,用户以为按钮死了,给提示。

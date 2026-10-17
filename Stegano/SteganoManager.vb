@@ -9,6 +9,48 @@ Namespace Stegano
             Return Password
         End Function
 
+        ' P1-3: 向导前置校验 —— 本地文件(含 file:// URI)必须真实存在,或必须是 http(s) 远程 URL。
+        ' 旧校验 IsValidUri 对 Windows 路径恒真(Uri 把 "C:\..." 解析成 scheme=file),
+        ' 不存在的路径一路放行,最后只得到 "未找到隐藏链接" 的误导提示。
+        Public Shared Function IsValidImageSource(ByVal Input As String) As Boolean
+            If String.IsNullOrWhiteSpace(Input) Then Return False
+            Dim s As String = Input.Trim()
+            Dim uri As Uri = Nothing
+            If Uri.TryCreate(s, UriKind.Absolute, uri) Then
+                If uri.IsFile Then Return IO.File.Exists(uri.LocalPath)
+                Return uri.Scheme = Uri.UriSchemeHttp OrElse uri.Scheme = Uri.UriSchemeHttps
+            End If
+            Return IO.File.Exists(s)
+        End Function
+
+        ' P1-3: 归一化输入来源 —— 本地路径(含 file:// URI 与 Windows 路径)返回
+        ' LocalPath,远程 http(s) 返回 URL,二者恰好其一非 Nothing。本地路径不存在时
+        ' 抛出明确的 ApplicationException("Input image does not exist")。
+        ' 旧代码让 WebRequest.Create 把 Windows 路径解析成 FileWebRequest 再 CType 成
+        ' HttpWebRequest(InvalidCastException 直接冒给用户),或被裸 Catch 压成
+        ' "未找到隐藏链接" 的误导提示。
+        Private Shared Function NormalizeInput(ByVal Input As String, ByRef LocalPath As String) As String
+            LocalPath = Nothing
+            Dim s As String = If(Input, String.Empty).Trim()
+            Dim uri As Uri = Nothing
+            If Uri.TryCreate(s, UriKind.Absolute, uri) Then
+                If uri.IsFile Then
+                    LocalPath = uri.LocalPath
+                ElseIf uri.Scheme = Uri.UriSchemeHttp OrElse uri.Scheme = Uri.UriSchemeHttps Then
+                    Return uri.AbsoluteUri
+                Else
+                    ' 其余 scheme 一律按本地路径处理,由下面的存在性检查给提示
+                    LocalPath = s
+                End If
+            Else
+                LocalPath = s
+            End If
+            If Not IO.File.Exists(LocalPath) Then
+                Throw New ApplicationException(Language.GetText("Input image does not exist"))
+            End If
+            Return Nothing
+        End Function
+
         ' B3:远端图片下载上限 64MB + 30s 超时。WebClient.DownloadData 无超时无上限,
         ' 误填/恶意的大文件 URL 直接整块进内存 OOM。超限抛 ApplicationException,
         ' 向导已有友好分支接住弹窗(不记为崩溃);超时/404 等 WebException 原样上抛,记日志。
@@ -24,18 +66,24 @@ Namespace Stegano
                 End If
                 Return localBytes
             End If
-            Dim req As Net.HttpWebRequest = CType(Net.WebRequest.Create(url), Net.HttpWebRequest)
-            req.Method = "GET"
-            req.Timeout = 30000
-            req.ReadWriteTimeout = 60000
-            req.AllowAutoRedirect = True
-            req.MaximumAutomaticRedirections = 5
+            ' P1-3: 不再 CType 强转 HttpWebRequest —— Windows 路径会被 WebRequest.Create
+            ' 解析成 FileWebRequest,强转抛 InvalidCastException 原样冒给用户。
+            ' HTTP 属性只在真正是 HttpWebRequest 时设置。
+            Dim req As Net.WebRequest = Net.WebRequest.Create(url)
+            Dim httpReq As Net.HttpWebRequest = TryCast(req, Net.HttpWebRequest)
+            If httpReq IsNot Nothing Then
+                httpReq.Method = "GET"
+                httpReq.Timeout = 30000
+                httpReq.ReadWriteTimeout = 60000
+                httpReq.AllowAutoRedirect = True
+                httpReq.MaximumAutomaticRedirections = 5
+            End If
             ' issue #6: transport failures (no internet, DNS, firewall/VPN/proxy,
             ' timeout) become an actionable ApplicationException — the wizard's
             ' ApplicationException branch shows it as a warning. API-level
             ' failures (404 etc.) keep their original message.
             Try
-                Using resp As Net.HttpWebResponse = CType(req.GetResponse(), Net.HttpWebResponse)
+                Using resp As Net.WebResponse = req.GetResponse()
                     If resp.ContentLength > MaxRemoteImageBytes Then
                         Throw New ApplicationException("Remote image is too large (over 64 MB).")
                     End If
@@ -80,24 +128,30 @@ Namespace Stegano
             ' 编码结果(在 Try 内生成,Try 外使用,故声明在块外)
             Dim encodedBytes As Byte() = Nothing
 
+            ' P1-3: 统一解析来源(本地路径 / file:// / 远程 URL),不存在的本地路径
+            ' 在此给出 "Input image does not exist",不再走到 DownloadImageBytes 的
+            ' WebRequest 强转路径。
+            Dim localPath As String = Nothing
+            Dim remoteUrl As String = NormalizeInput(Input, localPath)
+
             Try
-                If System.IO.File.Exists(Input) Then
+                If localPath IsNot Nothing Then
                     ' R-P4-1: a direct local path used to bypass the 64 MB cap that the
                     ' URL / file:// branches enforce — a huge image went fully into
                     ' memory (ReadAllBytes) and then through JPEG decode + re-encode,
                     ' an easy OOM. Same limit, same shape as DownloadImageBytes.
-                    Dim fi As New IO.FileInfo(Input)
+                    Dim fi As New IO.FileInfo(localPath)
                     If fi.Length > MaxRemoteImageBytes Then
                         Throw New ApplicationException("Image file is too large (over 64 MB).")
                     End If
                     ' Load file into memory first so the source file is not locked and
                     ' the backing stream stays open for the Image lifetime (FromStream requires it)
-                    Dim fileBytes As Byte() = File.ReadAllBytes(Input)
+                    Dim fileBytes As Byte() = File.ReadAllBytes(localPath)
                     backingStream = New MemoryStream(fileBytes)
                     img = Image.FromStream(backingStream)
                 Else
                     ' From URL
-                    Dim imgBytes As Byte() = DownloadImageBytes(Input)
+                    Dim imgBytes As Byte() = DownloadImageBytes(remoteUrl)
                     backingStream = New MemoryStream(imgBytes)
                     img = Image.FromStream(backingStream)
                 End If
@@ -161,17 +215,24 @@ Namespace Stegano
 
             Password = CheckPassword(Password)
 
+            ' P1-3: 先解析来源(不存在的本地路径抛 "Input image does not exist"),
+            ' 取数据/提取阶段的 ApplicationException(如网络失败)原样上抛,
+            ' 只有"图片里提取不到隐藏数据"才压成 False —— 旧代码裸 Catch 把
+            ' 路径写错、网络失败、无隐藏数据混成同一句误导提示。
+            Dim localPath As String = Nothing
+            Dim remoteUrl As String = NormalizeInput(Input, localPath)
+
             ' Retrieve data
             Using mem As New IO.MemoryStream
                 Try
-                    If System.IO.File.Exists(Input) Then
-                        Using st As Stream = File.OpenRead(Input)
+                    If localPath IsNot Nothing Then
+                        Using st As Stream = File.OpenRead(localPath)
                             Using extractor As New F5.JpegExtract(mem, System.Text.Encoding.Unicode.GetBytes(Password))
                                 extractor.Extract(st)
                             End Using
                         End Using
                     Else
-                        data = DownloadImageBytes(Input)
+                        data = DownloadImageBytes(remoteUrl)
                         Using st As New MemoryStream(data)
                             Using extractor As New F5.JpegExtract(mem, System.Text.Encoding.Unicode.GetBytes(Password))
                                 extractor.Extract(st)
@@ -181,6 +242,9 @@ Namespace Stegano
 
                     data = mem.ToArray
 
+                Catch ex As ApplicationException
+                    ' 可定位的输入问题(路径不存在/网络失败等),向导按警告显示具体原因
+                    Throw
                 Catch ex As Exception
                     Return False
                 End Try

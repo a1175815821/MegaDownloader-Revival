@@ -49,7 +49,11 @@
                     Throw New ApplicationException(Language.GetText("Input image not specified"))
                 End If
 
-                If Not System.IO.File.Exists(txtImageInput.Text) AndAlso Not IsValidUri(txtImageInput.Text) Then
+                ' P1-3: 旧校验 IsValidUri 对 Windows 路径恒真(Uri 把 "C:\..." 解析成
+                ' scheme=file),不存在的路径被放行,最后只得到 "未找到隐藏链接" 的
+                ' 误导提示。改用 SteganoManager.IsValidImageSource:本地文件必须真实
+                ' 存在,或必须是 http(s) 远程 URL。
+                If Not SteganoManager.IsValidImageSource(txtImageInput.Text) Then
                     Throw New ApplicationException(Language.GetText("Input image does not exist"))
                 End If
 
@@ -107,19 +111,6 @@
             Catch
             End Try
         End Sub
-
-        Public Function IsValidUri(url As String) As Boolean
-            ' R-P3-4: RelativeOrAbsolute 对 "hello world" 这类字符串也返回 True,校验形同虚设;
-            ' 必须限定 Absolute 且只允许 http/https/file(本地图片路径)。
-            ' 照抄 SteganoWizardSave.vb:96-104(该处已硬化,本处漏改)。
-            ' 修复前 :53 的 "Input image does not exist" 弹窗不可达——
-            ' 用户填不存在的路径只会得到 "未找到隐藏链接,请检查图片和口令" 的误导提示。
-            Dim validatedUri As Uri = Nothing
-            If Not Uri.TryCreate(url, UriKind.Absolute, validatedUri) Then Return False
-            Return validatedUri.Scheme = Uri.UriSchemeHttp OrElse _
-                   validatedUri.Scheme = Uri.UriSchemeHttps OrElse _
-                   validatedUri.Scheme = Uri.UriSchemeFile
-        End Function
 
         Private Sub btCancel_Click(sender As Object, e As EventArgs) Handles btCancel.Click
             Me.Close()

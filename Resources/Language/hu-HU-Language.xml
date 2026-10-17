@@ -77,7 +77,7 @@ Ha kilépsz, félbemarad a művelet és később neked kell manuálisan kibontan
   <Text key="Encode lin&amp;ks"><![CDATA[UR&L-ek]]></Text>
   <Text key="Collaborate"><![CDATA[Hozzájárulás]]></Text>
   <Text key="Creating files"><![CDATA[Fájlok készítése]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[Sorban áll]]></Text>
   <Text key="Verifying"><![CDATA[Ellenőrzés]]></Text>
   <Text key="Paused"><![CDATA[Szüneteltetve]]></Text>
   <Text key="Stopped"><![CDATA[Leállítva]]></Text>
@@ -406,4 +406,67 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="VLC path is not valid"><![CDATA[A VLC elérési útja érvénytelen.]]></Text>
   <Text key="Warning"><![CDATA[Figyelmeztetés]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[Szteganográ&fia]]></Text>
+  <Text key="Active downloads"><![CDATA[Aktív letöltések]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Ne jelenjen meg többé ez az üzenet? (Igen = nem kérdezi többet)]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Éppen egy új fiókot adott meg, amely még nem lett elmentve. Elveti, és betölti a kijelölt fiókot?]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[Adjon meg egy vagy több elrejtendő MEGA-linket.]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[A MEGA váratlan választ adott a megosztott mappa olvasásakor. Előfordulhat, hogy a linket törölték, privát, vagy a kulcs hibás. Ellenőrizze, hogy a link megnyílik-e a böngészőben. Technikai részlet: %DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Nem sikerült csatlakozni a MEGA-hoz a megosztott mappa olvasásához (hálózati hiba). Ellenőrizze az internetkapcsolatot, a tűzfalat/VPN-t/proxyt, és próbálja újra. Ha a mega.nz korlátozott az Ön régiójában, állítson be proxyt a Beállításokban, vagy használjon VPN-t, és győződjön meg róla, hogy a https://mega.nz megnyílik a böngészőben. Technikai részlet: %DETAIL%]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[További információkért kattintson ide]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[Ha a kép jelszóval védett, írja be. Ha nincs, hagyja üresen.]]></Text>
+  <Text key="Image to load"><![CDATA[Betöltendő kép]]></Text>
+  <Text key="Images"><![CDATA[Képek]]></Text>
+  <Text key="Input image"><![CDATA[Bemeneti kép]]></Text>
+  <Text key="Input image does not exist"><![CDATA[A bemeneti kép nem létezik]]></Text>
+  <Text key="Input image not specified"><![CDATA[Nincs megadva bemeneti kép]]></Text>
+  <Text key="Introduction"><![CDATA[Bevezetés]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[Érvénytelen JPEG-minőség]]></Text>
+  <Text key="JPEG Quality"><![CDATA[JPEG-minőség]]></Text>
+  <Text key="Load"><![CDATA[Betöltés]]></Text>
+  <Text key="Nav_All"><![CDATA[Összes]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Befejezve]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[Letöltés alatt]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Sikertelen]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[Várakozás]]></Text>
+  <Text key="Network_Error"><![CDATA[Nem sikerült csatlakozni a szerverhez (hálózati hiba). Ellenőrizze az internetkapcsolatot, a tűzfalat/VPN-t/proxyt, és próbálja újra. Ha a szolgáltatás korlátozott az Ön régiójában, állítson be proxyt a Beállításokban, vagy használjon VPN-t. Technikai részlet: %DETAIL%]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[Nem találhatók rejtett linkek. Ellenőrizze a képet és a jelszót.]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[Elhagyhatóan megadhatja a JPEG-minőséget és egy jelszót. Ha nem, hagyja üresen.]]></Text>
+  <Text key="Other options"><![CDATA[Egyéb beállítások]]></Text>
+  <Text key="Output image"><![CDATA[Kimeneti kép]]></Text>
+  <Text key="Output image not specified"><![CDATA[Nincs megadva kimeneti kép]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[A MEGA átviteli kvótája túllépésre került a megosztott mappa olvasásakor (HTTP 509 / -17). A kvótatörő mód be van kapcsolva: a sor nem áll le automatikusan — váltson IP-címet vagy proxyt, és próbálja újra.]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[Válasszon egy meglévő képet „Bemeneti kép”-ként, majd válasszon vagy hozzon létre egy új JPEG-képet „Kimeneti kép”-ként.
+A bemeneti kép lehet meglévő fájl vagy kép URL-címe.]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[Válasszon egy meglévő képet „Bemeneti kép”-ként, vagy adja meg a kép URL-címét.]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Nem sikerült feloldani a rövidített linket. Előfordulhat, hogy már nem elérhető, vagy a hálózat nem elérhető.]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[A szteganográfia az információ más üzenetbe rejtésének művészete és tudománya.
+A szteganográfia segítségével a MegaDownloader lehetővé teszi, hogy egy vagy több linket rejtsen el egy JPEG-képben.
+
+Ezzel a lehetőséggel egy már egy vagy több linket tartalmazó JPEG-képből tölthet be linkeket.
+Ne feledje, hogy a képeket az „Opciók” menü „Szteganográfia” lehetőségével hozhatja létre.
+
+A linkek lekéréséhez kövesse ezt a 2 egyszerű lépést:
+
+1) Válassza ki a rejtett linkeket tartalmazó képet a lemezről, vagy adja meg az URL-címet.
+2) Adja meg a linkek elrejtéséhez használt jelszót (ha nincs jelszó, hagyja üresen).]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[A szteganográfia az információ más üzenetbe rejtésének művészete és tudománya.
+A szteganográfia segítségével a MegaDownloader lehetővé teszi, hogy egy vagy több linket rejtsen el egy JPEG-képben.
+
+A lehetőség használatához kövesse ezt a 3 egyszerű lépést:
+
+1) Adja meg az elrejteni kívánt linkeket
+2) Válassza ki a használni kívánt bemeneti képet és a létrehozni kívánt kimeneti képet.
+3) Elhagyhatóan adjon meg egy jelszót a linkek biztonságának növeléséhez.]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[Szteganográfia varázsló]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[Nem sikerült dekódolni az ELC-linket: nem található benne egyetlen link sem. Előfordulhat, hogy a link sérült.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[Nem sikerült dekódolni az ELC-linket: a szerver nem adott vissza adatot. Előfordulhat, hogy a link sérült, vagy a fiók érvénytelen.]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[A kicsomagolási jelszó dupla idézőjelet tartalmaz, amelyet a beépített 7-Zip kicsomagoló nem tud átadni a parancssorban. Csomagolja ki ezt az archívumot a teljes 7-Zip alkalmazással, vagy használjon olyan archívumot, amelynek jelszava nem tartalmaz dupla idézőjelet.]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[A kép sikeresen elkészült {0} ms alatt]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[Nem sikerült regisztrálni a mega:// protokollt, így a böngészőből megnyitott linkek nem indítják el a MegaDownloader programot. Futtassa az alkalmazást egyszer rendszergazdaként a regisztráláshoz.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Ez a fájl nem egy többrészes RAR-archívum első kötete, így önmagában nincs mit kicsomagolni belőle. Adja hozzá inkább az első kötetet (part1.rar).]]></Text>
+  <Text key="Visible links"><![CDATA[Látható linkek]]></Text>
+  <Text key="Visible links HELP"><![CDATA[Ha bejelöli ezt a lehetőséget, a linkek láthatóak lesznek a lekérdező felhasználó számára.
+Egyébként le tudja tölteni a linkeket, de nem látja azokat.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Figyelmeztetés: az adatellenőrzés nem sikerült. A kimeneti fájl nem jött létre. Ez akkor fordulhat elő, ha a kép túl kicsi; próbálja egy nagyobb képpel.]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Figyelmeztetés: a kép túl kicsi, előfordulhat, hogy az adatok sérültek.]]></Text>
 </Language>

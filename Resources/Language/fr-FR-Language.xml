@@ -71,7 +71,7 @@ Do vous voulez le télécharger?]]></Text>
 
   <Text key="Collaborate"><![CDATA[Collaborer]]></Text>
   <Text key="Creating files"><![CDATA[La création de fichiers]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[En attente]]></Text>
   <Text key="Verifying"><![CDATA[Vérification]]></Text>
   <Text key="Paused"><![CDATA[Pause]]></Text>
   <Text key="Stopped"><![CDATA[Arrêté]]></Text>
@@ -404,4 +404,67 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="VLC path is not valid"><![CDATA[Le chemin de VLC n'est pas valide.]]></Text>
   <Text key="Warning"><![CDATA[Avertissement]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[Stéganographi&e]]></Text>
+  <Text key="Active downloads"><![CDATA[Téléchargements actifs]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Ne plus afficher ce message ? (Oui = ne plus demander)]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Vous êtes en train de saisir un nouveau compte qui n'a pas encore été enregistré. L'abandonner et charger le compte sélectionné ?]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[Saisissez un ou plusieurs liens MEGA à masquer.]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA a renvoyé une réponse inattendue lors de la lecture du dossier partagé. Le lien a peut-être été supprimé, est privé, ou la clé est incorrecte. Vérifiez que le lien s'ouvre dans votre navigateur. Détail technique : %DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Impossible de se connecter à MEGA pour lire le dossier partagé (erreur réseau). Vérifiez votre connexion Internet, votre pare-feu/VPN/proxy et réessayez. Si mega.nz est restreint dans votre région, configurez un proxy dans Configuration ou utilisez un VPN, et assurez-vous que https://mega.nz s'ouvre dans votre navigateur. Détail technique : %DETAIL%]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[Pour plus d'informations, cliquez ici]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[Si l'image a un mot de passe, saisissez-le. Sinon, laissez le champ vide.]]></Text>
+  <Text key="Image to load"><![CDATA[Image à charger]]></Text>
+  <Text key="Images"><![CDATA[Images]]></Text>
+  <Text key="Input image"><![CDATA[Image d'entrée]]></Text>
+  <Text key="Input image does not exist"><![CDATA[L'image d'entrée n'existe pas]]></Text>
+  <Text key="Input image not specified"><![CDATA[Aucune image d'entrée spécifiée]]></Text>
+  <Text key="Introduction"><![CDATA[Introduction]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[Qualité JPEG non valide]]></Text>
+  <Text key="JPEG Quality"><![CDATA[Qualité JPEG]]></Text>
+  <Text key="Load"><![CDATA[Charger]]></Text>
+  <Text key="Nav_All"><![CDATA[Tous]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Terminés]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[En cours]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Échoués]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[En attente]]></Text>
+  <Text key="Network_Error"><![CDATA[Impossible de se connecter au serveur (erreur réseau). Vérifiez votre connexion Internet, votre pare-feu/VPN/proxy et réessayez. Si le service est restreint dans votre région, configurez un proxy dans Configuration ou utilisez un VPN. Détail technique : %DETAIL%]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[Aucun lien masqué n'a été trouvé. Vérifiez l'image et le mot de passe.]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[Vous pouvez éventuellement spécifier la qualité JPEG et un mot de passe. Sinon, laissez les champs vides.]]></Text>
+  <Text key="Other options"><![CDATA[Autres options]]></Text>
+  <Text key="Output image"><![CDATA[Image de sortie]]></Text>
+  <Text key="Output image not specified"><![CDATA[Aucune image de sortie spécifiée]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[Le quota de transfert MEGA a été dépassé lors de la lecture du dossier partagé (HTTP 509 / -17). Le mode dépassement est activé : la file d'attente n'est pas mise en pause automatiquement — changez d'IP ou de proxy et réessayez.]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[Sélectionnez une image existante comme « Image d'entrée », puis sélectionnez ou créez une nouvelle image JPEG comme « Image de sortie ».
+L'image d'entrée peut être un fichier existant ou l'URL d'une image.]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[Sélectionnez une image existante comme « Image d'entrée », ou saisissez l'URL de l'image.]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Impossible de résoudre le lien raccourci. Il est peut-être devenu inaccessible, ou le réseau est injoignable.]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[La stéganographie est l'art et la science de dissimuler des informations dans un autre message.
+Avec la stéganographie, MegaDownloader vous permet de masquer un ou plusieurs liens dans une image JPEG.
+
+Avec cette option, vous pouvez charger des liens depuis une image JPEG qui contient déjà un ou plusieurs liens.
+Notez que vous pouvez générer des images avec l'option « Stéganographie » du menu « Options ».
+
+Pour récupérer les liens, il suffit de suivre ces 2 étapes simples :
+
+1) Sélectionnez l'image contenant les liens masqués sur votre disque, ou saisissez l'URL.
+2) Spécifiez le mot de passe utilisé pour masquer les liens (s'il n'y a pas de mot de passe, laissez le champ vide).]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[La stéganographie est l'art et la science de dissimuler des informations dans un autre message.
+Avec la stéganographie, MegaDownloader vous permet de masquer un ou plusieurs liens dans une image JPEG.
+
+Pour utiliser cette option, il suffit de suivre ces 3 étapes simples :
+
+1) Saisissez les liens que vous voulez masquer
+2) Sélectionnez l'image d'entrée à utiliser et l'image de sortie à générer.
+3) Spécifiez éventuellement un mot de passe pour renforcer la sécurité des liens.]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[Assistant de stéganographie]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[Le lien ELC n'a pas pu être décodé : aucun lien n'a été trouvé à l'intérieur. Le lien est peut-être endommagé.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[Le lien ELC n'a pas pu être décodé : le serveur n'a renvoyé aucune donnée. Le lien est peut-être endommagé ou le compte est peut-être invalide.]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[Le mot de passe d'extraction contient un guillemet double, que l'extracteur 7-Zip intégré ne peut pas transmettre sur sa ligne de commandes. Extrayez cette archive avec l'application 7-Zip complète, ou utilisez une archive dont le mot de passe ne contient pas de guillemets doubles.]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[L'image a été créée avec succès en {0} ms]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[Le protocole mega:// n'a pas pu être enregistré ; les liens ouverts depuis le navigateur ne lanceront donc pas MegaDownloader. Exécutez l'application une fois en tant qu'administrateur pour l'enregistrer.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Ce fichier n'est pas le premier volume d'une archive RAR multiparte ; il n'y a donc rien à en extraire seul. Ajoutez plutôt le premier volume (part1.rar).]]></Text>
+  <Text key="Visible links"><![CDATA[Liens visibles]]></Text>
+  <Text key="Visible links HELP"><![CDATA[Si vous cochez cette option, les liens seront visibles par l'utilisateur qui les récupère.
+Sinon, il pourra télécharger les liens mais pas les voir.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Avertissement : la vérification des données a échoué. Le fichier de sortie n'a pas été créé. Cela peut arriver si l'image est trop petite ; essayez avec une image plus grande.]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Avertissement : image trop petite, les données sont peut-être endommagées.]]></Text>
 </Language>

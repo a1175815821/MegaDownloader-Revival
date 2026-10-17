@@ -9,12 +9,19 @@ Public Class MegaURIProtocol
 
     Public Const UrlProtocol As String = "mega"
     Public Shared Function RegisterUrlProtocol() As Exception
+        Dim rootKey As RegistryKey = Nothing
         Dim rKey As RegistryKey = Nothing
         Try
-            rKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol, False)
+            ' P1-1:写 HKCU\Software\Classes 而不是 HKCR。HKCR 的写入落到 HKLM 需要
+            ' 提权,而 manifest 是 asInvoker——标准用户(以及 -silent 开机自启)下必然抛
+            ' UnauthorizedAccessException,导致每次启动弹框、静默模式更会以无属主模态框
+            ' 阻塞 Main_Load。HKCU 每用户注册无需提权,且优先级高于 HKLM 旧项,
+            ' 便携版挪位置后也不再需要管理员重注册。
+            rootKey = Registry.CurrentUser.CreateSubKey("Software\Classes")
+            rKey = rootKey.OpenSubKey(UrlProtocol, False)
 
             If rKey Is Nothing Then
-                rKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol)
+                rKey = rootKey.CreateSubKey(UrlProtocol)
                 rKey.SetValue("", "URL: mega Protocol")
                 rKey.SetValue("URL Protocol", "")
 
@@ -22,30 +29,31 @@ Public Class MegaURIProtocol
                 'rKeyIcon.SetValue("", """" & iconFilePath & """")
                 If rKey IsNot Nothing Then rKey.Close()
 
-                rKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol & "\shell\open\command")
+                rKey = rootKey.CreateSubKey(UrlProtocol & "\shell\open\command")
                 rKey.SetValue("", """" & Application.ExecutablePath & """ %1")
-                Log.WriteError("MEGA URI protocol added to registry.")
+                Log.WriteInfo("MEGA URI protocol added to registry (HKCU\Software\Classes).")
             Else
+                rKey.Close()
                 Dim val As String = """" & Application.ExecutablePath & """ %1"
 
-                Dim subKey As RegistryKey = rKey.OpenSubKey("shell\open\command", False)
+                Dim subKey As RegistryKey = rootKey.OpenSubKey(UrlProtocol & "\shell\open\command", False)
                 If subKey Is Nothing Then
-                    subKey = Registry.ClassesRoot.CreateSubKey(UrlProtocol & "\shell\open\command")
+                    subKey = rootKey.CreateSubKey(UrlProtocol & "\shell\open\command")
                 End If
                 If subKey Is Nothing OrElse subKey.GetValue("") Is Nothing OrElse CStr(subKey.GetValue("")) <> val Then
                     If subKey IsNot Nothing Then subKey.Close()
-                    subKey = Registry.ClassesRoot.OpenSubKey(UrlProtocol & "\shell\open\command", True)
+                    subKey = rootKey.OpenSubKey(UrlProtocol & "\shell\open\command", True)
                     If subKey IsNot Nothing Then subKey.SetValue("", val)
                 End If
                 If subKey IsNot Nothing Then subKey.Close()
             End If
             Return Nothing
         Catch ex As UnauthorizedAccessException
-            Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry. MEGA URI protocol could not be entered. Execute the application with administrator privileges (at least one time) in order to access the registry. Please note that if you move the application, you will have to execute it again with administrator privileges.")
+            Log.WriteError("SECURITY ERROR: could not write HKCU\Software\Classes for the MEGA URI protocol. Check group policy / registry restrictions. Error: " & Log.SafeException(ex))
             Return ex
 
         Catch ex As Security.SecurityException
-            Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry. MEGA URI protocol could not be entered. Execute the application with administrator privileges (at least one time) in order to access the registry. Please note that if you move the application, you will have to execute it again with administrator privileges.")
+            Log.WriteError("SECURITY ERROR: could not write HKCU\Software\Classes for the MEGA URI protocol. Check group policy / registry restrictions. Error: " & Log.SafeException(ex))
             Return ex
 
         Catch ex As Exception
@@ -54,6 +62,7 @@ Public Class MegaURIProtocol
 
         Finally
             If rKey IsNot Nothing Then rKey.Close()
+            If rootKey IsNot Nothing Then rootKey.Close()
         End Try
     End Function
 

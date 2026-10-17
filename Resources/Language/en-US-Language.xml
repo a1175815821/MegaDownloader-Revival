@@ -117,7 +117,7 @@ If you exit now, the extracted files can be corrupted and you will have to extra
 
   <Text key="Collaborate"><![CDATA[Contribute]]></Text>
   <Text key="Creating files"><![CDATA[Creating files]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[In queue]]></Text>
   <Text key="Verifying"><![CDATA[Verifying]]></Text>
   <Text key="Paused"><![CDATA[Paused]]></Text>
   <Text key="Stopped"><![CDATA[Stopped]]></Text>
@@ -541,4 +541,6 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid.]]></Text>
   <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[The ELC link could not be decoded: no links were found inside. The link may be corrupted.]]></Text>
   <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it.]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Do not show this message again?]]></Text>
+  <Text key="Active downloads"><![CDATA[Active downloads]]></Text>
 </Language>

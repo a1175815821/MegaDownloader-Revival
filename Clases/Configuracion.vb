@@ -44,6 +44,11 @@ Public Class Configuracion
 	''' first-run configuration dialog. This field reflects the load result only and is never
 	''' cleared; Main.vb:450 reads this one, Configuration.vb keeps reading ErrorConfig.</summary>
 	Public LoadErrorConfig As ErrorConfigClass
+
+	''' <summary>P0-3:加载失败是 IOException(文件被瞬时占用)而非损坏时为 True。
+	''' 此时磁盘上的配置可能完好,内存里只能跑默认值——所有写盘必须跳过并保留
+	''' 旧文件,否则 GuardarXML 会把默认值落盘并把完好文件挤进 .bak 直至彻底覆盖。</summary>
+	Public LoadTransientError As Boolean
 	
 	Public RutaDefecto As String
 	
@@ -108,6 +113,9 @@ Public Class Configuracion
 	Public LimiteVelocidadKBs As Integer
 	
 	Public IniciarConWindows As Boolean
+
+	''' <summary>P1-1:用户选择"不再提示"后,mega:// 注册失败不再弹框(仍写日志)。</summary>
+	Public NoMostrarAvisoURI As Boolean
 	
 	Public NivelLog As Log.LevelLogType
 	
@@ -198,6 +206,9 @@ Public Class Configuracion
 	' 之后才追加到 XML 的,所以账号增删改对周期性 GuardarXML(False) 完全不可见 —— P0-1 只能在
 	' 两处导入调用点补 GuardarXML(True) 兜底,陷阱本身还在。此字段让周期保存也能感知账号变更。
 	Private Shared _LastSavedELCAccountsHash As String = Nothing
+	' P0-3 补充:GuardarXML 每 5s 被调用一次,瞬时锁状态下若每次都写 Warning,一小时 700+ 条。
+	' 只在首次真正拦截时记一条,状态本身仍由 LoadTransientError 决定(不影响行为)。
+	Private Shared _TransientSkipLogged As Boolean = False
 	' DPAPI 密文存储前缀：有前缀=DPAPI blob（解密失败=需重填）；无前缀=历史明文（直接沿用，
 	' 下次保存时转加密迁移）。前缀法避免 base64 启发式误判（如 8 位字母数字口令恰为合法 base64）。
 	' 注意：降级到旧版本会读到 "DPAPI:..." 原字串当密码用——升级前备份配置（release notes 已要求）。
@@ -214,12 +225,15 @@ Public Class Configuracion
 	Private Function ELCAccountsHash() As String
 		Try
 			Dim sb As New System.Text.StringBuilder()
-			For Each Account As ELCAccountHelper.Account In Me.ELCAccounts
-				sb.Append(Account.Alias).Append(vbTab).Append(Account.URL).Append(vbTab).
-					Append(Criptografia.ToInsecureString(Account.User)).Append(vbTab).
-					Append(Criptografia.ToInsecureString(Account.Key)).Append(vbTab).
-					Append(If(Account.DefaultAccount, "1", "0")).Append(vbLf)
-			Next
+			' P1-5:持统一锁遍历(列表可能正被 ELCAccountHelper.SaveToConfig 换引用/释放)
+			SyncLock ELCAccountHelper.ELCAccountsLock
+				For Each Account As ELCAccountHelper.Account In Me.ELCAccounts
+					sb.Append(Account.Alias).Append(vbTab).Append(Account.URL).Append(vbTab).
+						Append(Criptografia.ToInsecureString(Account.User)).Append(vbTab).
+						Append(Criptografia.ToInsecureString(Account.Key)).Append(vbTab).
+						Append(If(Account.DefaultAccount, "1", "0")).Append(vbLf)
+				Next
+			End SyncLock
 			Using sha As System.Security.Cryptography.SHA256 = System.Security.Cryptography.SHA256.Create()
 				Return System.Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(sb.ToString())))
 			End Using
@@ -290,6 +304,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("LimiteVelocidadKBs")).InnerText = LimiteVelocidadKBs.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("IniciarConWindows")).InnerText = IniciarConWindows.ToString
+		If NoMostrarAvisoURI Then Xml.DocumentElement.AppendChild(Xml.CreateElement("NoMostrarAvisoURI")).InnerText = NoMostrarAvisoURI.ToString
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingActivo")).InnerText = ServidorStreamingActivo.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ServidorStreamingPuerto")).InnerText = ServidorStreamingPuerto.ToString
@@ -313,7 +328,18 @@ Public Class Configuracion
 		Dim Fichero As String
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
-		
+
+		' P0-3:加载时文件被瞬时占用、内存是默认值——拒绝写盘保住磁盘上的完好配置。
+		' 必须挡在去重比对之前,否则 _LastSaved* 被更新后,占用解除时反而跳过真正的补写。
+		If LoadTransientError AndAlso System.IO.File.Exists(Fichero) Then
+			If Not _TransientSkipLogged Then
+				_TransientSkipLogged = True
+				Log.WriteWarning("Skipping configuration save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
+			End If
+			ErrorConfig = ErrorConfigClass.Fichero_No_Creado
+			Exit Sub
+		End If
+
 		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
 		Dim curProxyPasswordPlain As String = If(ProxyPassword, "")
 		Dim curStreamingPasswordPlain As String = If(ServidorStreamingPassword, "")
@@ -353,14 +379,19 @@ Public Class Configuracion
 			
 			
 			Dim AccountsNode As XmlNode = Xml.DocumentElement.AppendChild(Xml.CreateElement("ELCAccounts"))
-			For Each Account As ELCAccountHelper.Account In Me.ELCAccounts
-				Dim AccountNode As XmlNode = AccountsNode.AppendChild(Xml.CreateElement("Account"))
-				AccountNode.AppendChild(Xml.CreateElement("Name")).InnerText = Account.Alias
-				AccountNode.AppendChild(Xml.CreateElement("URL")).InnerText = Account.URL
-				AccountNode.AppendChild(Xml.CreateElement("User")).InnerText = Criptografia.EncryptString_DPAPI(Account.User)
-				AccountNode.AppendChild(Xml.CreateElement("Key")).InnerText = Criptografia.EncryptString_DPAPI(Account.Key)
-				AccountNode.AppendChild(Xml.CreateElement("Default")).InnerText = If(Account.DefaultAccount, "1", "0")
-			Next
+			' P1-5:持统一锁遍历 —— 本循环在 GuardarXML 的 Try 之外,此前
+			' ELCAccountHelper.SaveToConfig 就地重建列表会抛 "Collection was modified"
+			' / ObjectDisposedException 直接炸死磁盘 worker(自动存盘全停)。
+			SyncLock ELCAccountHelper.ELCAccountsLock
+				For Each Account As ELCAccountHelper.Account In Me.ELCAccounts
+					Dim AccountNode As XmlNode = AccountsNode.AppendChild(Xml.CreateElement("Account"))
+					AccountNode.AppendChild(Xml.CreateElement("Name")).InnerText = Account.Alias
+					AccountNode.AppendChild(Xml.CreateElement("URL")).InnerText = Account.URL
+					AccountNode.AppendChild(Xml.CreateElement("User")).InnerText = Criptografia.EncryptString_DPAPI(Account.User)
+					AccountNode.AppendChild(Xml.CreateElement("Key")).InnerText = Criptografia.EncryptString_DPAPI(Account.Key)
+					AccountNode.AppendChild(Xml.CreateElement("Default")).InnerText = If(Account.DefaultAccount, "1", "0")
+				Next
+			End SyncLock
 			
 			Log.WriteDebug("Saving configuration")
 			
@@ -408,8 +439,9 @@ Public Class Configuracion
 		
 		Dim Xml As XmlDocument = Nothing
 		Dim recoveredFromBackup As Boolean = False
+		Dim transientFailure As Boolean = False
 		SyncLock Mutex.GuardarConfig
-			If Not AtomicFile.TryLoadXml(Fichero, Xml, recoveredFromBackup) Then
+			If Not AtomicFile.TryLoadXml(Fichero, Xml, recoveredFromBackup, transientFailure) Then
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
 					ErrorConfig = ErrorConfigClass.Fichero_No_Existe
@@ -417,7 +449,14 @@ Public Class Configuracion
 				Else
 					ErrorConfig = ErrorConfigClass.Fichero_No_Valido
 					LoadErrorConfig = ErrorConfigClass.Fichero_No_Valido
-					Log.WriteError("Configuration file could not be loaded (primary and backup failed).")
+					' P0-3:被占用(杀软/备份/同步盘)≠损坏。内存照跑默认值,但磁盘文件
+					' 可能完好,置标记让 GuardarXML 一律拒写,保住旧文件。
+					LoadTransientError = transientFailure
+					If transientFailure Then
+						Log.WriteError("Configuration file is locked by another process (transient). Running with defaults; writes are suspended to preserve the on-disk file.")
+					Else
+						Log.WriteError("Configuration file could not be loaded (primary and backup failed).")
+					End If
 				End If
 				ConfiguracionDefectoVacia()
 				Exit Sub
@@ -475,6 +514,7 @@ Public Class Configuracion
 		Dim needV25Migration As Boolean = Not ResetearErroresMigratedV25
 		Boolean.TryParse(LeerNodo(Xml, "UsarProxy", "false"), UsarProxy)
 		Boolean.TryParse(LeerNodo(Xml, "IniciarConWindows", "false"), IniciarConWindows)
+		Boolean.TryParse(LeerNodo(Xml, "NoMostrarAvisoURI", "false"), NoMostrarAvisoURI)
 		Boolean.TryParse(LeerNodo(Xml, "MantenerUltimaConfiguracion", "true"), MantenerUltimaConfiguracion)
         Boolean.TryParse(LeerNodo(Xml, "ComenzarDescargando", "true"), ComenzarDescargando)
 		Boolean.TryParse(LeerNodo(Xml, "ApagarPC", "false"), ApagarPC)

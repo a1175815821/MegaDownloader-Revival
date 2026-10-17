@@ -561,18 +561,19 @@ Public Class AddLinks
                 End If
             End If
 
+            ' 带子目录的文件夹分享:真名同样先赋值再建目录,与 Main.ControlRemotoAgregarLinks 形状统一
+            ' (此前建目录之后才回写显示名、刻意不套顶层目录,同一文件夹链接两个入口落盘形状不一致:
+            ' Web 推送多套一层真名目录而 AddLinks 不套)。赋值必须在建目录之前,建目录分支才会用真名建顶层目录。
+            If folderNamePending AndAlso .PendienteNombrePaquete Then
+                .Nombre = folderName
+                .PendienteNombrePaquete = False
+            End If
+
             ' Creamos el directorio
             If .CrearSubdirectorio And Not String.IsNullOrEmpty(.Nombre) Then
                 Dim packageSegment As String = PathGuard.SanitizeFileName(.Nombre, "package")
                 .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
                 System.IO.Directory.CreateDirectory(.RutaLocal)
-            End If
-
-            ' 带子目录的文件夹分享:只回写显示名,不额外套顶层目录(保持 issue #4 之后的落盘行为),
-            ' 因此必须在建目录之后赋值,否则会被上面的分支当成用户填的包名建出一层来。
-            If folderNamePending AndAlso .PendienteNombrePaquete Then
-                .Nombre = folderName
-                .PendienteNombrePaquete = False
             End If
 
             Log.WriteWarning("Adding package in " & .RutaLocal)

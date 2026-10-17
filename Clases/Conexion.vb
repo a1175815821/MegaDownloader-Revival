@@ -85,14 +85,40 @@ Public Class Conexion
     ''' "http://http//1.2.3.4:port" — a host literally named "http" — and every request then
     ''' failed with no hint that the field format was at fault. Surrounding whitespace and a
     ''' trailing slash are also rejected by the Uri parser, so they are trimmed here too.
-    ''' Bracketed IPv6 ("[::1]") is preserved untouched.
+    ''' P1-2: an inline port ("127.0.0.1:7890", "[::1]:8080") must be stripped as well —
+    ''' WebProxy("host:port", port) throws UriFormatException ("指定的端口无效") on every
+    ''' request, and the label "代理地址/IP" invites exactly that input. The separate port
+    ''' field in Configuration is the single source of truth for the port number.
+    ''' Bracketed IPv6 ("[::1]") is preserved; bare IPv6 ("::1") gets wrapped in brackets.
     ''' </summary>
     Private Shared Function NormalizeProxyHost(ByVal value As String) As String
         If String.IsNullOrEmpty(value) Then Return value
         Dim host As String = value.Trim()
         Dim schemeAt As Integer = host.IndexOf("://", StringComparison.Ordinal)
         If schemeAt >= 0 Then host = host.Substring(schemeAt + 3)
-        Return host.Trim().TrimEnd("/"c, "\"c)
+        host = host.Trim().TrimEnd("/"c, "\"c)
+
+        ' [IPv6]:port → [IPv6](括号后的任何后缀都是端口)
+        If host.StartsWith("[", StringComparison.Ordinal) Then
+            Dim closeBracket As Integer = host.IndexOf("]"c)
+            If closeBracket >= 0 Then Return host.Substring(0, closeBracket + 1)
+            Return host
+        End If
+
+        Dim firstColon As Integer = host.IndexOf(":"c)
+        If firstColon >= 0 Then
+            Dim secondColon As Integer = host.IndexOf(":"c, firstColon + 1)
+            If secondColon < 0 Then
+                ' 单冒号 = host:port(首字符即冒号的 ":8080" 属垃圾输入,原样返回交由上层报错)
+                If firstColon > 0 Then Return host.Substring(0, firstColon)
+            Else
+                ' 裸 IPv6 → 加括号,否则 WebProxy 拼出的 URI 非法。注意回环地址 "::1" 的首字符
+                ' 就是冒号:旧代码用 "firstColon > 0" 判断,恰好把它漏掉,输入 "::1" 时
+                ' WebProxy 抛 UriFormatException("未能分析主机名")。
+                Return "[" & host & "]"
+            End If
+        End If
+        Return host
     End Function
 
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest

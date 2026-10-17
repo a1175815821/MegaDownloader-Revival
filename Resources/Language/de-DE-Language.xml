@@ -69,7 +69,7 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
   <Text key="&amp;About"><![CDATA[&Über MegaDownloader]]></Text>
   <Text key="Creating files"><![CDATA[Erstellen von Dateien]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[In Warteschlange]]></Text>
   <Text key="Verifying"><![CDATA[Überprüfen]]></Text>
   <Text key="Paused"><![CDATA[Angehalten]]></Text>
   <Text key="Stopped"><![CDATA[Gestoppt]]></Text>
@@ -427,4 +427,67 @@ Sie können diese Funktion auf dem Bildschirm 'Konfiguration' im Tab 'Streaming'
 
 Nach der Konfiguration klicken Sie auf die Schaltfläche 'Online ansehen', um das Video auf Ihrem PC per Streaming anzusehen.]]></Text>
   <Text key="Web server and streaming server ports must be different"><![CDATA[Der Port des Streaming-Servers und der Port des Webservers dürfen nicht identisch sein.]]></Text>
+  <Text key="Active downloads"><![CDATA[Aktive Downloads]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Diese Meldung nicht mehr anzeigen? (Ja = nicht mehr nachfragen)]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Sie haben ein neues Konto eingegeben, das noch nicht gespeichert wurde. Verwerfen und das ausgewählte Konto laden?]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[Geben Sie einen oder mehrere MEGA-Links ein, die verborgen werden sollen.]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA hat beim Lesen des freigegebenen Ordners eine unerwartete Antwort zurückgegeben. Der Link wurde möglicherweise gelöscht, ist privat oder der Schlüssel ist falsch. Bitte prüfen Sie, ob der Link in Ihrem Browser geöffnet wird. Technisches Detail: %DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Beim Lesen des freigegebenen Ordners konnte keine Verbindung zu MEGA hergestellt werden (Netzwerkfehler). Prüfen Sie Ihre Internetverbindung, Firewall/VPN/Proxy und versuchen Sie es erneut. Falls mega.nz in Ihrer Region eingeschränkt ist, konfigurieren Sie einen Proxy in der Konfiguration oder verwenden Sie ein VPN, und stellen Sie sicher, dass https://mega.nz in Ihrem Browser geöffnet wird. Technisches Detail: %DETAIL%]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[Weitere Informationen finden Sie hier]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[Falls das Bild ein Passwort hat, geben Sie es ein. Andernfalls lassen Sie das Feld leer.]]></Text>
+  <Text key="Image to load"><![CDATA[Zu ladendes Bild]]></Text>
+  <Text key="Images"><![CDATA[Bilder]]></Text>
+  <Text key="Input image"><![CDATA[Eingabebild]]></Text>
+  <Text key="Input image does not exist"><![CDATA[Das Eingabebild existiert nicht]]></Text>
+  <Text key="Input image not specified"><![CDATA[Kein Eingabebild angegeben]]></Text>
+  <Text key="Introduction"><![CDATA[Einführung]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[Ungültige JPEG-Qualität]]></Text>
+  <Text key="JPEG Quality"><![CDATA[JPEG-Qualität]]></Text>
+  <Text key="Load"><![CDATA[Laden]]></Text>
+  <Text key="Nav_All"><![CDATA[Alle]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Abgeschlossen]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[Aktiv]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Fehlgeschlagen]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[Wartend]]></Text>
+  <Text key="Network_Error"><![CDATA[Es kann keine Verbindung zum Server hergestellt werden (Netzwerkfehler). Prüfen Sie Ihre Internetverbindung, Firewall/VPN/Proxy und versuchen Sie es erneut. Falls der Dienst in Ihrer Region eingeschränkt ist, konfigurieren Sie einen Proxy in der Konfiguration oder verwenden Sie ein VPN. Technisches Detail: %DETAIL%]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[Es wurden keine verborgenen Links gefunden. Bitte prüfen Sie das Bild und das Passwort.]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[Optional können Sie die JPEG-Qualität und ein Passwort angeben. Andernfalls lassen Sie die Felder leer.]]></Text>
+  <Text key="Other options"><![CDATA[Weitere Optionen]]></Text>
+  <Text key="Output image"><![CDATA[Ausgabebild]]></Text>
+  <Text key="Output image not specified"><![CDATA[Kein Ausgabebild angegeben]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[Beim Lesen des freigegebenen Ordners wurde das MEGA-Transferkontingent überschritten (HTTP 509 / -17). Der Durchbruchsmodus ist aktiv: Die Warteschlange wird nicht automatisch angehalten – ändern Sie die IP oder den Proxy und versuchen Sie es erneut.]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[Wählen Sie ein vorhandenes Bild als "Eingabebild" aus und wählen Sie dann ein neues JPEG-Bild als "Ausgabebild" aus oder erstellen Sie es.
+Das Eingabebild kann eine vorhandene Datei oder eine Bild-URL sein.]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[Wählen Sie ein vorhandenes Bild als "Eingabebild" aus oder geben Sie die Bild-URL ein.]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Der gekürzte Link konnte nicht aufgelöst werden. Er ist möglicherweise nicht mehr verfügbar oder das Netzwerk ist nicht erreichbar.]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[Steganografie ist die Kunst und Wissenschaft, Informationen in einer anderen Nachricht zu verbergen.
+Mit der Steganografie können Sie mit MegaDownloader einen oder mehrere Links in einem JPEG-Bild verbergen.
+
+Mit dieser Option können Sie Links aus einem JPEG-Bild laden, das bereits einen oder mehrere Links enthält.
+Bitte beachten Sie, dass Sie Bilder mit der Option "Steganografie" im Menü "Optionen" erzeugen können.
+
+Um die Links abzurufen, genügen diese 2 einfachen Schritte:
+
+1) Wählen Sie das Bild mit den verborgenen Links von Ihrer Festplatte aus, oder geben Sie die URL ein.
+2) Geben Sie das zum Verbergen der Links verwendete Passwort an (falls es kein Passwort gibt, lassen Sie das Feld leer).]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[Steganografie ist die Kunst und Wissenschaft, Informationen in einer anderen Nachricht zu verbergen.
+Mit der Steganografie können Sie mit MegaDownloader einen oder mehrere Links in einem JPEG-Bild verbergen.
+
+Um diese Option zu nutzen, genügen diese 3 einfachen Schritte:
+
+1) Geben Sie die Links ein, die Sie verbergen möchten
+2) Wählen Sie das Eingabebild, das Sie verwenden möchten, und das Ausgabebild, das Sie erzeugen möchten.
+3) Geben Sie optional ein Passwort an, um die Sicherheit der Links zu erhöhen.]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[Steganografie-Assistent]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[Der ELC-Link konnte nicht dekodiert werden: Es wurden keine Links darin gefunden. Der Link ist möglicherweise beschädigt.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[Der ELC-Link konnte nicht dekodiert werden: Der Server hat keine Daten zurückgegeben. Der Link ist möglicherweise beschädigt oder das Konto ist ungültig.]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[Das Extraktionspasswort enthält ein doppeltes Anführungszeichen, das der integrierte 7-Zip-Extraktor nicht an die Befehlszeile übergeben kann. Extrahieren Sie dieses Archiv mit der vollständigen 7-Zip-Anwendung oder verwenden Sie ein Archiv, dessen Passwort keine doppelten Anführungszeichen enthält.]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[Das Bild wurde erfolgreich in {0} ms erstellt]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[Das Protokoll mega:// konnte nicht registriert werden, daher starten Links, die im Browser geöffnet werden, MegaDownloader nicht. Führen Sie die Anwendung einmal als Administrator aus, um es zu registrieren.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Diese Datei ist nicht der erste Band eines mehrteiligen RAR-Archivs, daher lässt sich daraus allein nichts entpacken. Fügen Sie stattdessen den ersten Band (part1.rar) hinzu.]]></Text>
+  <Text key="Visible links"><![CDATA[Sichtbare Links]]></Text>
+  <Text key="Visible links HELP"><![CDATA[Falls Sie diese Option aktivieren, sind die Links für den Benutzer sichtbar, der sie abruft.
+Andernfalls kann er die Links herunterladen, aber nicht sehen.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Warnung: Die Datenprüfung ist fehlgeschlagen. Die Ausgabedatei wurde nicht erstellt. Dies kann passieren, wenn das Bild zu klein ist – versuchen Sie es mit einem größeren Bild.]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Warnung: Das Bild ist zu klein, möglicherweise sind die Daten beschädigt.]]></Text>
 </Language>

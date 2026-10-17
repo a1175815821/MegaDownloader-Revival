@@ -114,7 +114,7 @@ Si sale ahora, los ficheros extraídos pueden quedar inservibles y tendrá que d
 
   <Text key="Collaborate"><![CDATA[Colaborar]]></Text>
   <Text key="Creating files"><![CDATA[Creando ficheros]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[En cola]]></Text>
   <Text key="Verifying"><![CDATA[Verificando]]></Text>
   <Text key="Paused"><![CDATA[Pausado]]></Text>
   <Text key="Stopped"><![CDATA[Detenido]]></Text>
@@ -528,4 +528,18 @@ Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen m�
   <Text key="VLC could not be started"><![CDATA[No se pudo iniciar VLC. Compruebe que VLC está instalado y que su ruta está configurada.]]></Text>
   <Text key="VLC path is not valid"><![CDATA[La ruta de VLC no es válida.]]></Text>
   <Text key="Warning"><![CDATA[Advertencia]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[¿No volver a mostrar este mensaje? (Sí = no volver a preguntar)]]></Text>
+  <Text key="Active downloads"><![CDATA[Descargas activas]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Estaba introduciendo una cuenta nueva y todavía no se ha guardado. ¿Desea descartarla y cargar la cuenta seleccionada?]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA devolvió una respuesta inesperada al leer la carpeta compartida. Es posible que el enlace se haya eliminado, que sea privado o que la clave sea incorrecta. Compruebe que el enlace se abre en su navegador. Detalle técnico: %DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[No se puede conectar a MEGA para leer la carpeta compartida (error de red). Compruebe su conexión a Internet, el firewall/VPN/proxy e inténtelo de nuevo. Si mega.nz está restringido en su región, configure un proxy en Configuración o use una VPN, y asegúrese de que https://mega.nz se abre en su navegador. Detalle técnico: %DETAIL%]]></Text>
+  <Text key="Network_Error"><![CDATA[No se puede conectar con el servidor (error de red). Compruebe su conexión a Internet, el firewall/VPN/proxy e inténtelo de nuevo. Si el servicio está restringido en su región, configure un proxy en Configuración o use una VPN. Detalle técnico: %DETAIL%]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[Se superó la cuota de transferencia de MEGA al leer la carpeta compartida (HTTP 509 / -17). El modo de superación de cuota está activado: la cola no se pausa automáticamente; cambie de IP o de proxy e inténtelo de nuevo.]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[No se pudo resolver el enlace acortado. Puede que esté caído o que no haya acceso a la red.]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[No se pudo decodificar el enlace ELC: no se encontró ningún enlace en su interior. Puede que el enlace esté dañado.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[No se pudo decodificar el enlace ELC: el servidor no devolvió ningún dato. Puede que el enlace esté dañado o que la cuenta no sea válida.]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[La contraseña de extracción contiene una comilla doble, que el extractor 7-Zip integrado no puede pasar en su línea de comandos. Extraiga este archivo con la aplicación 7-Zip completa, o use un archivo cuya contraseña no contenga comillas dobles.]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[No se pudo registrar el protocolo mega://, por lo que los enlaces abiertos desde el navegador no iniciarán MegaDownloader. Ejecute la aplicación una vez como administrador para registrarlo.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Este archivo no es el primer volumen de un archivo RAR multiparte, así que no hay nada que extraer de él por sí solo. Añada el primer volumen (part1.rar) en su lugar.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Advertencia: la verificación de datos ha fallado. No se ha creado el archivo de salida. Esto puede ocurrir si la imagen es demasiado pequeña; pruebe con una imagen más grande.]]></Text>
 </Language>

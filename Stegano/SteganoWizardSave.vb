@@ -59,7 +59,10 @@ Namespace Stegano
                     Throw New ApplicationException(Language.GetText("Output image not specified"))
                 End If
 
-                If Not System.IO.File.Exists(txtImageInput.Text) AndAlso Not IsValidUri(txtImageInput.Text) Then
+                ' P1-3: 旧校验 IsValidUri 对 Windows 路径恒真(Uri 把 "C:\..." 解析成
+                ' scheme=file),不存在的路径被放行,随后 CreateImage 直接炸原始
+                ' InvalidCastException。改用 SteganoManager.IsValidImageSource。
+                If Not SteganoManager.IsValidImageSource(txtImageInput.Text) Then
                     Throw New ApplicationException(Language.GetText("Input image does not exist"))
                 End If
 
@@ -84,12 +87,12 @@ Namespace Stegano
                 MessageBox.Show(String.Format(Language.GetText("The image was created successfully in {0} ms"), Now.Subtract(start).TotalMilliseconds.ToString("F2")), Language.GetText("Save"), MessageBoxButtons.OK, MessageBoxIcon.Information)
 
             Catch ex As ApplicationException
-                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
 
             Catch ex As Exception
                 Log.WriteError("Error trying to generate stegano: " & ex.ToString)
-                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
 
             End Try
 
@@ -98,16 +101,6 @@ Namespace Stegano
             btSave.Text = Language.GetText("Save")
 
         End Sub
-
-        Public Function IsValidUri(url As String) As Boolean
-            ' RelativeOrAbsolute 对 "hello world" 这类字符串也返回 True,校验形同虚设;
-            ' 必须限定 Absolute 且只允许 http/https/file(本地图片路径)
-            Dim validatedUri As Uri = Nothing
-            If Not Uri.TryCreate(url, UriKind.Absolute, validatedUri) Then Return False
-            Return validatedUri.Scheme = Uri.UriSchemeHttp OrElse _
-                   validatedUri.Scheme = Uri.UriSchemeHttps OrElse _
-                   validatedUri.Scheme = Uri.UriSchemeFile
-        End Function
 
         Private Sub btCancel_Click(sender As Object, e As EventArgs) Handles btCancel.Click
             Me.Close()

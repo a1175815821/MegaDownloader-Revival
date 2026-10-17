@@ -3,6 +3,13 @@
 Public Class ELCAccountHelper
     Implements IDisposable
 
+    ' P1-5:ELCAccounts 列表及其 SecureString 的统一保护锁。Configuracion.GuardarXML /
+    ' ELCAccountsHash 跑在磁盘 worker(每 5s)上,而 SaveToConfig 在 UI 线程就地
+    ' Dispose→Clear→Add 重建列表,两者并发时读侧 For Each(在 GuardarXML 的 Try 之外)
+    ' 抛 "Collection was modified" / ObjectDisposedException 直接炸死磁盘 worker,
+    ' 本会话内自动存盘全部停摆。所有对 Config.ELCAccounts 的读写都必须持此锁。
+    Public Shared ReadOnly ELCAccountsLock As New Object
+
     Private _AccountList As Generic.List(Of Account)
 
     Public Class Account
@@ -15,15 +22,18 @@ Public Class ELCAccountHelper
 
     Public Sub New(ByRef Config As Configuracion)
         Me._AccountList = New Generic.List(Of Account)
-        For Each c As Account In Config.ELCAccounts
-            Dim newAccount As New Account
-            newAccount.User = c.User.Copy
-            newAccount.Key = c.Key.Copy
-            newAccount.Alias = c.Alias
-            newAccount.URL = c.URL
-            newAccount.DefaultAccount = c.DefaultAccount
-            Me._AccountList.Add(newAccount)
-        Next
+        ' P1-5:持锁遍历 Config.ELCAccounts(可能正被 SaveToConfig 换引用/释放)
+        SyncLock ELCAccountsLock
+            For Each c As Account In Config.ELCAccounts
+                Dim newAccount As New Account
+                newAccount.User = c.User.Copy
+                newAccount.Key = c.Key.Copy
+                newAccount.Alias = c.Alias
+                newAccount.URL = c.URL
+                newAccount.DefaultAccount = c.DefaultAccount
+                Me._AccountList.Add(newAccount)
+            Next
+        End SyncLock
     End Sub
 
 
@@ -109,12 +119,12 @@ Public Class ELCAccountHelper
     End Sub
 
     Public Sub SaveToConfig(ByRef Config As Configuracion)
-        For Each c As Account In Config.ELCAccounts
-            c.User.Dispose()
-            c.Key.Dispose()
-        Next
-        Config.ELCAccounts.Clear()
-
+        ' P1-5:先在锁外把新列表构造成独立副本,再持锁一次性换引用并释放旧 SecureString。
+        ' 旧代码就地 Dispose→Clear→Add,与 GuardarXML 的 For Each 竞态(见 ELCAccountsLock
+        ' 注释);现在任何读方持同一把锁,看到的要么是完整旧列表、要么是完整新列表,
+        ' 绝不会踩到半改状态或已释放的 SecureString。整体换引用仿
+        ' Forms/Configuration.vb 对 ListaPreSharedKeys 的安全写法。
+        Dim newList As New Generic.List(Of Account)
         For Each c As Account In _AccountList
             Dim newAccount As New Account
             newAccount.User = c.User.Copy
@@ -122,8 +132,18 @@ Public Class ELCAccountHelper
             newAccount.DefaultAccount = c.DefaultAccount
             newAccount.URL = c.URL
             newAccount.Alias = c.Alias
-            Config.ELCAccounts.Add(newAccount)
+            newList.Add(newAccount)
         Next
+
+        SyncLock ELCAccountsLock
+            If Config.ELCAccounts IsNot Nothing Then
+                For Each c As Account In Config.ELCAccounts
+                    c.User.Dispose()
+                    c.Key.Dispose()
+                Next
+            End If
+            Config.ELCAccounts = newList
+        End SyncLock
     End Sub
     
     Public function ImportConfig(ByVal ConfigList As Generic.List(Of String), byref MainForm As Main) As Boolean

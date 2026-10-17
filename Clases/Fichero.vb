@@ -846,6 +846,11 @@ Public Class Fichero
 		If s.IndexOf("-11", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EACCESS", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
 		If s.IndexOf("-14", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EKEY", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
 		If s.IndexOf("-16", StringComparison.Ordinal) >= 0 AndAlso s.IndexOf("EBLOCKED", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+		' 第11项(唯一的文本匹配例外):MEGA MetaMAC 校验失败(算法修正后 mismatch 即真损坏)
+		' 必须按永久失败处理 —— 否则自愈(默认开、15 分钟周期)每轮把整个文件重下一遍、
+		' 烧等量 MEGA 配额,而旧提示语承诺的 "从上次有效分块继续" 并不存在(分块被整体清零)。
+		' 用户仍可右键 "重试全部失败" 手动重试。
+		If s.IndexOf("MetaMAC verification failed", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
 		Return False
 	End Function
 
@@ -1119,7 +1124,8 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("DescargaProcesada")).InnerText = DescargaProcesada.ToString
         NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroAutomatica")).InnerText = ExtraccionFicheroAutomatica.ToString
 
-        If Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
+        ' DPAPI 密文(随机盐,每次不同)只写真盘、不进比对快照,理由同 Paquete.GuardarXML。
+        If IncluirDatosCifrados AndAlso Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
             NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = Criptografia.EncryptString_DPAPI(Criptografia.ToSecureString(ExtraccionFicheroPassword))
         End If
 

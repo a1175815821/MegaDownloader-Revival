@@ -218,8 +218,15 @@ Public Class Paquete
 
         Dim XML As XmlDocument = Nothing
         Dim recoveredFromBackup As Boolean = False
+        Dim transientFailure As Boolean = False
         SyncLock Mutex.GuardarDownloadList
-            If Not AtomicFile.TryLoadXml(Fichero, XML, recoveredFromBackup) Then
+            If Not AtomicFile.TryLoadXml(Fichero, XML, recoveredFromBackup, transientFailure) Then
+                ' P0-3:被瞬时占用 ≠ 损坏:置标记让 GuardarEnFichero 拒写,否则周期性
+                ' 落盘会把"空队列"写盘、把完好队列文件挤进 .bak 直至彻底覆盖。
+                _LoadTransientError = transientFailure
+                If transientFailure Then
+                    Log.WriteError("Download list is locked by another process (transient). Running with an empty list; writes are suspended to preserve the on-disk file.")
+                End If
                 Return New Generic.List(Of Paquete)
             End If
             If recoveredFromBackup Then
@@ -247,10 +254,16 @@ Public Class Paquete
                     If Fichero.DescargaEstado = Estado.Descargando Or _
                        Fichero.DescargaEstado = Estado.Pausado Or _
                        Fichero.DescargaEstado = Estado.Verificando Or _
-                       Fichero.DescargaEstado = Estado.Descomprimiendo Then
+                       Fichero.DescargaEstado = Estado.Descomprimiendo Or _
+                       Fichero.DescargaEstado = Estado.CreandoLocal Or _
+                       Fichero.DescargaEstado = Estado.ComprobandoMD5 Then
                         ' Verificando 是下载前的瞬态(EstadoAnterior 已丢失),Descomprimiendo 是下载完成但解压未完成:
                         ' 两者都不能标 Completado,否则“一字节没解也报成功”。统一回 EnCola,靠断点续传继续,
                         ' 已完整的文件只会做快速校验,不会从零重下。
+                        ' CreandoLocal/ComprobandoMD5 同为瞬态且持久化后会被原样读回:漏掉它们时,
+                        ' 关机窗口(API 验证 60s 超时/强杀/断电)内存盘的任务重启后既不会被调度
+                        ' (调度只认 EnCola)又占着 DescargasSimultaneas 名额,ForzarDescarga 也救不回,
+                        ' 队列永久停摆;ComprobandoMD5 还会被当成"已完成"。必须一并归一化。
                         Fichero.SetDescargaEstado = Estado.EnCola
                     End If
                     ' ③:存量 KB→控制器字节(×1024),否则历史限速全部 1/1024。
@@ -261,9 +274,22 @@ Public Class Paquete
     End Sub
 
     Private Shared _LastSavedXML As String = Nothing
+    ''' <summary>P0-3:见 CargarDesdeFichero——加载因文件被瞬时占用而失败时,磁盘上的
+    ''' 队列可能完好,写盘必须全部跳过(空列表落盘=用户队列被清空)。</summary>
+    Private Shared _LoadTransientError As Boolean = False
+    ' 同 Configuracion._TransientSkipLogged:GuardarEnFichero 每 5s 一次,只在首次拦截时记日志。
+    Private Shared _TransientSkipLogged As Boolean = False
     Public Shared Sub GuardarEnFichero(ByVal ListaPaquetes As Generic.List(Of Paquete))
 
         Dim Fichero As String = ObtenerRutaFicheroDescargas()
+
+        If _LoadTransientError AndAlso System.IO.File.Exists(Fichero) Then
+            If Not _TransientSkipLogged Then
+                _TransientSkipLogged = True
+                Log.WriteWarning("Skipping download list save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
+            End If
+            Exit Sub
+        End If
 
         Dim XML As XmlDocument = GuardarXML(ListaPaquetes, False)
 
@@ -353,7 +379,10 @@ Public Class Paquete
         NodoPaq.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
         NodoPaq.AppendChild(XML.CreateElement("CrearSubdirectorio")).InnerText = CrearSubdirectorio.ToString
         NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroAutomatica")).InnerText = ExtraccionFicheroAutomatica.ToString
-        If Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
+        ' 密文(随机 IV,每次不同)不得进入 IncluirDatosCifrados=False 的去重比对快照,
+        ' 否则 _LastSavedXML 恒不相等,队列每 5 秒全量落盘(WriteThrough+fsync+Replace+.bak)。
+        ' 与 Configuracion 的 B2-⑦/P0-4 处理一致:只写真盘,不参与比对。
+        If IncluirDatosCifrados AndAlso Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
             Dim encryptedZipPass As String = Criptografia.AES_EncryptString(ExtraccionFicheroPassword, "passZIP")
             If encryptedZipPass IsNot Nothing Then
                 NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = encryptedZipPass

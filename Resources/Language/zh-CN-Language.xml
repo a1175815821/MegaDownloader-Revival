@@ -69,7 +69,7 @@
   <Text key="Links"><![CDATA[连接]]></Text>
   <Text key="Hour"><![CDATA[时]]></Text>
   <Text key="Queued, error, completed"><![CDATA[队列, 错误与完成]]></Text>
-  <Text key="active downloads"><![CDATA[启用下载]]></Text>
+  <Text key="active downloads"><![CDATA[个活动下载]]></Text>
   <Text key="Error information"><![CDATA[错误信息]]></Text>
   <Text key="New version available"><![CDATA[新版本可用]]></Text>
   <Text key="New version do you want to download it? Recommended!"><![CDATA[有 MegaDownloader 的新版本。建议你更新它。
@@ -107,7 +107,7 @@
   <Text key="Encode lin&amp;ks"><![CDATA[加密网址(&L)]]></Text>
   <Text key="Collaborate"><![CDATA[贡献]]></Text>
   <Text key="Creating files"><![CDATA[创建文件中]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[排队中]]></Text>
   <Text key="Verifying"><![CDATA[验证中]]></Text>
   <Text key="Paused"><![CDATA[已暂停]]></Text>
   <Text key="Stopped"><![CDATA[已停止]]></Text>
@@ -476,4 +476,8 @@ B 是同行下载数。]]></Text>
   <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[ELC 链接无法解码：服务器没有返回任何数据。链接可能已损坏，或者账户无效。]]></Text>
   <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[ELC 链接无法解码：其中没有找到任何链接。链接可能已损坏。]]></Text>
   <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[mega:// 协议注册失败，因此从浏览器打开的链接不会启动 MegaDownloader。请以管理员身份运行本程序一次以完成注册。]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[不再显示此提示？（是 = 不再提示）]]></Text>
+  <!-- 第12项:Web 界面 "Active downloads" 标签(原代码误用大写 A 取键,永远落回英文);
+       小写 "active downloads" 用于托盘 "N 个活动下载 - 速度",补量词使其通顺 -->
+  <Text key="Active downloads"><![CDATA[活动下载]]></Text>
 </Language>

@@ -77,7 +77,7 @@ Dacă ieșiți acum, fișierele pot fi corupte la extragere și va trebui să le
   <Text key="Encode lin&amp;ks"><![CDATA[Codare &URL-uri]]></Text>
   <Text key="Collaborate"><![CDATA[Contribuții]]></Text>
   <Text key="Creating files"><![CDATA[Creare fișier]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[În coadă]]></Text>
   <Text key="Verifying"><![CDATA[Verific]]></Text>
   <Text key="Paused"><![CDATA[Pauzat]]></Text>
   <Text key="Stopped"><![CDATA[Oprit]]></Text>
@@ -409,4 +409,67 @@ Dacă marcați un alt cont ca implicit, contul implicit anterior va fi nemarcat.
   <Text key="VLC path is not valid"><![CDATA[Calea VLC nu este validă.]]></Text>
   <Text key="Warning"><![CDATA[Avertisment]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[Steganogra&fie]]></Text>
+  <Text key="Active downloads"><![CDATA[Descărcări active]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Nu mai afișa acest mesaj? (Da = nu mai întreba)]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Introduceați un cont nou care nu a fost încă salvat. Renunțați la el și încărcați contul selectat?]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[Introduceți unul sau mai multe linkuri MEGA de ascuns.]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA a returnat un răspuns neașteptat la citirea folderului partajat. Este posibil ca linkul să fi fost șters, să fie privat sau cheia să fie greșită. Verificați că linkul se deschide în browser. Detaliu tehnic: %DETAIL%]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Nu se poate conecta la MEGA pentru a citi folderul partajat (eroare de rețea). Verificați conexiunea la Internet, firewall-ul/VPN-ul/proxy-ul și încercați din nou. Dacă mega.nz este restricționat în regiunea dumneavoastră, configurați un proxy în Configurare sau utilizați un VPN și asigurați-vă că https://mega.nz se deschide în browser. Detaliu tehnic: %DETAIL%]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[Pentru mai multe informații faceți clic aici]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[Dacă imaginea are o parolă, introduceți-o. Dacă nu, lăsați câmpul gol.]]></Text>
+  <Text key="Image to load"><![CDATA[Imagine de încărcat]]></Text>
+  <Text key="Images"><![CDATA[Imagini]]></Text>
+  <Text key="Input image"><![CDATA[Imagine de intrare]]></Text>
+  <Text key="Input image does not exist"><![CDATA[Imaginea de intrare nu există]]></Text>
+  <Text key="Input image not specified"><![CDATA[Nu a fost specificată nicio imagine de intrare]]></Text>
+  <Text key="Introduction"><![CDATA[Introducere]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[Calitate JPEG nevalidă]]></Text>
+  <Text key="JPEG Quality"><![CDATA[Calitate JPEG]]></Text>
+  <Text key="Load"><![CDATA[Încarcă]]></Text>
+  <Text key="Nav_All"><![CDATA[Toate]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Finalizate]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[În descărcare]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Eșuate]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[În așteptare]]></Text>
+  <Text key="Network_Error"><![CDATA[Nu se poate conecta la server (eroare de rețea). Verificați conexiunea la Internet, firewall-ul/VPN-ul/proxy-ul și încercați din nou. Dacă serviciul este restricționat în regiunea dumneavoastră, configurați un proxy în Configurare sau utilizați un VPN. Detaliu tehnic: %DETAIL%]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[Nu au fost găsite linkuri ascunse. Verificați imaginea și parola.]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[Opțional, puteți specifica calitatea JPEG și o parolă. Dacă nu, lăsați câmpurile goale.]]></Text>
+  <Text key="Other options"><![CDATA[Alte opțiuni]]></Text>
+  <Text key="Output image"><![CDATA[Imagine de ieșire]]></Text>
+  <Text key="Output image not specified"><![CDATA[Nu a fost specificată nicio imagine de ieșire]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[Cota de transfer MEGA a fost depășită la citirea folderului partajat (HTTP 509 / -17). Modul de depășire este activ: coada nu este pusă pe pauză automat — schimbați IP-ul sau proxy-ul și încercați din nou.]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[Selectați o imagine existentă ca „Imagine de intrare”, apoi selectați sau creați o nouă imagine JPEG ca „Imagine de ieșire”.
+Imaginea de intrare poate fi un fișier existent sau adresa URL a unei imagini.]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[Selectați o imagine existentă ca „Imagine de intrare” sau introduceți adresa URL a imaginii.]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Nu s-a putut rezolva linkul scurtat. Este posibil să nu mai fie disponibil sau rețeaua să fie inaccesibilă.]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[Steganografia este arta și știința de a ascunde informații în interiorul unui alt mesaj.
+Folosind steganografia, MegaDownloader vă permite să ascundeți unul sau mai multe linkuri într-o imagine JPEG.
+
+Cu această opțiune puteți încărca linkuri dintr-o imagine JPEG care conține deja unul sau mai multe linkuri.
+Rețineți că puteți genera imagini cu opțiunea „Steganografie” din meniul „Opțiuni”.
+
+Pentru a prelua linkurile, trebuie doar să urmați acești 2 pași simpli:
+
+1) Selectați imaginea care conține linkurile ascunse de pe disc sau introduceți adresa URL.
+2) Specificați parola folosită pentru a ascunde linkurile (dacă nu există parolă, lăsați câmpul gol).]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[Steganografia este arta și știința de a ascunde informații în interiorul unui alt mesaj.
+Folosind steganografia, MegaDownloader vă permite să ascundeți unul sau mai multe linkuri într-o imagine JPEG.
+
+Pentru a utiliza această opțiune, trebuie doar să urmați acești 3 pași simpli:
+
+1) Introduceți linkurile pe care doriți să le ascundeți
+2) Selectați imaginea de intrare pe care doriți să o utilizați și imaginea de ieșire pe care doriți să o generați.
+3) Opțional, specificați o parolă pentru a crește securitatea linkurilor.]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[Asistent de steganografie]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[Nu s-a putut decoda linkul ELC: nu a fost găsit niciun link în interior. Este posibil ca linkul să fie deteriorat.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[Nu s-a putut decoda linkul ELC: serverul nu a returnat nicio date. Este posibil ca linkul să fie deteriorat sau contul să fie nevalid.]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[Parola de extragere conține un ghilimele dublu, pe care extractorul 7-Zip integrat nu îl poate transmite în linia de comandă. Extrageți această arhivă cu aplicația 7-Zip completă sau utilizați o arhivă a cărei parolă nu conține ghilimele duble.]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[Imaginea a fost creată cu succes în {0} ms]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[Nu s-a putut înregistra protocolul mega://, astfel că linkurile deschise din browser nu vor porni MegaDownloader. Rulați aplicația o dată ca administrator pentru a-l înregistra.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Acest fișier nu este primul volum al unei arhive RAR cu mai multe părți, deci nu există nimic de extras din el singur. Adăugați în schimb primul volum (part1.rar).]]></Text>
+  <Text key="Visible links"><![CDATA[Linkuri vizibile]]></Text>
+  <Text key="Visible links HELP"><![CDATA[Dacă bifați această opțiune, linkurile vor fi vizibile pentru utilizatorul care le preia.
+În caz contrar, va putea descărca linkurile, dar nu le va putea vedea.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Avertisment: verificarea datelor a eșuat. Fișierul de ieșire nu a fost creat. Acest lucru se poate întâmpla dacă imaginea este prea mică; încercați cu o imagine mai mare.]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Avertisment: imagine prea mică, este posibil ca datele să fie deteriorate.]]></Text>
 </Language>

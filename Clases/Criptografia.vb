@@ -794,8 +794,10 @@ Public Class Criptografia
         ' base64url length, but this function's contract is to report "cannot verify"
         ' rather than to throw at its callers on the download path.
         If (keyWithoutN.Length Mod 4) = 1 Then
+            ' 第15项:日志已声明 skipping,跳过绝不能当失败(同下方 4 词公链跳过分支的语义),
+            ' 否则畸形密钥会让每个完成的下载都报完整性错误。
             Log.WriteWarning("VerifyMegaMetaMac: key length " & keyWithoutN.Length & " is not valid base64url; skipping end-to-end verification for " & filePath)
-            Return False
+            Return True
         End If
 
         Dim b64Dec As Byte() = B64Decode(keyWithoutN)

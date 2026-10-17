@@ -6,6 +6,11 @@ Public Class StreamingLibrary
     Private _LibraryElementList As List(Of LibraryElement)
     Private _NextID As Integer
     Private ReadOnly _sync As New Object
+    ''' <summary>加载时文件被瞬时占用(杀软/备份/同步盘)而不是真的损坏。磁盘上的库可能
+    ''' 完好,此时内存里却是空库 —— 任何写盘都会用"空库+新增一条"覆盖掉用户的整库,
+    ''' 原件还会被 File.Replace 挤进 .bak,下次保存连 .bak 一起毁掉。
+    ''' 置位后 SaveXML 一律拒写,保住磁盘文件(与本轮 Configuracion/Paquete 的 P0-3 同策略)。</summary>
+    Private _LoadTransientError As Boolean
 
 
     Public Sub New()
@@ -52,8 +57,15 @@ Public Class StreamingLibrary
 
         Dim Xml As XmlDocument = Nothing
         Dim recovered As Boolean = False
+        Dim transientFailure As Boolean = False
         SyncLock Mutex.GuardarConfig
-            If Not AtomicFile.TryLoadXml(Fichero, Xml, recovered) Then
+            If Not AtomicFile.TryLoadXml(Fichero, Xml, recovered, transientFailure) Then
+                ' 瞬时占用≠损坏:磁盘上的库可能完好,内存却是空库。禁写,别让一次"加片"
+                ' 用空库覆盖掉整库(见 _LoadTransientError 声明处)。
+                If transientFailure AndAlso File.Exists(Fichero) Then
+                    _LoadTransientError = True
+                    Log.WriteError("Streaming library is locked by another process (transient). Running with an empty library; writes are suspended to preserve the on-disk file: " & Fichero)
+                End If
                 Exit Sub
             End If
             If recovered Then
@@ -94,6 +106,12 @@ Public Class StreamingLibrary
         End SyncLock
 
         Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
+
+        ' 加载期被瞬时占用 → 内存是空库,写盘会清空用户整库。宁可本次会话不保存。
+        If _LoadTransientError AndAlso File.Exists(Fichero) Then
+            Log.WriteWarning("Skipping streaming library save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
+            Exit Sub
+        End If
 
         SyncLock Mutex.GuardarConfig
         Try

@@ -813,7 +813,10 @@ Public Class DescompresorController
             End If
 
             ' ---- Pass 1: list entries and validate them against path traversal ----
-            Dim listing As String = RunSevenZip(cli, "l -ba -slt" & passwordArg & " -- """ & PathFichero & """", checkCancel:=True)
+            ' -sccUTF-8 必须与 Pass2(x -y -bd -sccUTF-8)一致:列表输出的条目名要与
+            ' 解压真实落盘名逐字节对得上,否则碰撞检测/路径校验比对的是乱码名,
+            ' 非 ASCII 文件名(中文等)的防覆盖保护会完全失效。ASCII 对照无影响。
+            Dim listing As String = RunSevenZip(cli, "l -ba -slt -sccUTF-8" & passwordArg & " -- """ & PathFichero & """", checkCancel:=True)
             Dim entryKeys As New Generic.List(Of String)
             Dim entrySizes As New Generic.Dictionary(Of String, Long)(StringComparer.OrdinalIgnoreCase)
             Dim archiveFullPath As String = IO.Path.GetFullPath(PathFichero)

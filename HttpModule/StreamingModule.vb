@@ -61,6 +61,8 @@ Public Class StreamingModule
             ElseIf request.Param.Item("id") IsNot Nothing AndAlso Not String.IsNullOrEmpty(request.Param.Item("id").Value) Then
                 Dim ele As LibraryElement = StreamingLibraryManager.GetElementByID(request.Param.Item("id").Value)
                 If ele Is Nothing Then
+                    ' 第16项:错误分支也要设 4xx,200+文本体会被播放器当媒体数据
+                    response.Status = HttpStatusCode.NotFound
                     ComprimirRespuesta(request, response, "Invalid ID")
                     Return True
                 End If
@@ -69,6 +71,8 @@ Public Class StreamingModule
                 FileID = Fichero.ExtraerFileID(link)
             ElseIf request.Param.Item("t") IsNot Nothing AndAlso Not String.IsNullOrEmpty(request.Param.Item("t").Value) Then
                 If Not StreamingHelper.GetFileDataFromTempID(request.Param.Item("t").Value, FileID, FileKey) Then
+                    ' 第16项:同上,错误分支设 4xx
+                    response.Status = HttpStatusCode.NotFound
                     ComprimirRespuesta(request, response, "Invalid ID")
                     Return True
                 End If
@@ -76,6 +80,8 @@ Public Class StreamingModule
 
 
             If String.IsNullOrEmpty(FileID) Then
+                ' 第16项:错误分支设 4xx,防播放器把错误文本当媒体数据
+                response.Status = HttpStatusCode.BadRequest
                 ComprimirRespuesta(request, response, "Missing FileID and/or FileKey")
                 Return True
             End If
@@ -95,6 +101,8 @@ Public Class StreamingModule
                 InfoFichero = Conexion.ObtenerInformacionFichero(Me._Config, FileID, FileKey, True)
                 If InfoFichero Is Nothing OrElse InfoFichero.Err <> Conexion.TipoError.SinErrores Then
                     Dim errTxt As String = If(InfoFichero Is Nothing, "Unknown", InfoFichero.Errtxt)
+                    ' 第16项:上游 MEGA 取文件信息失败同样不能回 200,502 表示网关侧错误
+                    response.Status = HttpStatusCode.BadGateway
                     ComprimirRespuesta(request, response, "Error: " & errTxt)
                     Return True
                 End If
@@ -301,24 +309,34 @@ Public Class StreamingModule
                 'range = mRange.Groups[1].Value + "-" + mRange.Groups[2].Value;
                 Dim hasStart As Boolean = Not String.IsNullOrEmpty(mRange.Groups(1).Value)
                 Dim hasEnd As Boolean = Not String.IsNullOrEmpty(mRange.Groups(2).Value)
-                If hasStart Then
-                    Long.TryParse(mRange.Groups(1).Value, rangeStart)
-                End If
-                If hasEnd Then
-                    Long.TryParse(mRange.Groups(2).Value, rangeEnd)
-                End If
-                ' 0-0:两端都显式给出了值且均为 0(RFC 7233 单字节探测),不是"未指定"
-                If hasStart AndAlso hasEnd AndAlso rangeStart = 0 AndAlso rangeEnd = 0 Then
-                    singleByteProbe = True
-                End If
-                ' RFC 7233 此前不支持的形式:
-                '   bytes=-N  后缀区间 = 最后 N 个字节
-                '   bytes=N- 开放区间 = 从 N 到文件末尾
-                If Not hasStart AndAlso hasEnd Then
-                    rangeStart = Math.Max(0, FileSize - rangeEnd)
-                    rangeEnd = FileSize - 1
-                ElseIf hasStart AndAlso Not hasEnd Then
-                    rangeEnd = FileSize - 1
+                If Not hasStart AndAlso Not hasEnd Then
+                    ' P1-4: "bytes=-"(两组皆空)正则能匹配但按 RFC 7233 非法 ——
+                    ' suffix-length 必须是数字。旧代码把它当 0-0 之外的默认情形:
+                    ' 内部范围只取 16 字节对齐块,而 requestRangeEnd 被补成 FileSize-1,
+                    ' 206 + Content-Range 声称整个文件,实际只发 16 字节就 EOF,
+                    ' 播放器挂死等余下字节。与无法解析的头一样按 §3.1 忽略 → 200 全长。
+                    rangeIgnored = True
+                    Log.WriteWarning("StreamingModule: ignoring invalid Range header '" & request.Headers("Range") & "' (empty byte-range-spec); serving the full file (RFC 7233 §3.1).")
+                Else
+                    If hasStart Then
+                        Long.TryParse(mRange.Groups(1).Value, rangeStart)
+                    End If
+                    If hasEnd Then
+                        Long.TryParse(mRange.Groups(2).Value, rangeEnd)
+                    End If
+                    ' 0-0:两端都显式给出了值且均为 0(RFC 7233 单字节探测),不是"未指定"
+                    If hasStart AndAlso hasEnd AndAlso rangeStart = 0 AndAlso rangeEnd = 0 Then
+                        singleByteProbe = True
+                    End If
+                    ' RFC 7233 此前不支持的形式:
+                    '   bytes=-N  后缀区间 = 最后 N 个字节
+                    '   bytes=N- 开放区间 = 从 N 到文件末尾
+                    If Not hasStart AndAlso hasEnd Then
+                        rangeStart = Math.Max(0, FileSize - rangeEnd)
+                        rangeEnd = FileSize - 1
+                    ElseIf hasStart AndAlso Not hasEnd Then
+                        rangeEnd = FileSize - 1
+                    End If
                 End If
             Else
                 rangeIgnored = True

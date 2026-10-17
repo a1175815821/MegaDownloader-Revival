@@ -453,6 +453,14 @@ Public Class FileDownloader
     ' State
     Private m_disposed As Boolean = False
     Private m_busy, m_paused, m_canceled As Boolean
+    ' 第10项:停滞看门狗/停止路径统一取消 chunk worker 后禁止复活的标记。
+    ' 旧代码这些路径只 CancelAsync 不改 m_canceled(该字段只在 IsBusy setter 赋值),
+    ' 于是 ChunkDownloader_RunWorkerCompleted 的 HasBeenCanceled 恒 False →
+    ' NewDownloaderWorker() 一比一复活:失败已报但字节仍在流、排空循环白等满 30s、
+    ' 孤儿 worker 下完后终结块早已跳过 → 完整文件留成 .part 且标红。
+    ' 复用 IsBusy=False(m_canceled)不可行:Canceled 事件会把 Erroneo 状态覆盖成
+    ' EnCola 并拆掉 Downloader。此标记在每次 Start(IsBusy=True)时复位。
+    Private m_abortChunkRestart As Boolean
     Private m_currentFileProgress, m_totalProgress, m_currentFileSize As Int64
     Private m_currentSpeed As Generic.Dictionary(Of String, Long)
 
@@ -890,6 +898,8 @@ Public Class FileDownloader
                     End While
                     If bgwDownloader.CancellationPending Then
                         Log.WriteDebug("Aborting connection - stop requested")
+                        ' 第10项:统一取消后禁止 chunk worker 复活(见 m_abortChunkRestart)
+                        m_abortChunkRestart = True
                         SyncLock Mutex
                             For Each w As DownloaderWorker In Me.listDownloaders
                                 If w.IsBusy Then
@@ -923,6 +933,9 @@ Public Class FileDownloader
                         ' here, but without this the workers kept retrying and writing into
                         ' the .part file; a retry reuses the same FileDownloader instance, so
                         ' two generations could write the same regions concurrently.
+                        ' 第10项:同时置 m_abortChunkRestart —— 旧代码只 CancelAsync 不改
+                        ' m_canceled,完成回调的 HasBeenCanceled 恒 False,worker 一比一复活。
+                        m_abortChunkRestart = True
                         SyncLock Mutex
                             For Each w As DownloaderWorker In Me.listDownloaders
                                 If w.IsBusy Then
@@ -1017,7 +1030,7 @@ Public Class FileDownloader
                 If Not String.IsNullOrEmpty(keyForMac) Then
                     Log.WriteInfo("Verifying MEGA MetaMAC for " & file.Name)
                     If Not Criptografia.VerifyMegaMetaMac(FicheroPART, keyForMac) Then
-                        Throw New ApplicationException("MEGA MetaMAC verification failed: the downloaded data does not match the uploaded file (size was exact: " & partInfo.Length & " bytes). The download will restart from the last valid chunk state.")
+                        Throw New ApplicationException("MEGA MetaMAC verification failed: the downloaded data does not match the uploaded file (size was exact: " & partInfo.Length & " bytes). The partial file has been reset; the download will restart from the beginning.")
                     End If
                 End If
 
@@ -1182,6 +1195,12 @@ Public Class FileDownloader
     End Sub
 
     Private Sub ChunkDownloader_DoWork(sender As Object, e As DoWorkEventArgs)
+        ' 第14项:失败事件防重入。报失败后 Exit Sub/Exit Try 退栈要经过两层 Finally 关流
+        ' (Stream.Close/webResp.Close),关闭抛出的异常会落进外层 Catch 二次发
+        ' ChunkDownloadFailedRaiser,Fichero.NumErroresChunk 双倍计数(30 次上限提前一倍命中)。
+        ' 该标记在每次上报前置位,外层 Catch 只对"尚未上报过"的裸区异常补报一次。
+        ' 注意:必须声明在最外层 Try 之前,否则 VB 块作用域导致 Catch 里看不到。
+        Dim failureReported As Boolean = False
         Try
 
             Dim worker As DownloaderWorker = CType(sender, DownloaderWorker)
@@ -1224,6 +1243,7 @@ Public Class FileDownloader
                     exc = New ApplicationException("FileKey not defined")
                     worker.ChunkDownloadFailed = True
                     Log.WriteError("Error: FileKey not defined")
+                    failureReported = True
                     worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                     Exit Try
                 End If
@@ -1329,6 +1349,7 @@ Public Class FileDownloader
                 If exc IsNot Nothing Then
                     worker.ChunkDownloadFailed = True
                     Log.WriteError("Connection error when downloading file " & file.Name & " - " & Log.SafeException(exc))
+                    failureReported = True
                     worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                     Exit Try
                 End If
@@ -1442,6 +1463,7 @@ Public Class FileDownloader
                                 End Try
                             End If
                             worker.ChunkDownloadFailed = True
+                            failureReported = True
                             worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                             speedTimer.Stop()
                             Exit Sub
@@ -1488,14 +1510,27 @@ Public Class FileDownloader
                 Finally
                     speedTimer.Stop()
                     ThrottledStreamController.GetController.RemoveStream(TStream)
-                    Stream.Close()
+                    ' 第14项:退栈路径(含报失败后的 Exit Sub)会经此处关流,关闭异常绝不能抛出,
+                    ' 否则落进外层 Catch 二次发 ChunkDownloadFailedRaiser,错误数双倍计。
+                    Try
+                        Stream.Close()
+                    Catch closeEx As Exception
+                        Log.WriteWarning("ChunkDownloader_DoWork: part stream close failed: " & Log.SafeException(closeEx))
+                    End Try
                 End Try
 
 
 
                 Log.WriteInfo("Finishing connection - " & file.Name & " - chunk downloaded")
             Finally
-                If webResp IsNot Nothing Then webResp.Close()
+                ' 同上:webResp 关闭异常也不得抛出(会二次发失败事件)。
+                If webResp IsNot Nothing Then
+                    Try
+                        webResp.Close()
+                    Catch respCloseEx As Exception
+                        Log.WriteWarning("ChunkDownloader_DoWork: web response close failed: " & Log.SafeException(respCloseEx))
+                    End Try
+                End If
             End Try
 
             fireEventFromDownloader(worker, [Event].FileDownloadStopped)
@@ -1513,11 +1548,15 @@ Public Class FileDownloader
             Dim failedWorker As DownloaderWorker = TryCast(sender, DownloaderWorker)
             If failedWorker IsNot Nothing Then
                 failedWorker.ChunkDownloadFailed = True
-                Try
-                    failedWorker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, ex)
-                Catch
-                    ' Reporting must never throw from an error path (worker may be disposing)
-                End Try
+                ' 第14项:已上报过的失败不再二次发事件(退栈关流异常等),防 NumErroresChunk 双倍计。
+                If Not failureReported Then
+                    failureReported = True
+                    Try
+                        failedWorker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, ex)
+                    Catch
+                        ' Reporting must never throw from an error path (worker may be disposing)
+                    End Try
+                End If
             End If
         End Try
     End Sub
@@ -1655,7 +1694,9 @@ Public Class FileDownloader
             Me.listDownloaders.Remove(worker)
             worker.Dispose()
         End SyncLock
-        If Not HasBeenCanceled Then
+        ' 第10项:停滞看门狗/停止路径统一取消后(m_abortChunkRestart)也不得复活 worker,
+        ' 旧代码只看 HasBeenCanceled,而该标志在这些路径下恒 False → 一比一复活。
+        If Not HasBeenCanceled AndAlso Not m_abortChunkRestart Then
 
             If worker.ChunkDownloadFailed Then
                 ' v2.5 beta: 配额期内不再空转重试,等待全局熔断解除后由调度器统一唤醒。
@@ -1721,6 +1762,9 @@ Public Class FileDownloader
     End Function
 
     Private Sub NewDownloaderWorker()
+        ' 第10项:统一取消后禁止复活(含退避 Task.Run 延迟到达的调用),
+        ' 与 ChunkDownloader_RunWorkerCompleted 的守卫双保险。
+        If m_abortChunkRestart OrElse HasBeenCanceled Then Return
         SyncLock Mutex
             Dim part As Int32? = Me.File.GetDataPart.NextAvailablePartIndex
             If part.HasValue Then
@@ -2017,6 +2061,8 @@ Public Class FileDownloader
                     ' 入口重播 chunk.Index 即得正确值;暂停/恢复不走 IsBusy,不受影响。
                     m_currentFileProgress = 0
                     m_totalProgress = 0
+                    ' 第10项:新一轮下载复位"禁止复活"标记
+                    m_abortChunkRestart = False
                     bgwDownloader.RunWorkerAsync()
                     RaiseEvent Started(Me, New EventArgs)
                     RaiseEvent IsBusyChanged(Me, New EventArgs)

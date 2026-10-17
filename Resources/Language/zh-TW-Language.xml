@@ -40,7 +40,7 @@
   <Text key="Links"><![CDATA[連結]]></Text>
   <Text key="Hour"><![CDATA[時]]></Text>
   <Text key="Queued, error, completed"><![CDATA[佇列, 錯誤與完成]]></Text>
-  <Text key="active downloads"><![CDATA[啟用下載]]></Text>
+  <Text key="active downloads"><![CDATA[個活動下載]]></Text>
   <Text key="Error information"><![CDATA[錯誤資訊]]></Text>
   <Text key="New version available"><![CDATA[新版本可用]]></Text>
   <Text key="New version do you want to download it? Recommended!"><![CDATA[有 MegaDownloader 的新版本。建議你更新它。
@@ -78,7 +78,7 @@
   <Text key="Encode lin&amp;ks"><![CDATA[編碼網址(&L)]]></Text>
   <Text key="Collaborate"><![CDATA[貢獻]]></Text>
   <Text key="Creating files"><![CDATA[建立檔案中]]></Text>
-  <Text key="In queue"><![CDATA[]]></Text>
+  <Text key="In queue"><![CDATA[排隊中]]></Text>
   <Text key="Verifying"><![CDATA[檢驗中]]></Text>
   <Text key="Paused"><![CDATA[已暫停]]></Text>
   <Text key="Stopped"><![CDATA[已停止]]></Text>
@@ -423,4 +423,56 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[ELC 連結無法解碼：伺服器沒有傳回任何資料。連結可能已損壞，或者帳戶無效。]]></Text>
   <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[ELC 連結無法解碼：其中沒有找到任何連結。連結可能已損壞。]]></Text>
   <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[mega:// 協定註冊失敗，因此從瀏覽器開啟的連結不會啟動 MegaDownloader。請以系統管理員身分執行本程式一次以完成註冊。]]></Text>
+  <Text key="Active downloads"><![CDATA[活動下載]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[不再顯示此提示？（是 = 不再提示）]]></Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[輸入一條或多條要隱藏的 MEGA 連結。]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[點擊此處了解更多資訊]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[如果圖片設有密碼，請輸入密碼；否則留空。]]></Text>
+  <Text key="Image to load"><![CDATA[要載入的圖片]]></Text>
+  <Text key="Images"><![CDATA[圖片]]></Text>
+  <Text key="Input image"><![CDATA[輸入圖片]]></Text>
+  <Text key="Input image does not exist"><![CDATA[輸入圖片不存在]]></Text>
+  <Text key="Input image not specified"><![CDATA[未指定輸入圖片]]></Text>
+  <Text key="Introduction"><![CDATA[介紹]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[JPEG 品質無效]]></Text>
+  <Text key="JPEG Quality"><![CDATA[JPEG 品質]]></Text>
+  <Text key="Load"><![CDATA[載入]]></Text>
+  <Text key="Nav_All"><![CDATA[全部]]></Text>
+  <Text key="Nav_Completed"><![CDATA[已完成]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[下載中]]></Text>
+  <Text key="Nav_Failed"><![CDATA[失敗]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[等待中]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[未找到隱藏的連結。請檢查圖片和密碼。]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[可指定 JPEG 品質和密碼，也可以留空。]]></Text>
+  <Text key="Other options"><![CDATA[其他選項]]></Text>
+  <Text key="Output image"><![CDATA[輸出圖片]]></Text>
+  <Text key="Output image not specified"><![CDATA[未指定輸出圖片]]></Text>
+  <Text key="Select an existing image as Input image ..."><![CDATA[選擇一張現有圖片作為「輸入圖片」，再選擇或新建一張 JPEG 圖片作為「輸出圖片」。
+輸入圖片可以是本機檔案，也可以是圖片網址。]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[選擇一張現有圖片作為「輸入圖片」，或輸入圖片網址。]]></Text>
+  <Text key="Steganography is the art and science ... LOAD"><![CDATA[隱寫術是將資訊隱藏在另一則訊息中的藝術與科學。
+使用隱寫功能，MegaDownloader 可以將一條或多條連結隱藏到 JPEG 圖片中。
+
+使用此選項可以從已包含一條或多條連結的 JPEG 圖片中載入連結。
+注意：可以在選單「選項」下的「隱寫」功能中產生圖片。
+
+提取連結只需簡單的 2 步：
+
+1) 從磁碟選擇包含隱藏連結的圖片，或輸入圖片網址。
+2) 指定隱藏連結時使用的密碼（如果沒有密碼則留空）。]]></Text>
+  <Text key="Steganography is the art and science ... SAVE"><![CDATA[隱寫術是將資訊隱藏在另一則訊息中的藝術與科學。
+使用隱寫功能，MegaDownloader 可以將一條或多條連結隱藏到 JPEG 圖片中。
+
+使用方法只需簡單的 3 步：
+
+1) 輸入要隱藏的連結
+2) 選擇要使用的輸入圖片，以及要產生的輸出圖片。
+3) 可選：指定密碼以提高連結安全性。]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[隱寫精靈]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[圖片已成功建立，用時 {0} 毫秒]]></Text>
+  <Text key="Visible links"><![CDATA[可見連結]]></Text>
+  <Text key="Visible links HELP"><![CDATA[如果勾選此選項，提取連結的使用者將能看到連結明文。
+否則他只能下載這些連結，看不到連結內容。]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：資料校驗失敗，輸出檔案未建立。可能圖片太小，請換一張更大的圖片。]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[警告：圖片太小，資料可能已損壞。]]></Text>
 </Language>
