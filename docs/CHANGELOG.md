@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 主题 |
 | --- | --- | --- |
+| 2.5.8 | 2026-10-22 | 慢速下载不再被误判停滞；解压队列崩溃自愈；RAR 分卷与密码修复；深色菜单栏换肤；改配置静默丢失根治 |
 | 2.5.7 | 2026-10-14 | 稳定性专项(36 项审计修复)；共享文件夹网络错误友好提示(issue #6)；文件夹分享包用真名 |
 | 2.5.6 | 2026-10-06 | 配额突破模式回归；散装建目录；真名回写；删盘收空目录 |
 | 2.5.5 | 2026-10-04 | 文件夹包命名修复(issue #4)；文件名转义解析；Dispose 清理 |
@@ -110,6 +111,79 @@
 | 并发污染     | Streaming 模块 AJAX 响应改 `AsyncLocal`,多请求互不串扰        |
 | 资源泄漏     | Mutex `Try/Finally` 释放;`BackgroundWorker.Dispose` |
 | 公开链接误报   | 4 words key 无 MetaMAC 时跳过校验(记日志),不再误判失败           |
+
+---
+
+## [2.5.8] - 2026-10-22
+
+补丁版，一句话：**慢速下载不再被"停滞看门狗"误杀；解压 worker 崩了能自愈；RAR 分卷（含旧式 `.rNN` 命名）与带密码的分卷终于解得出；深色模式的菜单栏会换肤了；改完配置静默丢失那条链彻底断根**。
+
+本版合并了 v2.5.7 之后的三批修复：`db35d8f`（已确认缺陷清单）、`1d40225`（审计第二轮）、`662dfaf`（审计第三轮，10 条确认缺陷）。
+
+### ⏱️ 停滞误判与解压队列自愈(P1-1 / P1-2)
+
+([FileDownloader.vb](../Clases/FileDownloader.vb) / [DescompresorController.vb](../Clases/DescompresorController.vb) / [Main.vb](../Forms/Main.vb))
+
+- **慢速下载不再被误杀**：停滞看门狗的判据从"已落盘进度"(`GetTotalProgress()`)改为内存进度 `m_currentFileProgress`（每 ~50 KB 推进一次），落盘进度保留作兜底，两信号取"或"——任一推进即续命，只有同时静止才判真停滞。原判据粒度 = `BufferSize-PackageSize`（默认 700 KiB），总速低于该粒度/120 s 就会周期性变红：**进度条在走，却每约 2 分钟失败一次**
+- **解压 worker 不再一崩即永久死亡**：单元素异常隔离在 `ProcesarElemento` 内，收尾改 `Finally` 保证任何退出路径都释放"当前元素"槽位，`elementHandled` 标记避免重复上报 `DescompresionFinalizada`。此前一次异常跳出 `While` 循环带走整个 worker，解压队列报废到重启，且 `Ocupado()` 恒 `True` → 每次关闭都弹 "Files extracting, corruption danger"
+- `bgwDescompresor` 增加看门狗：3 秒后自救重启（与 `bgwActualizadorListaDescargas` 同构），关闭期不重启，带防风暴（连续 5 次崩溃即放弃），且不重置 `bgwDescompresorCompleted`（该标志被关闭等待循环读取，清 `False` 会让关闭卡住）
+
+### 🗜️ 压缩包：RAR 分卷与 7z 误判(P2-3 / P3-12)
+
+([DescompresorController.vb](../Clases/DescompresorController.vb))
+
+- **按命名发现兄弟卷**：新增 `DescubrirVolumenesRar`，同时支持新式 `foo.partN.rar` 与旧式 `foo.rar` + `foo.rNN`。此前只认 `part1/part01/part001/part0001.rar`：`.r00/.r01` 旧式命名算出 `LengthPart=0` → 只读第一卷、解压结果不完整；单卷 RAR 只要碰巧叫 `xxx.part1.rar` 又被误判成多卷。现在文件名只用来"找兄弟卷"，不再用来"判定是不是多卷"
+- **带密码的分卷 RAR 能解了**：多卷分支此前用 `ReaderOpts(Nothing)` 显式丢掉密码（单卷分支是 `ReaderOpts(Password)`）→ 必然解不出来；现两分支统一带密码。并删掉"多卷 + 密码即抛 `NotSupportedException`"的拦截（硬编码英文，且发生在单卷判定之前，单卷 RAR 文件名带 `part1` 就被拒）
+- 打开压缩包时把整组卷交给 `RarArchive.OpenArchive(IReadOnlyList(Of FileInfo))`，`IsComplete` 反映真实完整性；不带密码的多卷 RAR 也能解出后续卷的条目
+- 解压失败改为本地化提示并附原始异常，不再直接抛英文
+- **7z 容器判定收紧**：改为 `Is7zContainer()`，只认结尾 `.7z` 与 `.7z.NNN`（纯数字分卷）。此前 `Contains(".7z.")` 把 `xxx.7z.zip` / `xxx.7z.rar` 也送去 7zr，退出码非 0 → 原本能解的包反而失败
+- 7z 解压 Pass1(`l`) / Pass2(`x`) 统一带 `-sccUTF-8`，非 ASCII（如中文）文件名的覆写判定与路径校验不再失效
+
+### 💾 配置不再静默丢失(P2-9 / P3-13)
+
+([Configuration.vb](../Forms/Configuration.vb) / [Configuracion.vb](../Clases/Configuracion.vb) / [AtomicFile.vb](../Clases/AtomicFile.vb))
+
+- **改完保存，配置全没了**：`ComboBox.SelectedValue` 在当前值无法匹配列表项时返回 `Nothing`（存量 `Configuration.xml` 的 `PrioridadDescompresion="VeryLow"` 即触发），`Enum.IsDefined(type, Nothing)` 抛 `ArgumentNullException`；异常冒出 `btnGuardar_Click`（无整体 Try/Catch），而全局兜底设 `ExitApplication=False` → 进程不崩但 `Config.GuardarXML` 被跳过，**刚改的配置全部丢失且无提示**。双管齐下：三处 `IsDefined`（comboLog / comboPrioridad / comboTheme）先判空再判是否已定义；下拉补入 `VeryLow`（枚举有该成员、`DescompresionThrottle` 有对应实现），从根上消除触发条件
+- `AtomicFile.TryLoadXml` 区分 `IOException`（瞬时锁）与 `XmlException`（损坏）：锁失败时 `Configuracion` / `Paquete` 拒绝写入并保留旧文件，不再拿默认值覆盖一份好配置
+- 随机 IV / 密码密文排除出 `_LastSavedXML` 去重快照（账号变更改由 SHA-256 指纹 `ELCAccountsHash()` 参与检测），周期保存不再每 5 秒重写一次磁盘；配额突破模式的续传照旧落盘
+- `ApplyConfigLimits()` 移到端口 / 超时解析之后（`CargaXML` 里此前两次调用都早于端口解析），并补 `ServidorWebTimeout` 的 0..99 钳制
+
+### 🎨 界面与主题(P2-7 / P2-8 / P2-4 / P3-10 / P3-11)
+
+([Main.vb](../Forms/Main.vb) / [ThemeManager.vb](../Clases/ThemeManager.vb) / [Main.DetailPanel.vb](../Forms/Main.DetailPanel.vb) / [StreamingForm.vb](../Forms/StreamingForm.vb) / [PropiedadesDescarga.vb](../Forms/PropiedadesDescarga.vb))
+
+- **深色模式下顶部菜单栏终于换肤**：经典 `MainMenu` → `MenuStrip`。实测 `MenuItem.OwnerDraw=True` 也给不了经典菜单条上色（条带由 OS 按系统菜单色绘制，仍是 `F0F0F0`），而 `MainMenu` 既不是 `ToolStrip` 也不在 `Controls` 树里，ThemeManager 的四类覆盖全都够不着；`MenuStrip` 走 `ToolStripManager.Renderer` + `ThemeColorTable`，随主题自动换肤
+- **左栏 / 右栏总览说明文字可读了**：ThemeManager 新增 `Muted` 主题色。此前误用 `Border`（边框色）当前景，与 `ControlBack` 的对比度浅色 1.38:1 / 深色 1.82:1，远低于正文 4.5:1；现为浅 5.16:1 / 深 4.97:1
+- `Options → Generate ELC` 打不开（查重类型 `EncodeLinksForm` → `ELCForm`，全仓 11 处 `IsFormAlreadyOpen` 里唯一错配）；已开着 ELC 再点也不再重复开第二个窗口
+- 包属性里**只改解压密码**现在生效：逐文件下发的判定条件由"勾选状态变了"改为"勾选状态变了 或 密码变了"；**取消速度限制**也生效：按载入时快照判定"用户是否动过限速"，取消勾选统一清零，从没碰过则不下发（只改路径 / 密码不再静默清零文件限速）
+- Streaming 窗口不再谎报 "URL is mandatory"：空 `Catch` 改为捕获并展示真实原因；解析成功后才推进 `PreviousURLMega`（失败保持原值，可重试）；后台轮询按 5 秒节流，空 URL 不重试
+- `AddLinks` 勾选"立即下载"不再绕过配额熔断守卫：守卫下沉到 `StartDownload()`，工具栏 Play 与 AddLinks 行为一致
+
+### 🔧 其他修复
+
+- 隐写向导（[SteganoWizardLoad.vb](../Stegano/SteganoWizardLoad.vb) / [SteganoWizardSave.vb](../Stegano/SteganoWizardSave.vb) / [SteganoManager.vb](../Stegano/SteganoManager.vb)）：路径错误上报修正（此前报的是错的异常信息），移除不安全的 `FileWebRequest` 强制转换
+- 版本统计上报永不触发：`Double.TryParse("2.5.7")` 必然失败 → `VersionActual` 恒为 0，与缺省的 `Config.VersionConfig="0"` 比恒假。改用 `System.Version` 比较（复用 `Updater.NormalizeVersionString`，由 `Private` 改为 `Public`）。**至此 `VERSION_UPDATE` 不再受"必须能被 `Double` 解析"的历史限制**。注：`Conexion.PingNewVersion` 目前是 no-op（goo.gl 短链已停用），本次修的是版本比较逻辑与 `VersionConfig` 的记录本身
+- `Paquete.MarcarFicherosComoParados` 归一化全部瞬态状态（含 `CreandoLocal` / `ComprobandoMD5`），缺漏的状态不再让队列永久卡住
+- 停滞下载的取消不再复活 worker；chunk 失败事件加重复上报守卫（含被吞掉的关闭流异常），`NumErroresChunk` 不再双计
+- MetaMAC 不匹配按硬失败处理，给出对齐的提示并重置 chunk 重试；无效 base64url 密钥长度（`len mod 4 == 1`）改为跳过端到端校验，不再让每个完成的下载都判失败
+- `mega://` 注册改写 `HKCU\Software\Classes`（无需管理员）；静默模式不弹模态框；失败提示带"不再询问"
+- 代理主机名剥掉内嵌端口（`host:port`、`[::1]:8080`），裸 IPv6 补方括号
+- Streaming：`bytes=-N` 这类非法 Range 按 200 全量处理，不再发"声称 206 却是坏区间"的响应；错误分支返回 4xx（404 无效 ID / 400 缺参数 / 502 上游 MEGA 错误），不再用 200 带错误体（播放器会当成媒体）
+- StreamingForm 的 MEGA 链接解析移到线程池（带 generation 守卫防陈旧结果），不再每 150 ms 阻塞 UI 线程
+- ELC 账号保存原子替换引用（竞态修复）；DLC 队列 worker 设 `IsBackground`，`StartProcessDLC` 的 `Invoke` 防已释放句柄
+- 关闭期 `Cerrando` 先于 `DoEvents` 泵设置，`RestaurarVentana` / `Resize` 加守卫，托盘不再在关闭过程中把窗口唤醒
+
+### 🌍 多语言
+
+- 已确认缺陷批：es-ES 补 13 键；de / fr / hu / it / pt-BR / ro 各补 45 键（含完整隐写向导）；zh-TW 补 34 键；硬编码的 "Error" 标题改为本地化
+- 审计第二轮：10 个语言包补 `Priority_VeryLow`
+- 审计第三轮：10 个语言包各补 2 键（"Streaming link could not be resolved" / "Could not extract the RAR archive. Check that all volumes are present and that the password is correct."）
+- i18n 审计：384 个字面量键 vs en-US 404 键，缺失 0；10 个语言包 XML 全部合法，保持 CRLF + no-BOM
+
+### 📦 版本号
+
+- Assembly / FileVersion → `2.5.8.0`；`docs/version.xml` → `2.5.8.0`；README 当前版本 → v2.5.8（5 个翻译同步）
+- InternalConfig `VERSION_MEGADOWNLOADER` / `VERSION_UPDATE` → `2.5.8`
 
 ---
 
