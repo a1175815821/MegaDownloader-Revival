@@ -468,7 +468,7 @@ Public Class FileDownloader
     ''' P1-1:停滞看门狗的"活"判据 —— 内存已收字节数(每 ~50KB 动一次)。
     ''' 此前用 GetTotalProgress()(各 chunk 已落盘 Index 之和),而 Index 只在
     ''' FlushToDisk 里推进,落盘粒度 = BufferSize-PackageSize(默认 700 KiB)。
-    ''' 于是慢速下载(总速 < 阈值)会长时间"落盘进度不动"而被判停滞误杀,
+    ''' 于是慢速下载(总速低于阈值)会长时间"落盘进度不动"而被判停滞误杀,
     ''' 表现为进度条在走却每 ~2 分钟变红一次。
     ''' 内存进度在每个包(50KB)读满时推进,粒度细两个数量级,慢速也能及时续命。
     ''' 线程安全:读取与写入同用 Mutex(写侧见 ChunkDownloader 内的 SyncLock Mutex)。

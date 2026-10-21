@@ -23,6 +23,12 @@ Public NotInheritable Class ThemeManager
     Private Shared _systemWatchHooked As Boolean = False
     Private Shared ReadOnly _watchedForms As New Generic.List(Of WeakReference)
 
+    ' Muted:次要说明文字专用色。此前这类文字取 "Border",而 Border 是边框色,
+    ' 浅色主题下与 ControlBack(240,240,240)对比度只有 1.38:1(深色 1.82:1),
+    ' 远低于正文 4.5:1 的下限,左栏总览说明几乎读不出来。
+    ' 现取值对 ControlBack 的对比度:浅色 5.16:1 / 深色 4.97:1。
+    ' 注意:注释不能写进 From { } 集合初始化器内部 —— VB 的隐式行继续会被注释行打断,
+    ' 右花括号随之提前闭合,其后每个元素都被判语法错误(BC30035)。
     ' 浅色配色
     Private Shared ReadOnly LightColors As New Dictionary(Of String, Color) From
     {
@@ -31,10 +37,6 @@ Public NotInheritable Class ThemeManager
         {"AltBack", Color.FromArgb(245, 245, 245)},
         {"ControlBack", Color.FromArgb(240, 240, 240)},
         {"Border", Color.FromArgb(204, 206, 209)},
-        ' Muted:次要说明文字专用色。此前这类文字取 "Border",而 Border 是边框色,
-        ' 浅色主题下与 ControlBack(240,240,240)对比度只有 1.38:1(深色 1.82:1),
-        ' 远低于正文 4.5:1 的下限,左栏总览说明几乎读不出来。
-        ' 现取值对 ControlBack 的对比度:浅色 5.16:1 / 深色 4.97:1。
         {"Muted", Color.FromArgb(100, 100, 105)},
         {"Selection", Color.FromArgb(0, 120, 215)},
         {"SelectionFore", Color.White},
@@ -53,6 +55,8 @@ Public NotInheritable Class ThemeManager
         {"ButtonPressed", Color.FromArgb(204, 228, 247)}
     }
 
+    ' Muted:深色主题下的次要说明文字色,对 ControlBack(51,51,55)对比度 4.97:1
+    ' (此前误用 Border 色,仅 1.82:1)。
     ' 深色配色(VS Code Dark+ 风格)
     Private Shared ReadOnly DarkColors As New Dictionary(Of String, Color) From
     {
@@ -61,8 +65,6 @@ Public NotInheritable Class ThemeManager
         {"AltBack", Color.FromArgb(45, 45, 48)},
         {"ControlBack", Color.FromArgb(51, 51, 55)},
         {"Border", Color.FromArgb(90, 90, 90)},
-        ' Muted:深色主题下的次要说明文字色,对 ControlBack(51,51,55)对比度 4.97:1
-        ' (此前误用 Border 色,仅 1.82:1)。
         {"Muted", Color.FromArgb(160, 163, 168)},
         {"Selection", Color.FromArgb(38, 79, 120)},
         {"SelectionFore", Color.FromArgb(241, 241, 241)},
