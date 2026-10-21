@@ -166,7 +166,7 @@ jobs:
           generate_release_notes: true    # 自动从 commits 生成 changelog
           draft: false
           prerelease: false
-          overwrite: true                 # 重发同一 tag(热修复强推)时覆盖同名资产
+          overwrite_files: true           # 重发同一 tag(热修复强推)时覆盖同名资产
           files: |
             artifacts/MegaDownloader-Revival-win-x86.zip
             artifacts/MegaDownloader.exe
