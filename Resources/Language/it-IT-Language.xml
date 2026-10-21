@@ -160,6 +160,7 @@
   <Text key="Log_Debug"><![CDATA[Mettere a punto]]></Text>
   <Text key="Priority_Low"><![CDATA[Basso]]></Text>
   <Text key="Priority_Normal"><![CDATA[Normale]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Molto basso]]></Text>
   <Text key="Do you want to leave the default path empty?"><![CDATA[Vuoi lasciare vuota di default?]]></Text>
   <Text key="Disk buffer or package size values are not correct"><![CDATA[I valori di dimensione del buffer sul disco o l'imballaggio non è corretto.]]></Text>
   <Text key="Disk buffer size must be greater than package size"><![CDATA[La dimensione del buffer del disco deve essere maggiore della dimensione del pacchetto.]]></Text>

@@ -220,6 +220,7 @@
   <Text key="Log_Debug"><![CDATA[除错]]></Text>
   <Text key="Priority_Low"><![CDATA[低]]></Text>
   <Text key="Priority_Normal"><![CDATA[一般]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[极低]]></Text>
   <Text key="Streaming"><![CDATA[流媒体]]></Text>
   <Text key="Watch Online"><![CDATA[在线观看]]></Text>
   <Text key="Watch Online help link"><![CDATA[注释关于在线观看]]></Text>

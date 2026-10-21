@@ -118,6 +118,11 @@ Public Class Main
     Private bgwActualizadorListaDescargasCompleted As Boolean = False
     Private bgwActualizadorDatosDiscoCompleted As Boolean = False
     Private bgwDescompresorCompleted As Boolean = False
+    ' P1-2:解压 worker 看门狗的重启防风暴计数。该 worker 是常驻循环,正常只在关闭时结束;
+    ' 若它启动即崩,无节制重启会变成 3 秒一次的死循环(比原 bug 更吵)。
+    ' 记录上次启动时刻:上一轮存活不足 30s 即视为崩溃,连续 5 次则放弃重启并写日志。
+    Private _descompresorLastStartUtc As Date = DateTime.MinValue
+    Private _descompresorCrashCount As Integer = 0
 
     ' ACCIONES
 
@@ -340,6 +345,8 @@ Public Class Main
         AddHandler bgwDescompresor.DoWork, AddressOf DescompresorController.DescompresorController_DoWork
         bgwDescompresor.WorkerReportsProgress = True
         bgwDescompresor.WorkerSupportsCancellation = True
+        ' P1-2:记录首次启动时刻,供看门狗判断"上一轮是否崩溃即退"。
+        _descompresorLastStartUtc = DateTime.UtcNow
         bgwDescompresor.RunWorkerAsync()
 
         AddHandler DescompresorController.GetController.DescompresionFinalizada, AddressOf DescompresionFinalizada_EventHandler
@@ -3261,6 +3268,48 @@ Public Class Main
 
     Private Sub bgwDescompresor_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwDescompresor.RunWorkerCompleted
         bgwDescompresorCompleted = True
+        ' P1-2:解压 worker 看门狗。该 worker 是常驻循环(While Not CancellationPending),
+        ' 正常只在关闭(CancelAsync)时结束;非关闭流程中结束 = 异常穿透 = worker 已死,
+        ' 此后整个解压队列无人消费,直到重启进程。此前此处理只置标志不重启。
+        ' 3 秒后自救重启,与 bgwActualizadorListaDescargas 看门狗同构。
+        ' 关闭时 Cerrando/_ForzarCierre/Disposed 必有一真,不重启,不卡退出流程。
+        Try
+            If e.Cancelled Then Return
+            If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
+
+            ' P1-2:重启防风暴。上一轮存活不足 30s 视为崩溃,连续 5 次放弃重启。
+            If _descompresorLastStartUtc <> DateTime.MinValue AndAlso _
+               (DateTime.UtcNow - _descompresorLastStartUtc).TotalSeconds < 30 Then
+                _descompresorCrashCount += 1
+                If _descompresorCrashCount >= 5 Then
+                    Log.WriteError("bgwDescompresor crashed " & _descompresorCrashCount.ToString() &
+                                    " times in a row; giving up on auto-restart. The extraction queue stays stalled until the app is restarted.")
+                    Return
+                End If
+            Else
+                _descompresorCrashCount = 0
+            End If
+
+            Log.WriteError("bgwDescompresor ended unexpectedly; restarting in 3s.")
+            System.Threading.Tasks.Task.Run(Sub()
+                                                System.Threading.Thread.Sleep(3000)
+                                                Try
+                                                    If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
+                                                    If bgwDescompresor.IsBusy Then Return
+                                                    ' 注意:不把 bgwDescompresorCompleted 置回 False。
+                                                    ' 该标志被关闭等待循环读取(:3531),若在此处清 False 而关闭流程
+                                                    ' 已经开始,关闭循环会永远等不到该 worker 结束。
+                                                    ' 重启后 worker 立刻进入 RunWorkerCompleted → 又置 True,自愈;
+                                                    ' 而关闭期由上面的 Cerrando 守卫直接跳过重启,不会走到这里。
+                                                    _descompresorLastStartUtc = DateTime.UtcNow
+                                                    bgwDescompresor.RunWorkerAsync()
+                                                Catch ex As Exception
+                                                    Log.WriteError("bgwDescompresor restart failed: " & Log.SafeException(ex))
+                                                End Try
+                                            End Sub)
+        Catch ex As Exception
+            Log.WriteError("bgwDescompresor watchdog failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Sub PonerFicherosADescargar()

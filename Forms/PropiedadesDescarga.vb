@@ -243,7 +243,13 @@ Public Class PropiedadesDescarga
                         Log.WriteError("PropiedadesDescarga: invalid relocated path, keeping old one for " & f.FileID & ": " & Log.SafeException(ex))
                     End Try
                 End If
-                If p.DescargaExtraccionAutomatica <> chkUnZip.Checked Then
+                ' P2-5:逐文件下发必须覆盖"只改密码"的情况。此前条件只比勾选状态,
+                ' 于是用户只改解压密码(勾选不变)时子文件拿不到新密码 —— 包级字段更新了
+                ' (:259),文件级仍是旧密码,解压时用的是文件自己的密码(Fichero.vb:686
+                ' 传 Me.DescargaExtraccionPassword)→ 解压必失败。
+                ' 判定条件与包级更新条件(:259)保持一致:勾选状态变了 或 密码变了 就下发。
+                If p.DescargaExtraccionAutomatica <> chkUnZip.Checked Or _
+                   p.DescargaExtraccionPassword <> txtPassword.Text Then
                     f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
                 End If
                 ' ⑨:包模式未勾选=用户没碰限速,跳过覆写(此前默认 False 导致保存即清零各文件限速);

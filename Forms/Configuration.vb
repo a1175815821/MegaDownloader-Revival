@@ -123,6 +123,13 @@ Public Class Configuration
         Dim ListaPrioridadExtraccion As New Generic.Dictionary(Of String, String)
         ListaPrioridadExtraccion(DescompresionPriority.Normal.ToString) = Language.GetText("Priority_Normal")
         ListaPrioridadExtraccion(DescompresionPriority.Low.ToString) = Language.GetText("Priority_Low")
+        ' P2-9:VeryLow 必须也在列表里。DescompresionPriority 枚举定义了该成员且
+        ' DescompresionThrottle 有对应实现(Sleep 3ms),存量 Configuration.xml 也可能存着
+        ' "VeryLow"(v1.8 继承或手工编辑)。此前下拉只有 Normal/Low → 绑定该存量值失败 →
+        ' SelectedIndex=-1、SelectedValue=Nothing → 保存时 Enum.IsDefined(type, Nothing) 抛
+        ' ArgumentNullException → 整份配置静默丢失。让下拉能表示枚举的每个合法值即可
+        ' 从根上消除该触发条件(与 :591 的空值守卫互为双保险)。
+        ListaPrioridadExtraccion(DescompresionPriority.VeryLow.ToString) = Language.GetText("Priority_VeryLow")
         comboPrioridad.DataSource = New BindingSource(ListaPrioridadExtraccion, Nothing)
         comboPrioridad.DisplayMember = "Value"
         comboPrioridad.ValueMember = "Key"
@@ -583,18 +590,30 @@ Public Class Configuration
         End If
 
 
-        If [Enum].IsDefined(GetType(Log.LevelLogType), comboLog.SelectedValue) Then
+        ' P2-9:Enum.IsDefined(type, value) 在 value 为 Nothing 时抛 ArgumentNullException
+        ' (实测:"Value cannot be null. (Parameter 'value')")。ComboBox.SelectedValue 在
+        ' "当前值无法与列表项匹配"时返回 Nothing —— 例如存量 Configuration.xml 里的
+        ' PrioridadDescompresion="VeryLow",而本下拉只有 Normal/Low,绑定失败后
+        ' SelectedIndex=-1、SelectedValue=Nothing。
+        ' 此处异常会一路冒出 btnGuardar_Click(该 Sub 无整体 Try/Catch),而
+        ' ApplicationEvents.UnhandledException 设了 ExitApplication=False → 进程不崩,
+        ' 但 Config.GuardarXML(True) 被跳过 → 用户刚改的全部配置静默丢失且无任何提示。
+        ' 故:先判空,再判是否已定义。三处(comboLog/comboPrioridad/comboTheme)同样处理。
+        Dim selLog As String = CStr(comboLog.SelectedValue)
+        If Not String.IsNullOrEmpty(selLog) AndAlso [Enum].IsDefined(GetType(Log.LevelLogType), selLog) Then
             Config.NivelLog = CType([Enum].Parse(GetType(Log.LevelLogType), CType(comboLog.SelectedItem, KeyValuePair(Of String, String)).Key), Log.LevelLogType)
             Log.SetLogLevel = Config.NivelLog
         End If
 
-        If [Enum].IsDefined(GetType(DescompresionPriority), comboPrioridad.SelectedValue) Then
+        Dim selPrioridad As String = CStr(comboPrioridad.SelectedValue)
+        If Not String.IsNullOrEmpty(selPrioridad) AndAlso [Enum].IsDefined(GetType(DescompresionPriority), selPrioridad) Then
             Config.PrioridadDescompresion = CType([Enum].Parse(GetType(DescompresionPriority), CType(comboPrioridad.SelectedItem, KeyValuePair(Of String, String)).Key), DescompresionPriority)
             DescompresionThrottle.DecompressionPriority = Config.PrioridadDescompresion
         End If
 
-        If [Enum].IsDefined(GetType(ConfiguracionUI.ThemeModeType), comboTheme.SelectedValue) Then
-            Config.ConfigUI.Tema = CType([Enum].Parse(GetType(ConfiguracionUI.ThemeModeType), CStr(comboTheme.SelectedValue)), ConfiguracionUI.ThemeModeType)
+        Dim selTema As String = CStr(comboTheme.SelectedValue)
+        If Not String.IsNullOrEmpty(selTema) AndAlso [Enum].IsDefined(GetType(ConfiguracionUI.ThemeModeType), selTema) Then
+            Config.ConfigUI.Tema = CType([Enum].Parse(GetType(ConfiguracionUI.ThemeModeType), selTema), ConfiguracionUI.ThemeModeType)
         End If
 
         Dim ListaSharedKeys As New List(Of Security.SecureString)

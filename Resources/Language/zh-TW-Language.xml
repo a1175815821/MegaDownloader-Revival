@@ -184,6 +184,7 @@
   <Text key="Log_Debug"><![CDATA[除錯]]></Text>
   <Text key="Priority_Low"><![CDATA[低]]></Text>
   <Text key="Priority_Normal"><![CDATA[一般]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[極低]]></Text>
   <Text key="Streaming"><![CDATA[串流]]></Text>
   <Text key="Watch Online"><![CDATA[線上觀看]]></Text>
   <Text key="Watch Online help link"><![CDATA[註解關於線上觀看]]></Text>

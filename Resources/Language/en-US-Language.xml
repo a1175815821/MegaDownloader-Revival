@@ -236,6 +236,7 @@ If you change the option 'Automatic extraction', it will apply to all files in t
   <Text key="Log_Debug"><![CDATA[Debug]]></Text>
   <Text key="Priority_Low"><![CDATA[Low]]></Text>
   <Text key="Priority_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Very low]]></Text>
 
   <Text key="Streaming"><![CDATA[Streaming]]></Text> 
   <Text key="Watch Online"><![CDATA[Watch online]]></Text>

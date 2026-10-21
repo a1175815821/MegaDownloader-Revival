@@ -464,6 +464,21 @@ Public Class FileDownloader
     Private m_currentFileProgress, m_totalProgress, m_currentFileSize As Int64
     Private m_currentSpeed As Generic.Dictionary(Of String, Long)
 
+    ''' <summary>
+    ''' P1-1:停滞看门狗的"活"判据 —— 内存已收字节数(每 ~50KB 动一次)。
+    ''' 此前用 GetTotalProgress()(各 chunk 已落盘 Index 之和),而 Index 只在
+    ''' FlushToDisk 里推进,落盘粒度 = BufferSize-PackageSize(默认 700 KiB)。
+    ''' 于是慢速下载(总速 < 阈值)会长时间"落盘进度不动"而被判停滞误杀,
+    ''' 表现为进度条在走却每 ~2 分钟变红一次。
+    ''' 内存进度在每个包(50KB)读满时推进,粒度细两个数量级,慢速也能及时续命。
+    ''' 线程安全:读取与写入同用 Mutex(写侧见 ChunkDownloader 内的 SyncLock Mutex)。
+    ''' </summary>
+    Private Function GetMemoryProgress() As Long
+        SyncLock Mutex
+            Return m_currentFileProgress
+        End SyncLock
+    End Function
+
     ' Data
     Private m_localDirectory As String
     Private m_file As FileInfo
@@ -886,7 +901,16 @@ Public Class FileDownloader
                 ' P0-1:无进度超时(stall watchdog)。此前是总时长墙钟:大文件即使一直在推进,
                 ' 只要墙钟超 120s 就判失败,叠加自愈删 .part 形成无限循环。此处每次有 chunk
                 ' 推进就重置计时,只有真正停滞 120s 才超时。
-                Dim lastProgress As Long = file.GetDataPart.GetTotalProgress()
+                '
+                ' P1-1:判据从"已落盘进度"改为"内存进度"。GetTotalProgress() 只累加各 chunk 的
+                ' Index,而 Index 仅在 FlushToDisk 里推进,落盘粒度 = BufferSize-PackageSize
+                ' (默认 750KB-50KB = 700 KiB)。于是慢速下载在两次落盘之间内存进度静止,
+                ' 只要总速低于 落盘粒度/120s 就会被误判停滞 → 进度条在走却周期性变红。
+                ' m_currentFileProgress 每读满一个包(50KB)就推进,粒度细两个数量级。
+                ' 两个信号取"或":任一推进即视为存活,只有两者同时静止才算真停滞。
+                ' (落盘信号保留作兜底:内存计数在 IsBusy 复位时归零,极端时序下仍以落盘为准。)
+                Dim lastProgress As Long = GetMemoryProgress()
+                Dim lastLandedProgress As Long = file.GetDataPart.GetTotalProgress()
                 Do
                     System.Threading.Thread.Sleep(100)
 
@@ -915,9 +939,13 @@ Public Class FileDownloader
                         Exit Do
                     End If
 
-                    Dim curProgress As Long = file.GetDataPart.GetTotalProgress()
-                    If curProgress <> lastProgress Then
+                    ' P1-1:内存进度(每 ~50KB 推进一次)为主判据,落盘进度为兜底。
+                    ' 任一推进即重置计时 → 慢速但持续前进的下载不再被误杀。
+                    Dim curProgress As Long = GetMemoryProgress()
+                    Dim curLandedProgress As Long = file.GetDataPart.GetTotalProgress()
+                    If curProgress <> lastProgress OrElse curLandedProgress <> lastLandedProgress Then
                         lastProgress = curProgress
+                        lastLandedProgress = curLandedProgress
                         waitStartTime = Now
                     End If
 

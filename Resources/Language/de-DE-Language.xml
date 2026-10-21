@@ -164,6 +164,7 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Log_Debug"><![CDATA[Debuggen]]></Text>
   <Text key="Priority_Low"><![CDATA[Gering]]></Text>
   <Text key="Priority_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Sehr gering]]></Text>
   <Text key="Do you want to leave the default path empty?"><![CDATA[Wollen Sie verlassen die Default-Pfad leer?]]></Text>
   <Text key="Disk buffer or package size values are not correct"><![CDATA[Disk-Puffer oder Packungsgröße Werte sind nicht korrekt.]]></Text>
   <Text key="Disk buffer size must be greater than package size"><![CDATA[Festplatte Puffergröße muss größer sein als Packungsgröße.]]></Text>

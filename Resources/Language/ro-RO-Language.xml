@@ -183,6 +183,7 @@ Dacă schimbi opțiunea de "extragere automată", se va aplica la toate fișiere
   <Text key="Log_Debug"><![CDATA[Depanare]]></Text>
   <Text key="Priority_Low"><![CDATA[Scăzut]]></Text>
   <Text key="Priority_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Foarte scăzut]]></Text>
   <Text key="Streaming"><![CDATA[Flux]]></Text>
   <Text key="Watch Online"><![CDATA[Vezi online]]></Text>
   <Text key="Watch Online help link"><![CDATA[Notă despre vezi on-line]]></Text>

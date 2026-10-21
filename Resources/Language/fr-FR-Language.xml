@@ -167,6 +167,7 @@ Do vous voulez le télécharger?]]></Text>
   <Text key="Log_Debug"><![CDATA[Déboguer]]></Text>
   <Text key="Priority_Low"><![CDATA[Bas]]></Text>
   <Text key="Priority_Normal"><![CDATA[Normal]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Très bas]]></Text>
 
   <Text key="Streaming"><![CDATA[Streaming]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[Gérer &la bibliothèque]]></Text>

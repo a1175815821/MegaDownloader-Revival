@@ -101,9 +101,80 @@ Public Class DescompresorController
         End SyncLock
     End Function
 
+    ''' <summary>
+    ''' P1-2:处理单个队列元素。异常在此被隔离 —— 单个坏元素不得带走整个 worker。
+    ''' 此前 ProcesarElemento 的异常一路冒泡到 DescompresorController_DoWork 的
+    ''' Try/Catch,Catch 只写日志就结束 DoWork → worker 静默死亡且永不重启,
+    ''' 整个解压队列报废到重启进程。
+    ''' </summary>
     Private Sub ProcesarElemento(ByRef Cancel As Boolean)
+        Dim codigo As String = Nothing
+        Try
+            SyncLock Mutex
+                codigo = _codigoElementoActual
+            End SyncLock
+            ProcesarElementoInterno(Cancel)
+        Catch ex As Exception
+            Log.WriteError("Decompressor: unexpected error while extracting '" & codigo & "': " & Log.SafeException(ex))
+            ' 只有当内部流程尚未走到收尾(状态仍被占用)时才补报失败,
+            ' 否则会与正常收尾路径的 DescompresionFinalizada 重复上报。
+            DiscardCurrentElementOnError("Unexpected error while extracting: " & ex.Message)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' P1-2:异常中止当前元素时清理残留状态并上报失败。
+    ''' _pathElementoActual 残留会让 Ocupado() 恒为 True(每次关闭都弹
+    ''' "Files extracting, corruption danger"),元素也永远卡在 Descomprimiendo。
+    ''' 若内部已走到正常收尾(状态已清空),则不重复上报失败事件。
+    ''' </summary>
+    Friend Function DiscardCurrentElementOnError(ByVal motivo As String) As String
+        Dim codigo As String = Nothing
+        SyncLock Mutex
+            codigo = _codigoElementoActual
+            Me._pathElementoActual = Nothing
+            Me._passwordElementoActual = Nothing
+            Me._codigoElementoActual = Nothing
+        End SyncLock
+        If Not String.IsNullOrEmpty(codigo) Then
+            Try
+                RaiseEvent DescompresionFinalizada(codigo, False, motivo)
+            Catch ex As Exception
+                Log.WriteError("Decompressor: failed to report failure for '" & codigo & "': " & Log.SafeException(ex))
+            End Try
+        End If
+        Return codigo
+    End Function
+
+    Private Sub ProcesarElementoInterno(ByRef Cancel As Boolean)
+        ' P1-2:收尾必须保证执行。此前是"先 RaiseEvent 再清状态"的直线代码,
+        ' 若事件处理器抛异常(RaiseEvent 会把处理器异常抛回调用方),
+        ' 状态就永远不会被清 → _pathElementoActual 残留 → Ocupado() 恒 True,
+        ' 且该元素卡在 Descomprimiendo 直到重启。
+        ' 现在用 Finally 兜底清理,保证任何退出路径都释放"当前元素"槽位。
+        Dim elementHandled As Boolean = False
+        Try
+            ProcesarElementoInternoCore(Cancel, elementHandled)
+        Finally
+            If Not elementHandled Then
+                ' 未走到正常收尾(抛异常)→ 释放"当前元素"占用槽位。
+                ' 注意:_codigoElementoActual 必须保留 —— 外层 ProcesarElemento 的 Catch
+                ' 靠它补报 DescompresionFinalizada 失败;此处一并清掉会让该元素
+                ' 永远卡在"解压中"(Fichero 侧只靠这个事件离开该状态)。
+                SyncLock Mutex
+                    Me._pathElementoActual = Nothing
+                    Me._passwordElementoActual = Nothing
+                End SyncLock
+            End If
+        End Try
+    End Sub
+
+    Private Sub ProcesarElementoInternoCore(ByRef Cancel As Boolean, ByRef elementHandled As Boolean)
         SyncLock Mutex
             If String.IsNullOrEmpty(Me._pathElementoActual) Then
+                ' 空转:没有元素可处理。此路径不占用任何状态,标记为已处理,
+                ' 避免 Finally 去动 _codigoElementoActual(那会把上一轮的 code 留下)。
+                elementHandled = True
                 Exit Sub
             End If
         End SyncLock
@@ -138,6 +209,8 @@ Public Class DescompresorController
 
             Log.WriteWarning("Decompressor: invalid element, discarding: '" & codigoDescartado & "'")
 
+            ' P1-2:本路径已上报失败并清空状态 → 标记为已处理,Finally 不再重复清理/上报。
+            elementHandled = True
             Exit Sub
         End If
 
@@ -231,6 +304,9 @@ Public Class DescompresorController
             Me._passwordElementoActual = Nothing
             Me._codigoElementoActual = Nothing
         End SyncLock
+
+        ' P1-2:正常收尾完成(已上报 + 已清状态)→ Finally 不再重复处理。
+        elementHandled = True
 
 
     End Sub
@@ -435,11 +511,23 @@ Public Class DescompresorController
 
             While Not worker.CancellationPending
 
-                If GetController.PonerElementoAProcesar Then
+                ' P1-2:逐次迭代独立兜底。此前整个 While 被一个 Try 包住,任何异常
+                ' (哪怕只是 PonerElementoAProcesar 的一次瞬时失败)都会跳出循环 →
+                ' Catch 只写日志 → DoWork 正常返回 → RunWorkerCompleted 只置标志不重启 →
+                ' worker 静默死亡,解压队列永久报废到重启进程。
+                ' 现在单次迭代出错只跳过本次,worker 继续消费队列。
+                Try
+                    If GetController.PonerElementoAProcesar Then
 
-                    GetController.ProcesarElemento(worker.CancellationPending)
+                        GetController.ProcesarElemento(worker.CancellationPending)
 
-                End If
+                    End If
+                Catch ex As Exception
+                    Log.WriteError("Error on worker bgwDescompresor (iteration, worker continues): " & ex.ToString)
+                    ' 该迭代取出的元素可能已占据"当前元素"槽位,必须清掉,否则
+                    ' PonerElementoAProcesar 永远返回 False(队列卡死)且 Ocupado() 恒 True。
+                    GetController.DiscardCurrentElementOnError("Unexpected error while processing the extraction queue: " & ex.Message)
+                End Try
 
                 If worker.CancellationPending Then
                     Exit While
@@ -450,6 +538,8 @@ Public Class DescompresorController
 
             Log.WriteWarning("Finishing worker bgwDescompresor")
         Catch ex As Exception
+            ' 最外层兜底:走到这里说明 worker 自身已不可用。记录后由 Main.vb 的
+            ' bgwDescompresor 看门狗重启(见 Main.vb:bgwDescompresor_RunWorkerCompleted)。
             Log.WriteError("Error on worker bgwDescompresor: " & ex.ToString)
         End Try
     End Sub
