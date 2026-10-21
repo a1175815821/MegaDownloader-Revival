@@ -677,12 +677,26 @@ Public Class Main
         Ayuda.DropDownItems.Add(About)
         menuPrincipal.Items.Add(Ayuda)
 
-        ' 挂到窗体上。停靠顺序:WinForms 按 Controls 索引从大到小停靠,索引越大越先
-        ' 停靠 —— 菜单条必须排在 TableLayoutPanel1 之后,才会停靠在最上面、工具栏在其下。
-        ' (等价布局已实测:菜单条 Top=0/H=25,工具栏 Top=25/Bottom=65,状态栏仍在 478;
-        '  下载区由 LayoutDownloadArea() 从工具栏底部绝对起算,无需任何手工偏移。)
+        ' 挂到窗体上:两条都不用 Dock,改为显式坐标。
+        ' 此前菜单条与工具栏都靠 Dock=Top,上下关系由"Controls 索引越大越先停靠"这条
+        ' 未文档化的规则决定 —— 顺序一反,菜单条就停到工具栏下面,压住下载区顶部
+        ' (用户实测到的"顶栏挡住下面主窗口 UI")。现在几何一次写死,与停靠顺序无关。
+        menuPrincipal.Dock = DockStyle.None
         Me.Controls.Add(menuPrincipal)
-        Me.Controls.SetChildIndex(menuPrincipal, Me.Controls.IndexOf(TableLayoutPanel1) + 1)
+        menuPrincipal.Location = New Point(0, 0)
+        menuPrincipal.Width = Me.ClientSize.Width
+        menuPrincipal.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        menuPrincipal.PerformLayout()
+
+        ' 工具栏紧接菜单条之下;宽度靠 Anchor 跟随,高度沿用设计器里的 40。
+        ' 下载区 LayoutDownloadArea() 用 TableLayoutPanel1.Bottom 起算,无需手工偏移。
+        If TableLayoutPanel1 IsNot Nothing Then
+            TableLayoutPanel1.Dock = DockStyle.None
+            TableLayoutPanel1.Location = New Point(0, menuPrincipal.Height)
+            TableLayoutPanel1.Width = Me.ClientSize.Width
+            TableLayoutPanel1.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        End If
+
         Me.PerformLayout()
     End Sub
 
