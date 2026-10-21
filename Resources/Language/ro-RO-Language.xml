@@ -473,4 +473,6 @@ Pentru a utiliza această opțiune, trebuie doar să urmați acești 3 pași sim
 În caz contrar, va putea descărca linkurile, dar nu le va putea vedea.]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Avertisment: verificarea datelor a eșuat. Fișierul de ieșire nu a fost creat. Acest lucru se poate întâmpla dacă imaginea este prea mică; încercați cu o imagine mai mare.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Avertisment: imagine prea mică, este posibil ca datele să fie deteriorate.]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[Nu s-a putut rezolva linkul MEGA. Verificați linkul și dacă serverul de streaming rulează.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Nu s-a putut extrage arhiva RAR. Verificați că toate volumele sunt prezente și că parola este corectă.]]></Text>
 </Language>

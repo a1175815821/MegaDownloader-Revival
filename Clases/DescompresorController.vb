@@ -612,9 +612,25 @@ Public Class DescompresorController
             Return opts
         End Function
 
-        Private Shared Function getIArchive(PathFichero As String, Password As String) As IArchive
+        Private Shared Function getIArchive(PathFichero As String, Password As String, Volumenes As List(Of String)) As IArchive
 
             If PathFichero.ToUpper.EndsWith(".RAR") Then
+                ' P2-3: 分卷 RAR 必须把整组卷一起交给 SharpCompress。此前只开第一卷,
+                ' 于是 IsComplete 反映的只是"第一卷在不在",缺卷检测与后续卷的条目
+                ' 全都拿不到(不带密码的多卷 RAR 只能解出第一卷的内容)。
+                If Volumenes IsNot Nothing AndAlso Volumenes.Count > 1 Then
+                    Dim archivos As New List(Of FileInfo)()
+                    For Each v As String In Volumenes
+                        Try
+                            archivos.Add(New FileInfo(v))
+                        Catch ex As Exception
+                            Log.WriteWarning("Could not stat RAR volume '" & v & "': " & Log.SafeException(ex))
+                        End Try
+                    Next
+                    If archivos.Count > 1 Then
+                        Return RarArchive.OpenArchive(archivos, ReaderOpts(Password))
+                    End If
+                End If
                 Return RarArchive.OpenArchive(PathFichero, ReaderOpts(Password))
             ElseIf PathFichero.ToUpper.EndsWith(".ZIP") Then
                 Return ZipArchive.OpenArchive(PathFichero, ReaderOpts(Password))
@@ -624,6 +640,99 @@ Public Class DescompresorController
 
         End Function
 
+        ''' <summary>
+        ''' P2-3: 收集 RAR 分卷,返回按卷序排列的完整路径列表(第一卷在最前)。
+        ''' 此前这里靠文件名后缀反推卷号(只认 part1/part01/part001/part0001.rar),于是:
+        '''  - .r00/.r01 这类旧式命名算出的 LengthPart=0 → 只读第一卷,解压结果不完整;
+        '''  - 单卷 RAR 只要文件名碰巧叫 xxx.part1.rar 就会被当成多卷,再叠加原 :687
+        '''    那个"在单卷判定之前就抛"的 throw → 带密码的单卷 RAR 直接被拒。
+        ''' 现在文件名只用来"找兄弟卷",不再用来"判定是不是多卷"(判定交给 archive
+        ''' 自己的 rar.IsMultipartVolume())。支持两种通行命名:
+        '''  - 新式 foo.part1.rar / foo.part2.rar ...
+        '''  - 旧式 foo.rar(第一卷)+ foo.r00 + foo.r01 ...
+        ''' </summary>
+        Private Shared Function DescubrirVolumenesRar(primeraRuta As String) As List(Of String)
+            Dim resultado As New List(Of String)
+            If String.IsNullOrWhiteSpace(primeraRuta) Then Return resultado
+
+            Dim directorio As String = Path.GetDirectoryName(primeraRuta)
+            If String.IsNullOrEmpty(directorio) Then directorio = "."
+            ' 注意:必须用完整文件名做判定。Path.GetFileNameWithoutExtension("foo.r00")
+            ' 会把 ".r00" 当成扩展名剥掉(得到 "foo"),旧式分卷就会被误判并重复入列。
+            Dim nombre As String = Path.GetFileName(primeraRuta)   ' foo.part01.rar / foo.rar / foo.r00
+
+            ' --- 新式 foo.partN.rar ---
+            Dim mPart As System.Text.RegularExpressions.Match =
+                System.Text.RegularExpressions.Regex.Match(nombre, "^(?<base>.+)\.part(?<num>\d+)\.rar$",
+                                                           System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            If mPart.Success Then
+                Dim baseNombre As String = mPart.Groups("base").Value
+                Dim digitos As Integer = mPart.Groups("num").Value.Length
+                Dim num As Integer = Integer.Parse(mPart.Groups("num").Value)
+                resultado.Add(primeraRuta)
+                Dim n As Integer = num + 1
+                Do
+                    Dim cand As String = Path.Combine(directorio, baseNombre & ".part" & n.ToString().PadLeft(digitos, "0"c) & ".rar")
+                    If Not File.Exists(cand) Then Exit Do
+                    resultado.Add(cand)
+                    n += 1
+                Loop While n <= 9999
+                Return resultado
+            End If
+
+            ' --- 旧式:选中的是 foo.rNN 这一卷,回到 foo.rar 第一卷 ---
+            Dim mOld As System.Text.RegularExpressions.Match =
+                System.Text.RegularExpressions.Regex.Match(nombre, "^(?<base>.+)\.r(?<num>\d+)$",
+                                                           System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            If mOld.Success Then
+                Dim baseNombre As String = mOld.Groups("base").Value
+                Dim cabecera As String = Path.Combine(directorio, baseNombre & ".rar")
+                If Not File.Exists(cabecera) Then
+                    ' 没有第一卷:交回给 archive 自己报"这不是第一卷"。
+                    resultado.Add(primeraRuta)
+                    Return resultado
+                End If
+                resultado.Add(cabecera)
+                Dim n As Integer = 0
+                Do
+                    Dim cand As String = Path.Combine(directorio, baseNombre & ".r" & n.ToString().PadLeft(2, "0"c))
+                    If Not File.Exists(cand) Then Exit Do
+                    If Not resultado.Contains(cand) Then resultado.Add(cand)
+                    n += 1
+                Loop While n <= 9999
+                Return resultado
+            End If
+
+            ' --- foo.rar:单卷,或者旧式分卷的第一卷 ---
+            If nombre.ToLowerInvariant().EndsWith(".rar") Then
+                Dim baseNombre As String = nombre.Substring(0, nombre.Length - 4)
+                resultado.Add(primeraRuta)
+                Dim n As Integer = 0
+                Do
+                    Dim cand As String = Path.Combine(directorio, baseNombre & ".r" & n.ToString().PadLeft(2, "0"c))
+                    If Not File.Exists(cand) Then Exit Do
+                    resultado.Add(cand)
+                    n += 1
+                Loop While n <= 9999
+                Return resultado
+            End If
+
+            resultado.Add(primeraRuta)
+            Return resultado
+        End Function
+
+
+        ''' <summary>
+        ''' P3-12: 判断是否 7z 容器。只有结尾 ".7z",或 ".7z.NNN"(NNN 纯数字分卷)
+        ''' 才算 7z。此前用 Contains(".7z."),于是 xxx.7z.zip / xxx.7z.rar 这类
+        ''' zip/rar 也被送去 7-Zip CLI,而 7zr 打不开 zip/rar → 退出码非 0 →
+        ''' 报 "7-Zip failed with exit code N",原本能正常解的包反而失败。
+        ''' </summary>
+        Private Shared Function Is7zContainer(PathFichero As String) As Boolean
+            Dim p As String = PathFichero.ToLowerInvariant()
+            If p.EndsWith(".7z") Then Return True
+            Return System.Text.RegularExpressions.Regex.IsMatch(p, "\.7z\.\d+$")
+        End Function
 
         Public Sub Extract()
             Try
@@ -633,12 +742,20 @@ Public Class DescompresorController
                 ' the external 7-Zip CLI — SharpCompress does not support the 7z container
                 ' format at all, which made every .7z extraction fail. Prefer a system
                 ' 7-Zip install; fall back to the embedded 7zr.exe (public domain).
-                If PathFichero.ToLower.EndsWith(".7z") OrElse PathFichero.ToLower.Contains(".7z.") Then
+                If Is7zContainer(PathFichero) Then
                     Extract7z()
                     Return
                 End If
 
-                Using archive As IArchive = getIArchive(PathFichero, Password)
+                ' P2-3: RAR 分卷按命名约定收集(见 DescubrirVolumenesRar)。打开压缩包时
+                ' 把整组卷一起交给 RarArchive,这样 IsComplete 反映的是"卷齐不齐",
+                ' 而不是"只有第一卷";不带密码的多卷 RAR 也才能把后续卷的条目一并解出。
+                Dim VolumenesRar As List(Of String) = Nothing
+                If PathFichero.ToUpperInvariant().EndsWith(".RAR") Then
+                    VolumenesRar = DescubrirVolumenesRar(PathFichero)
+                End If
+
+                Using archive As IArchive = getIArchive(PathFichero, Password, VolumenesRar)
 
                     If archive.IsComplete Then
 
@@ -659,33 +776,21 @@ Public Class DescompresorController
                             ' No nos sirve el ArchiveFactory... debemos usar el reader, pero solo para ficheros solidos RAR
                             ' Debemos pasar la lista con todos los part... pero como hemos comprobado antes
                             ' que "IsComplete" entonces estamos seguros que los tenemos todos...
+                            ' P2-3: 分卷列表改由 DescubrirVolumenesRar 按命名约定收集(见该函数)。
+                            ' 此前靠文件名后缀反推卷号(只认 part1/part01/part001/part0001.rar):
+                            '  - .r00/.r01 旧式命名 LengthPart=0 → 只读第一卷,解压结果不完整;
+                            '  - 单卷 RAR 恰好叫 xxx.part1.rar 时会被误判成多卷,再叠加下面
+                            '    那个"在单卷判定之前就抛"的 throw → 带密码的单卷 RAR 直接被拒。
                             Dim ListaFicheros As New Generic.List(Of Stream)
-                            ListaFicheros.Add(File.OpenRead(PathFichero))
                             Try
-                                Dim LengthPart As Integer = 0
-                                If PathFichero.ToLower.EndsWith("part1.rar") Then
-                                    LengthPart = 1
-                                ElseIf PathFichero.ToLower.EndsWith("part01.rar") Then
-                                    LengthPart = 2
-                                ElseIf PathFichero.ToLower.EndsWith("part001.rar") Then
-                                    LengthPart = 3
-                                ElseIf PathFichero.ToLower.EndsWith("part0001.rar") Then
-                                    LengthPart = 4
+                                Dim rutasVolumen As List(Of String) = VolumenesRar
+                                If rutasVolumen Is Nothing OrElse rutasVolumen.Count = 0 Then
+                                    rutasVolumen = New List(Of String)()
+                                    rutasVolumen.Add(PathFichero)
                                 End If
-
-                                For i As Integer = 2 To CInt(Math.Pow(10, LengthPart))
-                                    Dim path As String = PathFichero.ToLower.Replace("part" & "1".PadLeft(LengthPart, "0"c) & ".rar", "part" & i.ToString.PadLeft(LengthPart, "0"c) & ".rar")
-                                    ' Si es solido pero no multiparte, lo excluimos
-                                    If File.Exists(path) And PathFichero.ToLower <> path.ToLower Then
-                                        ListaFicheros.Add(File.OpenRead(path))
-                                    Else
-                                        Exit For
-                                    End If
+                                For Each v As String In rutasVolumen
+                                    ListaFicheros.Add(File.OpenRead(v))
                                 Next
-
-                                If LengthPart > 0 And Not String.IsNullOrEmpty(Password) Then
-                                    Throw New NotSupportedException("Solid RAR multipart archives with password are not supported by the built-in extractor.")
-                                End If
 
                                 If ListaFicheros.Count = 1 Then
 
@@ -737,50 +842,67 @@ Public Class DescompresorController
 
 
                                 Else
-                                    Using reader As IReader = RarReader.OpenReader(ListaFicheros, ReaderOpts(Nothing))
+                                    ' P2-3: 多卷分支此前用 ReaderOpts(Nothing) 把密码显式丢掉
+                                    ' (单卷分支是 ReaderOpts(Password))→ 带密码的分卷 RAR
+                                    ' 必然解不出来;而且原来那个"多卷+密码就抛
+                                    ' NotSupportedException"的硬编码英文拦截发生在单卷
+                                    ' 判定之前,单卷 RAR 只要文件名带 part1 也会被拒。
+                                    ' 现在两个分支都带上密码,失败时给出本地化原因。
+                                    Try
+                                        Using reader As IReader = RarReader.OpenReader(ListaFicheros, ReaderOpts(Password))
                                  
-                                        Dim c As DescompresorController = DescompresorController.GetController
-                                        Try
-                                            SyncLock Mutex
-                                                c._TamanoTotal = 0
-                                                c._FicActTamanoTotal = 0
-                                                c._TamanoTotalExtraido = 0
-                                                c._FicActExtraido = 0
-                                                c._FicActNombre = ""
-                                                For Each entry As IArchiveEntry In archive.Entries
-                                                    c._TamanoTotal += entry.Size
-                                                Next
-                                                EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
-                                            End SyncLock
-
-                                            While reader.MoveToNextEntry
-                                                If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
-                                                If Not reader.Entry.IsDirectory Then
-                                                    c._FicActNombre = reader.Entry.Key
-
-                                                    c._TamanoTotalExtraido += c._FicActTamanoTotal
-                                                    c._FicActTamanoTotal = reader.Entry.Size
+                                            Dim c As DescompresorController = DescompresorController.GetController
+                                            Try
+                                                SyncLock Mutex
+                                                    c._TamanoTotal = 0
+                                                    c._FicActTamanoTotal = 0
+                                                    c._TamanoTotalExtraido = 0
                                                     c._FicActExtraido = 0
+                                                    c._FicActNombre = ""
+                                                    For Each entry As IArchiveEntry In archive.Entries
+                                                        c._TamanoTotal += entry.Size
+                                                    Next
+                                                    EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
+                                                End SyncLock
 
-                                                    WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
-                                                    ' 新版无 CompressedBytesRead 流式事件：按条目结算进度，
-                                                    ' 再按解压优先级让出（旧 ListeningStream.Read 内 Sleep 的替代）。
-                                                    c._FicActExtraido = reader.Entry.Size
-                                                    DescompresionThrottle.ApplyThrottle()
-                                                End If
-                                            End While
-                                        Finally
-                                            SyncLock Mutex
-                                                c._TamanoTotal = Nothing
-                                                c._FicActTamanoTotal = Nothing
-                                                c._TamanoTotalExtraido = Nothing
-                                                c._FicActExtraido = Nothing
-                                                c._FicActNombre = Nothing
-                                            End SyncLock
+                                                While reader.MoveToNextEntry
+                                                    If CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
+                                                    If Not reader.Entry.IsDirectory Then
+                                                        c._FicActNombre = reader.Entry.Key
+
+                                                        c._TamanoTotalExtraido += c._FicActTamanoTotal
+                                                        c._FicActTamanoTotal = reader.Entry.Size
+                                                        c._FicActExtraido = 0
+
+                                                        WriteSafeEntry(reader, PathExtraccion, reader.Entry.Key)
+                                                        ' 新版无 CompressedBytesRead 流式事件：按条目结算进度，
+                                                        ' 再按解压优先级让出（旧 ListeningStream.Read 内 Sleep 的替代）。
+                                                        c._FicActExtraido = reader.Entry.Size
+                                                        DescompresionThrottle.ApplyThrottle()
+                                                    End If
+                                                End While
+                                            Finally
+                                                SyncLock Mutex
+                                                    c._TamanoTotal = Nothing
+                                                    c._FicActTamanoTotal = Nothing
+                                                    c._TamanoTotalExtraido = Nothing
+                                                    c._FicActExtraido = Nothing
+                                                    c._FicActNombre = Nothing
+                                                End SyncLock
                                           
-                                        End Try
+                                            End Try
 
-                                    End Using
+                                        End Using
+                                    Catch ex As Exception
+                                        ' P2-3: 失败原因对用户要有指向性(卷不齐/密码不对),
+                                        ' 不再把 SharpCompress 的原始异常直接抛出去。
+                                        If Not String.IsNullOrEmpty(Password) Then
+                                            Throw New ApplicationException( _
+                                                Language.GetText("Could not extract the RAR archive. Check that all volumes are present and that the password is correct.") & _
+                                                " (" & ex.Message & ")")
+                                        End If
+                                        Throw
+                                    End Try
                                 End If
 
 

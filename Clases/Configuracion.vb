@@ -586,6 +586,12 @@ Public Class Configuracion
 		ServidorWebBindIP = LeerNodo(Xml, "ServidorWebBindIP", "")
 		ServidorWebPuerto = 0
 		Integer.TryParse(LeerNodo(Xml, "ServidorWebPuerto", "0"), ServidorWebPuerto)
+		' P3-13: 端口/超时的钳制必须放在解析之后。ApplyConfigLimits 此前在 CargaXML
+		' 里只在 :542 和 :558 调用,两次都早于 ServidorStreamingPuerto(:563)、
+		' ServidorWebPuerto(:587)、ServidorWebTimeout(:582) 的解析 → 被手改坏的 XML
+		' 带来的越界值根本不会被钳,本次启动每次都弹 "Error starting web server",
+		' 要等下一次 GuardarXML 才钳回去。
+		ApplyConfigLimits()
 		
 		' Pre shared keys
 		Me.ListaPreSharedKeys = New List(Of SecureString)
@@ -719,6 +725,15 @@ Public Class Configuracion
 		ElseIf ServidorWebPuerto > 65535 Then
 			Log.WriteWarning("Web server port " & ServidorWebPuerto & " is out of range; clamped to 65535.")
 			ServidorWebPuerto = 65535
+		End If
+		' P3-13: ServidorWebTimeout 同样没被钳。UI 的合法区间是 0..99
+		' (Forms/Configuration.vb:490),越界值一样会让 Web 服务器启动失败。
+		If ServidorWebTimeout < 0 Then
+			Log.WriteWarning("Web server timeout " & ServidorWebTimeout & " is negative; reset to 5 (default).")
+			ServidorWebTimeout = 5
+		ElseIf ServidorWebTimeout > 99 Then
+			Log.WriteWarning("Web server timeout " & ServidorWebTimeout & " is out of range; clamped to 99.")
+			ServidorWebTimeout = 99
 		End If
 
 		If Not String.IsNullOrWhiteSpace(VLCPath) Then

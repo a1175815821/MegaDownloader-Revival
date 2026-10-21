@@ -544,4 +544,6 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it.]]></Text>
   <Text key="Do not show this message again?"><![CDATA[Do not show this message again?]]></Text>
   <Text key="Active downloads"><![CDATA[Active downloads]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[Could not resolve the MEGA link. Please check the link and make sure the streaming server is running.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Could not extract the RAR archive. Check that all volumes are present and that the password is correct.]]></Text>
 </Language>

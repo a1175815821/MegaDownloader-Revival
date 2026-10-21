@@ -67,6 +67,9 @@ Public Class StreamingForm
 
     Private PreviousURLMega As String = String.Empty
     Private ValidURLMega As Boolean = False
+    ' P3-10: 解析失败后的重试节流(见 ActualizarDatos)。
+    Private _resolveRetryAfterUtc As DateTime = DateTime.MinValue
+    Private Const ResolveRetryIntervalSeconds As Integer = 5
     ' 第17项:解析流水号。联网解析移到线程池后是异步的,URL 快速改动时
     ' 旧结果不得覆盖新结果;每次(重新)解析都递增,结果回 UI 时校验。
     Private _resolveGenLock As New Object()
@@ -92,9 +95,21 @@ Public Class StreamingForm
         End If
 
         Dim URLMega As String = Me.txtUrlMEGA.Text
-        If URLMega <> PreviousURLMega Then
+        ' P3-10: 解析失败后要能重试。此前这里在发起解析前就把 PreviousURLMega
+        ' 记成新 URL,失败后轮询认为"文本没变"就不再重试,用户不动输入框就永远
+        ' 拿不到正确结果。改为:文本变了立即解析;文本没变但仍无有效链接时,
+        ' 按 _resolveRetryAfterUtc 节流后重试(默认 5 秒一次,避免 150ms 轮询
+        ' 把解析请求打成网络风暴)。
+        Dim textoCambiado As Boolean = (URLMega <> PreviousURLMega)
+        ' 重试只在输入框非空时进行:空 URL 解析必然失败,否则会变成每 5 秒一次
+        ' 的无谓联网请求。
+        Dim tocaReintentar As Boolean = (Not ValidURLMega) AndAlso _
+                                       Not String.IsNullOrWhiteSpace(URLMega) AndAlso _
+                                       DateTime.UtcNow >= _resolveRetryAfterUtc
+        If textoCambiado OrElse tocaReintentar Then
             PreviousURLMega = URLMega
             ValidURLMega = False
+            _resolveRetryAfterUtc = DateTime.UtcNow.AddSeconds(ResolveRetryIntervalSeconds)
 
             ' 第17项:CreateStreamingLink 会走 MEGA API 解析(联网),此前在 UI 线程
             ' 同步执行导致输入卡死;移到线程池,结果经 BeginInvoke 回 UI。
@@ -140,15 +155,23 @@ Public Class StreamingForm
     Private Sub ResolveNow()
         Dim URLMega As String = Me.txtUrlMEGA.Text
         If ValidURLMega AndAlso URLMega = PreviousURLMega Then Exit Sub
-        PreviousURLMega = URLMega
+        ' P3-10: 此前在解析之前就把 PreviousURLMega 更新掉,于是后台轮询认为
+        ' "文本没变"不再重试;而这里一旦抛异常(用户明明填了合法 URL),
+        ' 唯一的提示却是"URL 是必填的",完全指错方向。
+        ' 改为:解析成功后才记录"已处理过的 URL";失败时保持原值,
+        ' 既让轮询能继续重试,也让点击路径能再次尝试。
         ValidURLMega = False
         SyncLock _resolveGenLock
             _resolveGeneration += 1
         End SyncLock
         Dim StreamingLink As String = StreamingHelper.CreateStreamingLink(URLMega, Config.ServidorStreamingPuerto, Config)
-        If String.IsNullOrEmpty(StreamingLink) Then Exit Sub
+        If String.IsNullOrEmpty(StreamingLink) Then
+            Log.WriteWarning("Streaming link resolution returned an empty link for the entered MEGA URL.")
+            Exit Sub
+        End If
         txtUrlStreaming.Text = StreamingLink
         ValidURLMega = True
+        PreviousURLMega = URLMega
     End Sub
 
     Private Sub btnLanzarVLC_Click(sender As System.Object, e As System.EventArgs) Handles btnLanzarVLC.Click
@@ -156,13 +179,23 @@ Public Class StreamingForm
         ' RC:ValidURLMega 靠后台 150ms 轮询,粘贴后立即点会误判。先算一次再判。
         ' 第17项:解析已移后台异步跑,点击时若链接有变/尚未解析完,同步兜底一次
         ' (仅用户主动点击触发,不随轮询冻结 UI)。
+        ' P3-10: 此前空 Catch 把真实原因吞掉,随后统一弹"URL 是必填的"——可用户
+        ' 明明已经填了合法 URL。改为:解析失败时把真实原因告诉用户;没有异常但
+        ' 解析不出链接时,提示"无法解析该 MEGA 链接",不再谎报"URL 必填"。
+        Dim errorMessage As String = ""
         Try
             ResolveNow()
-        Catch
+        Catch ex As Exception
+            Log.WriteError("Streaming link resolution failed: " & ex.ToString)
+            errorMessage = ex.Message
         End Try
         ' RC:无效链接此前静默 Exit,用户以为按钮死了,给提示。
         If Not ValidURLMega Then
-            MessageBox.Show(Language.GetText("URL is mandatory"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Dim msg As String = Language.GetText("Streaming link could not be resolved")
+            If Not String.IsNullOrEmpty(errorMessage) Then
+                msg &= " (" & errorMessage & ")"
+            End If
+            MessageBox.Show(msg, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return
         End If
         If Not StreamingHelper.WatchOnline(Config.VLCPath, txtUrlStreaming.Text) Then

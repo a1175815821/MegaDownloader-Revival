@@ -476,4 +476,6 @@ Please note that only basic support for ZIP and RAR files is currently provided.
 否則他只能下載這些連結，看不到連結內容。]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：資料校驗失敗，輸出檔案未建立。可能圖片太小，請換一張更大的圖片。]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[警告：圖片太小，資料可能已損壞。]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[無法解析該 MEGA 連結。請檢查連結是否正確,並確認串流伺服器已啟動。]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[無法解壓 RAR 壓縮檔。請檢查所有分卷是否齊全、密碼是否正確。]]></Text>
 </Language>

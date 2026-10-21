@@ -504,4 +504,6 @@ Para usar esta opção, basta seguir estes 3 passos simples:
 Caso contrário, ele poderá baixar os links, mas não vê-los.]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Aviso: a verificação dos dados falhou. O arquivo de saída não foi criado. Isso pode acontecer se a imagem for pequena demais; tente com uma imagem maior.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Aviso: imagem pequena demais, os dados podem estar corrompidos.]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[Não foi possível resolver o link MEGA. Verifique o link e se o servidor de streaming está em execução.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Não foi possível extrair o arquivo RAR. Verifique se todos os volumes estão presentes e se a senha está correta.]]></Text>
 </Language>

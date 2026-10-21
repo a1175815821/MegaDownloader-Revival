@@ -470,4 +470,6 @@ A lehetőség használatához kövesse ezt a 3 egyszerű lépést:
 Egyébként le tudja tölteni a linkeket, de nem látja azokat.]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Figyelmeztetés: az adatellenőrzés nem sikerült. A kimeneti fájl nem jött létre. Ez akkor fordulhat elő, ha a kép túl kicsi; próbálja egy nagyobb képpel.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Figyelmeztetés: a kép túl kicsi, előfordulhat, hogy az adatok sérültek.]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[A MEGA link nem oldható fel. Ellenőrizd a linket és hogy a streaming kiszolgáló fut-e.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[A RAR archívum kicsomagolása nem sikerült. Ellenőrizd, hogy minden rész megvan-e, és hogy a jelszó helyes-e.]]></Text>
 </Language>

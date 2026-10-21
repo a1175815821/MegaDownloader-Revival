@@ -111,7 +111,10 @@ Partial Public Class Main
     Private Sub ApplyDetailContentTheme()
         Try
             If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
-            Dim subtle As Drawing.Color = ThemeManager.GetColor("Border")
+            ' P2-8 同源问题:右栏详情左侧的"字段名"列也是次要说明文字,
+            ' 此前同样取 "Border" 当前景,挂在 detailContentPanel(ControlBack)上,
+            ' 对比度只有 1.38:1 / 1.82:1。改用 Muted 专用色。
+            Dim subtle As Drawing.Color = ThemeManager.GetColor("Muted")
             Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
             If detailTitleLabel IsNot Nothing Then
                 detailTitleLabel.ForeColor = fore

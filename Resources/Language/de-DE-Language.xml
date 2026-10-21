@@ -491,4 +491,6 @@ Um diese Option zu nutzen, genügen diese 3 einfachen Schritte:
 Andernfalls kann er die Links herunterladen, aber nicht sehen.]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Warnung: Die Datenprüfung ist fehlgeschlagen. Die Ausgabedatei wurde nicht erstellt. Dies kann passieren, wenn das Bild zu klein ist – versuchen Sie es mit einem größeren Bild.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Warnung: Das Bild ist zu klein, möglicherweise sind die Daten beschädigt.]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[Der MEGA-Link konnte nicht aufgelöst werden. Bitte Link und laufenden Streaming-Server prüfen.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Das RAR-Archiv konnte nicht entpackt werden. Prüfen Sie, ob alle Bände vorhanden sind und das Passwort stimmt.]]></Text>
 </Language>

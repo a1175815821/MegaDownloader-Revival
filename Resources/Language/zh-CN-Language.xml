@@ -481,4 +481,6 @@ B 是同行下载数。]]></Text>
   <!-- 第12项:Web 界面 "Active downloads" 标签(原代码误用大写 A 取键,永远落回英文);
        小写 "active downloads" 用于托盘 "N 个活动下载 - 速度",补量词使其通顺 -->
   <Text key="Active downloads"><![CDATA[活动下载]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[无法解析该 MEGA 链接。请检查链接是否正确,并确认流媒体服务器已启动。]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[无法解压 RAR 压缩包。请检查所有分卷是否齐全、密码是否正确。]]></Text>
 </Language>

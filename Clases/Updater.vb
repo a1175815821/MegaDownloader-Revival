@@ -95,7 +95,7 @@ Public Class Updater
     ''' <summary>
     ''' Normalizes "2.0" and "2.0.0.0" to the same four-part version string for comparisons.
     ''' </summary>
-    Private Shared Function NormalizeVersionString(ByVal value As String) As String
+    Public Shared Function NormalizeVersionString(ByVal value As String) As String
         If String.IsNullOrWhiteSpace(value) Then Return "0.0.0.0"
         Dim parts = value.Trim().Split("."c).ToList()
         While parts.Count < 4

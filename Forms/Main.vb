@@ -571,97 +571,119 @@ Public Class Main
         End Using
     End Function
 
+    ''' <summary>
+    ''' P2-7:顶部菜单条由经典 MainMenu 换成 MenuStrip。
+    ''' 经典 MainMenu 的条带由操作系统按系统菜单色绘制(实测:即便把每个 MenuItem 的
+    ''' OwnerDraw 置 True,条带仍是 F0F0F0 的系统亮色),它既不是 ToolStrip、也不在
+    ''' Controls 树里,ThemeManager 的四类覆盖(ToolStrip 渲染器 / Controls 递归 /
+    ''' ContextMenuStrip / ToolTip)全都够不着它 → 深色主题下顶部是一条明显亮带。
+    ''' MenuStrip 走 ToolStripManager.Renderer + ThemeColorTable,随主题自动换肤。
+    ''' </summary>
     Private Sub CrearMenus()
 
-        Me.Menu = New MainMenu
-        Dim Archivo As MenuItem = Menu.MenuItems.Add(Language.GetText("&File"))
+        Dim menuPrincipal As New MenuStrip
+        menuPrincipal.Name = "MenuPrincipal"
+        menuPrincipal.Dock = DockStyle.Top
 
-        Dim OpenELC As MenuItem = New MenuItem(Language.GetText("Open &ELC"))
+        Dim Archivo As New ToolStripMenuItem(Language.GetText("&File"))
+
+        Dim OpenELC As New ToolStripMenuItem(Language.GetText("Open &ELC"))
         AddHandler (OpenELC.Click), AddressOf OpenDLC_Click
 
-        Dim Salir As MenuItem = New MenuItem(Language.GetText("E&xit"))
+        Dim Salir As New ToolStripMenuItem(Language.GetText("E&xit"))
         AddHandler (Salir.Click), AddressOf CerrarToolStripMenuItem_Click
 
-        Archivo.MenuItems.Add(OpenELC)
-        Archivo.MenuItems.Add("-")
-        Archivo.MenuItems.Add(Salir)
+        Archivo.DropDownItems.Add(OpenELC)
+        Archivo.DropDownItems.Add(New ToolStripSeparator())
+        Archivo.DropDownItems.Add(Salir)
+        menuPrincipal.Items.Add(Archivo)
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-        Dim ColaExtraccion As MenuItem = New MenuItem(Language.GetText("See extraction &queue"))
+        Dim ColaExtraccion As New ToolStripMenuItem(Language.GetText("See extraction &queue"))
         AddHandler (ColaExtraccion.Click), AddressOf VerDescompresor_Click
 
-        Dim Configuracion As MenuItem = New MenuItem(Language.GetText("&Configuration"))
+        Dim Configuracion As New ToolStripMenuItem(Language.GetText("&Configuration"))
         AddHandler (Configuracion.Click), AddressOf btnConfig_Click
 
-        Dim VerLogs As MenuItem = New MenuItem(Language.GetText("See lo&gs"))
+        Dim VerLogs As New ToolStripMenuItem(Language.GetText("See lo&gs"))
         AddHandler (VerLogs.Click), AddressOf VerLogs_Click
 
-        Dim CodificarEnlaces As MenuItem = New MenuItem(Language.GetText("Encode lin&ks"))
+        Dim CodificarEnlaces As New ToolStripMenuItem(Language.GetText("Encode lin&ks"))
         AddHandler (CodificarEnlaces.Click), AddressOf CodificarEnlaces_Click
 
-        Dim GenerateELC As MenuItem = New MenuItem(Language.GetText("Generat&e ELC"))
+        Dim GenerateELC As New ToolStripMenuItem(Language.GetText("Generat&e ELC"))
         AddHandler (GenerateELC.Click), AddressOf GenerateELC_Click
 
-        Dim Stegano As MenuItem = New MenuItem(Language.GetText("Steganograph&y"))
+        Dim Stegano As New ToolStripMenuItem(Language.GetText("Steganograph&y"))
 
-        Dim Opciones As MenuItem = Menu.MenuItems.Add(Language.GetText("&Options"))
+        Dim Opciones As New ToolStripMenuItem(Language.GetText("&Options"))
 
-        Opciones.MenuItems.Add(CodificarEnlaces)
-        Opciones.MenuItems.Add(GenerateELC)
-        Opciones.MenuItems.Add(Stegano)
-        Opciones.MenuItems.Add("-")
-        Opciones.MenuItems.Add(ColaExtraccion)
-        Opciones.MenuItems.Add(VerLogs)
-        Opciones.MenuItems.Add("-")
-        Opciones.MenuItems.Add(Configuracion)
+        Opciones.DropDownItems.Add(CodificarEnlaces)
+        Opciones.DropDownItems.Add(GenerateELC)
+        Opciones.DropDownItems.Add(Stegano)
+        Opciones.DropDownItems.Add(New ToolStripSeparator())
+        Opciones.DropDownItems.Add(ColaExtraccion)
+        Opciones.DropDownItems.Add(VerLogs)
+        Opciones.DropDownItems.Add(New ToolStripSeparator())
+        Opciones.DropDownItems.Add(Configuracion)
+        menuPrincipal.Items.Add(Opciones)
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-        Dim CreateStegano As MenuItem = New MenuItem(Language.GetText("&Hide links inside an image"))
+        Dim CreateStegano As New ToolStripMenuItem(Language.GetText("&Hide links inside an image"))
         AddHandler (CreateStegano.Click), AddressOf CreateStegano_Click
-        Dim UseStegano As MenuItem = New MenuItem(Language.GetText("&Retrieve links from an image"))
+        Dim UseStegano As New ToolStripMenuItem(Language.GetText("&Retrieve links from an image"))
         AddHandler (UseStegano.Click), AddressOf UseStegano_Click
 
-        Stegano.MenuItems.Add(CreateStegano)
-        Stegano.MenuItems.Add(UseStegano)
+        Stegano.DropDownItems.Add(CreateStegano)
+        Stegano.DropDownItems.Add(UseStegano)
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-        Dim VerStreaming As MenuItem = New MenuItem(Language.GetText("Watch &Online"))
+        Dim VerStreaming As New ToolStripMenuItem(Language.GetText("Watch &Online"))
         AddHandler (VerStreaming.Click), AddressOf VerStreaming_Click
 
-        Dim LibraryManager As MenuItem = New MenuItem(Language.GetText("Manage Streaming &Library"))
+        Dim LibraryManager As New ToolStripMenuItem(Language.GetText("Manage Streaming &Library"))
         AddHandler (LibraryManager.Click), AddressOf LibraryManager_Click
 
-        Dim SeeLibraryManager As MenuItem = New MenuItem(Language.GetText("See Streaming &Library"))
+        Dim SeeLibraryManager As New ToolStripMenuItem(Language.GetText("See Streaming &Library"))
         AddHandler (SeeLibraryManager.Click), AddressOf SeeLibraryManager_Click
 
-        Dim Streaming As MenuItem = Menu.MenuItems.Add(Language.GetText("&Streaming"))
-        Streaming.MenuItems.Add(VerStreaming)
-        Streaming.MenuItems.Add("-")
-        Streaming.MenuItems.Add(SeeLibraryManager)
-        Streaming.MenuItems.Add(LibraryManager)
+        Dim Streaming As New ToolStripMenuItem(Language.GetText("&Streaming"))
+        Streaming.DropDownItems.Add(VerStreaming)
+        Streaming.DropDownItems.Add(New ToolStripSeparator())
+        Streaming.DropDownItems.Add(SeeLibraryManager)
+        Streaming.DropDownItems.Add(LibraryManager)
+        menuPrincipal.Items.Add(Streaming)
 
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-        Dim FAQ As New MenuItem(Language.GetText("FA&Q"))
+        Dim FAQ As New ToolStripMenuItem(Language.GetText("FA&Q"))
         AddHandler (FAQ.Click), AddressOf FAQ_Click
 
-        Dim About As New MenuItem(Language.GetText("&About"))
+        Dim About As New ToolStripMenuItem(Language.GetText("&About"))
         AddHandler (About.Click), AddressOf About_Click
 
-        Dim CheckUpdates As New MenuItem(Language.GetText("Chec&k for updates"))
+        Dim CheckUpdates As New ToolStripMenuItem(Language.GetText("Chec&k for updates"))
         AddHandler (CheckUpdates.Click), AddressOf CheckUpdates_Click
 
-        Dim Ayuda As MenuItem = Menu.MenuItems.Add(Language.GetText("&Help"))
-        Ayuda.MenuItems.Add(CheckUpdates)
-        Ayuda.MenuItems.Add("-")
-        Ayuda.MenuItems.Add(FAQ)
-        Ayuda.MenuItems.Add("-")
-        Ayuda.MenuItems.Add(About)
+        Dim Ayuda As New ToolStripMenuItem(Language.GetText("&Help"))
+        Ayuda.DropDownItems.Add(CheckUpdates)
+        Ayuda.DropDownItems.Add(New ToolStripSeparator())
+        Ayuda.DropDownItems.Add(FAQ)
+        Ayuda.DropDownItems.Add(New ToolStripSeparator())
+        Ayuda.DropDownItems.Add(About)
+        menuPrincipal.Items.Add(Ayuda)
 
+        ' 挂到窗体上。停靠顺序:WinForms 按 Controls 索引从大到小停靠,索引越大越先
+        ' 停靠 —— 菜单条必须排在 TableLayoutPanel1 之后,才会停靠在最上面、工具栏在其下。
+        ' (等价布局已实测:菜单条 Top=0/H=25,工具栏 Top=25/Bottom=65,状态栏仍在 478;
+        '  下载区由 LayoutDownloadArea() 从工具栏底部绝对起算,无需任何手工偏移。)
+        Me.Controls.Add(menuPrincipal)
+        Me.Controls.SetChildIndex(menuPrincipal, Me.Controls.IndexOf(TableLayoutPanel1) + 1)
+        Me.PerformLayout()
     End Sub
 
     Private Sub InicializarMonitores()
@@ -694,13 +716,28 @@ Public Class Main
     End Function
 
     Private Sub CheckVersionStatistics()
-        Dim VersionActual As Double = 0
-        Double.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE"), Globalization.NumberStyles.Number, New Globalization.CultureInfo("en-GB"), VersionActual)
+        ' P3-14: 此前用 Double.TryParse 解析 "2.5.7" —— 带两个小数点的版本号必然解析失败,
+        ' VersionActual 保持 0;而 Config.VersionConfig 缺省也是 "0",
+        ' 于是 0 > 0 恒假,PingNewVersion() 永远到不了(版本统计上报形同虚设)。
+        ' 2.5.0 时代 VERSION_UPDATE 写的是 "2.5"(恰好能被 Double 解析),2.5.7 改成
+        ' "2.5.7" 之后这条链就断了;更新检查本身用 System.Version,不受影响。
+        ' 改为与 Updater 同一套 System.Version 比较:先规整成四段再逐段比。
+        ' 旧配置里存的 "0" 视为"从未记录过",任何真实版本号都应触发一次上报。
+        Dim versionActual As System.Version = Nothing
+        If Not System.Version.TryParse( _
+                Updater.NormalizeVersionString(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_UPDATE")), _
+                versionActual) Then
+            Log.WriteWarning("Could not parse VERSION_UPDATE; version statistics ping skipped.")
+            Return
+        End If
 
-        Dim UltimaVersionConfig As Double = 0
-        Double.TryParse(Config.VersionConfig, Globalization.NumberStyles.Number, New Globalization.CultureInfo("en-GB"), UltimaVersionConfig)
-        If VersionActual > UltimaVersionConfig Then
-            Config.VersionConfig = VersionActual.ToString(New Globalization.CultureInfo("en-GB"))
+        Dim ultimaVersion As System.Version = Nothing
+        If Not System.Version.TryParse(Updater.NormalizeVersionString(Config.VersionConfig), ultimaVersion) Then
+            ultimaVersion = New System.Version(0, 0, 0, 0)
+        End If
+
+        If versionActual > ultimaVersion Then
+            Config.VersionConfig = versionActual.ToString()
 
             ' Hitcount new user of this version
             Conexion.PingNewVersion()
@@ -1713,7 +1750,11 @@ Public Class Main
     Private Sub ApplyNavRailTheme()
         Try
             If Not navRailInitialized Then Return
-            Dim subtle As Drawing.Color = ThemeManager.GetColor("Border")
+            ' P2-8: 说明文字此前取 "Border"(边框色)当前景。三个 Label 自身透明,
+            ' 挂在 navPanel(Panel → ControlBack)上,对比度浅色只有 1.38:1、深色 1.82:1,
+            ' 远低于正文 4.5:1 的下限 → 左栏总览说明几乎读不出来。
+            ' 改用主题 Muted 专用色(对 ControlBack:浅 5.16:1 / 深 4.97:1)。
+            Dim subtle As Drawing.Color = ThemeManager.GetColor("Muted")
             Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
             Dim accent As Drawing.Color = ThemeManager.GetColor("Link")
 
@@ -4846,7 +4887,13 @@ Public Class Main
     End Sub
 
     Private Sub GenerateELC_Click(sender As System.Object, e As System.EventArgs)
-        If Main.IsFormAlreadyOpen(GetType(EncodeLinksForm)) Is Nothing Then
+        ' P2-4: 类型不匹配 —— 这里查重用的是 EncodeLinksForm,开的却是 ELCForm。
+        ' 后果:开着"Encode links"时点"Generate ELC",条件恒为假 → 窗口永远打不开,
+        ' 且没有任何提示;已经开着 ELC 时再点一次,查重的仍是 EncodeLinksForm
+        ' (永远是 Nothing)→ 又开一个 ELC 窗口,每个都起一条常驻后台线程。
+        ' 全仓 11 处 IsFormAlreadyOpen(GetType(...)) 里唯一的一处错配,改为按实际
+        ' 要打开的窗体类型查重。
+        If Main.IsFormAlreadyOpen(GetType(ELCForm)) Is Nothing Then
             Dim frmName As New ELCForm
             frmName.MainForm = Me
             frmName.Show()
@@ -4854,6 +4901,14 @@ Public Class Main
     End Sub
 
     Public Sub StartDownload()
+        ' P3-11: 配额熔断守卫此前只挂在工具栏 Play 上,AddLinks 的"立即下载"直接
+        ' 调 StartDownload 绕过了它 —— 熔断期里一个任务都不会开,状态栏却显示
+        ' "Downloading",配额 Toast 也不弹,用户完全得不到解释。
+        ' 守卫下沉到 StartDownload,所有入口(工具栏/AddLinks/其它调用方)行为一致。
+        If MegaQuotaManager.IsQuarantined() Then
+            ShowQuotaBlockedToast()
+            Return
+        End If
         QuitarPausasIndividuales()
         Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
         ThrottledStreamController.GetController.Continuar()
@@ -4872,15 +4927,21 @@ Public Class Main
     Private Sub btnPlay_Click(sender As System.Object, e As System.EventArgs) Handles btnPlay.Click
         ' 熔断期点开始此前零反馈(调度器静默不开新任务)。给明确提示,不改状态。
         If MegaQuotaManager.IsQuarantined() Then
-            Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
-            Dim msg As String = Language.GetText("Quota_Error")
-            If qrem.HasValue Then
-                msg &= " (" & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value)) & ")"
-            End If
-            ToastForm.ShowToast(Me, msg)
+            ShowQuotaBlockedToast()
             Return
         End If
         StartDownload()
+    End Sub
+
+    ''' <summary>配额熔断提示。工具栏 Play 与"立即下载"(AddLinks)共用同一出口,
+    ''' 免得两边的文案/倒计时格式走样。</summary>
+    Private Sub ShowQuotaBlockedToast()
+        Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
+        Dim msg As String = Language.GetText("Quota_Error")
+        If qrem.HasValue Then
+            msg &= " (" & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value)) & ")"
+        End If
+        ToastForm.ShowToast(Me, msg)
     End Sub
 
     Private Sub btnPause_Click(sender As System.Object, e As System.EventArgs) Handles btnPause.Click

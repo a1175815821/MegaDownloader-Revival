@@ -7,6 +7,14 @@ Public Class PropiedadesDescarga
         End Set
     End Property
 
+    ' P2-6: 载入时的限速状态快照(单位 KB,与 Fichero.LimiteVelocidad 一致)。
+    ' 包模式下"复选框未勾选"有两种含义:用户从没碰过(包内各文件限速不一致,
+    ' 载入时就不勾),或者用户主动取消了勾选。之前只按 Checked 判断,后者被
+    ' 当成前者 → 取消勾选保存后限速纹丝不动,重开属性窗口复选框又变回勾选。
+    ' 改用"用户是否动过"来判断:只有相对快照发生了变化才下发/清除限速。
+    Private _limiteInicialActivo As Boolean = False
+    Private _limiteInicialKB As Integer = 0
+
 
 
     Private Sub PropiedadesDescarga_Load(sender As Object, e As System.EventArgs) Handles Me.Load
@@ -14,6 +22,8 @@ Public Class PropiedadesDescarga
         Translate()
 
         txtNombre.Text = _Descarga.DescargaNombre
+        ' P2-6: 载入时的限速快照(见字段说明)。限速以 KB 记,与 Fichero.LimiteVelocidad 同单位。
+        Dim limiteInicialKB As Integer = 0
         If TypeOf (_Descarga) Is Fichero Then
             GroupBox1.Text = Language.GetText("File properties")
             Dim f As Fichero = CType(_Descarga, Fichero)
@@ -32,6 +42,7 @@ Public Class PropiedadesDescarga
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
             If chkLimitarVelocidad.Checked Then
                 txtLimiteVelocidad.Text = (f.LimiteVelocidad / 1024).ToString("0.####")
+                limiteInicialKB = f.LimiteVelocidad
             End If
         Else
             GroupBox1.Text = Language.GetText("Package properties")
@@ -40,7 +51,7 @@ Public Class PropiedadesDescarga
             txtMD5.Text = Language.GetText("Not applied")
             txtUrl.Text = Language.GetText("Not applied")
             ' ⑨:包模式初始化各文件公共限速(全一致才显示),否则保持未勾选;
-            ' 配合保存侧"未勾选不覆写",只改路径/密码不再静默清零文件限速。
+            ' 保存侧按"用户是否动过"判断(见字段说明),只改路径/密码不会静默清零文件限速。
             Try
                 Dim commonLimit As Integer = -1
                 For Each ff As Fichero In p.ListaFicheros
@@ -54,6 +65,7 @@ Public Class PropiedadesDescarga
                 If commonLimit > 0 Then
                     chkLimitarVelocidad.Checked = True
                     txtLimiteVelocidad.Text = (commonLimit / 1024).ToString("0.####")
+                    limiteInicialKB = commonLimit
                 Else
                     chkLimitarVelocidad.Checked = False
                     txtLimiteVelocidad.Text = String.Empty
@@ -64,6 +76,10 @@ Public Class PropiedadesDescarga
             End Try
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
         End If
+        ' P2-6: 快照落地。保存时只有相对这份快照发生了变化才动限速,
+        ' 这样"用户从没碰过"与"用户主动取消勾选"才能区分开。
+        _limiteInicialActivo = chkLimitarVelocidad.Checked
+        _limiteInicialKB = limiteInicialKB
         txtTamano.Text = Language.GetText("Downloaded") & ": " & PintarTamano(_Descarga.DescargaPorcentaje * _Descarga.DescargaTamanoBytes / 100) & " - " & Language.GetText("Total") & ": " & PintarTamano(_Descarga.DescargaTamanoBytes)
         chkUnZip.Checked = _Descarga.DescargaExtraccionAutomatica
         txtPassword.Text = _Descarga.DescargaExtraccionPassword
@@ -192,6 +208,13 @@ Public Class PropiedadesDescarga
             LimiteVelocidad = CInt(asLong)
         End If
 
+        ' P2-6: 判断"用户是否动过限速",而不是只看复选框勾没勾。
+        ' 包模式下"未勾选"有两种含义:用户从没碰过(包内各文件限速不一致,载入时
+        ' 就不勾),或者用户主动取消了勾选。之前只按 Checked 判断,后者被当成前者 →
+        ' 取消勾选保存后限速纹丝不动,重开属性窗口复选框又变回勾选。
+        Dim limiteCambiado As Boolean = (chkLimitarVelocidad.Checked <> _limiteInicialActivo) OrElse _
+                                       (chkLimitarVelocidad.Checked AndAlso LimiteVelocidad <> _limiteInicialKB)
+
 
         If TypeOf (_Descarga) Is Fichero Then
             Dim f As Fichero = CType(_Descarga, Fichero)
@@ -216,9 +239,13 @@ Public Class PropiedadesDescarga
                 f.RutaLocal = txtRuta.Text
             End If
             f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
-            f.LimiteVelocidad = LimiteVelocidad
-            ' ③:单文件限速同为 KB,控制器要字节。
-            ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
+            ' P2-6: 同样按"用户是否动过"判断,避免没碰限速时被回写
+            ' (回写会因 MB→KB 的四舍五入产生微小漂移)。取消勾选 = 清除限速。
+            If limiteCambiado Then
+                f.LimiteVelocidad = LimiteVelocidad
+                ' ③:单文件限速同为 KB,控制器要字节。
+                ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
+            End If
         Else
             Dim p As Paquete = CType(_Descarga, Paquete)
 
@@ -252,11 +279,18 @@ Public Class PropiedadesDescarga
                    p.DescargaExtraccionPassword <> txtPassword.Text Then
                     f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
                 End If
-                ' ⑨:包模式未勾选=用户没碰限速,跳过覆写(此前默认 False 导致保存即清零各文件限速);
-                ' 勾选时才批量下发。单文件分支保持原语义(未勾选=清零本文件)。
-                If chkLimitarVelocidad.Checked Then
-                    f.LimiteVelocidad = LimiteVelocidad
-                    ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
+                ' P2-6: 只有用户动过限速才批量下发。勾选 = 统一设置;
+                ' 取消勾选 = 统一清除。此前"未勾选=不覆写"让取消勾选完全无效
+                ' (限速纹丝不动,重开窗口复选框又变回勾选),与单文件分支
+                ' "未勾选=清零"的语义正好相反。
+                If limiteCambiado Then
+                    If chkLimitarVelocidad.Checked Then
+                        f.LimiteVelocidad = LimiteVelocidad
+                        ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
+                    Else
+                        f.LimiteVelocidad = 0
+                        ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, 0)
+                    End If
                 End If
             Next
             If txtRuta.Text <> p.RutaLocal Then
