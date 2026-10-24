@@ -1,10 +1,7 @@
 MIT License
 
-Copyright (c) 2018 Zheng You Yun (MegaDownloader 原作者)
-Copyright (c) 2026 MegaDownloader Revival Project (复活计划贡献者)
-
-本仓库基于 MegaDownloader v1.8 反编译源码进行修复与维护,
-旨在恢复其对 MEGA 新版链接格式 (mega.nz/file/、mega.nz/folder/) 的兼容性。
+Copyright (c) 2018 Andres Soliño (original MegaDownloader author)
+Copyright (c) 2026 MegaDownloader Revival Project contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

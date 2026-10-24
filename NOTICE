@@ -1,0 +1,51 @@
+NOTICE
+======
+
+MegaDownloader Revival Project
+https://github.com/a1175815821/MegaDownloader-Revival
+
+
+Origin of this repository
+-------------------------
+
+This repository is based on source code obtained by decompiling
+MegaDownloader v1.8, originally created by Andres Soliño. The decompiled
+code has been repaired and maintained here for the sole purpose of restoring
+compatibility with MEGA's current link formats (mega.nz/file/,
+mega.nz/folder/), which the original release can no longer parse.
+
+本仓库基于 MegaDownloader v1.8 的反编译源码进行修复与维护，目的在于恢复其对
+MEGA 新版链接格式（mega.nz/file/、mega.nz/folder/）的兼容性，使已停止维护的
+原版软件重新可用。
+
+
+Attribution
+-----------
+
+Original MegaDownloader: Copyright (c) 2018 Andres Soliño.
+Revival Project fixes and additions: Copyright (c) 2026 MegaDownloader
+Revival Project contributors, maintained by Yingxue (v2.0+).
+
+
+Third-party components
+----------------------
+
+This repository redistributes third-party libraries under Resources/DLLs/.
+Each is governed by its own license, and users are responsible for verifying
+compliance:
+
+  - BouncyCastle      https://www.bouncycastle.org/
+  - Newtonsoft.Json   https://www.newtonsoft.com/json
+  - SharpCompress     https://github.com/adamhathcock/sharpcompress
+  - ObjectListView    http://objectlistview.sourceforge.net/
+  - 7-Zip             https://www.7-zip.org/
+  - mpress            https://www.matcode.com/mpress.htm
+  - F5Lib (steganography), HttpServer/Fadd
+
+
+Notice to the original author
+-----------------------------
+
+If the original author considers this repository to infringe their rights,
+please open an issue and we will cooperate to resolve the matter, including
+removal of the repository if requested.
