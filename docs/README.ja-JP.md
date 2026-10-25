@@ -1,10 +1,11 @@
 # MegaDownloader 復活プロジェクト
 
-**言語**：[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko-KR.md)
+**言語**：[English](../../README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko-KR.md)
 
-> クラシックな MEGA ダウンローダーを再び利用可能にします。v1.8 のソースコードを逆コンパイルして修正したもので、修正は継続中です。詳細は [CHANGELOG](CHANGELOG.md) をご覧ください。
+> クラシックな MEGA ダウンローダーを、今の MEGA で再び使えるように。新しいリンク形式に対応し、マルチスレッド高速ダウンロード・レジューム・quota 自動回復を、単一実行ファイル・インストール不要で。
+> 非公式プロジェクトであり、MEGA（MEGA Ltd.）とは関係ありません。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
@@ -13,7 +14,7 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
 
-> ⭐ このプロジェクトが役に立ったら、ぜひ右上の Star で応援をお願いします！
+> ⭐ このプロジェクトが時間の節約になったら、右上の Star を押してください。個人開発のオープンソースがより多くの人に届く、いちばんの方法です。
 
 ## スクリーンショット
 
@@ -23,196 +24,213 @@
 
 ---
 
-## 概要
+## ⚡ 30 秒で開始
 
-MegaDownloader は、スペインの開発者 **Andres Soliño** によって作成された MEGA クラウドストレージ用ダウンロードマネージャーで、軽量、安定性、マルチスレッド対応で知られています。元のプロジェクトは v1.8 以降メンテナンスが停止しており、MEGA はリンク形式を変更したため（`mega.nz/file/...`、`mega.nz/folder/...`）に変更されたため、旧バージョンは新しいリンクを認識できず、コア機能が動作しなくなりました。
+1. [Releases](../../releases/latest) からどちらか一方をダウンロード：
 
-このリポジトリは、その復活プロジェクトです。v1.8を逆コンパイルしてソースコードを取得し、それを基に修正とリファクタリングを行っています。
+   | ファイル | こんな人に |
+   | --- | --- |
+   | **`MegaDownloader.exe`**（単一ファイル） | 一番手軽に：ダウンロードしてダブルクリックするだけ。依存 DLL 15 個をすべて内蔵 |
+   | **`MegaDownloader-Revival-win-x86.zip`**（ポータブル版） | 安定重視：任意のフォルダーに展開して実行。単一ファイル版がウイルス対策ソフトに誤検知された場合はこちらを |
 
-**現在のバージョン：v2.5.8**。完全な変更履歴は [CHANGELOG](CHANGELOG.md) をご覧ください。
+2. ダブルクリックで実行 —— インストール不要、管理者権限も不要
+   > 動作環境：Windows 7 SP1 以降。.NET Framework 4.8（Windows 10 1903+ には標準搭載、旧 OS は案内に従ってインストール）
+3. MEGA リンクをコピー —— プログラムがクリップボードを自動検出し、確認するとダウンロードキューに追加
 
-> ⚠️ **法的声明**：本プロジェクトは、サードパーティが公開したソフトウェアの逆コンパイルに基づいており、その目的は互換性の問題を修正して使用可能性を回復することのみです。原著者が本リポジトリが自身の権利を侵害しているとお考えの場合は、Issue を通じてご連絡ください。対応させていただきます。
+これでダウンロードできます。以降は必要に応じて：[機能](#-何ができるか) → [プロジェクトの背景と比較](#-このプロジェクトはどこから来たか) → [FAQ](#-faq) → [開発者向け](#️-開発者向け)。
+
+リンク追加は他にも：リンクをメインウィンドウへドラッグ＆ドロップ · ツールバーの「リンク追加」から貼り付け · ブラウザーで `mega://` プロトコルのリンクをクリック。
+
+> 🆕 **最新版 [v2.5.8](../../releases/latest)**（2026-10-22）：低速ダウンロードが誤って「停滞」と判定される問題を修正 · RAR 分割・パスワード対応の修正 · ダークモードのメニューバー · 設定が黙って失われる問題を根治。履歴は [CHANGELOG](CHANGELOG.md) へ。
 
 ---
 
-## クイックスタート
+## 🚀 何ができるか
 
-1. [Releases](../../releases) からダウンロードしてください。以下の2つの選択肢から1つを選んでください：
-   - **`MegaDownloader-Revival-win-x86.zip`** —— インストール不要版（管理者権限不要）。任意のディレクトリに解凍し、`MegaDownloader.exe` をダブルクリックしてください。注意：設定とダウンロードキューは `%LOCALAPPDATA%\MegaDownloader\` に保存され、プログラムのフォルダにはありません
-   - **`MegaDownloader.exe`** —— 単一ファイル版。15個の依存DLLが組み込まれているため、ダウンロード後、解凍せずにダブルクリックしてください
-2. MEGAのリンクをコピーすると、プログラムがクリップボードの内容を自動的に認識します
-3. ツールバーの **リンクを追加** をクリックして手動で貼り付けるか、リンクをメインウィンドウにドラッグ＆ドロップすることも可能です
-4. **設定** でダウンロード先、同時ダウンロード数、速度制限を設定します
-5. **設定 → 一般 → テーマ** でダークモード/ライトモードを切り替えます（保存後すぐに反映されます）
+**ダウンロードのコア**
 
-### リンクの例
+- **マルチスレッド** —— 1 ファイルへ複数接続を同時に張り、回線を最大限活用
+- **レジューム** —— 一時停止 / 再開 / エラー時の再試行。プログラム再起動後も続きから
+- **フォルダーダウンロード** —— 共有フォルダー全体を再帰的に解析し、必要なサブフォルダーやファイルだけを選択可能
+- **速度制限** —— 全体またはタスクごと
+- **失敗の自己修復**（v2.5）—— 失敗タスクを定時に自動再試行し、永久に失敗するものは自動除外
+- **quota ブレーカー**（v2.5）—— MEGA のダウンロード quota を使い切ると自動一時停止してカウントダウン、時間になると自動再開。旧式の「quota 突破」リトライモードへ切り替えも可能（既定ではオフ）
+- **自動解凍** —— ダウンロード完了後に RAR / 7Z / ZIP を自動解凍。分割・パスワード付きにも対応
 
-新形式（v1.9 以降で対応）：
+**利便性とリモート**
+
+- **リンク追加は 4 つの方法** —— クリップボード自動検出 / ドラッグ＆ドロップ / 手動貼り付け / `mega://` プロトコル
+- **Web インターフェイス** —— 内蔵 HTTP サーバーで、ブラウザーからタスク追加や進捗確認が可能。LAN アクセスを有効にすればスマホからも
+- **ELC コンテナ** —— 暗号化リンクコンテナのインポート／エクスポート。`enc` / `enc2` / `fenc` / `fenc2` / `elc` すべて対応
+
+**インターフェイスと体験**
+
+- **ダウンロードしながら再生** —— VLC 統合で、ダウンロード中の動画をストリーミング再生
+- **ストリーミングライブラリ** —— よく見るストリーミングソースを視覚的に管理
+- **ダーク／ライトテーマ**（v2.0）—— システム設定に追従して自動切替、手動指定も可
+- **10 の UI 言語** —— English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română、追加も可能
+- **ステガノグラフィ** —— 画像 / 動画にファイルを隠す（F5 ステガノ）
+
+<details>
+<summary><b>対応するリンク形式一覧（クリックで展開）</b></summary>
+
+- 新形式：`mega.nz/file/ID#KEY`、`mega.nz/folder/ID#KEY`（v1.9 以降）
+- 旧形式：`mega.nz/#!ID!KEY`、`mega.co.nz/#F!ID!KEY`
+- 暗号化：`mega://enc?…`、`mega://enc2?…`、`mega://fenc?…`、`mega://fenc2?…`、`mega://elc?…`
+
+リンク例：
 
 ```
 https://mega.nz/file/abcDEFgh#IjklMNopQRstUVwxYZ1234567890
 https://mega.nz/folder/abcDEFgh#IjklMNopQRstUVwxYZ1234567890
-```
-
-旧形式（引き続き対応）：
-
-```
 https://mega.nz/#!abcDEFgh!IjklMNopQRstUVwxYZ1234567890
-https://mega.co.nz/#F!abcDEFgh!IjklMNopQRstUVwxYZ1234567890
-```
-
-暗号化リンク：
-
-```
 mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
-mega://enc2?abcDEFgh-IjklMNop
 ```
 
----
+> v2.0 から、サービス終了済みの以下には対応していません：MegaCrypter、YouPaste、LinkCrypter、EncrypterMe.ga、goo.gl 短縮リンク。
 
-## 機能・特徴
-
-| 機能 | 説明 |
-| --- | --- |
-| マルチスレッドダウンロード | 同一ファイルに対して複数の接続を並行して確立し、速度を大幅に向上 |
-| レジューム | 一時停止、再開、エラー時の再試行に対応 |
-| 速度制限 | 全体または個々のタスクごとの速度制限 |
-| クリップボード監視 | クリップボードにコピーされた MEGA リンクを自動認識 |
-| ドラッグ＆ドロップ対応 | リンクをメインウィンドウにドラッグするだけでキューに追加 |
-| MEGA フォルダ | 共有フォルダ全体を再帰的に解析してダウンロード。指定したサブフォルダやファイルのみのダウンロードにも対応 |
-| 暗号化リンク | `enc` / `enc2` / `fenc` / `fenc2` / `elc` などの各種形式に対応 |
-| ELCコンテナ | 暗号化リンクコンテナのインポートとエクスポート |
-| ストリーミング再生 | VLCを統合し、ダウンロードしながら再生可能 |
-| Webインターフェース | HttpServerを内蔵し、ブラウザからリモート管理が可能；LANアクセスを有効化可能 |
-| ストリーミングライブラリ | ストリーミングリソースの可視化管理 |
-| Stegano ステガノグラフィ | 画像・動画のステガノグラフィ符号化・復号 |
-| 自動解凍 | SharpCompress ベース、RAR / 7Z / ZIP に対応 |
-| サーキットブレーカー | MEGAのクォータが枯渇した際に自動的に一時停止し、カウントダウンを開始。期限が切れると自動的に再開（v2.5） |
-| クォータ突破モード | MEGAクォータ枯渇時にサーキットブレーカーの代わりに旧版の継続リトライを行う（任意、既定では無効）（v2.5.6） |
-| 失敗時の自動復旧 | 失敗したタスクを定期的に自動再試行。恒久的な失敗は自動的に除外（v2.5） |
-| 多言語インターフェース | 10言語に対応、拡張可能 |
-| ダーク／ライトテーマ | システムに追従、または手動で切り替え可能。Autoモードではリアルタイムで追従 |
-
-### 対応リンク形式
-
-- `mega.nz/#...!FileID!FileKey`（旧バージョン）
-- `mega.nz/file/FileID#FileKey`（新バージョン）
-- `mega.nz/folder/FolderID#FolderKey`（新バージョンのフォルダ）
-- MEGA URIプロトコル：`mega://#!...`、`mega://enc?...`、`mega://elc?...`
-
-> v2.0 以降、以下のサービス終了に伴いサポートが削除されました：MegaCrypter、YouPaste、LinkCrypter、EncrypterMe.ga、goo.gl 短縮URL。
+</details>
 
 ---
 
-## ビルド
+## 📖 このプロジェクトはどこから来たか
 
-### 環境要件
+MegaDownloader は、スペインの開発者 **Andres Soliño** が作った MEGA ダウンロードマネージャーで、軽量・安定・マルチスレッドで知られていました。上流は v1.8 で開発停止となり、その後 MEGA がリンク形式を変更した（`mega.nz/file/...`、`mega.nz/folder/...`）ため、旧版は新しいリンクを認識できず、中核機能が動かなくなりました。
 
-- Visual Studio 2013 以降（ソリューションは VS2013 形式で、新しいバージョンでも開けます）
-- .NET Framework 4.8 SDK（Visual Studio とともにインストールされます）
-- Windows 7 SP1 以降
+このリポジトリがそれを復活させました：v1.8 を逆コンパイルしてソースコードを取り出し、その上に修正とリファクタリングを続けています。これまでに **200 件超の修正と強化**（クラッシュ、サイレントなデータ喪失、セキュリティ、互換性）を積み重ね、セマンティックバージョニングで継続リリースしています。
 
-### ビルド設定
+|  | 旧版 v1.8（2018 年に停止） | **本リポジトリ v2.5.x** |
+| --- | --- | --- |
+| 新形式 `mega.nz/file` / `/folder` リンク | ❌ 認識不可 | ✅ v1.9 以降で対応 |
+| MEGA quota 超過 | フリーズ・エラー | ✅ 自動一時停止＋カウントダウン再開（v2.5） |
+| 失敗タスク | 手動での再試行のみ | ✅ 定時自己修復（v2.5） |
+| UI テーマ | システムグレーのみ | ✅ ダーク／ライト、システム追従（v2.0） |
+| 安定性 | — | ✅ 200 件超のクラッシュ／データ喪失／セキュリティ修正 |
+| メンテナンス | 停止中 | ✅ 積極的にメンテナンス中、Issue にも対応 |
 
-| 設定 | 説明 |
-| --- | --- |
-| `Debug` | デバッグ版、`bin/Debug/` に出力 |
-| `Release` | リリース版、`bin/Release/` に出力 |
-| `Debug_MSD` | MegaSearchDesktop 統合版のデバッグ |
-| `Release_MSD` | MegaSearchDesktop 統合版のリリースビルド、出力先：`Resources/Installer MSD/` |
+> ⚠️ **法的なお知らせ**：本プロジェクトは第三者が公開したソフトウェアの逆コンパイルに由来し、目的は互換性問題を修正して再び使えるようにすることに限られます。原作者が権利の侵害だとお考えの場合は Issue でご連絡ください。対応いたします。
 
-### 手順
+---
+
+## ❓ FAQ
+
+**ウイルス対策ソフトが警告を出します。**
+単一ファイル版は mpress でパックされており、一部のウイルス対策ソフトで誤検知されることがあります。zip 版を使うか、ソースから自分でビルドしてください —— 公式 Release はすべて GitHub Actions がソースから自動ビルドしており、過程は公開されています。
+
+**quota exceeded（quota 超過）と表示されます。**
+MEGA は無料アカウントと IP にダウンロード quota を設けています。v2.5 以降は自動で一時停止し、カウントダウン後に再開します。待てない場合は設定で「quota 突破モード」を有効にするとリトライを続けます。
+
+**設定とダウンロードキューはどこに保存されますか？**
+`%LOCALAPPDATA%\MegaDownloader\` です。プログラムのフォルダーは自由に移動・削除でき、設定には影響しません。OS 再インストール前にはこのフォルダーをバックアップしてください。
+
+**旧形式のリンクもダウンロードできますか？**
+できます。新旧形式、`mega://` 暗号化リンク、ELC コンテナすべて対応しています（一覧は上の折りたたみ）。
+
+**管理者権限は必要ですか？**
+不要です。インストール不要・管理者権限不要で動きます。
+
+**Mac / Linux 版はありますか？**
+ありません —— WinForms 製のため Windows 専用です。ただし内蔵 Web インターフェイスを有効にすれば、スマホや他の端末のブラウザーからダウンロードを管理できます。
+
+---
+
+## 🛠️ 開発者向け
+
+<details>
+<summary><b>ソースからビルド（クリックで展開）</b></summary>
+
+**必要環境**：Visual Studio 2013 以降（ソリューションは VS2013 形式）· .NET Framework 4.8 SDK（VS に同梱）· Windows 7 SP1+
 
 ```bash
 git clone https://github.com/a1175815821/MegaDownloader-Revival.git
 cd MegaDownloader-Revival
-# 用 Visual Studio 打开 MegaDownloader.sln，然后 Ctrl+Shift+B
+# MegaDownloader.sln を Visual Studio で開き、Ctrl+Shift+B
 ```
 
-コマンドラインからのビルド：
+コマンドラインビルド：
 
 ```bash
 msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 ```
 
-ビルド結果は `bin/<Configuration>/MegaDownloader.exe` にあります。
+成果物は `bin/<Configuration>/MegaDownloader.exe`。ビルド構成：`Debug` / `Release` / `Debug_MSD` / `Release_MSD`（MegaSearchDesktop 統合版、出力先 `Resources/Installer MSD/`）。
 
-### 技術スタック
+**技術スタック**：VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（暗号）· Newtonsoft.Json · ObjectListView · SharpCompress（解凍）· HttpServer/Fadd（Web）· F5Lib（ステガノ）
 
-VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（暗号化）· Newtonsoft.Json · ObjectListView · SharpCompress（解凍）· HttpServer/Fadd（Web）· F5Lib（ステガノグラフィ）
+</details>
 
-## プロジェクト構造
+<details>
+<summary><b>プロジェクト構成（クリックで展開）</b></summary>
 
 ```
 MegaDownloader/
-├── Clases/                 # 核心类库（加密、下载、配置、主题、更新）
-├── Controls/               # 自定义控件
-├── Forms/                  # WinForms 窗体（12 个）
-├── HttpModule/             # 内置 Web 服务器模块与 HTML 模板
-├── Stegano/                # 隐写术窗体
+├── Clases/                 # コアライブラリ（暗号、ダウンロード、設定、テーマ、更新）
+├── Controls/               # カスタムコントロール
+├── Forms/                  # WinForms フォーム（12 個）
+├── HttpModule/             # 内蔵 Web サーバーモジュールと HTML テンプレート
+├── Stegano/                # ステガノグラフィのフォーム
 ├── Resources/
-│   ├── DLLs/               # 第三方 DLL 依赖
-│   ├── Language/           # 多语言 XML（10 种）
-│   └── Installer MSD/      # WiX 安装包工程
-├── docs/                   # ドキュメント（README / 変更履歴 / 貢献ガイド）
-├── My Project/             # VS 项目元数据
+│   ├── DLLs/               # サードパーティ DLL 依存
+│   ├── Language/           # 多言語 XML（10 言語）
+│   └── Installer MSD/      # WiX インストーラープロジェクト
+├── docs/                   # ドキュメント（README / CHANGELOG / CONTRIBUTING）
 └── MegaDownloader.sln
 ```
 
-完全なディレクトリツリーとファイルの用途については、[CONTRIBUTING](CONTRIBUTING.md)を参照してください。
+完全なディレクトリツリーとファイル説明は [CONTRIBUTING](CONTRIBUTING.zh-CN.md) を参照。
+
+</details>
 
 ---
 
-## 対応言語
-
-ソフトウェアのインターフェースには、10種類の言語が標準で搭載されています：
-
-| 言語 | ファイル |
-| --- | --- |
-| English | `en-US-Language.xml` |
-| Español | `es-ES-Language.xml` |
-| 簡体中文 | `zh-CN-Language.xml` |
-| 繁體中文 | `zh-TW-Language.xml` |
-| Français | `fr-FR-Language.xml` |
-| Deutsch | `de-DE-Language.xml` |
-| Italiano | `it-IT-Language.xml` |
-| Português (Brasil) | `pt-BR-Language.xml` |
-| Magyar | `hu-HU-Language.xml` |
-| Română | `ro-RO-Language.xml` |
-
-言語を追加したり、既存の翻訳を改善したりするには、[CONTRIBUTING](CONTRIBUTING.md)を参照してください。
-
----
-
-## ドキュメント
+## 📚 ドキュメント
 
 | ドキュメント | 内容 |
 | --- | --- |
-| [CHANGELOG](CHANGELOG.md) | 完全なバージョン履歴と各バージョンの修正詳細 |
-| [CONTRIBUTING](CONTRIBUTING.md) | 貢献プロセス、コーディングスタイル、リリースプロセス |
+| [CHANGELOG](CHANGELOG.md) | 全バージョン履歴と各版の修正詳細（簡体字中国語のみ） |
+| [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | コントリビューションの流れ、コードスタイル、リリース手順 |
 
-README と CONTRIBUTING は各言語で手動メンテナンスしています。更新時は他言語も同期してください。CHANGELOG は簡体字中国語版のみメンテナンスしています：
+README と CONTRIBUTING は各言語を手動で管理しています。更新時は他言語も同期してください：
 
 | 言語 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
-| 英語 | `README.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
-| 簡体字中国語 | `README.zh-CN.md` | `CHANGELOG.md` | `CONTRIBUTING.zh-CN.md` |
-| 繁体字中国語 | `README.zh-TW.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
-| 日本語 | `README.ja-JP.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
-| 韓国語 | `README.ko-KR.md` | `CHANGELOG.md` | `CONTRIBUTING.md` |
+| English | `README.md`（リポジトリ直下） | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| 简体中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.zh-CN.md` |
+| 繁體中文 | `docs/README.zh-TW.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| 日本語 | `docs/README.ja-JP.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| 한국어 | `docs/README.ko-KR.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 
-> リポジトリルートの `README.md` は英語版です。すべての翻訳は `docs/` にあります。簡体字中国語が公式ソースです。
+> 简体中文が正式版（権威ソース）です。
+
+---
+
+## ⭐ このプロジェクトを応援する
+
+このツールに公式サイトはなく、宣伝もしていません。あなたの Star が、より多くの人に届く方法です：
+
+- ⭐ 右上の **Star** を押す —— 「MEGA ダウンローダー」で探している人に届きます
+- 🐛 問題があれば [Issue を報告](../../issues) —— 最近の修正の多くはユーザーの報告がきっかけです
+- 🌍 [翻訳](CONTRIBUTING.zh-CN.md)の改善に協力 —— 10 言語ありますが、ネイティブチェックを募集中
+- 🔗 まだ MEGA ダウンローダーを探している友人に教える
+
+<a href="https://star-history.com/#a1175815821/MegaDownloader-Revival&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=a1175815821/MegaDownloader-Revival&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=a1175815821/MegaDownloader-Revival&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=a1175815821/MegaDownloader-Revival&type=Date" />
+ </picture>
+</a>
 
 ---
 
 ## 謝辞
 
-- オリジナルの MegaDownloader 作成者 **Andres Soliño**
-- 復活プロジェクトのメンテナ **Yingxue**（v2.0+）
-- オープンソース依存関係：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
+- 原 MegaDownloader の作者 **Andres Soliño**
+- 復活プロジェクトのメンテナー **Yingxue**（v2.0+）、Issue 報告と翻訳改善に協力してくれたすべての人
+- オープンソース依存：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
 
 ## ライセンス
 
-[MIT License](LICENSE) に基づいて公開されています。元の著作権 © 2018 Andres Soliño、復活プロジェクトによる修正の著作権 © 2026 MegaDownloader Revival Project 貢献者。
+[MIT License](../../LICENSE) で公開。元の著作権 © 2018 Andres Soliño、復活プロジェクトの修正に関する著作権 © 2026 MegaDownloader Revival Project コントリビューター。
 
-> リポジトリ内のサードパーティ製 DLL は、それぞれの元のライセンスに従います。利用者は、コンプライアンスを自身で確認する必要があります。
+> リポジトリ内のサードパーティ DLL はそれぞれの元ライセンスに従います。利用者は適合性を自己確認してください。

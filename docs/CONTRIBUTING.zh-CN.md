@@ -260,7 +260,7 @@ git push origin feature/你的功能名称
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 用简体中文撰写发布说明（参考往期 `release-notes-*.md` 的结构）
+6. 用简体中文撰写发布说明（结构见下方「发布说明怎么写」），CI 创建 Release 后将正文校对粘贴到 GitHub Release 页面
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
@@ -273,6 +273,16 @@ CI 在 tag `v*` 上会自动：
 - 构建 Release 配置
 - 校验单文件版的 12 个内嵌 DLL 是否齐全（缺失则构建失败，避免发出「双击没反应」的包）
 - 打包为 zip 并上传 GitHub Release
+
+### 发布说明怎么写
+
+Release 页面是大多数用户唯一会细读的文档。按「从结论到细节」组织，让只看前 10 行的人也能完成下载和升级：
+
+1. **下载与升级**（引用块）：Assets 两个文件分别适合谁；升级直接替换 exe 即可，配置与下载队列保存在 `%LOCALAPPDATA%\MegaDownloader\` 不会丢；系统要求（Windows 7 SP1+ · .NET Framework 4.8）
+2. **一句话总结**：本版最核心的 3~5 个变化
+3. **这次修了什么症状**：3~6 条用户可感知的现象式描述（如「下载每约 2 分钟失败一次 → 已修复」），而不是技术名词罗列
+4. **全部修复明细**：按 下载 / 解压 / 界面 / 多语言 分节，可深入到开发者级别
+5. 结尾放 **Full Changelog** 对比链接
 
 > 测试预发布（RC 版）建议先以 `prerelease` 形式发布，验证通过后再转为正式版。
 

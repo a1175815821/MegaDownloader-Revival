@@ -260,7 +260,7 @@ When filing a bug, please include the following in the Issue:
 3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
-6. Write the release notes in Simplified Chinese (see the structure of previous `release-notes-*.md` files)
+6. Write the release notes in Simplified Chinese (structure below, see "Writing the release notes"); after CI creates the GitHub Release, review and paste the body onto the release page
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash
@@ -273,6 +273,16 @@ On a `v*` tag, CI automatically:
 - Builds the Release configuration
 - Verifies that all 12 embedded DLLs are present in the single-file build (the build fails if any are missing, so we never ship a "double-click does nothing" package)
 - Packages the zip and uploads it to the GitHub Release
+
+### Writing the release notes
+
+The release page is the only documentation most users read carefully. Organize it from conclusion to detail, so someone who reads only the first ten lines can still download and upgrade:
+
+1. **Download & upgrade** (blockquote): who should pick which of the two assets; upgrading is a simple exe replacement — settings and the download queue live in `%LOCALAPPDATA%\MegaDownloader\` and survive; system requirements (Windows 7 SP1+ · .NET Framework 4.8)
+2. **One-sentence summary**: the 3–5 most important changes of this release
+3. **What symptom does this fix**: 3–6 user-visible, symptom-style descriptions ("downloads failed every ~2 minutes → fixed") rather than lists of technical nouns
+4. **Full details**: sections per area (downloads / decompression / UI / i18n), developer-level depth welcome
+5. End with the **Full Changelog** compare link
 
 > For test pre-releases (RC builds), publish as `prerelease` first and promote to a full release once verified.
 
