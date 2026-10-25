@@ -155,7 +155,7 @@ jobs:
         run: ls -la artifacts/
 
       # 创建 Release 并上传双版本：zip（解压用，exe + DLL + config）+
-      # 裸 MegaDownloader.exe（直接打开用，12 个 DLL 已内嵌为资源，缺 DLL 时自动从自身加载）。
+      # 裸 MegaDownloader.exe（直接打开用，15 个 DLL 已内嵌为资源，缺 DLL 时自动从自身加载）。
       # 注意：新增 CopyLocal 引用必须同步在 vbproj 里加 EmbeddedResource，否则单文件版会坏，
       # 上一步 Verify embedded DLLs 会先拦住。
       - name: Create GitHub Release

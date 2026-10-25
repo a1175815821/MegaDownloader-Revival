@@ -271,7 +271,7 @@ git push origin v2.5.0
 
 On a `v*` tag, CI automatically:
 - Builds the Release configuration
-- Verifies that all 12 embedded DLLs are present in the single-file build (the build fails if any are missing, so we never ship a "double-click does nothing" package)
+- Verifies that all 15 embedded DLLs are present in the single-file build (the build fails if any are missing, so we never ship a "double-click does nothing" package)
 - Packages the zip and uploads it to the GitHub Release
 
 ### Writing the release notes
