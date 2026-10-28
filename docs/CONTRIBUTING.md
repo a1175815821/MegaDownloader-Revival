@@ -80,6 +80,7 @@ MegaDownloader/
 │   ├── README*.md                   #   Project readme (5 languages, root README.md is English)
 │   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
 │   └── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
+├── Tests/                          # Executable regression checks and runner
 ├── MegaDownloader.sln              # VS solution
 ├── MegaDownloader.vbproj           # VS project
 ├── app.config                      # .NET runtime configuration
@@ -100,6 +101,7 @@ MegaDownloader/
 | `Resources/Language/` | UI localization XML, one file per language |
 | `Resources/DLLs/` | Third-party dependency DLLs, committed with the repository |
 | `docs/` | This document and the changelog |
+| `Tests/` | Download, extraction, path and streaming regression checks; see [Tests/README.md](../Tests/README.md) |
 
 ## Contribution workflow
 
@@ -127,6 +129,14 @@ git checkout -b feature/your-feature-name
 - Open `MegaDownloader.sln` in Visual Studio
 - Build with the `Debug` configuration
 - Run `bin/Debug/MegaDownloader.exe` to verify your changes
+
+Run the executable regression checks from the project root in PowerShell (.NET SDK required):
+
+```powershell
+.\Tests\Run-RegressionTests.ps1
+```
+
+The runner builds Release and checks the actual application assembly using temporary files and a loopback HTTP server. It does not load real MEGA accounts or download queues. Use `-Configuration Debug` to run the same checks against Debug. Scope and requirements are in [Tests/README.md](../Tests/README.md).
 
 **Test cases (please cover these):**
 
@@ -195,15 +205,28 @@ A maintainer will review your PR and may request changes. Please be patient — 
 
 ## Adding a new Crypter / Link Protector
 
-Follow the pattern in [`Clases/Crypters/EncrypterMega.vb`](../Clases/Crypters/EncrypterMega.vb):
+Link protectors are **not** one file per crypter — they are handled centrally.
+Follow the existing `enc` / `enc2` / `fenc` / `fenc2` support in
+[`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb):
 
-1. Create `<Name>.vb` under `Clases/Crypters/`
-2. Implement `ObtenerInformacionFichero`, returning `Conexion.InformacionFichero`
-3. In [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb):
-   - Add a `<NAME>TOKEN` constant
-   - Add a matching regex to `patternOthers`
-   - Add a branch in `ExtraerFileID`
-4. Wire up the UI in `Forms/Main.vb` if needed
+1. In [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb):
+   - Add a prefix constant next to `ENCODEDPREFIX` / `ENCODEDPREFIX2` /
+     `FOLDERENCODEDPREFIX` / `FOLDERENCODEDPREFIX2`
+   - Add a matching regex to `patternMEGAURI()`, keeping the named groups
+     `BASIC_ENCODE` and `ENCODED_FILEID`
+   - In `CheckFileIDAndFileKey`, extend the prefix branch so the payload is
+     stripped and decrypted before `ExtraerFileID` / `ExtraerFileKey` run
+2. Put the crypto primitives in
+   [`Clases/Criptografia.vb`](../Clases/Criptografia.vb)
+   (`Criptografia.AES_EncryptString` / `AES_DecryptString`) instead of a new class
+3. Server-encoded links (`mega://elc?…`) are handled separately by
+   [`Clases/ServerEncoderLinkHelper.vb`](../Clases/ServerEncoderLinkHelper.vb)
+   (`ServerEncode` / `ServerDecode`), matched by `patternELCUri` /
+   `patternElcConfig`
+4. `Conexion.ObtenerInformacionFichero` in
+   [`Clases/Conexion.vb`](../Clases/Conexion.vb) is the single shared entry
+   point for fetching file info — it is not per-crypter
+5. Wire up the UI in `Forms/Main.vb` if needed
 
 ## Documentation and translation
 
@@ -255,9 +278,9 @@ When filing a bug, please include the following in the Issue:
 
 ## Release process (maintainers only)
 
-1. Confirm both `Debug` and `Release` build
+1. Confirm both `Debug` and `Release` build, and run `.\Tests\Run-RegressionTests.ps1`
 2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
-3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`
+3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all five README languages (including both English entry points)
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
 6. Write the release notes in Simplified Chinese (structure below, see "Writing the release notes"); after CI creates the GitHub Release, review and paste the body onto the release page

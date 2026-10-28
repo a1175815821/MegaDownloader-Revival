@@ -41,7 +41,7 @@ That's all you need to start downloading. Read on as needed: [Features](#-what-i
 
 Other ways to add links: drag a link onto the main window · paste via the **Add Link** toolbar button · click a `mega://` protocol link in your browser.
 
-> 🆕 **Latest release: [v2.5.8](../../releases/latest)** (2026-10-22): slow downloads no longer misjudged as stalled · RAR multi-volume & password fixes · dark-mode menu bar · config-silently-lost bug fixed. Full history in the [CHANGELOG](docs/CHANGELOG.md).
+> 🆕 **Latest release: [v2.5.9](../../releases/latest)** (2026-10-28): same-name downloads no longer interfere · extraction preserves existing files · completed downloads are verified and reused · streaming byte-range corruption fixed. Full history in the [CHANGELOG](docs/CHANGELOG.md).
 
 ---
 
@@ -155,6 +155,8 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 Output goes to `bin/<Configuration>/MegaDownloader.exe`. Build configurations: `Debug` / `Release` / `Debug_MSD` / `Release_MSD` (MegaSearchDesktop integrated edition, output to `Resources/Installer MSD/`).
 
+Regression checks: run `.\Tests\Run-RegressionTests.ps1` in PowerShell (requires the .NET SDK). Tests use temporary files and a local HTTP server; no MEGA account is needed. See [Tests/README.md](Tests/README.md).
+
 **Tech stack**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle (crypto) · Newtonsoft.Json · ObjectListView · SharpCompress (decompression) · HttpServer/Fadd (web) · F5Lib (steganography)
 
 </details>
@@ -174,6 +176,7 @@ MegaDownloader/
 │   ├── Language/           # Localization XML (10 languages)
 │   └── Installer MSD/      # WiX installer project
 ├── docs/                   # Docs (README / CHANGELOG / CONTRIBUTING)
+├── Tests/                  # Download, extraction and streaming regression checks
 └── MegaDownloader.sln
 ```
 
@@ -190,7 +193,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CHANGELOG](docs/CHANGELOG.md) | Complete version history and per-version fix details (Simplified Chinese only) |
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 
-README and CONTRIBUTING are maintained in every language by hand — if you update one, please update the others as well:
+README is hand-maintained in all five languages; CONTRIBUTING exists in English and Simplified Chinese only, and CHANGELOG in Simplified Chinese only. If you update one, please update the others as well:
 
 | Language | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |

@@ -80,6 +80,7 @@ MegaDownloader/
 │   ├── README*.md                   #   项目说明（5 种语言，根 README.md 为英文）
 │   ├── CHANGELOG.md                 #   变更日志（仅简体中文）
 │   └── CONTRIBUTING*.md             #   贡献指南（英文＋简体中文）
+├── Tests/                          # 可执行回归验证与运行脚本
 ├── MegaDownloader.sln              # VS 解决方案
 ├── MegaDownloader.vbproj           # VS 工程
 ├── app.config                      # .NET 运行时配置
@@ -100,6 +101,7 @@ MegaDownloader/
 | `Resources/Language/` | 界面多语言 XML，每种语言一个文件 |
 | `Resources/DLLs/` | 第三方依赖 DLL，随仓库提交 |
 | `docs/` | 本文档与变更日志 |
+| `Tests/` | 下载、解压、路径与流媒体回归验证，详见 [Tests/README.md](../Tests/README.md) |
 
 ## 贡献流程
 
@@ -127,6 +129,14 @@ git checkout -b feature/你的功能名称
 - 在 Visual Studio 中打开 `MegaDownloader.sln`
 - 选择 `Debug` 配置构建
 - 运行 `bin/Debug/MegaDownloader.exe`,验证你的修改
+
+在项目根目录用 PowerShell 运行回归验证（需要 .NET SDK）：
+
+```powershell
+.\Tests\Run-RegressionTests.ps1
+```
+
+脚本会构建 Release，并使用临时文件和本机 HTTP 服务验证实际应用程序集，不读取真实 MEGA 账号或下载队列。加 `-Configuration Debug` 可验证 Debug。覆盖范围与环境要求见 [Tests/README.md](../Tests/README.md)。
 
 **测试用例(请务必覆盖):**
 
@@ -195,15 +205,27 @@ git push origin feature/你的功能名称
 
 ## 添加新的 Crypter / Link Protector
 
-参考 [`Clases/Crypters/EncrypterMega.vb`](../Clases/Crypters/EncrypterMega.vb) 的实现模式:
+链接保护器**不是**一个保护器一个文件,而是集中处理的。请参照
+[`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb) 中已有的
+`enc` / `enc2` / `fenc` / `fenc2` 支持:
 
-1. 在 `Clases/Crypters/` 下新建 `<Name>.vb`
-2. 实现 `ObtenerInformacionFichero` 方法,返回 `Conexion.InformacionFichero`
-3. 在 [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb) 中:
-   - 添加 `<NAME>TOKEN` 常量
-   - 在 `patternOthers` 中添加匹配正则
-   - 在 `ExtraerFileID` 中添加分支
-4. 必要时在 `Forms/Main.vb` 中接入 UI
+1. 在 [`Clases/URLExtractor.vb`](../Clases/URLExtractor.vb) 中:
+   - 在 `ENCODEDPREFIX` / `ENCODEDPREFIX2` / `FOLDERENCODEDPREFIX` /
+     `FOLDERENCODEDPREFIX2` 旁添加前缀常量
+   - 在 `patternMEGAURI()` 中添加匹配正则,保留命名组
+     `BASIC_ENCODE` 与 `ENCODED_FILEID`
+   - 在 `CheckFileIDAndFileKey` 中扩展前缀分支,先剥离前缀并解密,
+     再交给 `ExtraerFileID` / `ExtraerFileKey`
+2. 加解密原语放在 [`Clases/Criptografia.vb`](../Clases/Criptografia.vb)
+   (`Criptografia.AES_EncryptString` / `AES_DecryptString`),不要新建类
+3. 服务器编码链接(`mega://elc?…`)由
+   [`Clases/ServerEncoderLinkHelper.vb`](../Clases/ServerEncoderLinkHelper.vb)
+   单独处理(`ServerEncode` / `ServerDecode`),对应 `patternELCUri` /
+   `patternElcConfig`
+4. [`Clases/Conexion.vb`](../Clases/Conexion.vb) 中的
+   `Conexion.ObtenerInformacionFichero` 是获取文件信息的统一入口,
+   **不是**每个保护器各自一份
+5. 必要时在 `Forms/Main.vb` 中接入 UI
 
 ## 文档与翻译
 
@@ -255,9 +277,9 @@ git push origin feature/你的功能名称
 
 ## 发布流程（仅维护者）
 
-1. 确认 `Debug` 与 `Release` 配置都能构建
+1. 确认 `Debug` 与 `Release` 配置都能构建，并运行 `.\Tests\Run-RegressionTests.ps1`
 2. 更新 `docs/CHANGELOG.md`（仅简体中文），追加新版本章节
-3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`
+3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步五种语言 README 的当前版本亮点（含两份英文入口）
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
 6. 用简体中文撰写发布说明（结构见下方「发布说明怎么写」），CI 创建 Release 后将正文校对粘贴到 GitHub Release 页面

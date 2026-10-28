@@ -5,14 +5,14 @@
 > The classic MEGA downloader, back in working order: supports the new mega.nz link formats, with multi-threaded downloads, resume support, and automatic quota recovery — in a single portable executable.
 > Unofficial project, not affiliated with MEGA (MEGA Ltd.).
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
 > ⭐ If this project saved you time, give it a Star in the top-right — it's the only way an independent open-source project gets seen.
 
@@ -26,7 +26,7 @@
 
 ## ⚡ Up and Running in 30 Seconds
 
-1. Download one of the two files from [Releases](../../releases/latest):
+1. Download one of the two files from [Releases](../../../releases/latest):
 
    | File | Choose it when… |
    | --- | --- |
@@ -41,7 +41,7 @@ That's all you need to start downloading. Read on as needed: [Features](#-what-i
 
 Other ways to add links: drag a link onto the main window · paste via the **Add Link** toolbar button · click a `mega://` protocol link in your browser.
 
-> 🆕 **Latest release: [v2.5.8](../../releases/latest)** (2026-10-22): slow downloads no longer misjudged as stalled · RAR multi-volume & password fixes · dark-mode menu bar · config-silently-lost bug fixed. Full history in the [CHANGELOG](CHANGELOG.md).
+> 🆕 **Latest release: [v2.5.9](../../../releases/latest)** (2026-10-28): same-name downloads no longer interfere · extraction preserves existing files · completed downloads are verified and reused · streaming byte-range corruption fixed. Full history in the [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -155,6 +155,8 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 Output goes to `bin/<Configuration>/MegaDownloader.exe`. Build configurations: `Debug` / `Release` / `Debug_MSD` / `Release_MSD` (MegaSearchDesktop integrated edition, output to `Resources/Installer MSD/`).
 
+Regression checks: run `.\Tests\Run-RegressionTests.ps1` in PowerShell (requires the .NET SDK). Tests use temporary files and a local HTTP server; no MEGA account is needed. See [Tests/README.md](../Tests/README.md).
+
 **Tech stack**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle (crypto) · Newtonsoft.Json · ObjectListView · SharpCompress (decompression) · HttpServer/Fadd (web) · F5Lib (steganography)
 
 </details>
@@ -174,6 +176,7 @@ MegaDownloader/
 │   ├── Language/           # Localization XML (10 languages)
 │   └── Installer MSD/      # WiX installer project
 ├── docs/                   # Docs (README / CHANGELOG / CONTRIBUTING)
+├── Tests/                  # Download, extraction and streaming regression checks
 └── MegaDownloader.sln
 ```
 
@@ -190,7 +193,7 @@ See [CONTRIBUTING](CONTRIBUTING.md) for the complete directory tree and file des
 | [CHANGELOG](CHANGELOG.md) | Complete version history and per-version fix details (Simplified Chinese only) |
 | [CONTRIBUTING](CONTRIBUTING.md) | Contribution process, coding style, release process |
 
-README and CONTRIBUTING are maintained in every language by hand — if you update one, please update the others as well:
+README is hand-maintained in all five languages; CONTRIBUTING exists in English and Simplified Chinese only, and CHANGELOG in Simplified Chinese only. If you update one, please update the others as well:
 
 | Language | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
@@ -209,7 +212,7 @@ README and CONTRIBUTING are maintained in every language by hand — if you upda
 This tool has no website and no promotion budget — your Star is how it reaches more people:
 
 - ⭐ Click **Star** in the top-right — it helps people searching for a MEGA downloader find this one
-- 🐛 [Report issues](../../issues) — many recent fixes came straight from user reports
+- 🐛 [Report issues](../../../issues) — many recent fixes came straight from user reports
 - 🌍 Help improve the [translations](CONTRIBUTING.md) — 10 languages exist, native speakers wanted
 - 🔗 Share it with friends still hunting for a MEGA downloader
 
@@ -231,6 +234,6 @@ This tool has no website and no promotion budget — your Star is how it reaches
 
 ## License
 
-Released under the [MIT License](../../LICENSE). Original copyright © 2018 Andres Soliño; copyright for the Revival Project fixes © 2026 MegaDownloader Revival Project contributors.
+Released under the [MIT License](../LICENSE). Original copyright © 2018 Andres Soliño; copyright for the Revival Project fixes © 2026 MegaDownloader Revival Project contributors.
 
 > Third-party DLLs in this repository are subject to their respective original licenses; users are responsible for verifying compliance.

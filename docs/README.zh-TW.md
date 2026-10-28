@@ -1,18 +1,18 @@
 # MegaDownloader 復活計畫
 
-**語言**：[English](../../README.md) · [简体中文](README.zh-CN.md) · **繁體中文** · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
+**語言**：[English](../README.md) · [简体中文](README.zh-CN.md) · **繁體中文** · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
 > 讓經典 MEGA 下載器在今天的 MEGA 上繼續可用：支援新版連結格式、多執行緒加速、中斷點續傳、配額自動恢復，單一檔案免安裝。
 > 非官方專案，與 MEGA（MEGA Ltd.）無關聯。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
 > ⭐ 如果這個專案幫你省了時間，點一下右上角 Star —— 這是獨立開源專案被更多人看到的方式。
 
@@ -26,7 +26,7 @@
 
 ## ⚡ 30 秒上手
 
-1. 從 [Releases](../../releases/latest) 下載，二選一：
+1. 從 [Releases](../../../releases/latest) 下載，二選一：
 
    | 檔案 | 適合你，如果…… |
    | --- | --- |
@@ -41,7 +41,7 @@
 
 其他加入連結的方式：把連結拖進主視窗 · 工具列「加入連結」手動貼上 · 瀏覽器中點擊 `mega://` 協定連結。
 
-> 🆕 **最新版本 [v2.5.8](../../releases/latest)**（2026-10-22）：慢速下載不再被誤判停滯 · RAR 分卷與密碼修復 · 深色選單列換膚 · 設定靜默遺失根治。完整歷史見 [CHANGELOG](CHANGELOG.md)。
+> 🆕 **最新版本 [v2.5.9](../../../releases/latest)**（2026-10-28）：同名並行下載互不干擾 · 解壓縮不再覆蓋原檔 · 已下載成品驗證後重用 · 線上播放 Range 位元組錯誤修復。完整歷史見 [CHANGELOG](CHANGELOG.md)。
 
 ---
 
@@ -155,6 +155,8 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 產物位於 `bin/<Configuration>/MegaDownloader.exe`。建置組態：`Debug` / `Release` / `Debug_MSD` / `Release_MSD`（MegaSearchDesktop 整合版，輸出到 `Resources/Installer MSD/`）。
 
+回歸驗證：在 PowerShell 中執行 `.\Tests\Run-RegressionTests.ps1`（需要 .NET SDK）。測試使用暫存檔與本機 HTTP 服務，無需 MEGA 帳號。詳見 [Tests/README.md](../Tests/README.md)。
+
 **技術堆疊**：VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（加密）· Newtonsoft.Json · ObjectListView · SharpCompress（解壓縮）· HttpServer/Fadd（Web）· F5Lib（隱寫）
 
 </details>
@@ -174,6 +176,7 @@ MegaDownloader/
 │   ├── Language/           # 多語系 XML（10 種）
 │   └── Installer MSD/      # WiX 安裝包專案
 ├── docs/                   # 文件（README / CHANGELOG / CONTRIBUTING）
+├── Tests/                  # 下載、解壓縮與串流回歸驗證
 └── MegaDownloader.sln
 ```
 
@@ -190,7 +193,7 @@ MegaDownloader/
 | [CHANGELOG](CHANGELOG.md) | 完整版本歷史與每版修復明細（僅簡體中文） |
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 貢獻流程、程式碼風格、發布流程 |
 
-README 與 CONTRIBUTING 為各語言手動維護，更新時請同步：
+README 為全部五種語言手動維護；CONTRIBUTING 僅有英文與簡體中文兩個版本，CHANGELOG 僅有簡體中文版本。更新時請同步：
 
 | 語言 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
@@ -209,7 +212,7 @@ README 與 CONTRIBUTING 為各語言手動維護，更新時請同步：
 這個工具沒有官網、不做推廣，你的 Star 就是它被更多人看到的方式：
 
 - ⭐ 點右上角 **Star** —— 讓搜尋「MEGA 下載器」的人找得到它
-- 🐛 遇到問題[提 Issue](../../issues) —— 近期的多個修復都來自使用者回報
+- 🐛 遇到問題[提 Issue](../../../issues) —— 近期的多個修復都來自使用者回報
 - 🌍 幫忙改進[翻譯](CONTRIBUTING.zh-CN.md) —— 已有 10 種語言，缺母語校對
 - 🔗 分享給還在找 MEGA 下載工具的朋友
 
@@ -231,6 +234,6 @@ README 與 CONTRIBUTING 為各語言手動維護，更新時請同步：
 
 ## 授權
 
-基於 [MIT License](../../LICENSE) 發布。原始版權 © 2018 Andres Soliño，復活計畫修復版權 © 2026 MegaDownloader Revival Project 貢獻者。
+基於 [MIT License](../LICENSE) 發布。原始版權 © 2018 Andres Soliño，復活計畫修復版權 © 2026 MegaDownloader Revival Project 貢獻者。
 
 > 儲存庫內第三方 DLL 遵循各自原始授權條款，使用者應自行確認合規性。

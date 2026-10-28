@@ -1,18 +1,18 @@
 # MegaDownloader 復活プロジェクト
 
-**言語**：[English](../../README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko-KR.md)
+**言語**：[English](../README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko-KR.md)
 
 > クラシックな MEGA ダウンローダーを、今の MEGA で再び使えるように。新しいリンク形式に対応し、マルチスレッド高速ダウンロード・レジューム・quota 自動回復を、単一実行ファイル・インストール不要で。
 > 非公式プロジェクトであり、MEGA（MEGA Ltd.）とは関係ありません。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
 [![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../stargazers)
+[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
+[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
 > ⭐ このプロジェクトが時間の節約になったら、右上の Star を押してください。個人開発のオープンソースがより多くの人に届く、いちばんの方法です。
 
@@ -26,7 +26,7 @@
 
 ## ⚡ 30 秒で開始
 
-1. [Releases](../../releases/latest) からどちらか一方をダウンロード：
+1. [Releases](../../../releases/latest) からどちらか一方をダウンロード：
 
    | ファイル | こんな人に |
    | --- | --- |
@@ -41,7 +41,7 @@
 
 リンク追加は他にも：リンクをメインウィンドウへドラッグ＆ドロップ · ツールバーの「リンク追加」から貼り付け · ブラウザーで `mega://` プロトコルのリンクをクリック。
 
-> 🆕 **最新版 [v2.5.8](../../releases/latest)**（2026-10-22）：低速ダウンロードが誤って「停滞」と判定される問題を修正 · RAR 分割・パスワード対応の修正 · ダークモードのメニューバー · 設定が黙って失われる問題を根治。履歴は [CHANGELOG](CHANGELOG.md) へ。
+> 🆕 **最新版 [v2.5.9](../../../releases/latest)**（2026-10-28）：同名ファイルの並列ダウンロードの競合を修正 · 解凍時に既存ファイルを保護 · 完了済みファイルを検証して再利用 · ストリーミングの Range データ破損を修正。履歴は [CHANGELOG](CHANGELOG.md) へ。
 
 ---
 
@@ -155,6 +155,8 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 成果物は `bin/<Configuration>/MegaDownloader.exe`。ビルド構成：`Debug` / `Release` / `Debug_MSD` / `Release_MSD`（MegaSearchDesktop 統合版、出力先 `Resources/Installer MSD/`）。
 
+回帰テスト：PowerShell で `.\Tests\Run-RegressionTests.ps1` を実行します（.NET SDK が必要）。一時ファイルとローカル HTTP サーバーを使用するため、MEGA アカウントは不要です。[Tests/README.md](../Tests/README.md) を参照してください。
+
 **技術スタック**：VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（暗号）· Newtonsoft.Json · ObjectListView · SharpCompress（解凍）· HttpServer/Fadd（Web）· F5Lib（ステガノ）
 
 </details>
@@ -174,6 +176,7 @@ MegaDownloader/
 │   ├── Language/           # 多言語 XML（10 言語）
 │   └── Installer MSD/      # WiX インストーラープロジェクト
 ├── docs/                   # ドキュメント（README / CHANGELOG / CONTRIBUTING）
+├── Tests/                  # ダウンロード・解凍・ストリーミングの回帰テスト
 └── MegaDownloader.sln
 ```
 
@@ -190,7 +193,7 @@ MegaDownloader/
 | [CHANGELOG](CHANGELOG.md) | 全バージョン履歴と各版の修正詳細（簡体字中国語のみ） |
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | コントリビューションの流れ、コードスタイル、リリース手順 |
 
-README と CONTRIBUTING は各言語を手動で管理しています。更新時は他言語も同期してください：
+README は 5 言語すべてを手動で管理しています。CONTRIBUTING は英語と簡体字中国語のみ、CHANGELOG は簡体字中国語のみです。更新時は他言語も同期してください：
 
 | 言語 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
@@ -209,7 +212,7 @@ README と CONTRIBUTING は各言語を手動で管理しています。更新�
 このツールに公式サイトはなく、宣伝もしていません。あなたの Star が、より多くの人に届く方法です：
 
 - ⭐ 右上の **Star** を押す —— 「MEGA ダウンローダー」で探している人に届きます
-- 🐛 問題があれば [Issue を報告](../../issues) —— 最近の修正の多くはユーザーの報告がきっかけです
+- 🐛 問題があれば [Issue を報告](../../../issues) —— 最近の修正の多くはユーザーの報告がきっかけです
 - 🌍 [翻訳](CONTRIBUTING.zh-CN.md)の改善に協力 —— 10 言語ありますが、ネイティブチェックを募集中
 - 🔗 まだ MEGA ダウンローダーを探している友人に教える
 
@@ -231,6 +234,6 @@ README と CONTRIBUTING は各言語を手動で管理しています。更新�
 
 ## ライセンス
 
-[MIT License](../../LICENSE) で公開。元の著作権 © 2018 Andres Soliño、復活プロジェクトの修正に関する著作権 © 2026 MegaDownloader Revival Project コントリビューター。
+[MIT License](../LICENSE) で公開。元の著作権 © 2018 Andres Soliño、復活プロジェクトの修正に関する著作権 © 2026 MegaDownloader Revival Project コントリビューター。
 
 > リポジトリ内のサードパーティ DLL はそれぞれの元ライセンスに従います。利用者は適合性を自己確認してください。
