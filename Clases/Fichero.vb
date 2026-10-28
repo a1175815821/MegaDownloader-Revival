@@ -20,6 +20,8 @@ Public Class Fichero
 	Public _URLFichero As SecureString ' Codificado!!
 
     Public NombreFichero As String ' Solo el nombre del fichero, sin ruta
+
+    Public PartialFileName As String = FileDownloader.CreatePartialFileName()
 	
     Public RutaLocal As String
 
@@ -296,7 +298,10 @@ Public Class Fichero
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
 					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
-					If Not String.IsNullOrEmpty(Info.Nombre) Then
+					If Not String.IsNullOrEmpty(Info.Nombre) AndAlso
+					   (Me.DatosPartes Is Nothing OrElse Not Me.DatosPartes.AllFinished OrElse String.IsNullOrEmpty(Me.NombreFichero)) Then
+						' A completed task may already use a collision suffix on disk.
+						' Keep that name while recovering extraction/verification.
 						Me.NombreFichero = PathGuard.SanitizeFileName(Info.Nombre, "file")
 					End If
 					Me.MD5 = Info.MD5
@@ -346,7 +351,7 @@ Public Class Fichero
 				If System.IO.File.Exists(Ruta) Then
 					System.IO.File.Delete(Ruta)
 				End If
-				Ruta = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, PathGuard.SanitizeFileName(Me.NombreFichero) & ".part")
+				Ruta = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
 				If System.IO.File.Exists(Ruta) Then
 					System.IO.File.Delete(Ruta)
 				End If
@@ -441,7 +446,8 @@ Public Class Fichero
 			Me.Downloader.DeleteCompletedFilesAfterCancel = False
 			Me.Downloader.PartsPerFile = worker.Config.ConexionesPorFichero
 			Me.Downloader.NumConnections = If(worker.Config.ConexionesPorFichero < worker.NumConexionesDisponibles, worker.Config.ConexionesPorFichero, worker.NumConexionesDisponibles)
-			Me.Downloader.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes)
+			Me.Downloader.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes, Me.PartialFileName)
+			Me.PartialFileName = Me.Downloader.File.PartialFileName
 
 			' B1-④:装配完成到 Start 之间的取消窗口同样要拦,否则建完即启动,前功尽弃。
 			If Me._StartupCancelled Then
@@ -640,7 +646,10 @@ Public Class Fichero
 		' This event fires as soon as the file is verified and renamed — before the Completed event.
 		' Setting Completado here ensures the UI reflects the true state immediately, even if the
 		' Completed event is delayed or the background worker's RunWorkerCompleted is slow to fire.
-		If Me.EstadoDescarga <> Estado.Erroneo Then
+		' A delayed notification must also preserve extraction/verification already in progress.
+		If Me.EstadoDescarga <> Estado.Erroneo AndAlso
+		   Me.EstadoDescarga <> Estado.Descomprimiendo AndAlso
+		   Me.EstadoDescarga <> Estado.ComprobandoMD5 Then
 			Me.EstadoDescarga = Estado.Completado
 		End If
 	End Sub
@@ -903,7 +912,7 @@ Public Class Fichero
 		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
 		If Not String.IsNullOrWhiteSpace(Me.RutaLocal) AndAlso Not String.IsNullOrWhiteSpace(Me.NombreFichero) Then
 			Try
-				Dim partPath As String = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, PathGuard.SanitizeFileName(Me.NombreFichero) & ".part")
+				Dim partPath As String = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
 				If System.IO.File.Exists(partPath) Then
 					System.IO.File.Delete(partPath)
 					Log.WriteInfo("Deleted .part file during reset: " & partPath)
@@ -989,6 +998,15 @@ Public Class Fichero
 
 
         Me.NombreFichero = LeerNodo(XML, "NombreFichero", "")
+        Me.PartialFileName = LeerNodo(XML, "PartialFileName", "")
+        If Not String.IsNullOrEmpty(Me.PartialFileName) Then
+            Try
+                FileDownloader.ValidatePartialFileName(Me.PartialFileName)
+            Catch ex As ArgumentException
+                Log.WriteWarning("Invalid persisted partial file name; assigning a new task file.")
+                Me.PartialFileName = FileDownloader.CreatePartialFileName()
+            End Try
+        End If
         Me.RutaRelativa = LeerNodo(XML, "RutaRelativa", "")
         Me.RutaLocal = LeerNodo(XML, "RutaLocal", "")
         Long.TryParse(LeerNodo(XML, "TamanoBytes", "0"), TamanoBytes)
@@ -1111,6 +1129,7 @@ Public Class Fichero
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
         End If
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
+        NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName
         NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
         NodoFic.AppendChild(XML.CreateElement("RutaRelativa")).InnerText = RutaRelativa
         NodoFic.AppendChild(XML.CreateElement("TamanoBytes")).InnerText = TamanoBytes.ToString

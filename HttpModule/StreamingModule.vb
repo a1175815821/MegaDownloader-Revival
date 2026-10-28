@@ -184,7 +184,19 @@ Public Class StreamingModule
                     'While DownloadIndex < InfoFichero.Tamano And ClientConnected(response)
                     While DownloadIndex < content And ClientConnected(response)
 
-                        currentPackageSize = Stream.Read(readBytes, 0, PackageSize)
+                        Dim skip As Integer = If(DownloadIndex = 0, CInt(requestRangeStart - rangeStart), 0)
+                        Dim wanted As Integer = CInt(Math.Min(CLng(PackageSize), content - DownloadIndex + skip))
+                        currentPackageSize = 0
+                        ' Read enough ciphertext for both the requested bytes and the
+                        ' aligned prefix discarded from the first decrypted block.
+                        While currentPackageSize < wanted
+                            Dim got As Integer = Stream.Read(readBytes, currentPackageSize, wanted - currentPackageSize)
+                            If got = 0 Then
+                                finishAfterSend = True
+                                Exit While
+                            End If
+                            currentPackageSize += got
+                        End While
 
                         ' EOF 防护:上游流提前结束(MEGA 节点/代理截断响应)时 Read=0。
                         ' 旧代码以零长 Buffer 空转发,DownloadIndex 永不推进 → 死循环占满线程,
@@ -195,48 +207,18 @@ Public Class StreamingModule
                             Exit While
                         End If
 
-                        ' Forzamos a que haya bloques de 16 bytes
-                        Dim diff As Integer = oCipher.GetBlockSize - currentPackageSize Mod oCipher.GetBlockSize
-                        If diff <> oCipher.GetBlockSize Then
-                            If DownloadIndex + currentPackageSize < content Then
-                                ' 凑齐 16 字节边界:循环读满 diff。旧代码单次 Read 不足 diff(EOF 落在
-                                ' 块中间)时留下非 16 倍数长度,ProcessBlock 固定写满 16 字节会写穿
-                                ' Buffer 越界崩溃。EOF 则回退到 16 字节边界,已收数据照常发送,
-                                ' 补不齐的 <16 字节尾巴(EOF 后拿不到)丢弃。
-                                Dim need As Integer = diff
-                                Do
-                                    ' currentPackageSize 随补齐递增,直接作为续写偏移;
-                                    ' need 逐轮缩短,读满即停
-                                    Dim got As Integer = Stream.Read(readBytes, currentPackageSize, need)
-                                    If got = 0 Then
-                                        Log.WriteWarning("StreamingModule: upstream ended mid-block (" & DownloadIndex & "/" & content & " bytes sent); truncating buffered " & currentPackageSize & " bytes to a 16-byte boundary.")
-                                        currentPackageSize = currentPackageSize And Not 15
-                                        finishAfterSend = True
-                                        Exit Do
-                                    End If
-                                    currentPackageSize += got
-                                    need -= got
-                                Loop While need > 0
-                                If currentPackageSize = 0 Then Exit While
-                            Else
-                                currentPackageSize += diff
-                            End If
-                        End If
-
-                        Dim Buffer(currentPackageSize - 1) As Byte
-                        For tempIndex As Integer = 0 To currentPackageSize - 1 Step oCipher.GetBlockSize
-                            oCipher.ProcessBlock(readBytes, tempIndex, Buffer, tempIndex)
+                        If currentPackageSize <= skip Then Exit While
+                        Dim paddedSize As Integer = ((currentPackageSize + 15) \ 16) * 16
+                        ' CTR can decrypt a final partial block with zero padding, but
+                        ' only the bytes actually read may be sent to the client.
+                        Array.Clear(readBytes, currentPackageSize, paddedSize - currentPackageSize)
+                        Dim decrypted(paddedSize - 1) As Byte
+                        For tempIndex As Integer = 0 To paddedSize - 1 Step oCipher.GetBlockSize
+                            oCipher.ProcessBlock(readBytes, tempIndex, decrypted, tempIndex)
                         Next
-
-                        If DownloadIndex = 0 Then
-                            Buffer = Buffer.ToList().GetRange(CInt(requestRangeStart - rangeStart), Buffer.Length - CInt(requestRangeStart - rangeStart)).ToArray()
-                        End If
-
-                        ' 尾块截断到请求长度:16 字节对齐的补齐字节不能发给客户端,
-                        ' 否则响应体超过 Content-Length,播放器可能解析错乱
-                        If DownloadIndex + Buffer.Length > content Then
-                            Buffer = Buffer.ToList().GetRange(0, CInt(content - DownloadIndex)).ToArray()
-                        End If
+                        Dim sendCount As Integer = CInt(Math.Min(CLng(currentPackageSize - skip), content - DownloadIndex))
+                        Dim Buffer(sendCount - 1) As Byte
+                        System.Buffer.BlockCopy(decrypted, skip, Buffer, 0, sendCount)
 
                         response.SendBody(Buffer)
 

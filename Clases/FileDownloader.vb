@@ -222,6 +222,8 @@ Public Class FileDownloader
 
         Public FileID As String
         Public FileKey As String
+        Public PartialFileName As String = CreatePartialFileName()
+        Friend AllowLegacyPartial As Boolean
         Public NumParts As Int32
         Private _Size As Long
 
@@ -433,6 +435,8 @@ Public Class FileDownloader
     Private WithEvents listDownloaders As New Generic.List(Of DownloaderWorker)
     Private Mutex As New Object() ' Sync workers for object manipulation
     Private MutexFile As New Object() ' Sync workers for disk write
+    Private Shared ReadOnly FinalFileLock As New Object()
+    Private m_completedFilePath As String
     ' P0-1 方案A：.part 长生命周期写流。FlushToDisk 复用本流，只做 Position+Write+Flush(True)，
     ' 省掉每次 open/close；fsync 语义不变，"持久化进度 ≤ 已 fsync 数据"红线不变。
     ' 仅在 MutexFile 保护下访问；.part 重建/重命名前必须先 ClosePartStream。
@@ -529,14 +533,54 @@ Public Class FileDownloader
 
 #Region "Public methods"
 
-    Public Sub AddFileInfo(ByVal FileID As String, ByVal FileKey As String, ByVal path As String, ByVal name As String, ByVal part As DataPart)
+    Public Sub AddFileInfo(ByVal FileID As String, ByVal FileKey As String, ByVal path As String, ByVal name As String, ByVal part As DataPart, Optional ByVal partialFileName As String = Nothing)
         Dim Info As New FileInfo(path)
         Info.Name = name
+        Info.AllowLegacyPartial = String.IsNullOrEmpty(partialFileName)
+        If Not String.IsNullOrEmpty(partialFileName) Then Info.PartialFileName = ValidatePartialFileName(partialFileName)
         Info.NumParts = Me.PartsPerFile
         Info.SetDataPart(part)
         Info.FileID = FileID
         Info.FileKey = FileKey
         Me.File = Info
+        MigrateLegacyPartial(Info, part)
+    End Sub
+
+    Public Shared Function CreatePartialFileName() As String
+        Return ".megadownloader-" & Guid.NewGuid().ToString("N") & ".part"
+    End Function
+
+    Friend Shared Function ValidatePartialFileName(ByVal value As String) As String
+        PathGuard.RequireSafePathSegment(value, "partial file name")
+        Const prefix As String = ".megadownloader-"
+        Dim taskId As Guid
+        If value.Length <> prefix.Length + 32 + 5 OrElse
+           Not value.StartsWith(prefix, StringComparison.Ordinal) OrElse
+           Not value.EndsWith(".part", StringComparison.Ordinal) OrElse
+           Not Guid.TryParseExact(value.Substring(prefix.Length, 32), "N", taskId) Then
+            Throw New ArgumentException("Invalid task partial file name.")
+        End If
+        Return value
+    End Function
+
+    Public Shared Function GetPartialFilePath(ByVal rootPath As String, ByVal fileName As String, ByVal partialFileName As String) As String
+        If String.IsNullOrEmpty(partialFileName) Then
+            Return PathGuard.GetSafeFilePathUnderRoot(rootPath, fileName & ".part")
+        End If
+        ValidatePartialFileName(partialFileName)
+        Return PathGuard.GetSafePathUnderRoot(rootPath, partialFileName, allowRoot:=False)
+    End Function
+
+    Private Sub MigrateLegacyPartial(ByVal file As FileInfo, ByVal part As DataPart)
+        If Not file.AllowLegacyPartial OrElse part Is Nothing OrElse String.IsNullOrEmpty(Me.LocalDirectory) Then Return
+        SyncLock FinalFileLock
+            Dim target As String = GetPartialFilePath(Me.LocalDirectory, file.Name, file.PartialFileName)
+            If Not System.IO.File.Exists(target) AndAlso part.GetTotalProgress() > 0 Then
+                Dim legacy As String = GetPartialFilePath(Me.LocalDirectory, file.Name, Nothing)
+                If System.IO.File.Exists(legacy) Then System.IO.File.Move(legacy, target)
+            End If
+            file.AllowLegacyPartial = False
+        End SyncLock
     End Sub
 
     ''' <summary>Start the downloads</summary>
@@ -693,7 +737,7 @@ Public Class FileDownloader
 
         Log.WriteWarning("Starting file download " & file.Name)
 
-        Dim FicheroPART As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name & ".part")
+        Dim FicheroPART As String = GetPartialFilePath(Me.LocalDirectory, file.Name, file.PartialFileName)
         Dim FicheroReal As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name)
 
         Dim exc As Exception = Nothing
@@ -738,6 +782,16 @@ Public Class FileDownloader
                 bgwDownloader.ReportProgress(InvokeType.FileDownloadFailedRaiser, exc)
                 exc = Nothing
                 Exit Try
+            End If
+
+            ' Claim old name.part downloads once, then recover completed output
+            ' before allocating disk space or starting any chunk requests.
+            If file.Size > 0 AndAlso file.DataPartInitialized Then
+                MigrateLegacyPartial(file, file.GetDataPart)
+                If file.GetDataPart.ValidateAndNormalize(file.Size) AndAlso file.GetDataPart.AllFinished AndAlso
+                   Not System.IO.File.Exists(FicheroPART) AndAlso TryReuseCompletedFile(FicheroReal, file) Then
+                    Return
+                End If
             End If
 
             ' Disk space precheck (file size + 64 MiB margin)
@@ -806,15 +860,9 @@ Public Class FileDownloader
 
             ' Check size
             If Not System.IO.File.Exists(FicheroPART) Then
-                If file.GetDataPart.AllFinished Then
-                    ' XML said complete but .part is missing — never invent a finished file
-                    file.GetDataPart.AllFinished = False
-                    For Each c As DataPart.Chunk In file.GetDataPart.ChunkList
-                        c.Index = 0
-                        c.SyncedIndex = 0
-                        c.Available = True
-                    Next
-                End If
+                ' No bytes on disk means no resumable progress, including partial
+                ' (not just AllFinished) metadata left after cleanup or a move.
+                file.SetDataPart(New DataPart(file.Size, file.NumParts))
 
                 fireEventFromBgw([Event].CreatingFilesLocal)
                 ' Creamos un fichero vacío con ese tamaño
@@ -1094,56 +1142,60 @@ Public Class FileDownloader
         End Try
     End Sub
 
+    Private Function TryReuseCompletedFile(ByVal completedPath As String, ByVal file As FileInfo) As Boolean
+        If Not System.IO.File.Exists(completedPath) Then Return False
+        Try
+            If New System.IO.FileInfo(completedPath).Length <> file.Size Then Return False
+            Dim key As String = file.FileKey
+            If String.IsNullOrEmpty(key) Then Return False
+            If key.Contains("=###n=") Then key = key.Substring(0, key.IndexOf("=###n="))
+            ' Reusing a final file requires a real embedded MetaMAC, not the
+            ' verifier's compatibility fallback for keys without one.
+            If Criptografia.base64urldecodeBytes(key).Length <> 32 Then Return False
+            If Not Criptografia.VerifyMegaMetaMac(completedPath, key) Then Return False
+            If bgwDownloader.CancellationPending Then Return True
+            m_currentFileSize = file.Size
+            SyncLock Mutex
+                m_currentFileProgress = file.Size
+                m_totalProgress = file.Size
+            End SyncLock
+            Log.WriteInfo("Reusing verified completed file " & file.Name)
+            fireEventFromBgw([Event].FileDownloadSucceeded)
+            Return True
+        Catch ex As Exception
+            Log.WriteWarning("Could not reuse completed file " & file.Name & ": " & Log.SafeException(ex))
+            Return False
+        End Try
+    End Function
+
     ''' <summary>
     ''' B1-③:把 FicheroPART 重命名为成品(含 "file (i)" 冲突消解),供正常终结与空文件短路共用。
     ''' 调用方必须已持有 Me.MutexFile(与原内联代码的加锁位置一致)。
     ''' 返回终局文件名(非全路径,无事可做返回 "");调用方出锁后凭此 Raise FileRenamed。
     ''' </summary>
     Private Function RenamePartToReal(ByVal FicheroPART As String, ByVal FicheroReal As String) As String
-        If Not System.IO.File.Exists(FicheroPART) Then Return ""
-
-        Dim finalReal As String = FicheroReal
-        If Not System.IO.File.Exists(FicheroReal) Then
-            Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal)
-            FileSystem.Rename(FicheroPART, FicheroReal)
-        Else
-
-            ' File exists, create someone like "file (2).txt"
-
-            Dim extension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(FicheroReal.LastIndexOf("."c) + 1), "")
-            Dim fileWithoutExtension As String = If(FicheroReal.LastIndexOf("."c) > 0, FicheroReal.Substring(0, FicheroReal.LastIndexOf("."c)), "")
-
+        SyncLock FinalFileLock
+            If Not System.IO.File.Exists(FicheroPART) Then Return ""
+            Dim directory As String = Path.GetDirectoryName(FicheroReal)
+            Dim leaf As String = Path.GetFileName(FicheroReal)
+            Dim dot As Integer = leaf.LastIndexOf("."c)
+            Dim extension As String = If(dot > 0, leaf.Substring(dot), "")
+            Dim baseName As String = If(dot > 0, leaf.Substring(0, dot), leaf)
+            Dim candidate As String = FicheroReal
             Dim i As Integer = 1
-            Dim renamed As Boolean = False
             Do
+                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, candidate, allowRoot:=False)
+                If Not System.IO.File.Exists(candidate) AndAlso Not IO.Directory.Exists(candidate) Then
+                    Log.WriteInfo("Rename from " & FicheroPART & " to " & candidate)
+                    System.IO.File.Move(FicheroPART, candidate)
+                    m_completedFilePath = candidate
+                    Return Path.GetFileName(candidate)
+                End If
                 i += 1
-                Dim FicheroReal2 As String = fileWithoutExtension & " (" & i & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, FicheroReal2, allowRoot:=False)
-                If Not System.IO.File.Exists(FicheroReal2) Then
-                    Log.WriteInfo("Rename from " & FicheroPART & " to " & FicheroReal2)
-                    FileSystem.Rename(FicheroPART, FicheroReal2)
-                    finalReal = FicheroReal2
-                    renamed = True
-                    Exit Do
-                End If
-
-                If i > 9999 Then
-                    Dim uniqueName As String = fileWithoutExtension & " (" & Guid.NewGuid().ToString("N").Substring(0, 8) & ")" & If(String.IsNullOrEmpty(extension), "", "." & extension)
-                    PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, uniqueName, allowRoot:=False)
-                    Log.WriteInfo("Rename from " & FicheroPART & " to " & uniqueName)
-                    FileSystem.Rename(FicheroPART, uniqueName)
-                    finalReal = uniqueName
-                    renamed = True
-                    Exit Do
-                End If
+                Dim suffix As String = If(i <= 9999, i.ToString(), Guid.NewGuid().ToString("N").Substring(0, 8))
+                candidate = Path.Combine(directory, baseName & " (" & suffix & ")" & extension)
             Loop
-            If Not renamed Then
-                Throw New ApplicationException("Could not rename partial file: name conflict resolution failed.")
-            End If
-
-        End If
-
-        Return System.IO.Path.GetFileName(finalReal)
+        End SyncLock
     End Function
 
     Private Sub bwgDownloader_ProgressChanged(ByVal sender As Object, ByVal e As ProgressChangedEventArgs) Handles bgwDownloader.ProgressChanged
@@ -1236,7 +1288,7 @@ Public Class FileDownloader
             Dim file As FileInfo = Me.File
 
 
-            Dim FicheroPART As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, file.Name & ".part")
+            Dim FicheroPART As String = GetPartialFilePath(Me.LocalDirectory, file.Name, file.PartialFileName)
 
             Dim FileKey As String = file.FileKey
 
@@ -1810,9 +1862,12 @@ Public Class FileDownloader
 
     Private Sub cleanUpFile()
         If File IsNot Nothing Then
-            Dim fullPath As String = PathGuard.GetSafeFilePathUnderRoot(Me.LocalDirectory, Me.File.Name)
-            PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, fullPath, allowRoot:=False)
+            Dim fullPath As String = GetPartialFilePath(Me.LocalDirectory, Me.File.Name, Me.File.PartialFileName)
             If IO.File.Exists(fullPath) Then IO.File.Delete(fullPath)
+            If DeleteCompletedFilesAfterCancel AndAlso Not String.IsNullOrEmpty(m_completedFilePath) Then
+                PathGuard.EnsurePathUnderRoot(Me.LocalDirectory, m_completedFilePath, allowRoot:=False)
+                If IO.File.Exists(m_completedFilePath) Then IO.File.Delete(m_completedFilePath)
+            End If
         End If
     End Sub
 
@@ -2091,6 +2146,7 @@ Public Class FileDownloader
                     m_totalProgress = 0
                     ' 第10项:新一轮下载复位"禁止复活"标记
                     m_abortChunkRestart = False
+                    m_completedFilePath = Nothing
                     bgwDownloader.RunWorkerAsync()
                     RaiseEvent Started(Me, New EventArgs)
                     RaiseEvent IsBusyChanged(Me, New EventArgs)

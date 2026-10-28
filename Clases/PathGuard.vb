@@ -80,7 +80,7 @@ Public NotInheritable Class PathGuard
 
     Public Shared Function GetSafePathUnderRoot(ByVal rootPath As String, ByVal relativePath As String, Optional ByVal allowRoot As Boolean = True) As String
         If String.IsNullOrWhiteSpace(rootPath) Then Throw New ArgumentException("The destination root is empty.")
-        Dim canonicalRoot As String = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        Dim canonicalRoot As String = NormalizeFullPath(rootPath)
         If String.IsNullOrEmpty(relativePath) Then
             If allowRoot Then Return canonicalRoot
             Throw New ArgumentException("A child path is required.")
@@ -102,9 +102,10 @@ Public NotInheritable Class PathGuard
     End Function
 
     Public Shared Sub EnsurePathUnderRoot(ByVal rootPath As String, ByVal candidatePath As String, Optional ByVal allowRoot As Boolean = False)
-        Dim canonicalRoot As String = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        Dim canonicalCandidate As String = Path.GetFullPath(candidatePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        Dim prefix As String = canonicalRoot & Path.DirectorySeparatorChar
+        Dim canonicalRoot As String = NormalizeFullPath(rootPath)
+        Dim canonicalCandidate As String = NormalizeFullPath(candidatePath)
+        Dim prefix As String = canonicalRoot
+        If Not prefix.EndsWith(Path.DirectorySeparatorChar) Then prefix &= Path.DirectorySeparatorChar
 
         If String.Equals(canonicalRoot, canonicalCandidate, StringComparison.OrdinalIgnoreCase) Then
             If allowRoot Then Return
@@ -114,6 +115,17 @@ Public NotInheritable Class PathGuard
             Throw New UnauthorizedAccessException("The resolved path is outside the allowed destination root.")
         End If
     End Sub
+
+    Private Shared Function NormalizeFullPath(ByVal value As String) As String
+        Dim full As String = Path.GetFullPath(value)
+        Dim root As String = Path.GetPathRoot(full)
+        Dim trimmed As String = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        ' Keep the separator on volume roots: "C:" means the drive's current directory.
+        If String.Equals(trimmed, root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) Then
+            Return root
+        End If
+        Return trimmed
+    End Function
 
     ''' <summary>
     ''' Resolves an archive entry key under an extraction root. Rejects Zip Slip / absolute paths.
