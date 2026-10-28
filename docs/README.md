@@ -5,6 +5,8 @@
 > The classic MEGA downloader, back in working order: supports the new mega.nz link formats, with multi-threaded downloads, resume support, and automatic quota recovery — in a single portable executable.
 > Unofficial project, not affiliated with MEGA (MEGA Ltd.).
 
+**[Download for Windows](../../../releases/latest)** · Portable EXE or ZIP · Windows 7 SP1+ · .NET Framework 4.8
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
@@ -14,13 +16,22 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
-> ⭐ If this project saved you time, give it a Star in the top-right — it's the only way an independent open-source project gets seen.
-
 ## Screenshots
 
-| Light theme | Dark theme |
-| --- | --- |
-| ![Main window (light theme)](screenshots/main-light.png) | ![Main window (dark theme)](screenshots/main-dark.png) |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+  <img alt="MegaDownloader main window — queue statistics in the left sidebar, the task list in the middle, and a details panel for the selected task on the right" src="screenshots/main-light.png">
+</picture>
+
+Live queue stats and shortcuts on the left, the task list in the middle, details for the selected task on the right. Drop a MEGA link anywhere in the window, or just copy one — the clipboard monitor picks it up. The theme follows your system setting, and so does the screenshot above.
+
+| Settings → General | Settings → Advanced |
+| :---: | :---: |
+| [![Settings — general tab](screenshots/settings-general.png)](screenshots/settings-general.png) | [![Settings — advanced tab](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
+| Download folder, clipboard monitoring, autostart, language, theme, speed limit, retries | Buffers and log level, proxy, built-in web server and LAN access |
+
+<sub>Screenshots from v2.5.9, captured in the Simplified Chinese UI — 10 interface languages available.</sub>
 
 ---
 
@@ -31,7 +42,7 @@
    | File | Choose it when… |
    | --- | --- |
    | **`MegaDownloader.exe`** (single file) | You want the simplest path: download and double-click — all 15 dependency DLLs are embedded |
-   | **`MegaDownloader-Revival-win-x86.zip`** (portable) | You prefer the safe option: extract anywhere and run. Also pick this if your antivirus flags the single-file build |
+   | **`MegaDownloader-Revival-win-x86.zip`** (portable) | You prefer an archive: extract it and run the executable |
 
 2. Double-click to run — no installer, no admin rights needed
    > System requirements: Windows 7 SP1 or later; .NET Framework 4.8 (built into Windows 10 1903+, installer offered on older systems)
@@ -115,7 +126,7 @@ This repository brings it back: v1.8 was decompiled to recover the source, and f
 ## ❓ FAQ
 
 **My antivirus flags the download.**
-The single-file build is packed with mpress, which a few antivirus products false-positive on. Use the zip build instead, or build from source yourself — every official Release is built automatically from source by GitHub Actions, and the process is public.
+If your antivirus flags a download, check its warning and verify the source before running it. You can inspect the [build workflow](../../../actions/workflows/build.yml), try the ZIP package, or build from source yourself. A different package does not guarantee that a warning will disappear.
 
 **It says quota exceeded.**
 MEGA limits free accounts and IPs. Since v2.5 the app pauses automatically and resumes after the countdown; if you can't wait, enable "quota breakthrough mode" in Settings to keep retrying.
@@ -209,9 +220,9 @@ README is hand-maintained in all five languages; CONTRIBUTING exists in English 
 
 ## ⭐ Support This Project
 
-This tool has no website and no promotion budget — your Star is how it reaches more people:
+If MegaDownloader Revival helps you, here are a few ways to support it:
 
-- ⭐ Click **Star** in the top-right — it helps people searching for a MEGA downloader find this one
+- ⭐ Click **Star** in the top-right to support the project
 - 🐛 [Report issues](../../../issues) — many recent fixes came straight from user reports
 - 🌍 Help improve the [translations](CONTRIBUTING.md) — 10 languages exist, native speakers wanted
 - 🔗 Share it with friends still hunting for a MEGA downloader
@@ -230,7 +241,7 @@ This tool has no website and no promotion budget — your Star is how it reaches
 
 - Original MegaDownloader author **Andres Soliño**
 - Revival Project maintainer **Yingxue** (v2.0+), and everyone who filed issues or improved translations
-- Open-source dependencies: [BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
+- Open-source dependencies: [BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/)
 
 ## License
 

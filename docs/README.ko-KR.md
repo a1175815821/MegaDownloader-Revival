@@ -5,6 +5,8 @@
 > 클래식 MEGA 다운로더를 오늘날의 MEGA에서 다시 사용할 수 있도록: 새 링크 형식 지원, 멀티스레드 가속, 이어받기, quota 자동 복구를 단일 실행 파일·설치 없이.
 > 비공식 프로젝트이며 MEGA(MEGA Ltd.)와는 무관합니다.
 
+**[Windows용 다운로드](../../../releases/latest)** · 단일 파일 또는 ZIP · Windows 7 SP1+ · .NET Framework 4.8
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
@@ -14,13 +16,22 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
-> ⭐ 이 프로젝트가 시간을 아껴주었다면 오른쪽 위의 Star를 눌러 주세요. 독립 오픈소스가 더 많은 사람에게 닿는 가장 좋은 방법입니다.
-
 ## 스크린샷
 
-| 라이트 테마 | 다크 테마 |
-| --- | --- |
-| ![메인 창 (라이트 테마)](screenshots/main-light.png) | ![메인 창 (다크 테마)](screenshots/main-dark.png) |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+  <img alt="MegaDownloader 메인 창 — 왼쪽 큐 통계, 가운데 작업 목록, 오른쪽 선택한 작업의 세부 정보" src="screenshots/main-light.png">
+</picture>
+
+왼쪽에는 실시간 큐 통계(총 속도, 진행 중 / 대기 / 실패, 큐 진행률, 남은 시간)와 바로가기가, 가운데에는 작업 목록이, 오른쪽에는 선택한 작업의 세부 정보가 표시됩니다. MEGA 링크를 창에 끌어다 놓거나 복사하기만 하면 클립보드 모니터가 자동으로 인식합니다. 테마는 시스템 설정을 따르며, 위 이미지도 GitHub 테마에 맞춰 전환됩니다.
+
+| 설정 · 일반 | 설정 · 고급 |
+| :---: | :---: |
+| [![설정 — 일반 탭](screenshots/settings-general.png)](screenshots/settings-general.png) | [![설정 — 고급 탭](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
+| 다운로드 경로, 클립보드 모니터링, 자동 시작, 언어, 테마, 속도 제한, 재시도 | 버퍼와 로그 수준, 프록시, 내장 웹 서버와 LAN 액세스 |
+
+<sub>스크린샷은 v2.5.9 기준이며 UI는 중국어 간체입니다. UI 언어는 10가지를 지원합니다.</sub>
 
 ---
 
@@ -31,7 +42,7 @@
    | 파일 | 이런 분께 |
    | --- | --- |
    | **`MegaDownloader.exe`** (단일 파일) | 가장 간편하게: 다운로드 후 더블클릭만. 의존 DLL 15개를 모두 내장 |
-   | **`MegaDownloader-Revival-win-x86.zip`** (포터블) | 안정성 우선: 원하는 폴더에 압축을 풀고 실행. 단일 파일 버전이 백신 오탐을 받는다면 이쪽을 |
+   | **`MegaDownloader-Revival-win-x86.zip`** (포터블) | ZIP을 선호한다면: 압축을 풀고 실행 |
 
 2. 더블클릭으로 실행 — 설치 불필요, 관리자 권한 불필요
    > 시스템 요구 사항: Windows 7 SP1 이상. .NET Framework 4.8 (Windows 10 1903+ 기본 탑재, 구버전 OS는 안내에 따라 설치)
@@ -115,7 +126,7 @@ MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 다운�
 ## ❓ FAQ
 
 **백신이 바이러스로 탐지합니다.**
-단일 파일 버전은 mpress로 패킹되어 있어 일부 백신에서 오탐이 날 수 있습니다. zip 버전을 사용하거나 소스에서 직접 빌드하세요 — 모든 공식 Release는 GitHub Actions가 소스에서 자동으로 빌드하며, 과정은 공개되어 있습니다.
+백신 경고가 표시되면 실행 전에 경고 내용과 다운로드 출처를 확인하세요. 공개된 [빌드 과정](../../../actions/workflows/build.yml)을 확인하거나 ZIP 패키지를 사용해 보거나 소스에서 직접 빌드할 수 있습니다. 패키지를 바꾸어도 경고가 사라진다는 보장은 없습니다.
 
 **quota exceeded가 표시됩니다.**
 MEGA는 무료 계정과 IP에 다운로드 quota 제한을 둡니다. v2.5부터는 자동으로 일시정지하고 카운트다운 후 재개합니다. 기다리기 어렵다면 설정에서 「quota 돌파 모드」를 켜서 계속 재시도할 수 있습니다.
@@ -209,9 +220,9 @@ README는 5개 언어 모두 수동으로 관리됩니다. CONTRIBUTING은 영�
 
 ## ⭐ 이 프로젝트를 응원하기
 
-이 도구는 공식 홈페이지도, 홍보 예산도 없습니다. 여러분의 Star가 더 많은 사람에게 닿는 방법입니다:
+MegaDownloader Revival이 도움이 되었다면 다음 방법으로 프로젝트를 응원해 주세요:
 
-- ⭐ 오른쪽 위 **Star** 클릭 — 「MEGA 다운로더」를 검색하는 사람이 찾을 수 있게
+- ⭐ 오른쪽 위의 **Star**를 눌러 프로젝트 응원하기
 - 🐛 문제가 생기면 [Issue 보고](../../../issues) — 최근 수정의 많은 부분이 사용자 신고에서 나왔습니다
 - 🌍 [번역](CONTRIBUTING.zh-CN.md) 개선에 참여 — 10개 언어가 있지만 모국어 검수가 필요합니다
 - 🔗 아직 MEGA 다운로더를 찾고 있는 지인에게 알려주기
@@ -230,7 +241,7 @@ README는 5개 언어 모두 수동으로 관리됩니다. CONTRIBUTING은 영�
 
 - 원본 MegaDownloader의 저자 **Andres Soliño**
 - 부활 프로젝트 관리자 **Yingxue** (v2.0+), 그리고 Issue를 보고하고 번역을 개선해 준 모든 기여자
-- 오픈소스 의존성: [BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
+- 오픈소스 의존성: [BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/)
 
 ## 라이선스
 

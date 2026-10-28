@@ -5,6 +5,8 @@
 > 讓經典 MEGA 下載器在今天的 MEGA 上繼續可用：支援新版連結格式、多執行緒加速、中斷點續傳、配額自動恢復，單一檔案免安裝。
 > 非官方專案，與 MEGA（MEGA Ltd.）無關聯。
 
+**[下載 Windows 版](../../../releases/latest)** · 單一檔案或 ZIP 免安裝包 · Windows 7 SP1+ · .NET Framework 4.8
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
@@ -14,13 +16,22 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
-> ⭐ 如果這個專案幫你省了時間，點一下右上角 Star —— 這是獨立開源專案被更多人看到的方式。
-
 ## 截圖
 
-| 淺色主題 | 深色主題 |
-| --- | --- |
-| ![主介面（淺色主題）](screenshots/main-light.png) | ![主介面（深色主題）](screenshots/main-dark.png) |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+  <img alt="MegaDownloader 主介面——左側佇列統計、中間任務清單、右側選取任務的詳情" src="screenshots/main-light.png">
+</picture>
+
+左側是即時佇列統計（總速度、進行中 / 等待 / 失敗、佇列進度、預計剩餘）與快速入口，中間是任務清單，右側顯示選取任務的詳情。把 MEGA 連結拖進視窗，或直接複製——剪貼簿監控會自動辨識。主題跟隨系統設定，上面這張圖也會跟著你的 GitHub 主題切換。
+
+| 設定 · 一般 | 設定 · 進階 |
+| :---: | :---: |
+| [![設定——一般分頁](screenshots/settings-general.png)](screenshots/settings-general.png) | [![設定——進階分頁](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
+| 下載路徑、剪貼簿監控、開機自動啟動、語言、主題、速度限制、錯誤重試 | Buffer 與日誌等級、代理、內建 Web 伺服器與區域網路存取 |
+
+<sub>截圖取自 v2.5.9，介面為簡體中文；支援 10 種介面語言。</sub>
 
 ---
 
@@ -31,7 +42,7 @@
    | 檔案 | 適合你，如果…… |
    | --- | --- |
    | **`MegaDownloader.exe`**（單一檔案） | 想要最省事：下載後直接雙擊執行，15 個依賴 DLL 已內嵌 |
-   | **`MegaDownloader-Revival-win-x86.zip`**（免安裝包） | 求穩妥：解壓縮到任意目錄執行。若防毒軟體對單一檔案版誤報，請選這個 |
+   | **`MegaDownloader-Revival-win-x86.zip`**（免安裝包） | 偏好壓縮檔：解壓縮後執行程式 |
 
 2. 雙擊執行 —— 免安裝、無需系統管理員權限
    > 系統需求：Windows 7 SP1 以上；.NET Framework 4.8（Windows 10 1903+ 已內建，舊系統依提示安裝即可）
@@ -114,8 +125,8 @@ MegaDownloader 是西班牙開發者 **Andres Soliño** 製作的 MEGA 下載管
 
 ## ❓ 常見問題
 
-**防毒軟體誤報？**
-單一檔案版使用 mpress 加殼，少數防毒軟體會誤報。可改用 zip 版，或從原始碼自行建置 —— 所有官方 Release 均由 GitHub Actions 從原始碼自動建置，過程公開可查。
+**防毒軟體發出警告？**
+如果防毒軟體發出警告，請先查看提示並確認下載來源。你可以查看公開的 [建置流程](../../../actions/workflows/build.yml)、嘗試 ZIP 包，或從原始碼自行建置。更換套件格式不保證警告消失。
 
 **提示配額不足 / quota exceeded？**
 MEGA 對免費帳戶和 IP 有下載配額限制。v2.5 起程式會自動暫停並倒數恢復；等不及的話，可在設定中開啟「配額突破模式」持續重試。
@@ -209,9 +220,9 @@ README 為全部五種語言手動維護；CONTRIBUTING 僅有英文與簡體中
 
 ## ⭐ 支持這個專案
 
-這個工具沒有官網、不做推廣，你的 Star 就是它被更多人看到的方式：
+如果 MegaDownloader Revival 幫到了你，歡迎透過以下方式支持專案：
 
-- ⭐ 點右上角 **Star** —— 讓搜尋「MEGA 下載器」的人找得到它
+- ⭐ 點右上角 **Star**，支持這個專案
 - 🐛 遇到問題[提 Issue](../../../issues) —— 近期的多個修復都來自使用者回報
 - 🌍 幫忙改進[翻譯](CONTRIBUTING.zh-CN.md) —— 已有 10 種語言，缺母語校對
 - 🔗 分享給還在找 MEGA 下載工具的朋友
@@ -230,7 +241,7 @@ README 為全部五種語言手動維護；CONTRIBUTING 僅有英文與簡體中
 
 - 原 MegaDownloader 作者 **Andres Soliño**
 - 復活計畫維護者 **Yingxue**（v2.0+），以及所有提 Issue、補翻譯的貢獻者
-- 開源依賴：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
+- 開源依賴：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/)
 
 ## 授權
 

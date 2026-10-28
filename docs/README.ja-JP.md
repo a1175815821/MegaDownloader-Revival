@@ -5,6 +5,8 @@
 > クラシックな MEGA ダウンローダーを、今の MEGA で再び使えるように。新しいリンク形式に対応し、マルチスレッド高速ダウンロード・レジューム・quota 自動回復を、単一実行ファイル・インストール不要で。
 > 非公式プロジェクトであり、MEGA（MEGA Ltd.）とは関係ありません。
 
+**[Windows 版をダウンロード](../../../releases/latest)** · 単一ファイルまたは ZIP · Windows 7 SP1+ · .NET Framework 4.8
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
@@ -14,13 +16,22 @@
 [![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
 [![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
 
-> ⭐ このプロジェクトが時間の節約になったら、右上の Star を押してください。個人開発のオープンソースがより多くの人に届く、いちばんの方法です。
-
 ## スクリーンショット
 
-| ライトテーマ | ダークテーマ |
-| --- | --- |
-| ![メインウィンドウ（ライトテーマ）](screenshots/main-light.png) | ![メインウィンドウ（ダークテーマ）](screenshots/main-dark.png) |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+  <img alt="MegaDownloader メインウィンドウ——左にキュー統計、中央にタスク一覧、右に選択中タスクの詳細" src="screenshots/main-light.png">
+</picture>
+
+左側はリアルタイムのキュー統計（合計速度、実行中 / 待機 / 失敗、キューの進捗、残り時間）とショートカット、中央はタスク一覧、右側は選択中タスクの詳細です。MEGA のリンクをウィンドウにドロップするか、コピーするだけでクリップボード監視が自動的に認識します。テーマはシステム設定に追従し、上の画像も GitHub のテーマに合わせて切り替わります。
+
+| 設定 · 一般 | 設定 · 詳細 |
+| :---: | :---: |
+| [![設定——一般タブ](screenshots/settings-general.png)](screenshots/settings-general.png) | [![設定——詳細タブ](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
+| 保存先、クリップボード監視、自動起動、言語、テーマ、速度制限、再試行 | バッファとログレベル、プロキシ、内蔵 Web サーバーと LAN アクセス |
+
+<sub>スクリーンショットは v2.5.9（UI は簡体字中国語）。UI 言語は 10 種類から選べます。</sub>
 
 ---
 
@@ -31,7 +42,7 @@
    | ファイル | こんな人に |
    | --- | --- |
    | **`MegaDownloader.exe`**（単一ファイル） | 一番手軽に：ダウンロードしてダブルクリックするだけ。依存 DLL 15 個をすべて内蔵 |
-   | **`MegaDownloader-Revival-win-x86.zip`**（ポータブル版） | 安定重視：任意のフォルダーに展開して実行。単一ファイル版がウイルス対策ソフトに誤検知された場合はこちらを |
+   | **`MegaDownloader-Revival-win-x86.zip`**（ポータブル版） | ZIP を使いたい場合：展開して実行 |
 
 2. ダブルクリックで実行 —— インストール不要、管理者権限も不要
    > 動作環境：Windows 7 SP1 以降。.NET Framework 4.8（Windows 10 1903+ には標準搭載、旧 OS は案内に従ってインストール）
@@ -115,7 +126,7 @@ MegaDownloader は、スペインの開発者 **Andres Soliño** が作った ME
 ## ❓ FAQ
 
 **ウイルス対策ソフトが警告を出します。**
-単一ファイル版は mpress でパックされており、一部のウイルス対策ソフトで誤検知されることがあります。zip 版を使うか、ソースから自分でビルドしてください —— 公式 Release はすべて GitHub Actions がソースから自動ビルドしており、過程は公開されています。
+警告が表示された場合は、実行前に警告内容とダウンロード元を確認してください。公開されている [ビルド手順](../../../actions/workflows/build.yml) を確認し、ZIP 版を試すか、ソースからビルドすることもできます。パッケージを変えても警告が消えるとは限りません。
 
 **quota exceeded（quota 超過）と表示されます。**
 MEGA は無料アカウントと IP にダウンロード quota を設けています。v2.5 以降は自動で一時停止し、カウントダウン後に再開します。待てない場合は設定で「quota 突破モード」を有効にするとリトライを続けます。
@@ -209,9 +220,9 @@ README は 5 言語すべてを手動で管理しています。CONTRIBUTING は
 
 ## ⭐ このプロジェクトを応援する
 
-このツールに公式サイトはなく、宣伝もしていません。あなたの Star が、より多くの人に届く方法です：
+MegaDownloader Revival が役に立ったら、以下の方法で応援していただけるとうれしいです：
 
-- ⭐ 右上の **Star** を押す —— 「MEGA ダウンローダー」で探している人に届きます
+- ⭐ 右上の **Star** を押してプロジェクトを応援
 - 🐛 問題があれば [Issue を報告](../../../issues) —— 最近の修正の多くはユーザーの報告がきっかけです
 - 🌍 [翻訳](CONTRIBUTING.zh-CN.md)の改善に協力 —— 10 言語ありますが、ネイティブチェックを募集中
 - 🔗 まだ MEGA ダウンローダーを探している友人に教える
@@ -230,7 +241,7 @@ README は 5 言語すべてを手動で管理しています。CONTRIBUTING は
 
 - 原 MegaDownloader の作者 **Andres Soliño**
 - 復活プロジェクトのメンテナー **Yingxue**（v2.0+）、Issue 報告と翻訳改善に協力してくれたすべての人
-- オープンソース依存：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/) · [mpress](https://www.matcode.com/mpress.htm)
+- オープンソース依存：[BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/)
 
 ## ライセンス
 
