@@ -154,6 +154,21 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      # 手写发行说明优先：docs/release-notes/<tag>.md 存在就用它作为 Release 正文，
+      # 否则回退到 GitHub 自动从 commits 生成的说明。空字符串在 action 里按“未设置”处理。
+      - name: Resolve release notes
+        id: notes
+        shell: bash
+        run: |
+          body="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$body" ]; then
+            echo "Using hand-written release notes: $body"
+            echo "body_path=$body" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release notes file for ${GITHUB_REF_NAME}; falling back to generated notes."
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+          fi
+
       # 创建 Release 并上传双版本：zip（解压用，exe + DLL + config）+
       # 裸 MegaDownloader.exe（直接打开用，15 个 DLL 已内嵌为资源，缺 DLL 时自动从自身加载）。
       # 注意：新增 CopyLocal 引用必须同步在 vbproj 里加 EmbeddedResource，否则单文件版会坏，
@@ -163,9 +178,10 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true    # 自动从 commits 生成 changelog
+          body_path: ${{ steps.notes.outputs.body_path }}   # 手写发行说明（为空时回退）
+          generate_release_notes: ${{ steps.notes.outputs.body_path == '' }}   # 没有手写说明时才自动生成
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}   # v2.7.0-rc.1 等预发布标签
           overwrite_files: true           # 重发同一 tag(热修复强推)时覆盖同名资产
           files: |
             artifacts/MegaDownloader-Revival-win-x86.zip

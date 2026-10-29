@@ -63,7 +63,7 @@ Public Class Language
                 Dim builtinDir As String = Path.Combine(LangPath, "Builtin")
                 If Not Directory.Exists(builtinDir) Then Directory.CreateDirectory(builtinDir)
                 Dim XMLFile As String = Path.Combine(builtinDir, CodigoIdioma & ".xml")
-                xmlIdioma.Save(XMLFile)
+                SaveBuiltinIfChanged(xmlIdioma, XMLFile)
 
                 ' Seed user language file only if missing (do not overwrite custom edits)
                 Dim userLangFile As String = Path.Combine(LangPath, CodigoIdioma & ".xml")
@@ -118,6 +118,15 @@ Public Class Language
 
     End Sub
 
+
+    Private Shared Sub SaveBuiltinIfChanged(xml As XmlDocument, filePath As String)
+        Using serialized As New MemoryStream()
+            xml.Save(serialized)
+            Dim expected As Byte() = serialized.ToArray()
+            If IO.File.Exists(filePath) AndAlso IO.File.ReadAllBytes(filePath).SequenceEqual(expected) Then Return
+            IO.File.WriteAllBytes(filePath, expected)
+        End Using
+    End Sub
 
     Private Shared Function ProcessMsg(ByVal msg As String) As String
 #If MSD Then

@@ -1,37 +1,123 @@
-# MegaDownloader 复活计划
+<p align="center">
+  <img src="screenshots/banner.png" alt="MegaDownloader 复活计划 —— 经典 MEGA 下载器，为今天的链接重建" width="100%">
+</p>
 
-**语言**：[English](../README.md) · **简体中文** · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
+<h1 align="center">MegaDownloader 复活计划</h1>
 
-> 让经典 MEGA 下载器在今天的 MEGA 上继续可用：适配新版链接格式、多线程加速、断点续传、配额自动恢复，单文件免安装。
+<p align="center">
+  <b>经典 MEGA 下载器，为今天的链接重建。</b><br>
+  多线程加速 · 真断点续传 · 配额自动恢复 · 下载前批量预检
+</p>
+
+<p align="center">
+  <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+</p>
+
+<p align="center"><sub>如果这个项目帮到了你，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>，让更多人发现它。</sub></p>
+
+<p align="center">
+  <a href="../../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
+  <a href="../../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
+  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
+  <a href="../../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
+</p>
+
+<p align="center">
+  <sub>单文件 EXE 或 ZIP · 免安装 · 免管理员 · .NET Framework 4.8 · 10 种界面语言</sub><br>
+  <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja-JP.md">日本語</a> · <a href="README.ko-KR.md">한국어</a></sub>
+</p>
+
+> **认识 v2.6「工作台」。** 界面整体重做，添加链接收进两步流程并支持批量预检，新增任务搜索与定时下载 —— 复活计划启动以来改动最大的一版，冷启动同时降到 **150–200 毫秒**。[看看新在哪 ↓](#-26-新在哪)
+>
 > 非官方项目，与 MEGA（MEGA Ltd.）无关联。
 
-**[下载 Windows 版](../../../releases/latest)** · 单文件或 ZIP 免安装包 · Windows 7 SP1+ · .NET Framework 4.8
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/v2.6-workbench-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/v2.6-workbench-light.png">
+    <img alt="MegaDownloader v2.6 workbench" src="screenshots/v2.6-workbench-light.png" width="100%">
+  </picture>
+</p>
+<p align="center"><sub>v2.6 工作台 · 截图随 GitHub 主题切换。</sub></p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
-[![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
-[![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
+---
 
-## 截图
+## ✨ 2.6 新在哪
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
-  <img alt="MegaDownloader 主界面——左侧队列统计、中间任务列表、右侧选中任务的详情" src="screenshots/main-light.png">
-</picture>
+> **一个窗口，两步操作，不用猜。**
+>
+> ⚡ **冷启动实测 5–7 秒 → 150–200 毫秒** · 500+ 个文件导入不卡界面
+>
+> 启动时间因硬件和运行环境而异。
 
-左侧是实时队列统计（总速度、进行中 / 等待 / 失败、队列进度、预计剩余）和快捷入口，中间是任务列表，右侧显示选中任务的详情。把 MEGA 链接拖进窗口，或者直接复制——剪贴板监控会自动识别。主题跟随系统设置，上面这张图也会跟着你的 GitHub 主题切换。
+<table>
+<tr>
+<td width="50%" valign="top">
 
-| 设置 · 一般 | 设置 · 高级 |
-| :---: | :---: |
-| [![设置——一般标签页](screenshots/settings-general.png)](screenshots/settings-general.png) | [![设置——高级标签页](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
-| 下载路径、剪贴板监控、开机自启、语言、主题、速度限制、出错重试 | Buffer 与日志等级、代理、内置 Web 服务器与局域网访问 |
+<b>🖥️ 工作台重做</b>
 
-<sub>截图取自 v2.5.9，界面为简体中文；支持 10 种界面语言。</sub>
+深浅色共用一套间距、字阶与图标网格。「添加链接」终于成了主操作，侧栏分组各自计数，详情栏可以收起，把宽度让给列表。
+
+</td>
+<td width="50%" valign="top">
+
+<b>➕ 两步添加</b>
+
+先在同一个窗口里粘链接，再挑文件，不再层层叠弹窗。点返回，链接、搜索词、展开的目录和勾选全都还在。
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+<b>🗂️ 批量预检</b>
+
+下载之前先看清文件名、大小、状态和相对路径。文件夹树可折叠，支持名称搜索、类型筛选、Ctrl/Shift 多选，并显示选中总大小与目标磁盘剩余空间。
+
+</td>
+<td valign="top">
+
+<b>🔎 任务搜索</b>
+
+<kbd>Ctrl</kbd>+<kbd>F</kbd> 搜索任务包名、文件名或相对路径，并与当前状态分组叠加过滤；<kbd>Esc</kbd> 清空后恢复整个队列。
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+<b>⏰ 定时下载</b>
+
+一次性预约或每日下载时段，支持跨午夜。时段开始自动恢复，结束时自动暂停，配置重启后沿用。
+
+</td>
+<td valign="top">
+
+<b>⚡ 启动 200 毫秒</b>
+
+冷启动从 5–7 秒降到 150–200 毫秒：首屏不再同步读性能计数器与 WMI。链接解析、建包与元数据检查也移出了界面线程，预检改为虚拟列表。
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>2.6 的其余改动与背后的修复</b></summary>
+
+<br>
+
+- **重复识别**：按文件 ID + 密钥识别新旧格式的重复链接，并检查现有队列；重复与失效项始终跳过。
+- **临时故障与永久失效分开处理**：网络抖动导致检查不了的普通链接，仍可手动勾选添加。
+- **确认期间的新链接**先暂存到下一批，不会被静默下载。
+- **大任务包**（超过 500 个文件）默认折叠，导入瞬间不会卡住列表。
+- **添加完成后**自动切到全部任务并定位最新任务包；文件树保留仍可见行的高亮与滚动位置。
+- **过程可见可停**：解析阶段显示已用时间、可停止 / 重检；提交阶段单独显示「加入下载队列」。
+- **DPI 与主题修复**：高 DPI 文件夹展开标记、详情滚动后的布局偏移、原生列表背景与空态换肤、带格式粘贴不再带入网页字色。
+- **定时控制队列**：在设定时段内恢复下载，时段结束后暂停；手动暂停整队列会持续到下一时段。
+
+</details>
 
 ---
 
@@ -44,15 +130,12 @@
    | **`MegaDownloader.exe`**（单文件） | 想要最省事：下载后直接双击运行，15 个依赖 DLL 已内嵌 |
    | **`MegaDownloader-Revival-win-x86.zip`**（免安装包） | 喜欢压缩包：解压后运行程序 |
 
-2. 双击运行 —— 免安装、无需管理员权限
-   > 系统要求：Windows 7 SP1 及以上；.NET Framework 4.8（Windows 10 1903+ 已内置，旧系统按提示安装即可）
-3. 复制一个 MEGA 链接 —— 程序自动识别剪贴板，确认后即加入下载队列
+2. **双击运行** —— 免安装、无需管理员权限
+   > Windows 7 SP1 及以上 · .NET Framework 4.8（Windows 10 1903+ 已内置，旧系统按提示安装）
 
-到这一步就能正常下载了。往下按需阅读：[功能](#-它能做什么) → [项目背景与对比](#-这个项目从哪来) → [常见问题](#-常见问题) → [开发者指南](#️-给开发者)。
+3. **复制一个 MEGA 链接** —— 剪贴板监控会自动识别，确认后即加入下载队列
 
-其他加链接的方式：把链接拖进主窗口 · 工具栏「添加链接」手动粘贴 · 浏览器中点击 `mega://` 协议链接。
-
-> 🆕 **最新版本 [v2.5.9](../../../releases/latest)**（2026-10-28）：同名并发下载互不干扰 · 解压不再覆盖原文件 · 已下完成品校验后复用 · 在线观看 Range 字节错误修复。完整历史见 [CHANGELOG](CHANGELOG.md)。
+到这一步就能正常下载了。其他加链接的方式：把链接拖进窗口 · 工具栏「添加链接」 · 浏览器中点击 `mega://` 协议链接。
 
 ---
 
@@ -61,35 +144,44 @@
 **下载核心**
 
 - **多线程加速** —— 同一文件多路并发连接，吃满带宽
-- **断点续传** —— 暂停 / 恢复 / 错误重试，重启程序接着下
+- **真断点续传** —— 暂停 / 恢复 / 出错重试，重启程序接着下，中断的半成品会被复用
 - **文件夹下载** —— 递归解析整个分享文件夹，可只选其中部分子文件夹或文件
 - **限速** —— 全局或单任务限速
-- **失败自愈**（v2.5）—— 失败任务定时自动重试，永久失败自动排除
-- **配额熔断**（v2.5）—— MEGA 配额耗尽时自动暂停并倒计时，到点自动恢复；也可切换回旧版「配额突破」持续重试模式（默认关闭）
-- **自动解压** —— 下完自动解压 RAR / 7Z / ZIP，支持分卷与密码
+- **失败自愈** —— 失败任务定时自动重试，永久失败自动排除（v2.5）
+- **配额熔断** —— MEGA 配额耗尽时自动暂停并倒计时，到点自动恢复；旧版「配额突破」持续重试模式仍可开启，默认关闭（v2.5）
+- **自动解压** —— 下完自动解压 RAR / 7Z / ZIP，支持分卷与密码，且不会覆盖已有同名文件
+- **成品校验** —— 链接包含 MetaMAC 时，下载文件会先经过校验，再标记为完成（v2.5.9）
 
-**便捷与远程**
+**链接接入**
 
-- **四种加链接方式** —— 剪贴板自动识别 / 拖拽 / 手动粘贴 / `mega://` 协议
-- **Web 界面** —— 内置 HTTP 服务，浏览器远程添加任务、查看进度；可开启局域网访问，用手机推送下载
+- **四种方式** —— 剪贴板自动识别 · 拖拽 · 手动粘贴 · `mega://` 协议
+- **批量预检** —— 大型分享先看清再勾选，不再盲下（v2.6）
 - **ELC 容器** —— 加密链接容器的导入与导出；`enc` / `enc2` / `fenc` / `fenc2` / `elc` 全支持
 
-**界面与体验**
+**工作台**
+
+- **秒开** —— 冷启动 150–200 毫秒，不再阻塞读 WMI 与性能计数器（v2.6）
+- **任务搜索** —— 包名、文件名、路径，`Ctrl+F` 直达（v2.6）
+- **定时下载** —— 每日时段或一次性预约（v2.6）
+- **详情栏可收起** —— 队列统计、任务列表、详情三段式，窄窗口自动让出空间
+- **深 / 浅色主题** —— 跟随系统，也可手动指定
+- **10 种界面语言** —— English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
+- **Web 界面** —— 内置 HTTP 服务，浏览器远程添加任务、查看进度；可开启局域网访问，用手机推送下载
+
+**附加能力**
 
 - **边下边播** —— 集成 VLC，流式播放尚未下完的视频
 - **流媒体库** —— 可视化管理常看的流媒体资源
-- **深 / 浅色主题**（v2.0）—— 跟随系统自动切换，也可手动指定
-- **10 种界面语言** —— English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română，可自行扩展
 - **隐写工具** —— 用图片 / 视频藏文件（F5 隐写）
 
 <details>
-<summary><b>支持的全部链接格式（点击展开）</b></summary>
+<summary><b>支持的全部链接格式</b></summary>
 
-- 新版：`mega.nz/file/ID#KEY`、`mega.nz/folder/ID#KEY`（v1.9 起）
+<br>
+
+- 新版：`mega.nz/file/ID#KEY`、`mega.nz/folder/ID#KEY`（v1.9 起），含分享内的子文件夹与单文件链接
 - 旧版：`mega.nz/#!ID!KEY`、`mega.co.nz/#F!ID!KEY`
 - 加密：`mega://enc?…`、`mega://enc2?…`、`mega://fenc?…`、`mega://fenc2?…`、`mega://elc?…`
-
-链接示例：
 
 ```
 https://mega.nz/file/abcDEFgh#IjklMNopQRstUVwxYZ1234567890
@@ -104,17 +196,34 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 
 ---
 
+## 🖼️ 界面
+
+**两步添加，下载前先看清**
+
+<table>
+<tr>
+  <td align="center" width="50%"><b>1. 粘贴链接</b><br><img src="screenshots/v2.6-add-links.png" alt="添加链接窗口" width="100%"></td>
+  <td align="center" width="50%"><b>2. 预检并选择文件</b><br><img src="screenshots/v2.6-preflight.png" alt="文件预检与选择窗口" width="100%"></td>
+</tr>
+</table>
+
+---
+
 ## 📖 这个项目从哪来
 
 MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管理器，以轻量、稳定、多线程著称。原项目在 v1.8 后停止维护，而 MEGA 更换了链接格式（`mega.nz/file/...`、`mega.nz/folder/...`），旧版无法识别新链接，核心功能失效。
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.5.x** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
 | 失败任务 | 只能手动重试 | ✅ 定时自愈（v2.5） |
+| 添加大型分享 | 粘完就下，全凭运气 | ✅ 批量预检 + 文件夹树（v2.6） |
+| 找任务 | 整队翻找 | ✅ 按包名 / 文件 / 路径搜索（v2.6） |
+| 无人值守下载 | — | ✅ 每日时段或一次性预约（v2.6） |
+| 启动速度 | 首屏同步阻塞 | ✅ 冷启动 150–200 毫秒，此前 5–7 秒（v2.6） |
 | 界面主题 | 仅系统灰 | ✅ 深 / 浅色，跟随系统（v2.0） |
 | 稳定性 | — | ✅ 200+ 项崩溃 / 丢数据 / 安全修复 |
 | 维护状态 | 已停更 | ✅ 活跃维护，Issue 有响应 |
@@ -124,9 +233,6 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 ---
 
 ## ❓ 常见问题
-
-**杀毒软件报毒？**
-如果杀毒软件发出警告，请先查看提示并确认下载来源。你可以查看公开的 [构建流程](../../../actions/workflows/build.yml)、尝试 ZIP 包，或从源码自行构建。更换包格式不保证警告消失。
 
 **提示配额不足 / quota exceeded？**
 MEGA 对免费账户和 IP 有下载配额限制。v2.5 起程序会自动暂停并倒计时恢复；等不及的话，可在设置中开启「配额突破模式」持续重试。
@@ -143,14 +249,22 @@ MEGA 对免费账户和 IP 有下载配额限制。v2.5 起程序会自动暂停
 **有 Mac / Linux 版吗？**
 没有 —— 基于 WinForms，仅限 Windows。但可开启内置 Web 界面，用手机或其他设备的浏览器远程管理下载。
 
+**定时下载会唤醒电脑吗？**
+不会。程序必须保持运行，不注册唤醒定时器、也不作为后台服务运行。
+
+**发现安全问题？**
+请不要公开提 Issue，按 [SECURITY](../SECURITY.md) 里的方式反馈。
+
 ---
 
 ## 🛠️ 给开发者
 
 <details>
-<summary><b>从源码构建（点击展开）</b></summary>
+<summary><b>从源码构建</b></summary>
 
-**环境要求**：Visual Studio 2013 或更高（解决方案为 VS2013 格式）· .NET Framework 4.8 SDK（随 VS 安装）· Windows 7 SP1+
+<br>
+
+**环境要求**：Visual Studio 2019 或 2022 · .NET Framework 4.8 开发人员包· Windows 7 SP1+
 
 ```bash
 git clone https://github.com/a1175815821/MegaDownloader-Revival.git
@@ -173,20 +287,22 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 </details>
 
 <details>
-<summary><b>项目结构（点击展开）</b></summary>
+<summary><b>项目结构</b></summary>
+
+<br>
 
 ```
 MegaDownloader/
-├── Clases/                 # 核心类库（加密、下载、配置、主题、更新）
+├── Clases/                 # 核心类库（加密、下载、配置、主题、预检、定时）
 ├── Controls/               # 自定义控件
-├── Forms/                  # WinForms 窗体（12 个）
+├── Forms/                  # WinForms 窗体（工作台、两步添加流程等）
 ├── HttpModule/             # 内置 Web 服务器模块与 HTML 模板
 ├── Stegano/                # 隐写术窗体
 ├── Resources/
 │   ├── DLLs/               # 第三方 DLL 依赖
 │   ├── Language/           # 多语言 XML（10 种）
 │   └── Installer MSD/      # WiX 安装包工程
-├── docs/                   # 文档（README / CHANGELOG / CONTRIBUTING）
+├── docs/                   # 文档、截图、发行说明
 ├── Tests/                  # 下载、解压与流媒体回归验证
 └── MegaDownloader.sln
 ```
@@ -201,10 +317,13 @@ MegaDownloader/
 
 | 文档 | 内容 |
 | --- | --- |
-| [CHANGELOG](CHANGELOG.md) | 完整版本历史与每版修复明细（仅简体中文） |
+| [CHANGELOG](CHANGELOG.md) | 完整版本历史与每版修复明细（简体中文，权威源） |
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
+| [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
+| [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
+| [2.6 发行说明](release-notes/v2.6.0.md) | 用作 GitHub Release 正文的文案 |
 
-README 为全部五种语言手动维护；CONTRIBUTING 仅有英文与简体中文两个版本，CHANGELOG 仅有简体中文版本。更新时请同步：
+README 为五种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 
 | 语言 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
@@ -214,16 +333,14 @@ README 为全部五种语言手动维护；CONTRIBUTING 仅有英文与简体中
 | 日本語 | `docs/README.ja-JP.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | 한국어 | `docs/README.ko-KR.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 
-> 简体中文是权威源。
-
 ---
 
 ## ⭐ 支持这个项目
 
-如果 MegaDownloader Revival 帮到了你，欢迎通过以下方式支持项目：
+如果 MegaDownloader Revival 帮到了你，这几件事最有帮助：
 
-- ⭐ 点右上角 **Star**，支持这个项目
-- 🐛 遇到问题 [提 Issue](../../../issues) —— 近期的多个修复都来自用户报告
+- ⭐ **点个 Star** —— 这是让项目被更多人看到的最直接信号
+- 🐛 [提 Issue](../../../issues) —— 近期的多个修复都来自用户报告
 - 🌍 帮忙改进 [翻译](CONTRIBUTING.zh-CN.md) —— 已有 10 种语言，缺母语校对
 - 🔗 分享给还在找 MEGA 下载工具的朋友
 

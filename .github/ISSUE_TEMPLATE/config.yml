@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/a1175815821/MegaDownloader-Revival/security/advisories/new
+    about: Please report security problems privately — never in a public issue.
+  - name: Latest release and download
+    url: https://github.com/a1175815821/MegaDownloader-Revival/releases/latest
+    about: Check that you are on the newest build before reporting a bug.
+  - name: Documentation
+    url: https://github.com/a1175815821/MegaDownloader-Revival#readme
+    about: Install steps, FAQ, supported link formats and the build guide.

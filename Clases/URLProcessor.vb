@@ -9,6 +9,14 @@ Public Class URLProcessor
 
         Public URL As String
         Public Path As String
+        ' Decrypted folder metadata is reused by the batch preview, not as a
+        ' cached download URL. The download engine still verifies before transfer.
+        Public DisplayName As String
+        Public SizeBytes As Long?
+        Friend PreflightIdentity As String
+        Friend PreflightIdentityUrl As String
+        ' Keeps identically named folders from separate input links in separate tree roots.
+        Friend PreflightOrigin As String
 
         ''' <summary>
         ''' 来源 MEGA 文件夹的真名(子文件夹链接为子文件夹名)。非文件夹链接为空。
@@ -79,6 +87,9 @@ Public Class URLProcessor
                                 For Each FileURL2 In MegaFolderHelper.RetrieveLinksFromFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress, ct)
                                     Dim hidden As New FileURL(Fichero.HIDDEN_LINK & FileURL2.URL, FileURL2.Path)
                                     hidden.FolderName = FileURL2.FolderName
+                                    hidden.DisplayName = FileURL2.DisplayName
+                                    hidden.SizeBytes = FileURL2.SizeBytes
+                                    hidden.PreflightOrigin = FileURL
                                     URLs3.Add(hidden)
                                 Next
                             Else
@@ -92,6 +103,9 @@ Public Class URLProcessor
                 Else
                     URLs3.Add(New FileURL(URL, ""))
                 End If
+                For index As Integer = before To URLs3.Count - 1
+                    If URLs3(index).PreflightOrigin Is Nothing Then URLs3(index).PreflightOrigin = URL
+                Next
             Catch ex As OperationCanceledException
                 Throw
             Catch ex As Exception

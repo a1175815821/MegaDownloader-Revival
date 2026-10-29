@@ -1,8 +1,5 @@
 ''' <summary>
-''' Main 右侧栏结构化详情（第二批第 7 项：先抽纯展示、无事件绑定的部分）。
-''' 由 Forms/Main.vb 的同名 Region 纯平移而来，无逻辑改动：
-''' 无 Handles 绑定、无 Designer 控件（运行时创建）、调用点（2633/2684/2686 选中变更）
-''' 与 Main 同类，Partial 合并后行为完全一致。
+''' 主窗口详情栏：运行时构建，字段分段显示，布局缓存与定时数值刷新分离。
 ''' </summary>
 Partial Public Class Main
 
@@ -15,6 +12,7 @@ Partial Public Class Main
     Private detailTitleLabel As Label = Nothing
     Private detailRows As New Generic.List(Of KeyValuePair(Of Label, Label))()
     Private detailProgressBar As ProgressBar = Nothing
+    Private detailLayoutSize As Drawing.Size
 
     ''' <summary>按需构建结构化详情面板(挂在 detailGroup 内,与空态 detailLabel 互斥显示)。
     ''' 行数固定为 状态/进度/大小/速度/剩余/路径,内容在 UpdateDetailContent 里填。</summary>
@@ -25,6 +23,8 @@ Partial Public Class Main
         detailContentPanel = New Panel()
         detailContentPanel.Name = "detailContentPanel"
         detailContentPanel.Dock = DockStyle.Fill
+        detailContentPanel.AutoScroll = True
+        UiStyles.SetRole(detailContentPanel, UiStyles.Role.Surface)
         detailContentPanel.Visible = False
 
         detailTitleLabel = New Label()
@@ -33,7 +33,7 @@ Partial Public Class Main
         detailTitleLabel.AutoEllipsis = True
         detailTitleLabel.Height = 36
         ' 标题加粗,只在此处建一次 Font(换肤不重建,避免 GDI 对象堆积)。
-        detailTitleLabel.Font = New Drawing.Font(detailTitleLabel.Font, Drawing.FontStyle.Bold)
+        UiStyles.SetFont(detailTitleLabel, 1, True, Me.Font)
 
         detailContentPanel.Controls.Add(detailTitleLabel)
 
@@ -78,31 +78,37 @@ Partial Public Class Main
     Private Sub LayoutDetailContent()
         Try
             If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
-            Dim sc As Single = GetUiScale()
-            Dim pad As Integer = CInt(8 * sc)
-            Dim w As Integer = detailContentPanel.ClientSize.Width
-            If w <= 0 Then w = detailGroup.ClientSize.Width - pad * 2
-            Dim innerW As Integer = Math.Max(60, w - pad * 2)
-            Dim capW As Integer = CInt(46 * sc)
-            Dim rowH As Integer = Math.Max(18, CInt(20 * sc))
-
-            detailTitleLabel.SetBounds(pad, pad, innerW, CInt(34 * sc))
-
-            Dim y As Integer = detailTitleLabel.Bottom + CInt(4 * sc)
-            For i As Integer = 0 To detailRows.Count - 1
-                Dim cap As Label = detailRows(i).Key
-                Dim val As Label = detailRows(i).Value
-                cap.SetBounds(pad, y, capW, rowH)
-                val.SetBounds(pad + capW, y, innerW - capW, rowH)
-                y += rowH
-
-                ' 第 2 行(进度)下方插一条进度条
-                If i = 1 AndAlso detailProgressBar IsNot Nothing Then
-                    detailProgressBar.SetBounds(pad + capW, y, innerW - capW, CInt(10 * sc))
-                    detailProgressBar.Visible = True
-                    y += detailProgressBar.Height + CInt(2 * sc)
-                End If
-            Next
+            If detailLayoutSize = detailContentPanel.ClientSize Then Return
+            Dim previousScroll As Drawing.Point = detailContentPanel.AutoScrollPosition
+            detailContentPanel.SuspendLayout()
+            Try
+                ' Bounds are defined in unscrolled coordinates; retain the user's reading position.
+                detailContentPanel.AutoScrollPosition = Drawing.Point.Empty
+                Dim sc As Single = GetUiScale()
+                Dim pad As Integer = CInt(12 * sc)
+                Dim w As Integer = detailContentPanel.ClientSize.Width - If(detailContentPanel.VerticalScroll.Visible, 0, SystemInformation.VerticalScrollBarWidth)
+                Dim innerW As Integer = Math.Max(60, w - pad * 2)
+                Dim rowH As Integer = Math.Max(detailContentPanel.Font.Height + 4, CInt(22 * sc))
+                detailTitleLabel.SetBounds(pad, pad, innerW, CInt(56 * sc))
+                Dim y As Integer = detailTitleLabel.Bottom + CInt(4 * sc)
+                For i As Integer = 0 To detailRows.Count - 1
+                    Dim cap As Label = detailRows(i).Key
+                    Dim val As Label = detailRows(i).Value
+                    cap.SetBounds(pad, y, innerW, rowH)
+                    val.SetBounds(pad, y + rowH, innerW, If(i = 5, rowH * 3, rowH))
+                    y = val.Bottom + CInt(8 * sc)
+                    If i = 1 AndAlso detailProgressBar IsNot Nothing Then
+                        detailProgressBar.SetBounds(pad, y, innerW, CInt(6 * sc))
+                        detailProgressBar.Visible = True
+                        y += detailProgressBar.Height + CInt(2 * sc)
+                    End If
+                Next
+                detailContentPanel.AutoScrollMinSize = New Drawing.Size(0, y + pad)
+            Finally
+                detailContentPanel.ResumeLayout(True)
+                detailContentPanel.AutoScrollPosition = New Drawing.Point(-previousScroll.X, -previousScroll.Y)
+            End Try
+            detailLayoutSize = detailContentPanel.ClientSize
         Catch ex As Exception
             Log.WriteDebug("LayoutDetailContent failed: " & Log.SafeException(ex))
         End Try
@@ -138,7 +144,8 @@ Partial Public Class Main
             EnsureDetailContentPanel()
             If detailContentPanel Is Nothing Then Return
 
-            detailTitleLabel.Text = ele.DescargaNombre
+            UiStyles.SetText(detailTitleLabel, ele.DescargaNombre)
+            ToolTipBotones.SetToolTip(detailTitleLabel, ele.DescargaNombre)
 
             Dim st As Estado = ele.DescargaEstado()
             Dim pct As Decimal = ele.DescargaPorcentaje()
@@ -176,8 +183,11 @@ Partial Public Class Main
             }
 
             For i As Integer = 0 To Math.Min(captions.Length, detailRows.Count) - 1
-                detailRows(i).Key.Text = captions(i)
-                detailRows(i).Value.Text = values(i)
+                UiStyles.SetText(detailRows(i).Key, captions(i))
+                If detailRows(i).Value.Text <> values(i) Then
+                    detailRows(i).Value.Text = values(i)
+                    If i = 5 Then ToolTipBotones.SetToolTip(detailRows(i).Value, values(i))
+                End If
                 ' 失败态用语义色标注,与列表"状态"列的着色保持一致
                 If i = 0 AndAlso st = Estado.Erroneo Then
                     detailRows(i).Value.ForeColor = ThemeManager.GetColor("ErrorFore")
@@ -193,7 +203,7 @@ Partial Public Class Main
                 If p < 0 Then p = 0
                 If p > 100 Then p = 100
                 Try
-                    detailProgressBar.Value = p
+                    If detailProgressBar.Value <> p Then detailProgressBar.Value = p
                 Catch
                 End Try
             End If

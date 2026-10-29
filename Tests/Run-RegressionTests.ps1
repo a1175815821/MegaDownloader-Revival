@@ -19,6 +19,7 @@ try {
         ('/r:' + (Join-Path $bin 'HttpServer.dll')),
         '/r:System.IO.Compression.dll', '/r:System.IO.Compression.FileSystem.dll',
         '/r:System.Windows.Forms.dll',
+        '/r:System.Drawing.dll',
         (Join-Path $PSScriptRoot 'RegressionTests.cs')
     )
     & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" @compilerArgs

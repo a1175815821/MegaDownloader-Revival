@@ -33,26 +33,36 @@ Public NotInheritable Class ThemeManager
     Private Shared ReadOnly LightColors As New Dictionary(Of String, Color) From
     {
         {"Back", Color.White},
-        {"Fore", Color.Black},
-        {"AltBack", Color.FromArgb(245, 245, 245)},
-        {"ControlBack", Color.FromArgb(240, 240, 240)},
-        {"Border", Color.FromArgb(204, 206, 209)},
-        {"Muted", Color.FromArgb(100, 100, 105)},
-        {"Selection", Color.FromArgb(0, 120, 215)},
-        {"SelectionFore", Color.White},
-        {"Link", Color.FromArgb(0, 102, 204)},
-        {"ToolBack", Color.FromArgb(240, 240, 240)},
-        {"ToolBorder", Color.FromArgb(204, 206, 209)},
+        {"Fore", Color.FromArgb(32, 42, 58)},
+        {"AltBack", Color.FromArgb(248, 250, 252)},
+        {"ControlBack", Color.FromArgb(244, 246, 249)},
+        {"Canvas", Color.FromArgb(231, 236, 243)},
+        {"Border", Color.FromArgb(216, 222, 231)},
+        {"ButtonBack", Color.FromArgb(246, 248, 251)},
+        {"ButtonBorder", Color.FromArgb(164, 177, 194)},
+        {"ButtonDisabledBack", Color.FromArgb(239, 242, 247)},
+        {"ButtonDisabledFore", Color.FromArgb(102, 113, 129)},
+        {"ButtonDisabledBorder", Color.FromArgb(193, 202, 214)},
+        {"Muted", Color.FromArgb(92, 105, 124)},
+        {"Selection", Color.FromArgb(225, 236, 252)},
+        {"SelectionFore", Color.FromArgb(25, 58, 104)},
+        {"Accent", Color.FromArgb(199, 45, 60)},
+        {"AccentFore", Color.White},
+        {"AccentHover", Color.FromArgb(179, 37, 51)},
+        {"AccentPressed", Color.FromArgb(154, 30, 43)},
+        {"Link", Color.FromArgb(36, 94, 173)},
+        {"ToolBack", Color.White},
+        {"ToolBorder", Color.FromArgb(216, 222, 231)},
         {"ErrorFore", Color.FromArgb(192, 0, 0)},
         {"QuotaBack", Color.FromArgb(178, 34, 34)},
         {"QuotaFore", Color.White},
-        {"SuccessFore", Color.FromArgb(0, 128, 0)},
+        {"SuccessFore", Color.FromArgb(26, 121, 90)},
         {"ProgressBack", Color.White},
-        {"ProgressFill", Color.MediumTurquoise},
-        {"ProgressGradientStart", Color.SpringGreen},
-        {"ProgressGradientEnd", Color.MediumTurquoise},
-        {"ButtonHover", Color.FromArgb(229, 241, 251)},
-        {"ButtonPressed", Color.FromArgb(204, 228, 247)}
+        {"ProgressFill", Color.FromArgb(40, 148, 113)},
+        {"ProgressGradientStart", Color.FromArgb(40, 148, 113)},
+        {"ProgressGradientEnd", Color.FromArgb(40, 148, 113)},
+        {"ButtonHover", Color.FromArgb(235, 240, 248)},
+        {"ButtonPressed", Color.FromArgb(221, 230, 243)}
     }
 
     ' Muted:深色主题下的次要说明文字色,对 ControlBack(51,51,55)对比度 4.97:1
@@ -60,27 +70,37 @@ Public NotInheritable Class ThemeManager
     ' 深色配色(VS Code Dark+ 风格)
     Private Shared ReadOnly DarkColors As New Dictionary(Of String, Color) From
     {
-        {"Back", Color.FromArgb(30, 30, 30)},
-        {"Fore", Color.FromArgb(241, 241, 241)},
-        {"AltBack", Color.FromArgb(45, 45, 48)},
-        {"ControlBack", Color.FromArgb(51, 51, 55)},
-        {"Border", Color.FromArgb(90, 90, 90)},
-        {"Muted", Color.FromArgb(160, 163, 168)},
-        {"Selection", Color.FromArgb(38, 79, 120)},
-        {"SelectionFore", Color.FromArgb(241, 241, 241)},
-        {"Link", Color.FromArgb(86, 156, 214)},
-        {"ToolBack", Color.FromArgb(45, 45, 48)},
-        {"ToolBorder", Color.FromArgb(90, 90, 90)},
+        {"Back", Color.FromArgb(30, 36, 47)},
+        {"Fore", Color.FromArgb(230, 235, 243)},
+        {"AltBack", Color.FromArgb(34, 42, 54)},
+        {"ControlBack", Color.FromArgb(37, 45, 58)},
+        {"Canvas", Color.FromArgb(17, 23, 33)},
+        {"Border", Color.FromArgb(64, 77, 96)},
+        {"ButtonBack", Color.FromArgb(46, 57, 73)},
+        {"ButtonBorder", Color.FromArgb(100, 116, 139)},
+        {"ButtonDisabledBack", Color.FromArgb(37, 45, 58)},
+        {"ButtonDisabledFore", Color.FromArgb(153, 169, 191)},
+        {"ButtonDisabledBorder", Color.FromArgb(73, 87, 106)},
+        {"Muted", Color.FromArgb(166, 180, 199)},
+        {"Selection", Color.FromArgb(46, 68, 99)},
+        {"SelectionFore", Color.FromArgb(238, 245, 255)},
+        {"Accent", Color.FromArgb(190, 46, 61)},
+        {"AccentFore", Color.White},
+        {"AccentHover", Color.FromArgb(211, 57, 73)},
+        {"AccentPressed", Color.FromArgb(164, 35, 49)},
+        {"Link", Color.FromArgb(135, 184, 250)},
+        {"ToolBack", Color.FromArgb(30, 36, 47)},
+        {"ToolBorder", Color.FromArgb(64, 77, 96)},
         {"ErrorFore", Color.FromArgb(244, 135, 113)},
         {"QuotaBack", Color.FromArgb(122, 28, 28)},
         {"QuotaFore", Color.White},
         {"SuccessFore", Color.FromArgb(78, 201, 176)},
         {"ProgressBack", Color.FromArgb(45, 45, 48)},
-        {"ProgressFill", Color.FromArgb(38, 79, 120)},
-        {"ProgressGradientStart", Color.FromArgb(14, 99, 156)},
-        {"ProgressGradientEnd", Color.FromArgb(38, 79, 120)},
-        {"ButtonHover", Color.FromArgb(62, 62, 66)},
-        {"ButtonPressed", Color.FromArgb(38, 79, 120)}
+        {"ProgressFill", Color.FromArgb(67, 184, 146)},
+        {"ProgressGradientStart", Color.FromArgb(67, 184, 146)},
+        {"ProgressGradientEnd", Color.FromArgb(67, 184, 146)},
+        {"ButtonHover", Color.FromArgb(62, 78, 100)},
+        {"ButtonPressed", Color.FromArgb(77, 95, 119)}
     }
 
     Private Shared Function CurrentColors() As Dictionary(Of String, Color)
@@ -438,6 +458,8 @@ Public NotInheritable Class ThemeManager
             control.ForeColor = colors("Fore")
             CType(control, LinkLabel).LinkColor = colors("Link")
             CType(control, LinkLabel).VisitedLinkColor = colors("Link")
+            CType(control, LinkLabel).ActiveLinkColor = colors("Link")
+            CType(control, LinkLabel).DisabledLinkColor = colors("Muted")
             GoTo RecurseChildren
         End If
         If TypeOf control Is Label Then
@@ -446,9 +468,23 @@ Public NotInheritable Class ThemeManager
             GoTo RecurseChildren
         End If
 
+        ' Native DropDownList painting can use a light system background in dark mode.
+        ' Draw the item with theme colors, including the closed selected value.
+        If TypeOf control Is ComboBox Then
+            Dim combo As ComboBox = CType(control, ComboBox)
+            combo.BackColor = colors("Back")
+            combo.ForeColor = colors("Fore")
+            If combo.DropDownStyle = ComboBoxStyle.DropDownList AndAlso combo.DrawMode = DrawMode.Normal Then
+                combo.DrawMode = DrawMode.OwnerDrawFixed
+                AddHandler combo.DrawItem, AddressOf DrawThemedComboItem
+            End If
+            combo.Invalidate()
+            GoTo RecurseChildren
+        End If
+
         ' 文本类控件
         If TypeOf control Is TextBox OrElse TypeOf control Is RichTextBox OrElse
-           TypeOf control Is ComboBox OrElse TypeOf control Is NumericUpDown OrElse
+           TypeOf control Is NumericUpDown OrElse
            TypeOf control Is MaskedTextBox Then
             control.BackColor = colors("Back")
             control.ForeColor = colors("Fore")
@@ -557,6 +593,7 @@ Public NotInheritable Class ThemeManager
         End If
 
 RecurseChildren:
+        UiStyles.Apply(control)
         For Each child As Control In control.Controls
             ApplyThemeRecursive(child, colors, theme)
         Next
@@ -565,6 +602,8 @@ RecurseChildren:
     Private Shared Sub ApplyThemeToObjectListView(olv As BrightIdeasSoftware.ObjectListView,
                                                   colors As Dictionary(Of String, Color),
                                                   theme As ResolvedTheme)
+        RemoveHandler olv.HandleCreated, AddressOf ThemedList_HandleCreated
+        AddHandler olv.HandleCreated, AddressOf ThemedList_HandleCreated
         ' 关键:关闭 Explorer 主题,否则自定义颜色不生效
         Try
             olv.UseExplorerTheme = False
@@ -579,6 +618,14 @@ RecurseChildren:
 
         olv.BackColor = colors("Back")
         olv.ForeColor = colors("Fore")
+        olv.UseAlternatingBackColors = True
+        Dim emptyOverlay As BrightIdeasSoftware.TextOverlay = TryCast(olv.EmptyListMsgOverlay, BrightIdeasSoftware.TextOverlay)
+        If emptyOverlay IsNot Nothing Then
+            emptyOverlay.BackColor = colors("Back")
+            emptyOverlay.TextColor = colors("Muted")
+            emptyOverlay.BorderColor = colors("Border")
+            emptyOverlay.BorderWidth = 0
+        End If
         Try
             olv.AlternateRowBackColor = colors("AltBack")
         Catch ex As Exception
@@ -620,6 +667,46 @@ RecurseChildren:
         Catch ex As Exception
             Log.WriteDebug("ThemeManager reflection/theme apply failed once: " & Log.SafeException(ex))
         End Try
+        ' Reuse the virtual model; discard only cached row formatting from the prior palette.
+        Dim virtualList As BrightIdeasSoftware.VirtualObjectListView = TryCast(olv, BrightIdeasSoftware.VirtualObjectListView)
+        If virtualList IsNot Nothing Then virtualList.ClearCachedInfo()
+        SyncNativeListColors(olv)
+        olv.Invalidate()
+    End Sub
+
+    Friend Shared Sub RefreshListTheme(list As BrightIdeasSoftware.ObjectListView)
+        If list Is Nothing OrElse list.IsDisposed Then Return
+        ApplyThemeToObjectListView(list, CurrentColors(), _current)
+    End Sub
+
+    <System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint:="SendMessageW", ExactSpelling:=True)>
+    Private Shared Function SendListViewMessage(window As IntPtr, message As Integer, wParam As IntPtr, lParam As IntPtr) As IntPtr
+    End Function
+
+    Private Shared Sub SyncNativeListColors(list As ListView)
+        If list.IsDisposed OrElse Not list.IsHandleCreated OrElse list.InvokeRequired Then Return
+        ' ListView's native colors can diverge from its managed properties after handle recreation.
+        ' LVM_SETBKCOLOR, LVM_SETTEXTCOLOR and LVM_SETTEXTBKCOLOR also cover unused row space.
+        Dim back As New IntPtr(ColorTranslator.ToWin32(list.BackColor))
+        Dim fore As New IntPtr(ColorTranslator.ToWin32(list.ForeColor))
+        SendListViewMessage(list.Handle, &H1001, IntPtr.Zero, back)
+        SendListViewMessage(list.Handle, &H1024, IntPtr.Zero, fore)
+        SendListViewMessage(list.Handle, &H1026, IntPtr.Zero, back)
+    End Sub
+
+    Private Shared Sub ThemedList_HandleCreated(sender As Object, e As EventArgs)
+        Dim list As ListView = DirectCast(sender, ListView)
+        SyncNativeListColors(list)
+        Try
+            ' ObjectListView applies its own native styles after the base HandleCreated event.
+            list.BeginInvoke(New MethodInvoker(Sub()
+                                                  If list.IsDisposed OrElse Not list.IsHandleCreated Then Return
+                                                  SyncNativeListColors(list)
+                                                  list.Invalidate()
+                                              End Sub))
+        Catch ex As InvalidOperationException
+            ' The window may be closing while the deferred update is queued.
+        End Try
     End Sub
 
     Private Shared Sub TrySetProperty(target As Object, propertyName As String, value As Object)
@@ -633,28 +720,82 @@ RecurseChildren:
         End Try
     End Sub
 
+    Private Shared Sub DrawThemedComboItem(sender As Object, e As DrawItemEventArgs)
+        Dim combo As ComboBox = DirectCast(sender, ComboBox)
+        Dim selected As Boolean = (e.State And DrawItemState.Selected) <> 0 AndAlso (e.State And DrawItemState.ComboBoxEdit) = 0
+        Dim background As Color = GetColor(If(selected, "Selection", "Back"))
+        Dim foreground As Color = GetColor(If(Not combo.Enabled, "Muted", If(selected, "SelectionFore", "Fore")))
+        Using brush As New SolidBrush(background)
+            e.Graphics.FillRectangle(brush, e.Bounds)
+        End Using
+        If e.Index >= 0 AndAlso e.Index < combo.Items.Count Then
+            TextRenderer.DrawText(e.Graphics, combo.GetItemText(combo.Items(e.Index)), e.Font, e.Bounds, foreground,
+                                  TextFormatFlags.Left Or TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis Or TextFormatFlags.NoPrefix)
+        End If
+        If (e.State And DrawItemState.Focus) <> 0 Then e.DrawFocusRectangle()
+    End Sub
+
     Private Shared Sub ApplyThemeToButton(btn As Button, colors As Dictionary(Of String, Color))
         btn.UseVisualStyleBackColor = False
         btn.FlatStyle = FlatStyle.Flat
-        btn.BackColor = colors("ControlBack")
+        btn.BackColor = colors("ButtonBack")
         btn.ForeColor = colors("Fore")
         btn.FlatAppearance.BorderSize = 1
-        btn.FlatAppearance.BorderColor = colors("Border")
+        btn.FlatAppearance.BorderColor = colors("ButtonBorder")
         btn.FlatAppearance.MouseOverBackColor = colors("ButtonHover")
         btn.FlatAppearance.MouseDownBackColor = colors("ButtonPressed")
         ' 有图标的工具栏按钮禁用时保持边框可见
         btn.FlatAppearance.CheckedBackColor = colors("Selection")
+        RemoveHandler btn.Paint, AddressOf DrawDisabledButton
+        AddHandler btn.Paint, AddressOf DrawDisabledButton
+    End Sub
+
+    Private Shared Sub DrawDisabledButton(sender As Object, e As PaintEventArgs)
+        Dim btn As Button = DirectCast(sender, Button)
+        ' Native disabled text is nearly black on dark surfaces. Preserve native
+        ' image layout for image buttons; text-only buttons get legible theme ink.
+        If btn.Enabled OrElse btn.Image IsNot Nothing OrElse btn.ClientSize.Width < 2 OrElse btn.ClientSize.Height < 2 Then Return
+        Dim bounds As Rectangle = btn.ClientRectangle
+        Using brush As New SolidBrush(GetColor("ButtonDisabledBack"))
+            e.Graphics.FillRectangle(brush, bounds)
+        End Using
+        Using pen As New Pen(GetColor("ButtonDisabledBorder"))
+            e.Graphics.DrawRectangle(pen, 0, 0, bounds.Width - 1, bounds.Height - 1)
+        End Using
+        Dim flags As TextFormatFlags = If(btn.Text.Contains(vbLf), TextFormatFlags.WordBreak, TextFormatFlags.SingleLine Or TextFormatFlags.EndEllipsis)
+        Select Case btn.TextAlign
+            Case ContentAlignment.TopLeft, ContentAlignment.MiddleLeft, ContentAlignment.BottomLeft
+                flags = flags Or TextFormatFlags.Left
+            Case ContentAlignment.TopRight, ContentAlignment.MiddleRight, ContentAlignment.BottomRight
+                flags = flags Or TextFormatFlags.Right
+            Case Else
+                flags = flags Or TextFormatFlags.HorizontalCenter
+        End Select
+        Select Case btn.TextAlign
+            Case ContentAlignment.TopLeft, ContentAlignment.TopCenter, ContentAlignment.TopRight
+                flags = flags Or TextFormatFlags.Top
+            Case ContentAlignment.BottomLeft, ContentAlignment.BottomCenter, ContentAlignment.BottomRight
+                flags = flags Or TextFormatFlags.Bottom
+            Case Else
+                flags = flags Or TextFormatFlags.VerticalCenter
+        End Select
+        If Not btn.UseMnemonic Then flags = flags Or TextFormatFlags.NoPrefix
+        If btn.RightToLeft = RightToLeft.Yes Then flags = flags Or TextFormatFlags.RightToLeft
+        bounds = New Rectangle(2 + btn.Padding.Left, 1 + btn.Padding.Top,
+                               Math.Max(0, bounds.Width - 4 - btn.Padding.Horizontal),
+                               Math.Max(0, bounds.Height - 2 - btn.Padding.Vertical))
+        TextRenderer.DrawText(e.Graphics, btn.Text, btn.Font, bounds, GetColor("ButtonDisabledFore"), flags)
     End Sub
 
     Private Shared Sub ApplyThemeToToolStripItem(item As ToolStripItem, colors As Dictionary(Of String, Color))
         item.BackColor = colors("ToolBack")
         item.ForeColor = colors("Fore")
 
-        If TypeOf item Is ToolStripMenuItem Then
-            Dim mi As ToolStripMenuItem = CType(item, ToolStripMenuItem)
-            For Each child As ToolStripItem In mi.DropDownItems
-                ApplyThemeToToolStripItem(child, colors)
-            Next
+        If TypeOf item Is ToolStripDropDownItem Then
+            Dim dropDown As ToolStripDropDownItem = CType(item, ToolStripDropDownItem)
+            If dropDown.HasDropDownItems Then ApplyThemeToToolStrip(dropDown.DropDown, colors)
+        ElseIf TypeOf item Is ToolStripControlHost Then
+            ApplyThemeRecursive(CType(item, ToolStripControlHost).Control, colors, _current)
         ElseIf TypeOf item Is ToolStripLabel Then
             CType(item, ToolStripLabel).BackColor = colors("ToolBack")
         End If

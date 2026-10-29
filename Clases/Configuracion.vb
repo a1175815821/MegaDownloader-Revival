@@ -85,6 +85,7 @@ Public Class Configuracion
 	Public UsarProxy As Boolean
 	
     Public ApagarPC As Boolean
+    Public DownloadSchedule As New DownloadScheduleSettings()
 
     Public CheckUpdates As Boolean
 
@@ -277,6 +278,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV25")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
+        Xml.DocumentElement.AppendChild(DownloadSchedule.ToXml(Xml))
 		
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ComenzarDescargando")).InnerText = ComenzarDescargando.ToString
 
@@ -491,6 +493,7 @@ Public Class Configuracion
 		QuotaBreakthroughMode = False
 		UsarProxy = False
 		ApagarPC = False
+        DownloadSchedule = New DownloadScheduleSettings()
         ComenzarDescargando = True
 		IniciarConWindows = False
 		MantenerUltimaConfiguracion = True
@@ -518,6 +521,7 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "MantenerUltimaConfiguracion", "true"), MantenerUltimaConfiguracion)
         Boolean.TryParse(LeerNodo(Xml, "ComenzarDescargando", "true"), ComenzarDescargando)
 		Boolean.TryParse(LeerNodo(Xml, "ApagarPC", "false"), ApagarPC)
+        DownloadSchedule = DownloadScheduleSettings.FromXml(Xml.DocumentElement.SelectSingleNode("DownloadSchedule"))
 		TamanoPaqueteKB = 50
 		TamanoBufferKB = 750
         MaxConexionesGuardadas = 100
@@ -641,6 +645,7 @@ Public Class Configuracion
 		Me.AnalizarPortapapeles = True
 		Me.HideCollaborateButton = False
 		Me.ApagarPC = False
+        Me.DownloadSchedule = New DownloadScheduleSettings()
         Me.UsarProxy = False
         ' P3-5(b): align the empty-config default with CargaXML (:407 pre-read
         ' assignment and :428 node default "true", Forms/Configuration.vb:552 write

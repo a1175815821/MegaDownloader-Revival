@@ -38,9 +38,10 @@ Partial Class AddLinks
         Me.LinkLabel1 = New System.Windows.Forms.LinkLabel()
         Me.btnAgregar = New System.Windows.Forms.Button()
         Me.btnWatchOnline = New System.Windows.Forms.Button()
-        Me.txtLinks = New System.Windows.Forms.RichTextBox()
+        Me.txtLinks = New UiStyles.PlainTextRichTextBox()
         Me.linkStegano = New System.Windows.Forms.LinkLabel()
         Me.lblLinkCount = New System.Windows.Forms.Label()
+        Me.preflightProgressBar = New System.Windows.Forms.ProgressBar()
         Me.OpcionesPaquete.SuspendLayout()
         Me.SuspendLayout()
         '
@@ -67,7 +68,7 @@ Partial Class AddLinks
         Me.OpcionesPaquete.Controls.Add(Me.txtNombre)
         Me.OpcionesPaquete.Controls.Add(Me.Label2)
         Me.OpcionesPaquete.Controls.Add(Me.Label1)
-        Me.OpcionesPaquete.Location = New System.Drawing.Point(12, 215)
+        Me.OpcionesPaquete.Location = New System.Drawing.Point(12, 264)
         Me.OpcionesPaquete.Name = "OpcionesPaquete"
         Me.OpcionesPaquete.Size = New System.Drawing.Size(649, 111)
         Me.OpcionesPaquete.TabIndex = 4
@@ -235,19 +236,27 @@ Partial Class AddLinks
         '
         'lblLinkCount
         '
-        Me.lblLinkCount.AutoSize = True
-        Me.lblLinkCount.Location = New System.Drawing.Point(333, 191)
+        Me.lblLinkCount.AutoSize = False
+        Me.lblLinkCount.Location = New System.Drawing.Point(12, 213)
         Me.lblLinkCount.Name = "lblLinkCount"
-        Me.lblLinkCount.Size = New System.Drawing.Size(70, 13)
+        Me.lblLinkCount.Size = New System.Drawing.Size(649, 32)
         Me.lblLinkCount.TabIndex = 14
         Me.lblLinkCount.Text = ""
         Me.lblLinkCount.TextAlign = System.Drawing.ContentAlignment.MiddleLeft
         '
+        'preflightProgressBar
+        '
+        Me.preflightProgressBar.Location = New System.Drawing.Point(12, 248)
+        Me.preflightProgressBar.Size = New System.Drawing.Size(649, 8)
+        Me.preflightProgressBar.Name = "preflightProgressBar"
+        Me.preflightProgressBar.Visible = False
+        '
         'AddLinks
         '
-        Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
+        Me.AutoScaleDimensions = New System.Drawing.SizeF(7.0!, 15.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(675, 338)
+        Me.ClientSize = New System.Drawing.Size(960, 600)
+        Me.Controls.Add(Me.preflightProgressBar)
         Me.Controls.Add(Me.linkStegano)
         Me.Controls.Add(Me.lblLinkCount)
         Me.Controls.Add(Me.txtLinks)
@@ -256,13 +265,14 @@ Partial Class AddLinks
         Me.Controls.Add(Me.btnAgregar)
         Me.Controls.Add(Me.OpcionesPaquete)
         Me.Controls.Add(Me.FlowLayoutPanel1)
-        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle
+        Me.Font = New System.Drawing.Font("Segoe UI", 9.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable
         Me.Icon = Global.MegaDownloader.My.Resources.Resources.icono
         Me.MaximizeBox = False
-        Me.MaximumSize = New System.Drawing.Size(1500, 1500)
         Me.MinimizeBox = False
         Me.Name = "AddLinks"
         Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
+        Me.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Show
         Me.Text = "AddLinks"
         Me.OpcionesPaquete.ResumeLayout(False)
         Me.OpcionesPaquete.PerformLayout()
@@ -289,4 +299,5 @@ Partial Class AddLinks
     Friend WithEvents txtLinks As System.Windows.Forms.RichTextBox
     Friend WithEvents linkStegano As System.Windows.Forms.LinkLabel
     Friend WithEvents lblLinkCount As System.Windows.Forms.Label
+    Friend WithEvents preflightProgressBar As System.Windows.Forms.ProgressBar
 End Class

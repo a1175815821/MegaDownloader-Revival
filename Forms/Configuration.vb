@@ -5,6 +5,7 @@ Public Class Configuration
     Public Config As Configuracion
     Public MainForm As Main
     Public RequiereConfiguracion As Boolean = False
+    Friend StartupConfigurationSaved As Boolean = False
 
     Public Const PASSWORDDEFECTO As String = "*****"
 
@@ -657,11 +658,13 @@ Public Class Configuration
         End Try
 
         ' Reiniciamos el servidor 
-        ServidorWebController.StopWebServer()
-        Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Main, Me.Config)
-        If Not String.IsNullOrEmpty(strErrServidorWeb) Then
-            MessageBox.Show(Language.GetText("Error starting web server") & ": " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Exit Sub
+        If Not RequiereConfiguracion Then
+            ServidorWebController.StopWebServer()
+            Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Main, Me.Config)
+            If Not String.IsNullOrEmpty(strErrServidorWeb) Then
+                MessageBox.Show(Language.GetText("Error starting web server") & ": " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End If
         End If
 
         Dim AvisoUsuarioAnonimo As Boolean = String.IsNullOrEmpty(txtUsuario.Text) And String.IsNullOrEmpty(txtPassword.Text)
@@ -686,6 +689,7 @@ Public Class Configuration
         MessageBox.Show(Language.GetText("Data saved successfully") & avisos, Language.GetText("Save"), MessageBoxButtons.OK, MessageBoxIcon.Information)
 
 
+        StartupConfigurationSaved = True
         Me.Close()
 
     End Sub

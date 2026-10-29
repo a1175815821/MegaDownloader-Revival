@@ -1,4 +1,4 @@
-Imports BrightIdeasSoftware
+﻿Imports BrightIdeasSoftware
 Imports System.ComponentModel
 Imports System.Runtime.InteropServices
 
@@ -215,10 +215,15 @@ Public Class Main
     Private VersionNuevaVersionMegadownloader As String
 
 
-    ' Un par de monitores...
-    Private ProcesadorCounter As PerformanceCounter
-    Private RAMCounter As PerformanceCounter
-    Private NumCores As Integer
+    ' Enabled after Shown; the refresh worker owns the sampler and its Process handle.
+    Private _resourceMonitoringEnabled As Integer
+    Private _startupReady As Boolean = False
+    Private _startupNeedsAttention As Boolean = False
+    Private _firstPaintLogged As Boolean = False
+
+    Private Sub LogStartupStage(stage As String)
+        Log.WriteWarning("Startup timing " & stage & ": " & My.MyApplication.StartupClock.ElapsedMilliseconds.ToString() & " ms")
+    End Sub
 
 
     ''' <summary>
@@ -249,8 +254,10 @@ Public Class Main
         Log.WriteError("Version: " & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER"))
 
         Config = New Configuracion
+        LogStartupStage("configuration loaded")
         Log.SetLogLevel = Config.NivelLog
         Language.InitLanguage(Config.Idioma)
+        LogStartupStage("language loaded")
 
         Dim Silent As Boolean = IsSilent()
 
@@ -265,27 +272,12 @@ Public Class Main
 
         Me.Translate()
 
-        InicializarMonitores()
-
         clipChange = New ClipboardViewer
         clipChange.AssignHandle(Handle)
         clipChange.Install()
 
-        Dim thisExe As System.Reflection.Assembly
-        thisExe = System.Reflection.Assembly.GetExecutingAssembly()
-
-        ' Load embedded icon resources into independent MemoryStreams so the
-        ' underlying manifest streams can be closed immediately. Image.FromStream
-        ' requires the stream to remain open for the lifetime of the Image.
-        btnConfig.Image = LoadEmbeddedImage(thisExe, "config.png")
-        btnPause.Image = LoadEmbeddedImage(thisExe, "pause.png")
-        btnPlay.Image = LoadEmbeddedImage(thisExe, "play.png")
-        btnStop.Image = LoadEmbeddedImage(thisExe, "stop.png")
-        btnAddLink.Image = LoadEmbeddedImage(thisExe, "addlink.png")
-        btnUpdate.Image = LoadEmbeddedImage(thisExe, "download.png")
-        btnCollaborate.Image = LoadEmbeddedImage(thisExe, "collaborate.png")
-
         CrearMenus()
+        InitWorkbench()
         InitBatchMenu()
         InitQuotaBanner()
         InitDownloadAreaLayout()
@@ -310,6 +302,7 @@ Public Class Main
         End If
 
         ListaPaquetes = Paquete.CargarDesdeFichero
+        LogStartupStage("queue loaded")
 
         ' Usamos esta librería para pintar la lista de descargas:
         ' http://objectlistview.sourceforge.net/cs/index.html
@@ -320,36 +313,18 @@ Public Class Main
         ' 否则 navListBox.Items.Count 还是 0,拿不到正确高度,总览会压在列表上。
         InitNavRail()
         UpdateNavRailOverview()
+        ' Apply colors before the first visible frame, including all runtime controls.
+        Try
+            ApplyCurrentTheme()
+        Catch ex As Exception
+            Log.WriteError("Failed to apply theme: " & ex.ToString)
+        End Try
 
         DescompresionThrottle.DecompressionPriority = Config.PrioridadDescompresion
 
         Conexion.PingMega()
 
         Me.NumeroConexionesMaxima = Config.MaxConexionesGuardadas
-
-        Log.WriteInfo("Starting workers")
-
-        bgwComprobarMaxConexiones.WorkerReportsProgress = True
-        bgwComprobarMaxConexiones.WorkerSupportsCancellation = True
-        bgwComprobarMaxConexiones.RunWorkerAsync()
-
-        bgwActualizadorListaDescargas.WorkerReportsProgress = True
-        bgwActualizadorListaDescargas.WorkerSupportsCancellation = True
-        bgwActualizadorListaDescargas.RunWorkerAsync()
-
-        bgwActualizadorDatosDisco.WorkerReportsProgress = True
-        bgwActualizadorDatosDisco.WorkerSupportsCancellation = True
-        bgwActualizadorDatosDisco.RunWorkerAsync()
-
-
-        AddHandler bgwDescompresor.DoWork, AddressOf DescompresorController.DescompresorController_DoWork
-        bgwDescompresor.WorkerReportsProgress = True
-        bgwDescompresor.WorkerSupportsCancellation = True
-        ' P1-2:记录首次启动时刻,供看门狗判断"上一轮是否崩溃即退"。
-        _descompresorLastStartUtc = DateTime.UtcNow
-        bgwDescompresor.RunWorkerAsync()
-
-        AddHandler DescompresorController.GetController.DescompresionFinalizada, AddressOf DescompresionFinalizada_EventHandler
 
         'If Me.Config.PermitirSkins And Not String.IsNullOrEmpty(Me.Config.ConfigUI.RutaSkin) AndAlso System.IO.File.Exists(Me.Config.ConfigUI.RutaSkin) Then
         '    SkinEngine.SkinFile = Me.Config.ConfigUI.RutaSkin
@@ -386,7 +361,7 @@ Public Class Main
                                    Language.GetText("Warning"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
                     If resp = DialogResult.Yes Then
                         Config.NoMostrarAvisoURI = True
-                        Config.GuardarXML(False)
+                        If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
                     End If
                 Catch
                 End Try
@@ -394,26 +369,13 @@ Public Class Main
         End If
 
 
-        If Config.ComenzarDescargando Then
-            QuitarPausasIndividuales()
-            Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
-        End If
-
-        Log.WriteInfo("Start process finished")
-
-
     End Sub
 
     Private Sub Main_Shown(sender As Object, e As System.EventArgs) Handles Me.Shown
 
-        Me.Text = InternalConfiguration.ObtenerNombreApp & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER")
+        LogStartupStage("shown event")
 
-        ' 应用主题(在所有控件创建后、用户可见时应用)
-        Try
-            ApplyCurrentTheme()
-        Catch ex As Exception
-            Log.WriteError("Failed to apply theme: " & ex.ToString)
-        End Try
+        Me.Text = InternalConfiguration.ObtenerNombreApp & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER")
 
         If Config.ConfigUI.AltoVentanaPrincipal > 0 And Config.ConfigUI.AnchoVentanaPrincipal > 0 Then
             Log.WriteDebug("Window size - X: " & Config.ConfigUI.AnchoVentanaPrincipal & " Y:" & Config.ConfigUI.AltoVentanaPrincipal)
@@ -426,7 +388,10 @@ Public Class Main
         ' Centramos la pantalla
         ' http://stackoverflow.com/questions/7892090/how-to-set-winform-start-position-at-top-right
         Dim scr = Screen.FromPoint(Me.Location)
-        Me.Location = New Point(CInt((scr.WorkingArea.Right - Me.Width) / 2), CInt((scr.WorkingArea.Bottom - Me.Height) / 2))
+        ClampMainWindowToWorkingArea(scr.WorkingArea)
+        Me.Size = New Size(Math.Min(Me.Width, scr.WorkingArea.Width), Math.Min(Me.Height, scr.WorkingArea.Height))
+        Me.Location = New Point(scr.WorkingArea.Left + (scr.WorkingArea.Width - Me.Width) \ 2,
+                                scr.WorkingArea.Top + (scr.WorkingArea.Height - Me.Height) \ 2)
 
 
         If Config.ConfigUI.EstadoLista IsNot Nothing Then
@@ -439,12 +404,12 @@ Public Class Main
             ApplyColumnDefaults()
             Config.ColumnUIDefaultsMigratedV26 = True
             Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
-            Config.GuardarXML(False)
+            If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
         ElseIf RepairColumnStateIfCorrupted() Then
             ' 坏列状态自愈:持久化曾被拖成 0/上千像素(# 0 + 文件名 0 + 横向滚动条),
             ' 迁移已跑过不会重跑,此处按宽度 sanity 修一次并落盘,用户重启即恢复。
             Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
-            Config.GuardarXML(False)
+            If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
         End If
 
         ' 进度数字列(IndiceColumnaPorcentajeTexto)与条形列并排展示:每次启动强制显示一次,
@@ -456,46 +421,95 @@ Public Class Main
                 ListaDescargas.AllColumns(5).IsVisible = True
                 ListaDescargas.RebuildColumns()
                 Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
-                Config.GuardarXML(False)
+                If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
             End If
         Catch ex As Exception
             Log.WriteError("ShowPctTextColumn failed: " & ex.ToString)
         End Try
-
-        If Not CheckMEGAConditions() Then Exit Sub
-        CheckVersionStatistics()
-
-        ' R1: read LoadErrorConfig, NOT ErrorConfig. ErrorConfig is cleared by every
-        ' successful save (P0-2), and the V26 column migration above (line 420-424) always
-        ' saves once on a fresh/empty config before we get here - so the first-run dialog
-        ' (and the corrupt-config warning) were being skipped. LoadErrorConfig is never cleared.
-        If Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
-            Log.WriteWarning("Invalid configuration, opening configuration form.")
-            Dim frmName As New Configuration
-            frmName.MainForm = Me
-            frmName.Config = Config
-            frmName.RequiereConfiguracion = True
-            frmName.ShowDialog()
-            ' Hasta que no se cierre la ventana no continuamos la ejecución
-            frmName.Dispose()
-        End If
-
-        Log.WriteDebug("App render finished")
+        ' RestoreState / RebuildColumns can recreate the native list and its header.
+        ThemeManager.RefreshListTheme(ListaDescargas)
 
         If IsSilent() Then
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
+        If IsSilent() AndAlso (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
+            _startupNeedsAttention = True
+            Log.WriteWarning("Silent startup paused: terms or configuration require attention. Open the main window to continue.")
+            IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Startup requires attention. Open the main window to continue."), ToolTipIcon.Warning)
+            Return
+        End If
+        CompleteStartup()
+    End Sub
 
+    Private Sub CompleteStartup()
+        If _startupReady OrElse Cerrando OrElse IsDisposed Then Return
+        _startupNeedsAttention = False
+        If Not CheckMEGAConditions() Then Exit Sub
+        CheckVersionStatistics()
+        If Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
+            Log.WriteWarning("Invalid configuration, opening configuration form.")
+            Using frmName As New Configuration
+                frmName.MainForm = Me
+                frmName.Config = Config
+                frmName.RequiereConfiguracion = True
+                frmName.ShowDialog(Me)
+                If Not frmName.StartupConfigurationSaved Then
+                    Log.WriteWarning("Startup cancelled before configuration was saved.")
+                    _ForzarCierre = True
+                    Me.Close()
+                    Return
+                End If
+            End Using
+        End If
+
+        If Config.ComenzarDescargando AndAlso Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then
+            Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
+        End If
+        InitDownloadScheduler()
+        Log.WriteInfo("Starting workers")
+        bgwComprobarMaxConexiones.WorkerReportsProgress = True
+        bgwComprobarMaxConexiones.WorkerSupportsCancellation = True
+        bgwActualizadorListaDescargas.WorkerReportsProgress = True
+        bgwActualizadorListaDescargas.WorkerSupportsCancellation = True
+        bgwActualizadorDatosDisco.WorkerReportsProgress = True
+        bgwActualizadorDatosDisco.WorkerSupportsCancellation = True
+        AddHandler bgwDescompresor.DoWork, AddressOf DescompresorController.DescompresorController_DoWork
+        bgwDescompresor.WorkerReportsProgress = True
+        bgwDescompresor.WorkerSupportsCancellation = True
+        AddHandler DescompresorController.GetController.DescompresionFinalizada, AddressOf DescompresionFinalizada_EventHandler
+        _descompresorLastStartUtc = DateTime.UtcNow
+        _startupReady = True
+        bgwComprobarMaxConexiones.RunWorkerAsync()
+        bgwActualizadorListaDescargas.RunWorkerAsync()
+        bgwActualizadorDatosDisco.RunWorkerAsync()
+        bgwDescompresor.RunWorkerAsync()
 
         Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Me, Me.Config)
         If Not String.IsNullOrEmpty(strErrServidorWeb) Then
-            MessageBox.Show("Error starting web server: " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Log.WriteError("Error starting web server: " & strErrServidorWeb)
+            If IsSilent() AndAlso Me.WindowState = FormWindowState.Minimized Then
+                IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Error starting web server") & ": " & strErrServidorWeb, ToolTipIcon.Error)
+            Else
+                MessageBox.Show("Error starting web server: " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
         End If
 
 
         ProcessArgs(Environment.GetCommandLineArgs)
 
+        ' Resource statistics must not hold up the first window. Sampling starts on the
+        ' existing refresh worker after the Shown handler has finished preparing the UI.
+        System.Threading.Volatile.Write(_resourceMonitoringEnabled, 1)
+        Log.WriteInfo("Start process finished")
+        LogStartupStage("startup ready")
+
+    End Sub
+
+    Private Sub Main_FirstPaint(sender As Object, e As PaintEventArgs) Handles Me.Paint
+        If _firstPaintLogged Then Return
+        _firstPaintLogged = True
+        LogStartupStage("first main window paint")
     End Sub
 
     Private Sub Translate()
@@ -553,23 +567,10 @@ Public Class Main
         UpdateBatchMenuTexts()
         UpdateQuotaBannerTexts()
         ApplyQuotaBannerTheme()
+        UpdateWorkbenchTexts()
     End Sub
 
-    ''' <summary>
-    ''' 从嵌入式资源加载图像,复制到独立 MemoryStream 后立即释放清单流。
-    ''' Image.FromStream 要求 stream 在 Image 生命周期内保持打开,
-    ''' 此方法返回的 MemoryStream 由 Image 持有,窗体关闭时由 Button.Dispose 间接释放。
-    ''' </summary>
-    Private Shared Function LoadEmbeddedImage(asm As System.Reflection.Assembly, resourceName As String) As Image
-        Dim resName As String = asm.GetName.Name & "." & resourceName
-        Using stream As System.IO.Stream = asm.GetManifestResourceStream(resName)
-            If stream Is Nothing Then Return Nothing
-            Dim buffer(CInt(stream.Length - 1)) As Byte
-            stream.Read(buffer, 0, buffer.Length)
-            Dim ms As New System.IO.MemoryStream(buffer)
-            Return Image.FromStream(ms)
-        End Using
-    End Function
+
 
     ''' <summary>
     ''' P2-7:顶部菜单条由经典 MainMenu 换成 MenuStrip。
@@ -582,6 +583,7 @@ Public Class Main
     Private Sub CrearMenus()
 
         Dim menuPrincipal As New MenuStrip
+        Me.MainMenuStrip = menuPrincipal
         menuPrincipal.Name = "MenuPrincipal"
         menuPrincipal.Dock = DockStyle.Top
 
@@ -625,6 +627,9 @@ Public Class Main
         Opciones.DropDownItems.Add(New ToolStripSeparator())
         Opciones.DropDownItems.Add(ColaExtraccion)
         Opciones.DropDownItems.Add(VerLogs)
+        scheduleMenuItem = New ToolStripMenuItem(Language.GetText("Schedule_Title"))
+        AddHandler scheduleMenuItem.Click, AddressOf OpenDownloadSchedule
+        Opciones.DropDownItems.Add(scheduleMenuItem)
         Opciones.DropDownItems.Add(New ToolStripSeparator())
         Opciones.DropDownItems.Add(Configuracion)
         menuPrincipal.Items.Add(Opciones)
@@ -698,23 +703,6 @@ Public Class Main
         End If
 
         Me.PerformLayout()
-    End Sub
-
-    Private Sub InicializarMonitores()
-        Try
-            Dim p As Process = Process.GetCurrentProcess
-
-            ProcesadorCounter = New PerformanceCounter("Process", "% Processor Time", p.ProcessName)
-            RAMCounter = New PerformanceCounter("Process", "Working Set", p.ProcessName)
-
-            NumCores = 0
-            For Each item As System.Management.ManagementBaseObject In New System.Management.ManagementObjectSearcher("Select * from Win32_Processor").[Get]()
-                NumCores += Integer.Parse(item("NumberOfCores").ToString())
-            Next
-            p.Dispose()
-        Catch ex As Exception
-            Log.WriteError("Error in InicializarMonitores: " & ex.ToString)
-        End Try
     End Sub
 
     Private Function IsSilent() As Boolean
@@ -801,10 +789,12 @@ Public Class Main
         ServidorWebController.StopWebServer()
 
         ' 2) Cancel background workers and extraction
-        bgwActualizadorListaDescargas.CancelAsync()
-        bgwComprobarMaxConexiones.CancelAsync()
-        bgwActualizadorDatosDisco.CancelAsync()
-        bgwDescompresor.CancelAsync()
+        If _startupReady Then
+            bgwActualizadorListaDescargas.CancelAsync()
+            bgwComprobarMaxConexiones.CancelAsync()
+            bgwActualizadorDatosDisco.CancelAsync()
+            bgwDescompresor.CancelAsync()
+        End If
         Try
             DescompresorController.GetController.RequestCancel()
         Catch ex As Exception
@@ -814,18 +804,20 @@ Public Class Main
         ' 3) Stop downloads and wait
         Log.WriteInfo("Cancelling downloads")
         PararDescargaFicheros()
-        EsperarParadaDescargasYWorkers()
+        If _startupReady Then EsperarParadaDescargasYWorkers()
 
         ' 4) Atomic-ish persistence before releasing UI lists
         Log.WriteInfo("Saving download list")
-        GuardarFicheroDescargas()
+        If _startupReady Then GuardarFicheroDescargas()
 
         If Me.WindowState <> FormWindowState.Minimized Then
             Me.Config.ConfigUI.AnchoVentanaPrincipal = Me.Width
             Me.Config.ConfigUI.AltoVentanaPrincipal = Me.Height
         End If
-        Me.Config.ConfigUI.EstadoLista = Me.ListaDescargas.SaveState
-        Me.Config.GuardarXML(False)
+        If _startupReady Then
+            Me.Config.ConfigUI.EstadoLista = Me.ListaDescargas.SaveState
+            Me.Config.GuardarXML(False)
+        End If
 
         ' 5) Release list/UI resources
         ListaDescargas.ClearObjects()
@@ -941,6 +933,12 @@ Public Class Main
             Me.IconoMinimizado.Visible = False
             Me.WindowState = FormWindowState.Normal
         End If
+        If _startupNeedsAttention Then CompleteStartup()
+    End Sub
+
+    Friend Sub ActivateExistingInstance()
+        If _startupNeedsAttention Then RestaurarVentana()
+        If Not IsDisposed Then Activate()
     End Sub
 
 
@@ -1157,10 +1155,10 @@ Public Class Main
                                                 End If
                                                 Dim files As Generic.List(Of Fichero) = CType(ele, Paquete).ListaFicheros
                                                 If files Is Nothing Then Return Nothing
-                                                If _navScope = DownloadEstadoFilter.NavScope.All Then Return files
+                                                If _navScope = DownloadEstadoFilter.NavScope.All AndAlso queueQuery.Length = 0 Then Return files
                                                 Dim shown As New Generic.List(Of Fichero)()
                                                 For Each f As Fichero In files
-                                                    If DownloadEstadoFilter.MatchesScope(f, _navScope) Then shown.Add(f)
+                                                    If MatchesQueueFile(f, CType(ele, Paquete)) Then shown.Add(f)
                                                 Next
                                                 Return shown
                                             Catch ex As Exception
@@ -1189,8 +1187,8 @@ Public Class Main
         ' 拖动时靠 ColumnWidthChanging 事件手动夹取(见下方 handler)。
         ApplyColumnWidthLimits()
 
-        ' P0-7 UI:行高 26px 留白;空列表引导(尺寸不受换肤影响,只设一次)
-        ListaDescargas.RowHeight = 26
+        ' 行高随当前 DPI / 字体留出间距；空态复用语言包。
+        ListaDescargas.RowHeight = Math.Max(CInt(32 * GetUiScale()), Font.Height + 12)
         ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
         ' P2-11b:导航初始化(计数+分组;过滤走 Roots 子集,禁用 OLV UseFiltering/ModelFilter)
         InitNavList()
@@ -1225,6 +1223,13 @@ Public Class Main
         ApplyToolbarIconTheme()
         ApplyNavListColors()
         ApplyNavRailTheme()
+        ApplyDetailContentTheme()
+        If workbenchReady Then
+            UiStyles.Apply(Me)
+            UiStyles.Apply(btnAddLink)
+            RAMProcToolStripStatusLabel.ForeColor = ThemeManager.GetColor("Muted")
+            navListBox.Invalidate()
+        End If
         If ListaDescargas IsNot Nothing Then
             ListaDescargas.Invalidate()
         End If
@@ -1243,92 +1248,10 @@ Public Class Main
         progressBarRenderer.MaximumHeight = 18
     End Sub
 
-    ''' <summary>
-    ''' P0-5 UI:工具栏图标跟随主题。原图(40x40)首次调用时存入 Button.Tag,显示图统一缩到
-    ''' 20px(88x34 文字钮放不下 40px 原图),深色再按 ColorMatrix 提亮;显示图每次重建,
-    ''' 替换后 Dispose 上一张,原图与窗体同寿命,切换过程无句柄增长。
-    ''' </summary>
+    ' Line icons are drawn once for each theme / DPI change.
     Private Sub ApplyToolbarIconTheme()
-        Try
-            Dim dark As Boolean = (ThemeManager.Current = ThemeManager.ResolvedTheme.Dark)
-            ApplyIconThemeToButton(btnPlay, dark)
-            ApplyIconThemeToButton(btnPause, dark)
-            ApplyIconThemeToButton(btnStop, dark)
-            ApplyIconThemeToButton(btnAddLink, dark)
-            ApplyIconThemeToButton(btnUpdate, dark)
-            ApplyIconThemeToButton(btnConfig, dark)
-            ApplyIconThemeToButton(btnCollaborate, dark)
-        Catch ex As Exception
-            Log.WriteError("ApplyToolbarIconTheme failed: " & ex.ToString)
-        End Try
+        If workbenchReady Then ApplyWorkbenchIcons()
     End Sub
-
-    Private Shared Function GetToolbarIconSize() As Integer
-        ' RC:高 DPI 下图标跟随放大(此前写死 20,150% 下显小)。
-        Try
-            Using g As Graphics = Graphics.FromHwnd(IntPtr.Zero)
-                Dim s As Single = g.DpiX / 96.0F
-                If s < 1.0F Then s = 1.0F
-                If s > 2.5F Then s = 2.5F
-                Return CInt(20 * s)
-            End Using
-        Catch
-            Return 20
-        End Try
-    End Function
-
-    Private Shared Sub ApplyIconThemeToButton(btn As Button, dark As Boolean)
-        If btn Is Nothing OrElse btn.IsDisposed Then Return
-        Dim original As Image = TryCast(btn.Tag, Image)
-        If original Is Nothing Then
-            If btn.Image Is Nothing Then Return
-            original = btn.Image
-            btn.Tag = original
-        End If
-        Dim previous As Image = btn.Image
-        Dim scaled As Image = ScaleToolbarIcon(original, GetToolbarIconSize())
-        Try
-            If dark Then
-                Dim tinted As Image = RecolorImageForDark(scaled)
-                scaled.Dispose()
-                scaled = tinted
-            End If
-            btn.Image = scaled
-            scaled = Nothing
-        Finally
-            If scaled IsNot Nothing Then scaled.Dispose()
-        End Try
-        If previous IsNot Nothing AndAlso Not Object.ReferenceEquals(previous, original) Then
-            previous.Dispose()
-        End If
-    End Sub
-
-    Private Shared Function ScaleToolbarIcon(original As Image, size As Integer) As Image
-        Dim bmp As New Bitmap(size, size)
-        Using g As Graphics = Graphics.FromImage(bmp)
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic
-            g.DrawImage(original, 0, 0, size, size)
-        End Using
-        Return bmp
-    End Function
-
-    Private Shared Function RecolorImageForDark(original As Image) As Image
-        Dim bmp As New Bitmap(original.Width, original.Height)
-        Using g As Graphics = Graphics.FromImage(bmp)
-            Dim m As New System.Drawing.Imaging.ColorMatrix(New Single()() {
-                New Single() {1.35F, 0.0F, 0.0F, 0.0F, 0.0F},
-                New Single() {0.0F, 1.35F, 0.0F, 0.0F, 0.0F},
-                New Single() {0.0F, 0.0F, 1.35F, 0.0F, 0.0F},
-                New Single() {0.0F, 0.0F, 0.0F, 1.0F, 0.0F},
-                New Single() {0.08F, 0.08F, 0.08F, 0.0F, 1.0F}})
-            Using attrs As New System.Drawing.Imaging.ImageAttributes()
-                attrs.SetColorMatrix(m)
-                g.DrawImage(original, New Rectangle(0, 0, bmp.Width, bmp.Height),
-                            0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attrs)
-            End Using
-        End Using
-        Return bmp
-    End Function
 
 #Region "v2.5 beta: 配额横幅 + 批量失败操作"
 
@@ -1385,9 +1308,8 @@ Public Class Main
 
             Dim sc As Single = GetUiScale()
             Dim pad As Integer = CInt(6 * sc)
-            Dim innerW As Integer = NavRailWidth - pad * 2
+            Dim innerW As Integer = Math.Max(40, navPanel.ClientSize.Width - pad * 2)
             Dim rowH As Integer = CInt(20 * sc)
-
             ' ---- B 段:任务总览 ----
             navOverviewHeader = CreateNavSectionHeader(Language.GetText("Overview_Title"), sc)
 
@@ -1505,7 +1427,7 @@ Public Class Main
         lbl.Text = text
         ' 分节标题用加粗主色(与说明性灰字区分)。Font 只在此处建一次,
         ' 换肤只改颜色——避免每次 ApplyTheme 都 New Font 造成 GDI 对象堆积。
-        lbl.Font = New Drawing.Font(lbl.Font, Drawing.FontStyle.Bold)
+        UiStyles.SetFont(lbl, 0, True, Me.Font)
         Return lbl
     End Function
 
@@ -1524,12 +1446,17 @@ Public Class Main
     ''' <summary>左栏两段的所有几何一次算死,不依赖 Anchor 累加,避免 resize/DPI 变化漂移。
     ''' 总览与快捷入口占据列表区下方,过滤器本体高度保持不变。</summary>
     Private Sub LayoutNavRail()
+        Dim previousScroll As Drawing.Point = Drawing.Point.Empty
         Try
             If Not navRailInitialized OrElse navPanel Is Nothing Then Return
+            ' Lay out in unscrolled coordinates and then restore the reading position.
+            previousScroll = navPanel.AutoScrollPosition
+            navPanel.AutoScrollPosition = Drawing.Point.Empty
             Dim sc As Single = GetUiScale()
             Dim pad As Integer = CInt(6 * sc)
-            Dim innerW As Integer = NavRailWidth - pad * 2
+            Dim innerW As Integer = Math.Max(40, navPanel.ClientSize.Width - pad * 2)
             Dim rowH As Integer = CInt(20 * sc)
+            navListBox.Location = New Drawing.Point(CInt(8 * sc), CInt(8 * sc))
 
             ' 过滤器本体高度 = 5 项 × 真实行高(见 GetNavActualItemHeight);它不再 Dock=Fill,必须显式给定,
             ' 否则默认 130 在字体/DPI 变化时会截断第 5 项。Normal 模式 ItemHeight 无效,不可直接用它。
@@ -1539,14 +1466,7 @@ Public Class Main
 
             Dim y As Integer = navListBox.Bottom + CInt(8 * sc)
 
-            ' 纵向空间不足时(最小窗口 280 高 → 内容区仅约 209px)整段隐藏,
-            ' 避免总览/快捷入口溢出到状态栏外面。阈值 = 总览+快捷入口两段所需高度。
-            Dim needH As Integer = CInt(8 * sc) + CInt(20 * sc) + rowH * 3 + CInt(34 * sc) +
-                                   CInt(10 * sc) + CInt(4 * sc) + CInt(10 * sc) +
-                                   CInt(20 * sc) + CInt(26 * sc) * 3 + CInt(3 * sc) * 3
-            Dim showRail As Boolean = (navPanel.ClientSize.Height - navListBox.Bottom) >= needH
-            SetNavRailSectionVisible(showRail, False)
-            If Not showRail Then Return
+            ' Keep both sections reachable on short windows through the sidebar scrollbar.
             SetNavRailSectionVisible(True, True)
 
             ' --- B 段:任务总览 ---
@@ -1584,8 +1504,13 @@ Public Class Main
                     y += btn.Height + CInt(3 * sc)
                 End If
             Next
+            navPanel.AutoScrollMinSize = New Drawing.Size(0, y + pad)
         Catch ex As Exception
             Log.WriteDebug("LayoutNavRail failed: " & Log.SafeException(ex))
+        Finally
+            If navPanel IsNot Nothing AndAlso Not navPanel.IsDisposed Then
+                navPanel.AutoScrollPosition = New Drawing.Point(-previousScroll.X, -previousScroll.Y)
+            End If
         End Try
     End Sub
 
@@ -1621,16 +1546,8 @@ Public Class Main
         End Try
     End Sub
 
-    Private Shared Function GetUiScale() As Single
-        Dim sc As Single = 1.0F
-        Try
-            Using g As Drawing.Graphics = System.Drawing.Graphics.FromHwnd(IntPtr.Zero)
-                sc = g.DpiY / 96.0F
-            End Using
-        Catch
-        End Try
-        If sc < 1.0F Then sc = 1.0F
-        Return sc
+    Private Function GetUiScale() As Single
+        Return Math.Max(1.0F, CSng(Me.DeviceDpi) / 96.0F)
     End Function
 
     ''' <summary>切换语言后重建左栏所有文案。计数/速度等动态值由 UpdateNavRailOverview 刷新。</summary>
@@ -1680,42 +1597,20 @@ Public Class Main
             If VelocidadGlobalDescarga.HasValue AndAlso VelocidadGlobalDescarga.Value > 0 Then
                 speedTxt = PintarVelocidadDescarga(VelocidadGlobalDescarga.Value)
             End If
-            navOverviewSpeedValue.Text = speedTxt
+            UiStyles.SetText(navOverviewSpeedValue, speedTxt)
             Try
                 TintNavSpeedValue()
             Catch
             End Try
 
-            ' 计数:一次遍历同时累加总量/已完成量,再算整体进度。
-            ' 快照持 Mutex.ListaDescargas(只包遍历,不包控件赋值,锁序与 RefreshListaDescargas 一致)。
-            Dim total As Integer = 0
-            Dim active As Integer = 0
-            Dim queued As Integer = 0
-            Dim failed As Integer = 0
-            Dim totalBytes As Decimal = 0D
-            Dim doneBytes As Decimal = 0D
-
-            If ListaPaquetes IsNot Nothing Then
-                SyncLock Mutex.ListaDescargas
-                    For Each p As Paquete In ListaPaquetes
-                        total += 1
-                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Downloading) Then active += 1
-                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Waiting) Then queued += 1
-                        If DownloadEstadoFilter.MatchesScope(p, DownloadEstadoFilter.NavScope.Failed) Then failed += 1
-
-                        Dim st As Long = p.DescargaTamanoBytes()
-                        Dim pct As Decimal = p.DescargaPorcentaje()
-                        If st > 0 Then
-                            totalBytes += st
-                            doneBytes += Math.Ceiling(pct * st / 100D)
-                        End If
-                    Next
-                End SyncLock
-            End If
-
-            navOverviewCountsValue.Text = Language.GetText("Overview_Active") & " " & active.ToString() &
-                "   " & Language.GetText("Overview_Queued") & " " & queued.ToString() &
-                "   " & Language.GetText("Overview_Failed") & " " & failed.ToString()
+            ' 导航和总览读取同一份后台快照，不在界面线程重复遍历队列。
+            Dim snapshot As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
+            If snapshot Is Nothing Then Return
+            Dim totalBytes As Decimal = snapshot.TotalBytes
+            Dim doneBytes As Decimal = snapshot.DoneBytes
+            UiStyles.SetText(navOverviewCountsValue, Language.GetText("Overview_Active") & " " & snapshot.Totals(1).ToString() &
+                "   " & Language.GetText("Overview_Queued") & " " & snapshot.Totals(2).ToString() &
+                "   " & Language.GetText("Overview_Failed") & " " & snapshot.Totals(3).ToString())
 
             Dim pctOverall As Integer = 0
             If totalBytes > 0 Then pctOverall = CInt(Math.Floor(doneBytes * 100D / totalBytes))
@@ -1727,7 +1622,7 @@ Public Class Main
                 If navOverviewProgressBar.Value <> pctOverall Then navOverviewProgressBar.Value = pctOverall
             Catch
             End Try
-            navOverviewProgressText.Text = pctOverall.ToString() & "%"
+            UiStyles.SetText(navOverviewProgressText, pctOverall.ToString() & "%")
 
             ' 剩余:总剩余字节 / 当前总速度(KB/s)。速度缺失或无剩余时不显示估算,避免编造数字。
             Dim remainTxt As String = "-"
@@ -1739,7 +1634,7 @@ Public Class Main
                     remainTxt = FormatNavRemaining(CInt(Math.Ceiling(secs)))
                 End If
             End If
-            navOverviewRemainingValue.Text = remainTxt
+            UiStyles.SetText(navOverviewRemainingValue, remainTxt)
         Catch ex As Exception
             Log.WriteDebug("UpdateNavRailOverview failed: " & Log.SafeException(ex))
         End Try
@@ -1800,8 +1695,8 @@ Public Class Main
             End Try
 
             ' 快捷入口按钮:沿用主题按钮配色(与工具栏一致的 Flat + 边框)
-            Dim btnBack As Drawing.Color = ThemeManager.GetColor("ControlBack")
-            Dim btnBorder As Drawing.Color = ThemeManager.GetColor("Border")
+            Dim btnBack As Drawing.Color = ThemeManager.GetColor("ButtonBack")
+            Dim btnBorder As Drawing.Color = ThemeManager.GetColor("ButtonBorder")
             Dim btnHover As Drawing.Color = ThemeManager.GetColor("ButtonHover")
             Dim btnPressed As Drawing.Color = ThemeManager.GetColor("ButtonPressed")
             For Each btn As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
@@ -2309,12 +2204,7 @@ Public Class Main
         Catch
         End Try
         Try
-            Dim sc As Single = 1.0F
-            Using g As Drawing.Graphics = Me.CreateGraphics()
-                sc = g.DpiY / 96.0F
-            End Using
-            If sc < 1.0F Then sc = 1.0F
-            navListBox.ItemHeight = Math.Max(20, CInt((navListBox.Font.Height + 6) * sc))
+            navListBox.ItemHeight = Math.Max(CInt(34 * GetUiScale()), navListBox.Font.Height + 14)
         Catch
         End Try
         UpdateNavCounts()
@@ -2345,86 +2235,11 @@ Public Class Main
     ''' 宽度占满 navPanel;文本超宽时优先加宽面板(≤220),平时无任何滚动条,
     ''' 窄窗口实在加不动才出横滚兜底(此时高度补上横滚条高度,横滚不再顶出竖滚)。</summary>
     Private Sub FitNavListBoxNoScroll()
-        Try
-            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
-            If navPanel Is Nothing OrElse navPanel.IsDisposed Then Return
-            If navListBox.Items.Count <= 0 Then Return
-            navListBox.IntegralHeight = False
-            navListBox.ScrollAlwaysVisible = False
-            ' 先关横滚:开着时 ClientSize.Height 被压缩,边框与宽度都会误算,
-            ' 且横滚条会盖住最后一项反过来顶出竖滚。
-            If navListBox.HorizontalScrollbar Then
-                Try
-                    navListBox.HorizontalScrollbar = False
-                    navListBox.HorizontalExtent = 0
-                Catch
-                End Try
-            End If
-            Dim itemH As Integer = GetNavActualItemHeight()
-            ' 边框实测(自适应 Fixed3D/FixedSingle),失败时按 Fixed3D 取 4。
-            Dim borderH As Integer = 4
-            Try
-                Dim bh As Integer = navListBox.Height - navListBox.ClientSize.Height
-                If bh >= 2 AndAlso bh <= 10 Then borderH = bh
-            Catch
-            End Try
-            ' GDI 量字(与 ListBox 渲染同管线,比 GDI+ 的 MeasureString 准)。
-            Dim maxW As Integer = 0
-            Try
-                For Each o As Object In navListBox.Items
-                    Dim s As String = If(o Is Nothing, String.Empty, o.ToString())
-                    If String.IsNullOrEmpty(s) Then Continue For
-                    Dim sz As Drawing.Size = Windows.Forms.TextRenderer.MeasureText(
-                        s, navListBox.Font, New Drawing.Size(Integer.MaxValue, Integer.MaxValue),
-                        Windows.Forms.TextFormatFlags.SingleLine Or Windows.Forms.TextFormatFlags.NoPadding)
-                    Dim w As Integer = sz.Width + 10
-                    If w > maxW Then maxW = w
-                Next
-            Catch
-            End Try
-            ' 超宽则加宽面板而不是出横滚(上限 220,避免吃掉中部列表)。
-            If maxW > 0 Then
-                Dim chromeW As Integer = 0
-                Try
-                    chromeW = (navPanel.Width - navPanel.ClientSize.Width) +
-                              (navListBox.Width - navListBox.ClientSize.Width) + 4
-                    If chromeW < 4 OrElse chromeW > 30 Then chromeW = 8
-                Catch
-                    chromeW = 8
-                End Try
-                Dim needPanelW As Integer = maxW + chromeW
-                If needPanelW > NavRailWidth AndAlso needPanelW <= NavRailMaxWidth Then
-                    NavRailWidth = needPanelW
-                    ApplyNavRailWidth()
-                ElseIf needPanelW > NavRailMaxWidth AndAlso NavRailWidth < NavRailMaxWidth Then
-                    NavRailWidth = NavRailMaxWidth
-                    ApplyNavRailWidth()
-                End If
-            End If
-            Dim fullW As Integer = navPanel.ClientSize.Width
-            If fullW > 0 AndAlso navListBox.Width <> fullW Then navListBox.Width = fullW
-            Dim listH As Integer = itemH * navListBox.Items.Count + borderH
-            ' 面板实在加不动(窄窗口被 ApplyNavRailWidth 钳住)才出横滚,
-            ' 高度必须补上横滚条高度,否则横滚盖住最后一项又顶出竖滚。
-            Dim needH As Boolean = False
-            If maxW > 0 Then
-                Try
-                    needH = maxW > navListBox.ClientSize.Width
-                Catch
-                End Try
-            End If
-            If needH Then
-                Try
-                    navListBox.HorizontalScrollbar = True
-                    navListBox.HorizontalExtent = maxW
-                Catch
-                End Try
-                listH += Windows.Forms.SystemInformation.HorizontalScrollBarHeight
-            End If
-            If navListBox.Height <> listH Then navListBox.Height = listH
-        Catch ex As Exception
-            Log.WriteDebug("FitNavListBoxNoScroll failed: " & Log.SafeException(ex))
-        End Try
+        If navListBox Is Nothing OrElse navPanel Is Nothing Then Return
+        Dim pad As Integer = CInt(8 * GetUiScale())
+        navListBox.HorizontalScrollbar = False
+        navListBox.Width = Math.Max(40, navPanel.ClientSize.Width - pad * 2)
+        navListBox.Height = GetNavActualItemHeight() * navListBox.Items.Count
     End Sub
 
     Private Sub ApplyNavListColors()
@@ -2454,45 +2269,57 @@ Public Class Main
             End Select
             If scope = _navScope Then Return
             _navScope = scope
-            ApplyNavRoots()
-            ListaDescargas.BuildList()
+            RebuildWorkbenchRoots()
         Catch ex As Exception
             Log.WriteError("navListBox_SelectedIndexChanged failed: " & ex.ToString)
         End Try
     End Sub
 
     Private Sub UpdateNavCounts()
-        Try
-            If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+        If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
+        Dim snapshot As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
+        Dim totals(4) As Integer
+        If snapshot IsNot Nothing Then
+            Array.Copy(snapshot.Totals, totals, totals.Length)
+        ElseIf ListaPaquetes IsNot Nothing Then
+            SyncLock Mutex.ListaDescargas
+                For Each package As Paquete In ListaPaquetes
+                    CountNavObject(package, totals)
+                Next
+            End SyncLock
+        End If
+        Dim changed As Boolean = navListBox.Items.Count <> 5
+        Dim texts(4) As String
+        Dim keys() As String = {"Nav_All", "Nav_Downloading", "Nav_Waiting", "Nav_Failed", "Nav_Completed"}
+        For i As Integer = 0 To 4
+            navTitles(i) = Language.GetText(keys(i))
+            texts(i) = navTitles(i) & " (" & totals(i).ToString() & ")"
+            If navListBox.Items.Count <= i OrElse Not Object.Equals(navListBox.Items(i), texts(i)) Then changed = True
+        Next
+        navTotals = totals
+        If changed Then
             _updatingNav = True
+            navListBox.BeginUpdate()
             Try
                 While navListBox.Items.Count < 5
                     navListBox.Items.Add("")
                 End While
-                Dim totals(4) As Integer
-                If ListaPaquetes IsNot Nothing Then
-                    For Each p As Paquete In ListaPaquetes
-                        CountNavObject(p, totals)
-                    Next
-                End If
-                Dim keys() As String = {"Nav_All", "Nav_Downloading", "Nav_Waiting", "Nav_Failed", "Nav_Completed"}
                 For i As Integer = 0 To 4
-                    Dim t As String = Language.GetText(keys(i)) & " (" & totals(i).ToString() & ")"
-                    If Not Object.Equals(navListBox.Items(i), t) Then navListBox.Items(i) = t
+                    If Not Object.Equals(navListBox.Items(i), texts(i)) Then navListBox.Items(i) = texts(i)
                 Next
-                If navListBox.SelectedIndex < 0 OrElse navListBox.SelectedIndex > 4 Then navListBox.SelectedIndex = 0
+                If navListBox.SelectedIndex < 0 Then navListBox.SelectedIndex = 0
             Finally
+                navListBox.EndUpdate()
                 _updatingNav = False
             End Try
-            ' 计数后缀变宽(如 9→10000)时刷新横向范围;高度按真实行高重算,保证 5 项免竖滚。
-            FitNavListBoxNoScroll()
-        Catch ex As Exception
-            Log.WriteDebug("UpdateNavCounts failed: " & Log.SafeException(ex))
-        End Try
+            navListBox.Invalidate()
+        End If
+        UpdateWorkbenchHeading()
     End Sub
 
-    ''' <summary>顶层包计数。包命中判定本身已含子文件穿透(MatchesScope),此处不再递归进文件,
-    ''' 否则包与文件重复累加,计数与列表行数对不上。</summary>
+    ' Top-level package counts use the same scope rules as the task list.
+
+
     Private Shared Sub CountNavObject(obj As Object, totals() As Integer)
         totals(0) += 1
         For s As Integer = 1 To 4
@@ -2505,27 +2332,32 @@ Public Class Main
     ''' 为全量,故每次重建后调用;False 刷新沿用当前 Roots。禁用 OLV UseFiltering。
     ''' </summary>
     Private Sub ApplyNavRoots()
-        Try
-            If ListaDescargas Is Nothing OrElse ListaPaquetes Is Nothing Then Return
-            If _navScope = DownloadEstadoFilter.NavScope.All Then
-                ListaDescargas.Roots = Me.ListaPaquetes
+        If ListaDescargas Is Nothing OrElse ListaPaquetes Is Nothing Then Return
+        SyncLock Mutex.ListaDescargas
+            If _navScope = DownloadEstadoFilter.NavScope.All AndAlso queueQuery.Length = 0 Then
+                ListaDescargas.Roots = ListaPaquetes
+                queueVisibleCount = ListaPaquetes.Count
             Else
                 Dim shown As New Generic.List(Of Paquete)()
-                For Each p As Paquete In ListaPaquetes
-                    If DownloadEstadoFilter.MatchesScope(p, _navScope) Then shown.Add(p)
+                For Each package As Paquete In ListaPaquetes
+                    If MatchesQueuePackage(package) Then shown.Add(package)
                 Next
                 ListaDescargas.Roots = shown
+                queueVisibleCount = shown.Count
             End If
-        Catch ex As Exception
-            Log.WriteError("ApplyNavRoots failed: " & ex.ToString)
-        End Try
+        End SyncLock
+        UpdateWorkbenchHeading()
     End Sub
 
-    ''' <summary>下载区绝对布局:列表+两侧栏 Top/Height 永远由工具栏底+横幅显隐重算。
-    ''' 此前相对位移(Top+=h)叠加 Anchor Top|Bottom,在 resize/最大化/DPI 变化时漂移累积,
-    ''' 横幅解除后底部压住状态栏直到下次 resize。现所有几何一次算死,不再累加。</summary>
+    ' Explicit geometry prevents anchor drift during window resizing.
+
+
     Private Sub LayoutDownloadArea()
         Try
+            If workbenchReady Then
+                LayoutWorkbenchArea()
+                Return
+            End If
             If ListaDescargas Is Nothing OrElse ListaDescargas.IsDisposed Then Return
             If navPanel Is Nothing OrElse detailPanel Is Nothing Then Return
             If TableLayoutPanel1 Is Nothing OrElse StatusStrip1 Is Nothing Then Return
@@ -2596,6 +2428,7 @@ Public Class Main
 
     Private Sub UpdateDetailPanel()
         Try
+            If workbenchReady AndAlso Not detailPanel.Visible Then Return
             Dim sel As IDescarga = Nothing
             If ListaDescargas IsNot Nothing AndAlso ListaDescargas.SelectedObjects IsNot Nothing AndAlso
                ListaDescargas.SelectedObjects.Count > 0 Then
@@ -2647,7 +2480,7 @@ Public Class Main
     ''' </summary>
     ''' <param name="Paquete"></param>
     ''' <remarks></remarks>
-    Friend Sub AgregarPaquete(ByVal Paquete As Paquete, AgregadoDesdeServidorWeb As Boolean)
+    Friend Sub AgregarPaquete(ByVal Paquete As Paquete, AgregadoDesdeServidorWeb As Boolean, Optional saveInBackground As Boolean = False)
 
         SyncLock Mutex.ListaDescargas
             Me.ListaPaquetes.Add(Paquete)
@@ -2659,9 +2492,14 @@ Public Class Main
 
         ReordenarPrioridadPaquetes(True)
 
-        GuardarFicheroDescargas()
-        ' 新包自动展开,否则列表永远只见"封装"行、文件名藏在里面需逐个点开。
-        ExpandPaquete(Paquete)
+        If saveInBackground Then
+            SaveImportedQueueInBackground()
+        Else
+            GuardarFicheroDescargas()
+        End If
+        ' Small packages expand immediately. Large imports stay collapsed to avoid
+        ' building thousands of visible tree rows on the confirmation path.
+        If Paquete.ListaFicheros Is Nothing OrElse Paquete.ListaFicheros.Count <= 500 Then ExpandPaquete(Paquete)
         ' P0-4 UI:任务入库后给一次非打断确认(之前只有日志,用户不知道"加上没")。
         ' Web 推送且主窗最小化时不弹(用户不在跟前,状态栏/托盘已有其它反馈位)。
         If Not (AgregadoDesdeServidorWeb AndAlso Me.WindowState = FormWindowState.Minimized) Then
@@ -2669,6 +2507,22 @@ Public Class Main
         End If
         If Not AgregadoDesdeServidorWeb Then RestaurarVentana()
    
+    End Sub
+
+    Friend Function IsPackageQueued(package As Paquete) As Boolean
+        SyncLock Mutex.ListaDescargas
+            Return ListaPaquetes IsNot Nothing AndAlso ListaPaquetes.Contains(package)
+        End SyncLock
+    End Function
+
+    Friend Sub SaveImportedQueueInBackground()
+        System.Threading.Tasks.Task.Run(Sub()
+                                            Try
+                                                GuardarFicheroDescargas()
+                                            Catch ex As Exception
+                                                Log.WriteError("Saving imported package failed: " & Log.SafeException(ex))
+                                            End Try
+                                        End Sub)
     End Sub
 
     ''' <summary>在 UI 线程展开指定包(Web 推送走后台线程,必须编组;关闭中直接跳过)。</summary>
@@ -3040,6 +2894,8 @@ Public Class Main
         Dim worker As BackgroundWorker = DirectCast(sender, BackgroundWorker)
         Dim sw As New System.Diagnostics.Stopwatch
         Dim Flujo As String = ""
+        Dim resourceMonitor As ProcessResourceMonitor = Nothing
+        Dim monitorFailureLogged As Boolean = False
 
         Try
             Log.WriteWarning("Starting worker bgwActualizadorListaDescargas")
@@ -3111,6 +2967,7 @@ Public Class Main
                     Next
                 End SyncLock
 
+                PublishQueueOverview(snapshot)
                 CheckDownloadNotifications(snapshot)
 
                 If worker.CancellationPending Then Exit While
@@ -3148,15 +3005,27 @@ Public Class Main
                 ' Calculo procesador y RAM
                 Dim RAMStr As String = "-"
                 Dim ProcesadorStr As String = "-"
-                If RAMCounter IsNot Nothing And ProcesadorCounter IsNot Nothing Then
-                    Dim RAM As Double = RAMCounter.NextValue / 1024 / 1024 ' MB
-                    Dim Procesador As Double = ProcesadorCounter.NextValue / (If(Me.NumCores = 0, 1, Me.NumCores))  ' %
-                    RAMStr = RAM.ToString("F2")
-                    ProcesadorStr = Procesador.ToString("F2")
+                If System.Threading.Volatile.Read(_resourceMonitoringEnabled) <> 0 Then
+                    Try
+                        If resourceMonitor Is Nothing Then resourceMonitor = New ProcessResourceMonitor()
+                        Dim ramMegabytes As Double
+                        Dim cpuPercentage As Double?
+                        resourceMonitor.ReadSnapshot(ramMegabytes, cpuPercentage)
+                        RAMStr = ramMegabytes.ToString("F2")
+                        If cpuPercentage.HasValue Then ProcesadorStr = cpuPercentage.Value.ToString("F2")
+                        monitorFailureLogged = False
+                    Catch exMonitor As Exception
+                        ' A statistics failure must not interrupt queue updates or spam each tick.
+                        If Not monitorFailureLogged Then
+                            Log.WriteWarning("Process resource monitoring failed: " & Log.SafeException(exMonitor))
+                            monitorFailureLogged = True
+                        End If
+                    End Try
                 End If
 
                 Flujo &= "Displaying data in status bar" & vbNewLine
 
+                If Not Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then EstadoTxt = Language.GetText("Schedule_Waiting")
                 SetStatusBar(RAMStr & "MB", ProcesadorStr & "%", EstadoTxt, VelocidadTxt, Config.ConexionesPorFichero & "/" & Config.DescargasSimultaneas)
 
                 ' 左栏任务总览:与状态栏同频(430ms)刷新,数据源一致,不额外起线程。
@@ -3196,6 +3065,7 @@ Public Class Main
             If sw.ElapsedMilliseconds > 5000 Then
                 Log.WriteError("bgwActualizadorListaDescargas was too slow (" & sw.ElapsedMilliseconds & " ms): " & vbNewLine & Flujo)
             End If
+            If resourceMonitor IsNot Nothing Then resourceMonitor.Dispose()
             bgwActualizadorListaDescargasCompleted = True
         End Try
     End Sub
@@ -3368,6 +3238,7 @@ Public Class Main
     End Sub
 
     Private Sub PonerFicherosADescargar()
+        If Not ScheduleAllowsStart() Then Return
         Dim ColaDescarga As New Generic.List(Of Fichero) ' Lista de ficheros en cola
         Dim ColaDescargaPausa As New Generic.List(Of Fichero) ' Lista de ficheros pausados en cola
         Dim ColaReseteo As New Generic.List(Of Fichero) ' Lista de ficheros a resetear
@@ -3426,9 +3297,9 @@ Public Class Main
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not quotaHold Then
+                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
                         ColaDescarga.Add(Fichero)
-                    ElseIf Fichero.DescargaEstado = Estado.Pausado And Not Fichero.PausaIndividual Then
+                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
                         ColaDescargaPausa.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
                         ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
@@ -3483,16 +3354,20 @@ Public Class Main
     End Sub
 
     Private Sub ForzarDescarga(Fichero As Fichero)
+        If Not ScheduleAllowsStart(True) Then Return
         Log.WriteInfo("Forcing download" & Fichero.NombreFichero)
         SyncLock Mutex.ListaDescargas
             If Fichero.DescargaEstado = Estado.Pausado Then
+                Fichero.PausaIndividual = False
                 Fichero.Resume()
             ElseIf Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada Then
+                Fichero.PausaIndividual = False
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             ElseIf Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
                 ' ⑧:红字强制=手动全量重置后按单个强制起(删 .part 从头来,顺带修尺寸不符类错误)。
                 Fichero.ResetearDescarga()
+                Fichero.PausaIndividual = False
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
@@ -4324,7 +4199,7 @@ Public Class Main
     Private Sub clipChange_ClipboardChanged(ByVal sender As Object, ByVal e As System.EventArgs) Handles clipChange.ClipboardChanged
         'Application.DoEvents()
 
-        If Config IsNot Nothing AndAlso Config.AnalizarPortapapeles Then
+        If _startupReady AndAlso Config IsNot Nothing AndAlso Config.AnalizarPortapapeles Then
             LeerPortapapelesYAgregarLinks()
         End If
     End Sub
@@ -4450,18 +4325,16 @@ Public Class Main
             Dim d As New RefreshListaDescargasCallback(AddressOf RefreshListaDescargas)
             Me.Invoke(d, New Object() {SetObjects})
         Else
+            Dim overview As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
+            Dim scopeChanged As Boolean = overview IsNot Nothing AndAlso overview.ScopeVersion <> appliedScopeVersion
             SyncLock Mutex.ListaDescargas
-                If SetObjects Then
-                    ListaDescargas.SetObjects(Me.ListaPaquetes)
-                    ApplyNavRoots()
-                    ListaDescargas.BuildList()
-                End If
-
-                ' 卡顿治理：430ms 节拍全量 RefreshObjects 时挂起重绘，一次性刷完再放行，
-                ' 否则几百行每 tick 逐行重绘闪烁 + 吃 UI 线程。只包列表控件，
-                ' UpdateNavCounts/UpdateDetailPanel 是别的控件，不受影响。
                 ListaDescargas.BeginUpdate()
                 Try
+                    If SetObjects Then ListaDescargas.SetObjects(Me.ListaPaquetes)
+                    If SetObjects OrElse (_navScope <> DownloadEstadoFilter.NavScope.All AndAlso scopeChanged) Then
+                        ApplyNavRoots()
+                        ListaDescargas.BuildList()
+                    End If
                     ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
                 Finally
                     ListaDescargas.EndUpdate()
@@ -4469,6 +4342,14 @@ Public Class Main
                 UpdateNavCounts()
                 UpdateDetailPanel()
             End SyncLock
+            If overview IsNot Nothing Then appliedScopeVersion = overview.ScopeVersion
+            If workbenchReady AndAlso workbenchSearch.TextLength > 0 AndAlso
+                (SetObjects OrElse (overview IsNot Nothing AndAlso overview.SearchVersion <> requestedSearchVersion)) Then
+                If overview IsNot Nothing Then requestedSearchVersion = overview.SearchVersion
+                System.Threading.Interlocked.Increment(queueSearchGeneration)
+                workbenchSearchTimer.Stop()
+                workbenchSearchTimer.Start()
+            End If
 
         End If
     End Sub
@@ -4544,7 +4425,7 @@ Public Class Main
         Dim dropText As String = TryCast(e.Data.GetData(DataFormats.UnicodeText), String)
         If String.IsNullOrEmpty(dropText) Then dropText = TryCast(e.Data.GetData(DataFormats.Text), String)
         If Not String.IsNullOrEmpty(dropText) Then
-            ComprobarYAgregarLinks(dropText, True, False)
+            ComprobarYAgregarLinks(dropText, True, False, False)
             Return
         End If
         If e.Data.GetData(DataFormats.FileDrop) IsNot Nothing Then
@@ -4915,6 +4796,7 @@ Public Class Main
     End Sub
 
     Public Sub StartDownload()
+        If Not ScheduleAllowsStart(True) Then Return
         ' P3-11: 配额熔断守卫此前只挂在工具栏 Play 上,AddLinks 的"立即下载"直接
         ' 调 StartDownload 绕过了它 —— 熔断期里一个任务都不会开,状态栏却显示
         ' "Downloading",配额 Toast 也不弹,用户完全得不到解释。
@@ -4923,19 +4805,28 @@ Public Class Main
             ShowQuotaBlockedToast()
             Return
         End If
-        QuitarPausasIndividuales()
-        Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
-        ThrottledStreamController.GetController.Continuar()
+        SyncLock scheduleActionLock
+            scheduleController.MarkManualStart()
+            QuitarPausasIndividuales()
+            Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
+            ThrottledStreamController.GetController.Continuar()
+        End SyncLock
     End Sub
     Public Sub PauseDownload()
-        QuitarDescargasIndividuales()
-        Me.EstadoAplicacion = TipoEstadoAplicacion.Pausa
-        ThrottledStreamController.GetController.Abortar()
+        SyncLock scheduleActionLock
+            scheduleController.MarkManualPause(Config.DownloadSchedule, DateTime.Now)
+            QuitarDescargasIndividuales()
+            Me.EstadoAplicacion = TipoEstadoAplicacion.Pausa
+            ThrottledStreamController.GetController.Abortar()
+        End SyncLock
     End Sub
     Public Sub StopDownload()
-        QuitarDescargasIndividuales()
-        Me.EstadoAplicacion = TipoEstadoAplicacion.Parado
-        ThrottledStreamController.GetController.Abortar()
+        SyncLock scheduleActionLock
+            scheduleController.MarkManualPause(Config.DownloadSchedule, DateTime.Now)
+            QuitarDescargasIndividuales()
+            Me.EstadoAplicacion = TipoEstadoAplicacion.Parado
+            ThrottledStreamController.GetController.Abortar()
+        End SyncLock
     End Sub
 
     Private Sub btnPlay_Click(sender As System.Object, e As System.EventArgs) Handles btnPlay.Click
@@ -5216,75 +5107,89 @@ Public Class Main
 
 #Region "Agregar enlaces"
 
-    Public Sub ComprobarYAgregarLinks(ByVal Texto As String, ExtraerURLs As Boolean, EsconderLinks As Boolean)
+    Public Async Sub ComprobarYAgregarLinks(ByVal Texto As String, ExtraerURLs As Boolean, EsconderLinks As Boolean,
+                                          Optional clipboardInput As Boolean = True)
 
-        Dim frm As Form = IsFormAlreadyOpen(GetType(AddLinks))
-        ' Si ya está abierta la pantalla de agregar link no la volvemos a abrir
-        If (frm Is Nothing) Then
+        If Me.IsDisposed OrElse Cerrando Then Return
+        If Me.InvokeRequired Then
+            Me.BeginInvoke(New Action(Sub() ComprobarYAgregarLinks(Texto, ExtraerURLs, EsconderLinks, clipboardInput)))
+            Return
+        End If
+        Try
+            ' Capture the copy-time focus before background parsing can yield to another app.
+            Dim inbox As AddLinks = TryCast(IsFormAlreadyOpen(GetType(AddLinks)), AddLinks)
+            If clipboardInput AndAlso inbox IsNot Nothing AndAlso inbox.ContainsFocus Then Return
+            Dim parsed = Await System.Threading.Tasks.Task.Run(Function() Tuple.Create(URLExtractor.ExtraerConfiguracionELC(Texto), URLExtractor.ExtraerURLs(Texto)))
+            If Me.IsDisposed OrElse Cerrando Then Return
 
-            ' Si tenemos abierta la pantalla de "ver links", seguramente copiemos los links así que no queremos que salte
-            ' ToastForm deliberately NOT listed: it is a 2-second notification with no links
-            ' in it, and blocking on it silently swallowed whatever the user copied right
-            ' after adding a package (which is exactly when the toast is showing).
-            Dim formsDiscarded As New Generic.List(Of Type)
-            formsDiscarded.Add(GetType(PantallaMsg))
-            formsDiscarded.Add(GetType(ELCForm))
-            formsDiscarded.Add(GetType(EncodeLinksForm))
-            For Each t As Type In formsDiscarded
-                frm = IsFormAlreadyOpen(t)
-                If (frm IsNot Nothing) Then
-                    Exit Sub
+            Dim frm As Form = IsFormAlreadyOpen(GetType(AddLinks))
+            ' Si ya está abierta la pantalla de agregar link no la volvemos a abrir
+            If (frm Is Nothing) Then
+
+                ' Si tenemos abierta la pantalla de "ver links", seguramente copiemos los links así que no queremos que salte
+                ' ToastForm deliberately NOT listed: it is a 2-second notification with no links
+                ' in it, and blocking on it silently swallowed whatever the user copied right
+                ' after adding a package (which is exactly when the toast is showing).
+                Dim formsDiscarded As New Generic.List(Of Type)
+                formsDiscarded.Add(GetType(PantallaMsg))
+                formsDiscarded.Add(GetType(ELCForm))
+                formsDiscarded.Add(GetType(EncodeLinksForm))
+                If clipboardInput Then
+                    For Each t As Type In formsDiscarded
+                        frm = IsFormAlreadyOpen(t)
+                        If (frm IsNot Nothing) Then
+                            Exit Sub
+                        End If
+                    Next
                 End If
-            Next
 
-            Dim ConfigsELC As Generic.List(Of String) = URLExtractor.ExtraerConfiguracionELC(Texto)
-            If ConfigsELC IsNot Nothing AndAlso ConfigsELC.Count > 0 Then
-                Dim Helper As New ELCAccountHelper(Me.Config)
-                If Helper.ImportConfig(ConfigsELC, Me) Then
-                    Helper.SaveToConfig(Me.Config)
-                    ' P0-1: SaveToConfig only updates the in-memory list. Without a forced
-                    ' save the imported accounts never reach disk (the background periodic
-                    ' GuardarXML(False) compares a snapshot taken before the ELCAccounts
-                    ' node is appended, so it sees "no change" and skips the write).
-                    Me.Config.GuardarXML(True)
+                Dim ConfigsELC As Generic.List(Of String) = parsed.Item1
+                If ConfigsELC IsNot Nothing AndAlso ConfigsELC.Count > 0 Then
+                    Dim Helper As New ELCAccountHelper(Me.Config)
+                    If Helper.ImportConfig(ConfigsELC, Me) Then
+                        Helper.SaveToConfig(Me.Config)
+                        ' P0-1: SaveToConfig only updates the in-memory list. Without a forced
+                        ' save the imported accounts never reach disk (the background periodic
+                        ' GuardarXML(False) compares a snapshot taken before the ELCAccounts
+                        ' node is appended, so it sees "no change" and skips the write).
+                        Me.Config.GuardarXML(True)
+                    End If
+                    Helper.Dispose()
                 End If
-                Helper.Dispose()
-            End If
 
 
-            Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(Texto)
-            If URLs IsNot Nothing AndAlso URLs.Count > 0 Then
+                Dim URLs As Generic.List(Of String) = parsed.Item2
+                If URLs IsNot Nothing AndAlso URLs.Count > 0 Then
 
-                ' Damos foco a la ventana
-                Me.Activate()
+                    ' Damos foco a la ventana
+                    Me.Activate()
 
-                AgregarLink(Texto, String.Empty, ExtraerURLs, EsconderLinks)
-            End If
+                    AgregarLink(Texto, String.Empty, ExtraerURLs, EsconderLinks, parsed.Item2)
+                End If
 
-        ElseIf frm.GetType.FullName = GetType(AddLinks).FullName Then
-            ' Añadimos links a la ventana ya abierta
-            Dim frmName As AddLinks = CType(frm, AddLinks)
-            If Not frmName.ContainsFocus Then ' Evitamos que si estamos en la ventana y hacemos un cortar, vuelva a pegarse los links
-
-                If frmName.AgregarEnlaces(Texto, False, ExtraerURLs, EsconderLinks) Then
+            ElseIf frm.GetType.FullName = GetType(AddLinks).FullName Then
+                ' Añadimos links a la ventana ya abierta
+                Dim frmName As AddLinks = CType(frm, AddLinks)
+                If frmName.AgregarEnlaces(Texto, False, ExtraerURLs, EsconderLinks, parsed.Item2) Then
                     frmName.PonerFoco()
                 End If
-
             End If
-        End If
+        Catch ex As Exception
+            Log.WriteWarning("Importing clipboard links failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Sub AgregarLink()
         AgregarLink(String.Empty, String.Empty, True, False)
     End Sub
 
-    Private Sub AgregarLink(Url As String, ByVal NombrePaquete As String, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean)
+    Private Sub AgregarLink(Url As String, ByVal NombrePaquete As String, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean, Optional parsed As Generic.List(Of String) = Nothing)
         Dim frmName As New AddLinks
         frmName.Main = Me
 
         frmName.Config = Me.Config
         If Not String.IsNullOrEmpty(Url) Then
-            frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks)
+            frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks, parsed)
         End If
         If Not String.IsNullOrEmpty(NombrePaquete) Then
             frmName.txtNombre.Text = NombrePaquete
@@ -5292,9 +5197,12 @@ Public Class Main
 
         frmName.ShowDialog(Me)
 
+        Dim importedPackage As Paquete = frmName.LastImportedPackage
         Dim openStegano As Boolean =   frmName.OpenSteganoLoadOnExit
         ' Hasta que no se cierre la ventana no continuamos la ejecución
         frmName.Dispose()
+
+        If importedPackage IsNot Nothing Then RevealImportedPackage(importedPackage)
 
 
         ' Ñapa para abrir el cuadro de carga esteganografica... necesario porque AddLinks contiene un botón a ese cuadro :/
@@ -5337,7 +5245,7 @@ Public Class Main
             End If
         Next
         If URLlist.Count > 0 Then
-            ComprobarYAgregarLinks(String.Join(vbNewLine, URLlist.ToArray), True, False)
+            ComprobarYAgregarLinks(String.Join(vbNewLine, URLlist.ToArray), True, False, False)
         End If
         For Each dlcPath As String In DLCList
             AddDLC(dlcPath)
@@ -5391,16 +5299,12 @@ Public Class Main
         End If
 
         If LocalURLList IsNot Nothing Then
-            Dim URLstr As String = ""
-            For Each url As String In LocalURLList
-                If URLstr.Length > 0 Then
-                    URLstr &= vbNewLine
-                End If
-                URLstr &= url
-            Next
+            Dim URLstr As String = String.Join(vbNewLine, LocalURLList)
             If Not String.IsNullOrEmpty(URLstr) Then
-                AgregarLink(URLstr, String.Empty, True, False)
-            ElseIf ErrorProcessing IsNot Nothing Then ' Si hay excepcion, ya hemos enseñado un error antes
+                ' Use the same asynchronous inbox for explicit container imports.
+                ' An existing file-selection page keeps this batch deferred.
+                ComprobarYAgregarLinks(URLstr, True, False, False)
+            ElseIf ErrorProcessing Is Nothing Then ' A decoder error was already shown above.
                 MessageBox.Show(Language.GetText("The DLC has no valid Mega links"), Language.GetText("Note"), _
                        MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If

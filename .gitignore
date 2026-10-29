@@ -136,12 +136,15 @@ _check.py
 
 # 内部评审笔记,不进仓库
 docs/UI-REVIEW-main-window.md
+docs/REVIEW-2.6.0.md
+docs/STAR-GROWTH-ANALYSIS.md
 
 # TRAE IDE 临时文件
 .trae/
 TODO/
 # 本地工作区工具状态
 .workbuddy/
+.workbuddy-ai/
 
 # Codebuff 本地工具标识
 .freebuff/

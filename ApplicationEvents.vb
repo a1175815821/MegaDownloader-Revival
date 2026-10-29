@@ -13,6 +13,7 @@ Namespace My
 
 
         Private Shared _mainFrm As Main
+        Friend Shared ReadOnly StartupClock As New System.Diagnostics.Stopwatch()
         Friend Shared Property Main_Form As Main
             Set(value As Main)
                 _mainFrm = value
@@ -23,6 +24,8 @@ Namespace My
         End Property
 
         Private Sub MyApplication_Startup(sender As Object, e As Microsoft.VisualBasic.ApplicationServices.StartupEventArgs) Handles Me.Startup
+
+            StartupClock.Start()
 
             If Not ApplicationInstanceManager.CreateSingleInstance("MegaDownloader", AddressOf SingleInstanceCallback) Then
                 Return
@@ -67,7 +70,7 @@ Namespace My
                                                   ' Buffer.dat file and picked up by the 430ms GetParameters poll
                                                   ' (Main.vb), which calls ProcessArgs — this callback only needs
                                                   ' to focus the already-running window.
-                                                  _mainFrm.Activate()
+                                                  _mainFrm.ActivateExistingInstance()
                                               End Sub
                 _mainFrm.Invoke(d, True)
             Catch ex As InvalidOperationException

@@ -291,6 +291,8 @@ Public Class MegaFolderHelper
 
                         Dim resolved As New URLProcessor.FileURL(NuevoLink, path)
                         resolved.FolderName = folderDisplayName
+                        resolved.DisplayName = PathGuard.SanitizeFileName(FileInfoDec, "file")
+                        resolved.SizeBytes = Math.Max(0L, fileN.s)
                         Results.Add(resolved)
 
                     Else

@@ -1,0 +1,117 @@
+name: Bug report
+description: Something does not work — a download, extraction, the interface, languages, the web server.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A precise report is usually the difference between a fix in days and a mystery that never gets solved.
+
+        Please **do not paste MEGA links that contain private files**, and redact file names you would rather not share.
+
+  - type: input
+    id: version
+    attributes:
+      label: MegaDownloader version
+      description: "About → Version, or the title bar"
+      placeholder: "v2.6.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Which build
+      options:
+        - Single-file MegaDownloader.exe
+        - ZIP package
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2 (x64), display scaling 125%"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Adding links / pre-flight
+        - Downloading / resume
+        - Quota handling
+        - Extraction (RAR / 7Z / ZIP)
+        - Workbench / theme / DPI
+        - Search or scheduling
+        - Web interface / LAN access
+        - Language pack
+        - Streaming / VLC
+        - Steganography
+        - Update checker
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a cold start if possible
+      placeholder: |
+        1. Start MegaDownloader 2.6.0
+        2. Paste <link type, redacted>
+        3. Select 3 files in the pre-flight tree
+        4. Click "Add to download queue"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include any error message exactly as shown
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: 'Logs are in %LOCALAPPDATA%\MegaDownloader\Log\. Review them for private information, then attach a file or paste the last ~50 lines.'
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here if the problem is visual. Blur any private file names.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am running the latest release (or a build newer than the one that failed)
+          required: true
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I removed private links, file names and credentials from this report
+          required: true

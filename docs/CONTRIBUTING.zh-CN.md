@@ -77,9 +77,11 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   消息提示窗体
 │   └── PropiedadesDescarga.vb      #   下载属性窗体
 ├── docs/                           # 项目文档
-│   ├── README*.md                   #   项目说明（5 种语言，根 README.md 为英文）
+│   ├── README.*.md                  #   各语言说明（根 README.md 为英文）
 │   ├── CHANGELOG.md                 #   变更日志（仅简体中文）
-│   └── CONTRIBUTING*.md             #   贡献指南（英文＋简体中文）
+│   ├── CONTRIBUTING*.md             #   贡献指南（英文 + 简体中文）
+│   ├── release-notes/               #   各版本发行说明（用于 Release 页面）
+│   └── screenshots/                 #   README 使用的横幅与界面截图
 ├── Tests/                          # 可执行回归验证与运行脚本
 ├── MegaDownloader.sln              # VS 解决方案
 ├── MegaDownloader.vbproj           # VS 工程
@@ -110,7 +112,7 @@ MegaDownloader/
 ```bash
 # Fork 仓库到自己的 GitHub 账户后:
 git clone https://github.com/<你的用户名>/MegaDownloader-Revival.git
-cd MegaDownloader
+cd MegaDownloader-Revival
 git remote add upstream https://github.com/a1175815821/MegaDownloader-Revival.git
 ```
 
@@ -246,21 +248,23 @@ git push origin feature/你的功能名称
 
 改进步骤：
 
-1. 找到对应语言的 XML（如 `ja-JP-Language.xml`）
+1. 找到对应语言的 XML（如 `zh-CN-Language.xml`）
 2. 修改 `<Text>` 节点的 CDATA 内容，**不要改 `key` 属性**
 3. 若新增键，需同时确保 `en-US-Language.xml` 中有同名 key（作为回退基准）
 
 ### 新增界面语言
 
 1. 复制 `Resources/Language/en-US-Language.xml` 为 `<locale>-Language.xml`
-2. 翻译所有 `<Text>` 节点的 CDATA 内容
+2. 修改根节点的 `id` 为有效的语言区域代码（如 `ja-JP`），将 `name` 改为语言显示名，再翻译所有 `<Text>` 节点的 CDATA 内容
 3. 在 `MegaDownloader.vbproj` 中添加嵌入资源：
 
 ```xml
 <EmbeddedResource Include="Resources\Language\ja-JP-Language.xml" />
 ```
 
-4. 运行程序，在 **设置 → 语言** 中能看到新语言
+4. 重新构建并运行程序，在 **设置 → 语言** 中选择新语言
+
+> 测试已有语言的修改时，磁盘上的 `%LOCALAPPDATA%\MegaDownloader\Language\<locale>.xml` 优先于内置资源。先备份该文件，再暂时移走并重启，或在隔离的测试账户中验证；不要覆盖用户的自定义翻译。
 
 > 语言键查找有三级回退：磁盘文件 → 内置资源 → `en-US` → 返回 key 本身。所以即使某些键漏翻，程序也不会崩，只是会显示英文或原始 key。
 
@@ -273,22 +277,22 @@ git push origin feature/你的功能名称
 - **链接类型**(完整复制一个示例链接,敏感部分可脱敏)
 - **复现步骤**
 - **预期行为** vs **实际行为**
-- **错误日志**(如有,位于程序目录下的日志文件)
+- **错误日志**(如有,位于 `%LOCALAPPDATA%\MegaDownloader\Log\`)
 
 ## 发布流程（仅维护者）
 
 1. 确认 `Debug` 与 `Release` 配置都能构建，并运行 `.\Tests\Run-RegressionTests.ps1`
 2. 更新 `docs/CHANGELOG.md`（仅简体中文），追加新版本章节
-3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步五种语言 README 的当前版本亮点（含两份英文入口）
+3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步五种语言 README 的当前版本亮点（根目录英文 + 四份翻译）
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 用简体中文撰写发布说明（结构见下方「发布说明怎么写」），CI 创建 Release 后将正文校对粘贴到 GitHub Release 页面
+6. 按下方结构撰写 `docs/release-notes/vX.Y.Z.md`；该文件存在时 CI 会直接用作 Release 正文，否则回退到自动生成的说明
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
-git tag -a v2.5.0 -m "Release v2.5.0"
+git tag -a v2.6.0 -m "Release v2.6.0"
 git push origin main
-git push origin v2.5.0
+git push origin v2.6.0
 ```
 
 CI 在 tag `v*` 上会自动：
@@ -300,18 +304,18 @@ CI 在 tag `v*` 上会自动：
 
 Release 页面是大多数用户唯一会细读的文档。按「从结论到细节」组织，让只看前 10 行的人也能完成下载和升级：
 
-1. **下载与升级**（引用块）：Assets 两个文件分别适合谁；升级直接替换 exe 即可，配置与下载队列保存在 `%LOCALAPPDATA%\MegaDownloader\` 不会丢；系统要求（Windows 7 SP1+ · .NET Framework 4.8）
+1. **下载与升级**（引用块）：Assets 两个文件分别适合谁；单文件版升级时替换 exe，ZIP 版替换压缩包内的程序文件；配置与下载队列保存在 `%LOCALAPPDATA%\MegaDownloader\` 不会丢；系统要求（Windows 7 SP1+ · .NET Framework 4.8）
 2. **一句话总结**：本版最核心的 3~5 个变化
 3. **这次修了什么症状**：3~6 条用户可感知的现象式描述（如「下载每约 2 分钟失败一次 → 已修复」），而不是技术名词罗列
 4. **全部修复明细**：按 下载 / 解压 / 界面 / 多语言 分节，可深入到开发者级别
 5. 结尾放 **Full Changelog** 对比链接
 
-> 测试预发布（RC 版）建议先以 `prerelease` 形式发布，验证通过后再转为正式版。
+> 测试预发布请使用带连字符的标签（例如 `v2.7.0-rc.1`）；CI 会将其标为 prerelease。验证通过后推送正式标签（例如 `v2.7.0`）发布正式版。
 
 ## 联系方式
 
 - 提交 Issue:GitHub Issues
-- 安全相关问题:请勿在公开 Issue 中讨论,通过邮件联系维护者
+- 安全相关问题：请勿公开讨论，按 [SECURITY.md](../SECURITY.md) 中的方式反馈
 
 ---
 

@@ -1,95 +1,187 @@
-# MegaDownloader 부활 프로젝트
+<p align="center">
+  <img src="screenshots/banner.png" alt="MegaDownloader 부활 프로젝트 — 클래식 MEGA 다운로더를 오늘의 링크에 맞게 다시 만들다" width="100%">
+</p>
 
-**언어**: [English](../README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja-JP.md) · **한국어**
+<h1 align="center">MegaDownloader 부활 프로젝트</h1>
 
-> 클래식 MEGA 다운로더를 오늘날의 MEGA에서 다시 사용할 수 있도록: 새 링크 형식 지원, 멀티스레드 가속, 이어받기, quota 자동 복구를 단일 실행 파일·설치 없이.
-> 비공식 프로젝트이며 MEGA(MEGA Ltd.)와는 무관합니다.
+<p align="center">
+  <b>클래식 MEGA 다운로더를 오늘의 링크에 맞게 다시 만들었습니다.</b><br>
+  멀티스레드 전송 · 확실한 이어받기 · 할당량 자동 복구 · 다운로드 전 일괄 확인
+</p>
 
-**[Windows용 다운로드](../../../releases/latest)** · 단일 파일 또는 ZIP · Windows 7 SP1+ · .NET Framework 4.8
+<p align="center">
+  <a href="../../../releases/latest"><img alt="최신 릴리스 다운로드" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="변경 내역" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://dotnet.microsoft.com/)
-[![.NET](https://img.shields.io/badge/.NET%20Framework-4.8-purple.svg)](https://dotnet.microsoft.com/download/dotnet-framework)
-[![Language](https://img.shields.io/badge/Language-VB.NET-005a9c.svg)](https://docs.microsoft.com/dotnet/visual-basic/)
-[![Build](https://github.com/a1175815821/MegaDownloader-Revival/actions/workflows/build.yml/badge.svg)](../../../actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?include_prereleases)](../../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total)](../../../releases)
-[![Stars](https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=social)](../../../stargazers)
+<p align="center"><sub>도움이 되셨다면 <a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a>로 프로젝트를 응원해 주세요.</sub></p>
 
-## 스크린샷
+<p align="center">
+  <a href="../../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
+  <a href="../../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
+  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
+  <a href="../../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
+</p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
-  <img alt="MegaDownloader 메인 창 — 왼쪽 큐 통계, 가운데 작업 목록, 오른쪽 선택한 작업의 세부 정보" src="screenshots/main-light.png">
-</picture>
+<p align="center">
+  <sub>단일 EXE 또는 ZIP · 설치 불필요 · 관리자 권한 불필요 · .NET Framework 4.8 · UI 10개 언어</sub><br>
+  <sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja-JP.md">日本語</a> · <b>한국어</b></sub>
+</p>
 
-왼쪽에는 실시간 큐 통계(총 속도, 진행 중 / 대기 / 실패, 큐 진행률, 남은 시간)와 바로가기가, 가운데에는 작업 목록이, 오른쪽에는 선택한 작업의 세부 정보가 표시됩니다. MEGA 링크를 창에 끌어다 놓거나 복사하기만 하면 클립보드 모니터가 자동으로 인식합니다. 테마는 시스템 설정을 따르며, 위 이미지도 GitHub 테마에 맞춰 전환됩니다.
+> **v2.6 "워크벤치"를 소개합니다.** UI를 전면 재작업하고, 링크 추가를 2단계 흐름으로 묶어 일괄 사전 확인을 지원합니다. 작업 검색과 예약 다운로드도 새로 추가했습니다. 부활 프로젝트 시작 이후 가장 큰 업데이트이며, 콜드 스타트는 **150~200ms**로 줄었습니다. [새 기능 보기 ↓](#-26-새로운-기능)
+>
+> MEGA(MEGA Ltd.)와 무관한 비공식 프로젝트입니다.
 
-| 설정 · 일반 | 설정 · 고급 |
-| :---: | :---: |
-| [![설정 — 일반 탭](screenshots/settings-general.png)](screenshots/settings-general.png) | [![설정 — 고급 탭](screenshots/settings-advanced.png)](screenshots/settings-advanced.png) |
-| 다운로드 경로, 클립보드 모니터링, 자동 시작, 언어, 테마, 속도 제한, 재시도 | 버퍼와 로그 수준, 프록시, 내장 웹 서버와 LAN 액세스 |
-
-<sub>스크린샷은 v2.5.9 기준이며 UI는 중국어 간체입니다. UI 언어는 10가지를 지원합니다.</sub>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/v2.6-workbench-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/v2.6-workbench-light.png">
+    <img alt="MegaDownloader v2.6 workbench" src="screenshots/v2.6-workbench-light.png" width="100%">
+  </picture>
+</p>
+<p align="center"><sub>v2.6 워크벤치 · 스크린샷은 GitHub 테마에 맞춰 바뀝니다. 화면 언어는 중국어 간체입니다.</sub></p>
 
 ---
 
-## ⚡ 30초 만에 시작하기
+## ✨ 2.6 새로운 기능
 
-1. [Releases](../../../releases/latest)에서 둘 중 하나를 다운로드:
+> **창은 하나, 단계는 둘, 추측은 없습니다.**
+>
+> ⚡ **콜드 스타트 실측 5~7초 → 150~200ms** · 500개 넘는 파일 가져오기도 멈추지 않음
+>
+> 시작 시간은 하드웨어와 실행 환경에 따라 다릅니다.
 
-   | 파일 | 이런 분께 |
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<b>🖥️ 워크벤치 재작업</b>
+
+라이트/다크가 같은 여백, 글자 크기, 아이콘 그리드를 공유합니다. "링크 추가"가 드디어 주 동작이 되었고, 사이드바 그룹이 각자 개수를 표시하며, 세부 정보 패널은 접어서 목록에 폭을 넘겨줄 수 있습니다.
+
+</td>
+<td width="50%" valign="top">
+
+<b>➕ 2단계 추가</b>
+
+같은 창에서 링크를 붙여 넣고 파일을 고릅니다. 대화상자가 겹치지 않습니다. 뒤로 가도 링크, 검색어, 펼친 폴더, 체크 상태가 그대로 남습니다.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+<b>🗂️ 일괄 사전 확인</b>
+
+다운로드 전에 파일 이름, 크기, 상태, 상대 경로를 확인합니다. 폴더 트리는 접을 수 있고, 이름 검색, 형식 필터, Ctrl/Shift 다중 선택, 선택 합계 크기와 대상 디스크 여유 공간을 표시합니다.
+
+</td>
+<td valign="top">
+
+<b>🔎 작업 검색</b>
+
+<kbd>Ctrl</kbd>+<kbd>F</kbd>로 패키지 이름, 파일 이름, 상대 경로를 검색합니다. 현재 상태 그룹과 함께 필터링되고 <kbd>Esc</kbd>로 지우면 전체 큐가 복원됩니다.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+<b>⏰ 예약 다운로드</b>
+
+한 번만 예약하거나 매일 시간대를 지정합니다. 자정을 넘는 구간도 지원하며, 시간대가 시작되면 자동 재개하고 끝나면 일시정지합니다. 설정은 재시작 후에도 유지됩니다.
+
+</td>
+<td valign="top">
+
+<b>⚡ 200ms 시작</b>
+
+콜드 스타트가 5~7초에서 150~200ms로 줄었습니다. 첫 화면이 더 이상 성능 카운터와 WMI를 동기로 읽지 않습니다. 링크 분석, 패키지 구성, 메타데이터 확인도 UI 스레드에서 분리했고 사전 확인 목록은 가상화했습니다.
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>2.6의 나머지 변경과 그 뒤의 수정들</b></summary>
+
+<br>
+
+- **중복 감지**: 파일 ID + 키로 신·구 링크 형식의 중복을 식별하고 기존 큐와도 대조합니다. 중복과 무효 항목은 항상 건너뜁니다.
+- **일시적 실패와 영구 실패 분리**: 네트워크가 잠깐 끊겨 확인하지 못한 일반 링크는 직접 선택해 추가할 수 있습니다.
+- **확인 중 들어온 새 링크**는 다음 배치로 보류하며 몰래 다운로드하지 않습니다.
+- **대형 패키지**(500개 파일 초과)는 기본으로 접힌 상태로 시작해 가져오는 순간 목록이 멈추지 않습니다.
+- **추가 후** 자동으로 전체 작업으로 전환해 최신 패키지를 보여주고, 파일 트리는 보이는 행의 강조와 스크롤 위치를 유지합니다.
+- **진행 상황을 보고 멈출 수 있음**: 분석 중 경과 시간과 중지/재확인, 제출 시 "다운로드 큐에 추가" 상태를 따로 표시합니다.
+- **DPI·테마 수정**: 고DPI 폴더 펼침 표식, 세부 정보 스크롤 후 레이아웃 밀림, 네이티브 목록 배경과 빈 상태 테마 적용, 서식 있는 붙여넣기의 웹 글자색 유입.
+- **예약으로 큐 관리**: 설정한 시간대에 다운로드를 재개하고 종료 시 일시정지합니다. 전체 큐를 수동 일시정지하면 다음 시간대까지 유지됩니다.
+
+</details>
+
+---
+
+## ⚡ 30초 만에 시작
+
+1. [Releases](../../../releases/latest)에서 둘 중 하나를 받습니다:
+
+   | 파일 | 이런 경우에 |
    | --- | --- |
-   | **`MegaDownloader.exe`** (단일 파일) | 가장 간편하게: 다운로드 후 더블클릭만. 의존 DLL 15개를 모두 내장 |
-   | **`MegaDownloader-Revival-win-x86.zip`** (포터블) | ZIP을 선호한다면: 압축을 풀고 실행 |
+   | **`MegaDownloader.exe`** (단일 파일) | 가장 간단하게: 받아서 더블클릭. 의존 DLL 15개가 내장되어 있습니다 |
+   | **`MegaDownloader-Revival-win-x86.zip`** (포터블) | 압축 파일을 선호한다면: 풀어서 실행 |
 
-2. 더블클릭으로 실행 — 설치 불필요, 관리자 권한 불필요
-   > 시스템 요구 사항: Windows 7 SP1 이상. .NET Framework 4.8 (Windows 10 1903+ 기본 탑재, 구버전 OS는 안내에 따라 설치)
-3. MEGA 링크를 복사 — 프로그램이 클립보드를 자동 인식하고, 확인하면 다운로드 대기열에 추가됩니다
+2. **실행** — 설치 없음, 관리자 권한 없음
+   > Windows 7 SP1 이상 · .NET Framework 4.8 (Windows 10 1903+ 기본 포함, 이전 버전은 안내에 따라 설치)
 
-여기까지면 다운로드를 바로 쓸 수 있습니다. 이후는 필요할 때: [기능](#-무엇을-할-수-있나요) → [프로젝트 배경과 비교](#-이-프로젝트는-어디서-왔나) → [FAQ](#-faq) → [개발자용](#️-개발자용).
+3. **MEGA 링크 복사** — 클립보드 감시가 인식하고, 확인하면 큐에 추가됩니다
 
-링크 추가 방법은 더 있습니다: 링크를 메인 창으로 드래그 · 도구 모음의 「링크 추가」로 붙여넣기 · 브라우저에서 `mega://` 프로토콜 링크 클릭.
-
-> 🆕 **최신 버전 [v2.5.9](../../../releases/latest)** (2026-10-28): 동명 파일의 동시 다운로드 충돌 수정 · 압축 해제 시 기존 파일 보존 · 완료 파일을 검증해 재사용 · 스트리밍 Range 데이터 손상 수정. 전체 이력은 [CHANGELOG](CHANGELOG.md)에서.
+이게 전부입니다. 다른 방법: 창에 링크 끌어다 놓기 · 툴바의 "링크 추가" · 브라우저에서 `mega://` 링크 클릭.
 
 ---
 
-## 🚀 무엇을 할 수 있나요
+## 🚀 무엇을 하는가
 
 **다운로드 엔진**
 
-- **멀티스레드** — 파일 하나에 여러 연결을 동시에 열어 회선을 최대한 활용
-- **이어받기** — 일시정지 / 재개 / 오류 재시도. 프로그램을 재시작해도 이어서
-- **폴더 다운로드** — 공유 폴더 전체를 재귀적으로 분석하고, 필요한 하위 폴더나 파일만 선택 가능
-- **속도 제한** — 전역 또는 작업별
-- **실패 자가 치유** (v2.5) — 실패한 작업을 주기적으로 자동 재시도, 영구 실패는 자동 제외
-- **quota 서킷 브레이커** (v2.5) — MEGA 다운로드 quota가 소진되면 자동 일시정지 후 카운트다운, 시간이 되면 자동 재개. 구식 「quota 돌파」 재시도 모드로 전환도 가능 (기본값은 꺼짐)
-- **자동 압축 해제** — 다운로드 완료 후 RAR / 7Z / ZIP 자동 해제, 분할·암호 포함
+- **멀티스레드** — 파일 하나에 여러 연결로 대역폭을 끝까지 사용
+- **제대로 되는 이어받기** — 일시정지·재개·오류 재시도, 재시작 후에도 이어서, 중단된 부분 파일 재사용
+- **폴더 다운로드** — 공유 폴더를 재귀적으로 분석하고 필요한 하위 폴더나 파일만 선택
+- **속도 제한** — 전체 또는 작업 단위
+- **실패 자가 복구** — 실패한 작업을 주기적으로 재시도하고 영구 실패는 제외 (v2.5)
+- **할당량 차단기** — MEGA 할당량이 떨어지면 자동 일시정지 후 카운트다운, 시간이 되면 자동 재개. 기존 "할당량 돌파" 모드는 기본 꺼짐 상태로 유지 (v2.5)
+- **자동 압축 해제** — 완료 시 RAR / 7Z / ZIP 해제, 분할·암호 압축 지원, 같은 이름의 기존 파일은 덮어쓰지 않음
+- **결과 검증** — 링크에 MetaMAC이 있으면 다운로드한 파일을 검증한 뒤 완료로 표시 (v2.5.9)
 
-**편의성과 원격**
+**링크 가져오기**
 
-- **링크 추가 4가지 방법** — 클립보드 자동 인식 / 드래그 앤 드롭 / 수동 붙여넣기 / `mega://` 프로토콜
-- **웹 인터페이스** — 내장 HTTP 서버로 브라우저에서 작업 추가·진행 상황 확인. LAN 접근을 켜면 스마트폰에서도
+- **네 가지 방법** — 클립보드 감시 · 끌어다 놓기 · 직접 붙여넣기 · `mega://` 프로토콜
+- **일괄 사전 확인** — 큰 공유도 내용을 보고 고르기 (v2.6)
 - **ELC 컨테이너** — 암호화 링크 컨테이너 가져오기/내보내기. `enc` / `enc2` / `fenc` / `fenc2` / `elc` 모두 지원
 
-**인터페이스와 경험**
+**워크벤치**
 
-- **다운받으면서 재생** — VLC 통합으로 다운로드 중인 영상을 스트리밍 재생
+- **즉시 시작** — 콜드 스타트 150~200ms, WMI와 성능 카운터 동기 읽기 없음 (v2.6)
+- **작업 검색** — 패키지·파일·경로를 `Ctrl+F`로 (v2.6)
+- **예약 다운로드** — 매일 시간대 또는 한 번 예약 (v2.6)
+- **세부 정보 접기** — 큐 통계, 작업 목록, 세부 정보 3단 구성. 좁은 창에서는 자동으로 폭을 양보
+- **다크/라이트 테마** — 시스템 설정을 따르거나 직접 지정
+- **UI 10개 언어** — English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
+- **웹 인터페이스** — 내장 HTTP 서버. 브라우저에서 작업 추가와 진행 확인, LAN 접근을 켜면 휴대폰에서도 전송 가능
+
+**부가 기능**
+
+- **받으면서 재생** — VLC를 통합해 아직 받는 중인 영상 스트리밍 재생
 - **스트리밍 라이브러리** — 자주 보는 스트리밍 소스를 시각적으로 관리
-- **다크 / 라이트 테마** (v2.0) — 시스템 설정을 따라 자동 전환, 수동 지정도 가능
-- **10가지 UI 언어** — English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română, 추가 가능
-- **스테가노그래피** — 이미지 / 영상에 파일을 숨기기 (F5 스테가노)
+- **스테가노그래피** — 이미지·영상 안에 파일 숨기기 (F5)
 
 <details>
-<summary><b>지원하는 링크 형식 전체 (클릭하여 펼치기)</b></summary>
+<summary><b>지원하는 모든 링크 형식</b></summary>
 
-- 신형: `mega.nz/file/ID#KEY`, `mega.nz/folder/ID#KEY` (v1.9+)
+<br>
+
+- 신형: `mega.nz/file/ID#KEY`, `mega.nz/folder/ID#KEY` (v1.9+), 공유 내 하위 폴더·단일 파일 링크 포함
 - 구형: `mega.nz/#!ID!KEY`, `mega.co.nz/#F!ID!KEY`
 - 암호화: `mega://enc?…`, `mega://enc2?…`, `mega://fenc?…`, `mega://fenc2?…`, `mega://elc?…`
-
-링크 예시:
 
 ```
 https://mega.nz/file/abcDEFgh#IjklMNopQRstUVwxYZ1234567890
@@ -98,64 +190,86 @@ https://mega.nz/#!abcDEFgh!IjklMNopQRstUVwxYZ1234567890
 mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 ```
 
-> v2.0부터 서비스가 종료된 아래 항목들은 지원하지 않습니다: MegaCrypter, YouPaste, LinkCrypter, EncrypterMe.ga, goo.gl 단축 링크.
+> v2.0에서 종료된 서비스 지원을 제거했습니다: MegaCrypter, YouPaste, LinkCrypter, EncrypterMe.ga, goo.gl 단축 링크.
 
 </details>
 
 ---
 
-## 📖 이 프로젝트는 어디서 왔나
+## 🖼️ 인터페이스
 
-MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 다운로드 관리자로, 가볍고 안정적이며 멀티스레드를 지원하는 것으로 유명했습니다. 원 프로젝트는 v1.8 이후 개발이 중단되었고, 그 사이 MEGA가 링크 형식을 바꿔버려(`mega.nz/file/...`, `mega.nz/folder/...`) 구버전은 새 링크를 인식하지 못하고 핵심 기능이 동작하지 않게 되었습니다.
+**링크부터 다운로드까지 두 단계**
 
-이 저장소가 그것을 되살렸습니다: v1.8을 역컴파일해 소스 코드를 확보하고, 그 위에 수정과 리팩터링을 이어가고 있습니다. 지금까지 **200건 이상의 수정과 강화**(크래시, 조용한 데이터 유실, 보안, 호환성)를 쌓았고, 시맨틱 버저닝으로 꾸준히 릴리스하고 있습니다.
-
-|  | 구버전 v1.8 (2018년 중단) | **이 저장소 v2.5.x** |
-| --- | --- | --- |
-| 신형 `mega.nz/file` / `/folder` 링크 | ❌ 인식 불가 | ✅ v1.9부터 지원 |
-| MEGA quota 초과 | 멈춤 / 오류 | ✅ 자동 일시정지 + 카운트다운 재개 (v2.5) |
-| 실패한 작업 | 수동 재시도만 | ✅ 주기적 자가 치유 (v2.5) |
-| UI 테마 | 시스템 회색뿐 | ✅ 다크 / 라이트, 시스템 연동 (v2.0) |
-| 안정성 | — | ✅ 200건 이상의 크래시 / 데이터 유실 / 보안 수정 |
-| 유지보수 | 중단됨 | ✅ 활발히 유지보수, Issue에도 응답 |
-
-> ⚠️ **법적 고지**: 이 프로젝트는 제3자가 배포한 소프트웨어의 역컴파일에서 파생되었으며, 목적은 호환성 문제를 수정해 다시 쓸 수 있게 하는 것에 한정됩니다. 원 저작자가 권리를 침해받았다고 생각하신다면 Issue로 연락해 주세요. 협조하여 처리하겠습니다.
+<table>
+<tr>
+  <td align="center" width="50%"><b>1. 링크 붙여넣기</b><br><img src="screenshots/v2.6-add-links.png" alt="링크 입력 창" width="100%"></td>
+  <td align="center" width="50%"><b>2. 미리 확인하고 파일 선택</b><br><img src="screenshots/v2.6-preflight.png" alt="사전 확인 및 파일 선택 창" width="100%"></td>
+</tr>
+</table>
 
 ---
 
-## ❓ FAQ
+## 📖 이 프로젝트의 유래
 
-**백신이 바이러스로 탐지합니다.**
-백신 경고가 표시되면 실행 전에 경고 내용과 다운로드 출처를 확인하세요. 공개된 [빌드 과정](../../../actions/workflows/build.yml)을 확인하거나 ZIP 패키지를 사용해 보거나 소스에서 직접 빌드할 수 있습니다. 패키지를 바꾸어도 경고가 사라진다는 보장은 없습니다.
+MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 다운로드 관리자로, 가볍고 안정적이며 멀티스레드를 지원하는 것으로 알려져 있습니다. 원 프로젝트는 v1.8 이후 유지보수가 중단되었고, MEGA가 링크 형식(`mega.nz/file/...`, `mega.nz/folder/...`)을 바꾸면서 구버전은 새 링크를 인식하지 못해 핵심 기능이 동작하지 않게 되었습니다.
 
-**quota exceeded가 표시됩니다.**
-MEGA는 무료 계정과 IP에 다운로드 quota 제한을 둡니다. v2.5부터는 자동으로 일시정지하고 카운트다운 후 재개합니다. 기다리기 어렵다면 설정에서 「quota 돌파 모드」를 켜서 계속 재시도할 수 있습니다.
+이 저장소는 그것을 되살린 결과물입니다. v1.8을 디컴파일해 소스를 복원하고, 그 위에서 수정과 리팩터링을 이어왔습니다. 지금까지 **200건 이상의 수정과 강화**(크래시, 조용한 데이터 손실, 보안, 호환성)를 적용했고 시맨틱 버전 규칙으로 꾸준히 배포합니다.
 
-**설정과 다운로드 대기열은 어디에 저장되나요?**
-`%LOCALAPPDATA%\MegaDownloader\` 입니다. 프로그램 폴더는 자유롭게 옮기거나 삭제해도 설정에 영향이 없습니다. Windows 재설치 전에 이 폴더를 백업하세요.
+|  | 원본 v1.8 (2018년 중단) | **이 저장소 v2.6** |
+| --- | --- | --- |
+| 신형 `mega.nz/file` / `/folder` 링크 | ❌ 인식 못 함 | ✅ v1.9부터 지원 |
+| MEGA 할당량 소진 | 멈춤·오류 | ✅ 자동 정지 + 카운트다운 재개 (v2.5) |
+| 실패한 작업 | 수동 재시도만 | ✅ 주기적 자가 복구 (v2.5) |
+| 큰 공유 추가 | 붙여넣고 기도 | ✅ 일괄 사전 확인 + 폴더 트리 (v2.6) |
+| 작업 찾기 | 큐 전체 스크롤 | ✅ 패키지·파일·경로 검색 (v2.6) |
+| 무인 다운로드 | — | ✅ 매일 시간대 또는 한 번 예약 (v2.6) |
+| 시작 속도 | 첫 화면이 블로킹됨 | ✅ 콜드 스타트 150~200ms (기존 5~7초, v2.6) |
+| UI 테마 | 시스템 회색뿐 | ✅ 다크/라이트, 시스템 추종 (v2.0) |
+| 안정성 | — | ✅ 200건 이상의 크래시·데이터 손실·보안 수정 |
+| 유지보수 | 중단 | ✅ 활발히 유지, Issue 응답 |
 
-**구형 링크도 다운로드되나요?**
-네. 신구 형식, `mega://` 암호화 링크, ELC 컨테이너 모두 지원합니다 (전체 목록은 위의 접기 블록).
+> ⚠️ **법적 고지**: 이 프로젝트는 제3자가 배포한 소프트웨어를 디컴파일한 결과에서 출발했으며, 호환성 문제를 고쳐 다시 사용할 수 있게 하는 것만을 목적으로 합니다. 원저자가 권리 침해라고 판단하면 Issue로 알려 주세요. 협력해 처리하겠습니다.
+
+---
+
+## ❓ 자주 묻는 질문
+
+**할당량 초과(quota exceeded)라고 나옵니다.**
+MEGA는 무료 계정과 IP에 다운로드 할당량을 겁니다. v2.5부터는 자동으로 일시정지하고 카운트다운 후 재개합니다. 기다릴 수 없다면 설정에서 "할당량 돌파 모드"를 켜 계속 재시도할 수 있습니다.
+
+**설정과 다운로드 큐는 어디에 있나요?**
+`%LOCALAPPDATA%\MegaDownloader\`에 있습니다. 프로그램 폴더는 자유롭게 옮기거나 지워도 설정에 영향이 없습니다. Windows를 다시 설치하기 전에 이 폴더를 백업하세요.
+
+**구형 링크도 되나요?**
+됩니다. 신·구 형식, `mega://` 암호화 링크, ELC 컨테이너를 모두 지원합니다(위 목록 참고).
 
 **관리자 권한이 필요한가요?**
-아니요. 설치도, 관리자 권한도 필요 없습니다.
+아니요. 포터블이며 권한 상승 없이 실행됩니다.
 
-**Mac / Linux 버전은 없나요?**
-없습니다 — WinForms 기반이라 Windows 전용입니다. 다만 내장 웹 인터페이스를 켜면 스마트폰이나 다른 기기의 브라우저에서 다운로드를 관리할 수 있습니다.
+**Mac / Linux 버전이 있나요?**
+없습니다. WinForms 기반이라 Windows 전용입니다. 다만 내장 웹 인터페이스를 켜면 어떤 기기의 브라우저에서든 다운로드를 관리할 수 있습니다.
+
+**예약 다운로드가 PC를 깨우나요?**
+아니요. 앱이 실행 중이어야 하며, 깨우기 타이머를 등록하거나 서비스로 상주하지 않습니다.
+
+**보안 문제를 발견하면?**
+공개 Issue를 열지 말고 [SECURITY](../SECURITY.md)의 절차로 알려 주세요.
 
 ---
 
 ## 🛠️ 개발자용
 
 <details>
-<summary><b>소스에서 빌드 (클릭하여 펼치기)</b></summary>
+<summary><b>소스에서 빌드</b></summary>
 
-**필요 환경**: Visual Studio 2013 이상 (솔루션은 VS2013 형식) · .NET Framework 4.8 SDK (VS와 함께 설치) · Windows 7 SP1+
+<br>
+
+**요구 사항**: Visual Studio 2019 또는 2022 · .NET Framework 4.8 개발자 팩 · Windows 7 SP1+
 
 ```bash
 git clone https://github.com/a1175815821/MegaDownloader-Revival.git
 cd MegaDownloader-Revival
-# MegaDownloader.sln을 Visual Studio로 열고 Ctrl+Shift+B
+# Visual Studio에서 MegaDownloader.sln을 열고 Ctrl+Shift+B
 ```
 
 명령줄 빌드:
@@ -164,34 +278,36 @@ cd MegaDownloader-Revival
 msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 ```
 
-결과물은 `bin/<Configuration>/MegaDownloader.exe`. 빌드 구성: `Debug` / `Release` / `Debug_MSD` / `Release_MSD` (MegaSearchDesktop 통합 버전, 출력 위치 `Resources/Installer MSD/`).
+출력은 `bin/<Configuration>/MegaDownloader.exe`입니다. 빌드 구성: `Debug` / `Release` / `Debug_MSD` / `Release_MSD`(MegaSearchDesktop 통합판, `Resources/Installer MSD/`로 출력).
 
-회귀 테스트: PowerShell에서 `.\Tests\Run-RegressionTests.ps1`을 실행하세요(.NET SDK 필요). 임시 파일과 로컬 HTTP 서버를 사용하므로 MEGA 계정이 필요하지 않습니다. [Tests/README.md](../Tests/README.md)를 참고하세요.
+회귀 테스트: PowerShell에서 `.\Tests\Run-RegressionTests.ps1` 실행(.NET SDK 필요). 임시 파일과 로컬 HTTP 서버를 사용하므로 MEGA 계정이 필요 없습니다. 자세한 내용은 [Tests/README.md](../Tests/README.md).
 
-**기술 스택**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle (암호화) · Newtonsoft.Json · ObjectListView · SharpCompress (압축 해제) · HttpServer/Fadd (웹) · F5Lib (스테가노)
+**기술 스택**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle(암호) · Newtonsoft.Json · ObjectListView · SharpCompress(압축 해제) · HttpServer/Fadd(웹) · F5Lib(스테가노그래피)
 
 </details>
 
 <details>
-<summary><b>프로젝트 구조 (클릭하여 펼치기)</b></summary>
+<summary><b>프로젝트 구조</b></summary>
+
+<br>
 
 ```
 MegaDownloader/
-├── Clases/                 # 핵심 클래스 (암호화, 다운로드, 설정, 테마, 업데이트)
+├── Clases/                 # 핵심 클래스(암호, 다운로드, 설정, 테마, 사전 확인, 예약)
 ├── Controls/               # 사용자 정의 컨트롤
-├── Forms/                  # WinForms 폼 (12개)
+├── Forms/                  # WinForms 폼(워크벤치, 2단계 추가 흐름 등)
 ├── HttpModule/             # 내장 웹 서버 모듈과 HTML 템플릿
 ├── Stegano/                # 스테가노그래피 폼
 ├── Resources/
 │   ├── DLLs/               # 서드파티 DLL 의존성
-│   ├── Language/           # 다국어 XML (10개 언어)
-│   └── Installer MSD/      # WiX 설치 패키지 프로젝트
-├── docs/                   # 문서 (README / CHANGELOG / CONTRIBUTING)
+│   ├── Language/           # 로컬라이즈 XML(10개 언어)
+│   └── Installer MSD/      # WiX 설치 프로젝트
+├── docs/                   # 문서, 스크린샷, 릴리스 노트
 ├── Tests/                  # 다운로드·압축 해제·스트리밍 회귀 테스트
 └── MegaDownloader.sln
 ```
 
-전체 디렉터리 트리와 파일 설명은 [CONTRIBUTING](CONTRIBUTING.zh-CN.md)을 참고하세요.
+전체 디렉터리 트리는 [CONTRIBUTING](CONTRIBUTING.md)을 참고하세요.
 
 </details>
 
@@ -201,31 +317,32 @@ MegaDownloader/
 
 | 문서 | 내용 |
 | --- | --- |
-| [CHANGELOG](CHANGELOG.md) | 전체 버전 이력과 버전별 수정 내역 (간체 중국어만) |
-| [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
+| [CHANGELOG](CHANGELOG.md) | 전체 버전 기록과 버전별 수정 상세(중국어 간체, 원본) |
+| [CONTRIBUTING](CONTRIBUTING.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
+| [SECURITY](../SECURITY.md) | 취약점 신고 방법 |
+| [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 커뮤니티 행동 강령 |
+| [2.6 릴리스 노트](release-notes/v2.6.0.md) | GitHub Release 본문으로 쓰는 문안 |
 
-README는 5개 언어 모두 수동으로 관리됩니다. CONTRIBUTING은 영어와 간체 중국어만 있으며, CHANGELOG는 간체 중국어만 있습니다. 수정 시 다른 언어도 동기화해 주세요:
+README는 5개 언어로 직접 관리합니다. CONTRIBUTING은 영어와 중국어 간체, CHANGELOG는 중국어 간체만 있습니다. 하나를 고치면 나머지도 함께 갱신해 주세요:
 
 | 언어 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
-| English | `README.md` (저장소 루트) | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| English | `README.md`(루트) | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | 简体中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.zh-CN.md` |
 | 繁體中文 | `docs/README.zh-TW.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | 日本語 | `docs/README.ja-JP.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | 한국어 | `docs/README.ko-KR.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 
-> 简体中文이 원본(기준판)입니다.
-
 ---
 
-## ⭐ 이 프로젝트를 응원하기
+## ⭐ 프로젝트 지원하기
 
-MegaDownloader Revival이 도움이 되었다면 다음 방법으로 프로젝트를 응원해 주세요:
+MegaDownloader Revival이 도움이 되었다면, 다음 방법이 가장 효과적입니다:
 
-- ⭐ 오른쪽 위의 **Star**를 눌러 프로젝트 응원하기
-- 🐛 문제가 생기면 [Issue 보고](../../../issues) — 최근 수정의 많은 부분이 사용자 신고에서 나왔습니다
-- 🌍 [번역](CONTRIBUTING.zh-CN.md) 개선에 참여 — 10개 언어가 있지만 모국어 검수가 필요합니다
-- 🔗 아직 MEGA 다운로더를 찾고 있는 지인에게 알려주기
+- ⭐ **Star 눌러주기** — 프로젝트가 더 눈에 띄게 하는 가장 직접적인 신호입니다
+- 🐛 [Issue 올리기](../../../issues) — 최근 수정의 상당수가 사용자 제보에서 나왔습니다
+- 🌍 [번역](CONTRIBUTING.md) 개선 — 10개 언어가 있지만 원어민 교정이 부족합니다
+- 🔗 아직 쓸 만한 MEGA 다운로더를 찾는 사람에게 알려주기
 
 <a href="https://star-history.com/#a1175815821/MegaDownloader-Revival&Date">
  <picture>
@@ -239,12 +356,12 @@ MegaDownloader Revival이 도움이 되었다면 다음 방법으로 프로젝�
 
 ## 감사의 말
 
-- 원본 MegaDownloader의 저자 **Andres Soliño**
-- 부활 프로젝트 관리자 **Yingxue** (v2.0+), 그리고 Issue를 보고하고 번역을 개선해 준 모든 기여자
+- 원 MegaDownloader 개발자 **Andres Soliño**
+- 부활 프로젝트 메인테이너 **Yingxue**(v2.0+), 그리고 Issue와 번역으로 기여한 모든 분
 - 오픈소스 의존성: [BouncyCastle](https://www.bouncycastle.org/) · [Newtonsoft.Json](https://www.newtonsoft.com/json) · [SharpCompress](https://github.com/adamhathcock/sharpcompress) · [ObjectListView](http://objectlistview.sourceforge.net/) · [7-Zip](https://www.7-zip.org/)
 
 ## 라이선스
 
-[MIT License](../LICENSE)로 공개. 원본 저작권 © 2018 Andres Soliño, 부활 프로젝트 수정 부분의 저작권 © 2026 MegaDownloader Revival Project 기여자.
+[MIT License](../LICENSE)로 배포합니다. 원본 저작권 © 2018 Andres Soliño, 부활 프로젝트 수정에 대한 저작권 © 2026 MegaDownloader Revival Project 기여자.
 
-> 저장소 내 서드파티 DLL은 각자의 원 라이선스를 따릅니다. 사용자는 준수 여부를 직접 확인해야 합니다.
+> 저장소의 서드파티 DLL은 각자의 원래 라이선스를 따릅니다. 사용자가 직접 준수 여부를 확인해야 합니다.

@@ -1,10 +1,22 @@
 Imports System.Text.RegularExpressions
 
 Public Class AddLinks
+
+    Public Sub New()
+        ' Build the complete hierarchy before the first automatic font/DPI scaling pass.
+        SuspendLayout()
+        Try
+            InitializeComponent()
+            InitAddLinksLayout()
+        Finally
+            ResumeLayout(True)
+        End Try
+    End Sub
 	
 	Public Main As Main
 	Public Config As Configuracion
 	Public HiddenLinks As String = String.Empty
+    Public ReadOnly Property LastImportedPackage As Paquete
 
 	' P0-6 UI:链接计数 debounce(300ms,避免大文本每次击键跑正则)+输入框水印
 	Private WithEvents _linkCountTimer As Timer
@@ -16,8 +28,8 @@ Public Class AddLinks
 	End Function
 	
 	Private Sub AddLinks_Load(sender As Object, e As System.EventArgs) Handles Me.Load
-		ThemeManager.ApplyTheme(Me)
 		Translate()
+		ThemeManager.ApplyTheme(Me)
 		
 		txtRuta.Text = Config.RutaDefecto
 		chkCrearDirectorio.Checked = Config.CrearDirectorioPaquete
@@ -44,32 +56,38 @@ Public Class AddLinks
 		End If
 		_linkCountTimer.Interval = 300
 		
-		' Centramos la pantalla
-		' http://stackoverflow.com/questions/7892090/how-to-set-winform-start-position-at-top-right
-		Dim scr = Screen.FromPoint(Me.Location)
-		Me.Location = New Point(CInt((scr.WorkingArea.Right - Me.Width) / 2), CInt((scr.WorkingArea.Bottom - Me.Height) / 2))
+		FitAddLinksToWorkingArea(True)
+        addLinksLayoutReady = True
+        UpdateAddLinksInputHeight()
 		
     End Sub
 
-    Public Function AgregarEnlaces(texto As String, limpiarContenidoAnterior As Boolean, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean) As Boolean
+    Public Function AgregarEnlaces(texto As String, limpiarContenidoAnterior As Boolean, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean, Optional parsed As Generic.List(Of String) = Nothing) As Boolean
 
+        If importBusy OrElse onSelectionPage Then
+            deferredInputs.Add(Tuple.Create(texto, ExtraerURLs, EsconderLinks, parsed))
+            If preflightView IsNot Nothing Then preflightView.ShowNotice(Language.GetText("AddLinks_Deferred"))
+            Return False ' Keep the current selection stable; merge new links on return.
+        End If
+        If parsed IsNot Nothing AndAlso Not limpiarContenidoAnterior AndAlso Not EsconderLinks Then
+            If parsed.Count = 0 Then Return False
+            Dim addition As String = If(ExtraerURLs, String.Join(vbNewLine, parsed), texto)
+            If txtLinks.TextLength > 0 Then txtLinks.AppendText(vbNewLine)
+            txtLinks.AppendText(addition)
+            Return True
+        End If
+
+        Dim previousText As String = Me.txtLinks.Text
         If Not limpiarContenidoAnterior Then
             texto = Me.txtLinks.Text & vbNewLine & texto
         End If
 
-        Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(texto)
+        Dim URLs As Generic.List(Of String) = If(parsed IsNot Nothing AndAlso Not EsconderLinks, parsed, URLExtractor.ExtraerURLs(texto))
         If URLs IsNot Nothing AndAlso URLs.Count > 0 Then
 
             If ExtraerURLs Then
-                Dim URLstr As String = ""
-                For Each url As String In URLs
-                    If URLstr.Length > 0 Then
-                        URLstr &= vbNewLine
-                    End If
-                    URLstr &= url
-                Next
-
-                texto = URLstr
+                texto = String.Join(vbNewLine, URLs)
+                If parsed IsNot Nothing AndAlso Not limpiarContenidoAnterior Then texto = previousText & vbNewLine & texto
 
             End If
 
@@ -117,7 +135,7 @@ Public Class AddLinks
         Me.btnExaminar.Text = Language.GetText("Browse")
         Me.Label2.Text = Language.GetText("Name") & ":"
         Me.Label1.Text = Language.GetText("Path") & ":"
-        Me.btnAgregar.Text = Language.GetText("Add links")
+        Me.btnAgregar.Text = Language.GetText("AddLinks_SelectFiles")
         Me.btnWatchOnline.Text = Language.GetText("Watch Online")
         Me.chkStartDownload.Text = Language.GetText("Start download")
         Me.lblPassword.Text = Language.GetText("Password") & ":"
@@ -137,10 +155,7 @@ Public Class AddLinks
     End Sub
 
     Public Sub PonerFoco()
-        ' http://stackoverflow.com/questions/278237/keep-window-on-top-and-steal-focus-in-winforms
-        Me.TopMost = True
-        Me.TopMost = False
-        Me.TopMost = True ' Para que funcione tenemos que quitar Topmost y volverlo a activar (??)
+        ' The modal owner keeps this window above Main without making it globally topmost.
         Me.Activate()
     End Sub
 
@@ -152,6 +167,7 @@ Public Class AddLinks
 	Private Sub txtLinks_TextChanged(sender As Object, e As System.EventArgs) Handles txtLinks.TextChanged
 		' RC:清空与 HiddenLinks 同步,不等 300ms debounce,否则窗口期内点添加仍用残留建包。
 		If String.IsNullOrWhiteSpace(txtLinks.Text) Then HiddenLinks = String.Empty
+		PreflightInputChanged()
 		If _linkCountTimer IsNot Nothing Then
 			_linkCountTimer.Stop()
 			_linkCountTimer.Start()
@@ -164,52 +180,16 @@ Public Class AddLinks
 	End Sub
 
 	Private Sub AddLinks_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
+		DisposePreflight()
 		Try
 			If _linkCountTimer IsNot Nothing Then _linkCountTimer.Dispose()
 		Catch
 		End Try
 	End Sub
 
-	Private Sub UpdateLinkCount()
-		Try
-			' RC:文本框清空时同步清 HiddenLinks,否则计数残留且点添加仍建包。
-			If String.IsNullOrWhiteSpace(txtLinks.Text) Then
-				HiddenLinks = String.Empty
-			End If
-			Dim n As Integer = 0
-			If Not String.IsNullOrEmpty(txtLinks.Text) Then
-				Dim urls As Generic.List(Of String) = ExtraerURLs()
-				If urls IsNot Nothing Then n = urls.Count
-				' 隐身链路:N 行占位符对应 1 个 elc,计数至少反映可见行数,避免“5 行显示 1 个”困惑。
-				If Not String.IsNullOrEmpty(HiddenLinks) Then
-					Try
-						Dim placeholder As Integer = 0
-						For Each ln As String In txtLinks.Text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.None)
-							If ln.Trim() = Fichero.HIDDEN_LINK_DESC Then placeholder += 1
-						Next
-						If placeholder > n Then n = placeholder
-					Catch
-					End Try
-				End If
-			Else
-				n = 0
-			End If
-			If n > 0 Then
-				lblLinkCount.Text = Language.GetText("AddLinks_LinkCount").Replace("%N%", n.ToString())
-			Else
-				lblLinkCount.Text = ""
-			End If
-			If _cueFallbackLabel IsNot Nothing AndAlso Not _cueFallbackLabel.IsDisposed Then
-				_cueFallbackLabel.Visible = (txtLinks.TextLength = 0)
-			End If
-		Catch ex As Exception
-			Log.WriteError("UpdateLinkCount failed: " & ex.ToString)
-		End Try
-	End Sub
-
 	''' <summary>
 	''' P0-6:RichTextBox 水印。EM_SETCUEBANNER 在部分 RichEdit 版本上返回 0,
-	''' 此时 fallback 为覆盖式灰 Label(Disabled 穿透点击),随 Shown 只建一次。
+	''' 此时使用带主题色的提示 Label，点击交还输入焦点，随 Shown 只建一次。
 	''' </summary>
 	Private Sub TrySetCueBanner()
 		Try
@@ -222,15 +202,17 @@ Public Class AddLinks
 				If _cueFallbackLabel Is Nothing OrElse _cueFallbackLabel.IsDisposed Then
 					_cueFallbackLabel = New Label()
 					_cueFallbackLabel.AutoSize = True
-					_cueFallbackLabel.Enabled = False
+					_cueFallbackLabel.Enabled = True
 					_cueFallbackLabel.BackColor = txtLinks.BackColor
 					' RC:深色下水印此前默认黑字不可见,固定灰字。
-					_cueFallbackLabel.ForeColor = Drawing.SystemColors.GrayText
-					_cueFallbackLabel.Location = New Point(txtLinks.Left + 4, txtLinks.Top + 3)
+					UiStyles.SetRole(_cueFallbackLabel, UiStyles.Role.Muted)
+					_cueFallbackLabel.Location = New Point(4, 3)
 					_cueFallbackLabel.Text = cue
-					Me.Controls.Add(_cueFallbackLabel)
+					txtLinks.Controls.Add(_cueFallbackLabel)
+					AddHandler _cueFallbackLabel.Click, Sub() txtLinks.Focus()
 					_cueFallbackLabel.BringToFront()
 				End If
+				UpdateAddLinksCueBounds()
 				_cueFallbackLabel.Visible = (txtLinks.TextLength = 0)
 			End If
 		Catch ex As Exception
@@ -257,46 +239,7 @@ Public Class AddLinks
     End Function
 
     Private Sub btnAgregar_Click(sender As System.Object, e As System.EventArgs) Handles btnAgregar.Click
-        Try
-            ' RC:与 TextChanged 同步语义——空文本=无操作,残留 HiddenLinks 不得建包。
-            If String.IsNullOrWhiteSpace(txtLinks.Text) Then HiddenLinks = String.Empty
-            Dim URLs As Generic.List(Of String) = ExtraerURLs()
-            If URLs.Count = 0 Then
-                Throw New ApplicationException(Language.GetText("Links not valid"))
-            End If
-
-            ' P0-3:目录不存在时建完必须继续走添加流程,此前 ElseIf 建完直接 End If,
-            ' 第一次点击静默无操作,第二下才成功。
-            If Not System.IO.Directory.Exists(txtRuta.Text) Then
-                Try
-                    System.IO.Directory.CreateDirectory(txtRuta.Text)
-                    If Not System.IO.Directory.Exists(txtRuta.Text) Then Throw New ApplicationException("Invalid dir")
-                Catch ex As Exception
-                    Throw New ApplicationException(Language.GetText("Invalid directory"))
-                End Try
-            End If
-
-            btnAgregar.Text = Language.GetText("Loading...")
-            btnAgregar.Enabled = False
-
-
-            ' Guardamos la última configuración usada
-            UltimaConfiguracionUsada.ExisteUltimaConfiguracion = True
-            UltimaConfiguracionUsada.CrearDirectorioPaquete = chkCrearDirectorio.Checked
-            UltimaConfiguracionUsada.ExtraerAutomaticamente = chkUnZip.Checked
-            UltimaConfiguracionUsada.RutaDescarga = txtRuta.Text
-            UltimaConfiguracionUsada.IniciarDescarga = chkStartDownload.Checked
-
-            ' v2.5 beta: 文件夹解析可能很慢(API + 逐节点解密),放线程池并显示实时计数,避免 UI 假死。
-            ResolveUrlsAsync(URLs, AddressOf OnResolveForAdd)
-            Return
-        Catch ex As Exception
-            Log.WriteError("Error while adding the link: " & ex.ToString)
-                MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-            btnAgregar.Enabled = True
-            btnAgregar.Text = Language.GetText("Add links")
-        End Try
-
+        ShowSelectionPage()
     End Sub
 
     ''' <summary>v2.5 beta: 文件夹读取进度窗(常亮计数 + 取消=丢弃结果)。</summary>
@@ -440,7 +383,7 @@ Public Class AddLinks
         Try
             If btnAgregar IsNot Nothing AndAlso Not btnAgregar.IsDisposed Then
                 btnAgregar.Enabled = True
-                btnAgregar.Text = Language.GetText("Add links")
+                btnAgregar.Text = Language.GetText("AddLinks_SelectFiles")
             End If
         Catch
         End Try
@@ -496,121 +439,44 @@ Public Class AddLinks
         Return quotaMsg
     End Function
 
-    Private Sub OnResolveForAdd(URLs2 As Generic.List(Of URLProcessor.FileURL), err As Exception, unused As FolderResolveProgressForm)
-        Try
-            If err IsNot Nothing Then
-                If TypeOf err Is MegaQuotaExceededException Then
-                    Log.WriteWarning("Quota hit while reading folder: " & Log.SafeException(err))
-                    MessageBox.Show(GetQuotaErrorMessage(), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Else
-                    Log.WriteError("Error while adding the link: " & err.ToString)
-                    MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                End If
-                btnAgregar.Enabled = True
-                btnAgregar.Text = Language.GetText("Add links")
-                Return
-            End If
-            If URLs2 Is Nothing OrElse URLs2.Count = 0 Then
-                Throw New ApplicationException(Language.GetText("Links not valid"))
-            End If
-            FinishAddPackage(URLs2)
-        Catch ex As Exception
-            Log.WriteError("Error while adding the link: " & ex.ToString)
-            MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-            btnAgregar.Enabled = True
-            btnAgregar.Text = Language.GetText("Add links")
-        End Try
-    End Sub
 
-    Private Sub FinishAddPackage(URLs2 As Generic.List(Of URLProcessor.FileURL))
-        ' Creamos el paquete
-        Dim oPaquete As New Paquete
-        With oPaquete
-            .Nombre = txtNombre.Text
-            .RutaLocal = txtRuta.Text
-            .CrearSubdirectorio = chkCrearDirectorio.Checked
-            .PendienteNombrePaquete = String.IsNullOrEmpty(txtNombre.Text)
-
-            ' 文件夹分享的真名(MegaFolderHelper 展开时就解密带出了,此前被丢掉)。
-            ' 用户填了包名不动;单条目也不动——那种包验名后按文件名命名并建目录是既有行为。
-            Dim folderName As String = URLProcessor.GetCommonFolderName(URLs2)
-            Dim folderNamePending As Boolean = .PendienteNombrePaquete AndAlso _
-                                               Not String.IsNullOrEmpty(folderName) AndAlso _
-                                               URLs2 IsNot Nothing AndAlso URLs2.Count > 1
-
-            ' 散装多文件(所有条目都无相对子目录)+勾选创建目录+包名空:自动用"新建包"
-            ' 建子目录,否则多文件无名包会直接散落下载目录(此前取首个文件名建目录即 issue #4)。
-            ' 文件夹分享(任一 Path 非空)保持现状,不额外套顶层;单文件走验名流程。
-            If .PendienteNombrePaquete AndAlso .CrearSubdirectorio AndAlso URLs2 IsNot Nothing AndAlso URLs2.Count > 1 Then
-                Dim allFlat As Boolean = True
-                For Each fu As URLProcessor.FileURL In URLs2
-                    If Not String.IsNullOrEmpty(fu.Path) Then
-                        allFlat = False
-                        Exit For
-                    End If
-                Next
-                If allFlat Then
-                    ' 扁平文件夹分享也走这里:目录照建,只是名字从"新建包"换成真名(落盘形状不变)。
-                    Dim autoName As String = folderName
-                    If String.IsNullOrEmpty(autoName) Then
-                        autoName = Language.GetText("New package")
-                        If String.IsNullOrEmpty(autoName) Then autoName = "New package"
-                    End If
-                    .Nombre = autoName
-                    .PendienteNombrePaquete = False
-                End If
-            End If
-
-            ' 带子目录的文件夹分享:真名同样先赋值再建目录,与 Main.ControlRemotoAgregarLinks 形状统一
-            ' (此前建目录之后才回写显示名、刻意不套顶层目录,同一文件夹链接两个入口落盘形状不一致:
-            ' Web 推送多套一层真名目录而 AddLinks 不套)。赋值必须在建目录之前,建目录分支才会用真名建顶层目录。
-            If folderNamePending AndAlso .PendienteNombrePaquete Then
-                .Nombre = folderName
-                .PendienteNombrePaquete = False
-            End If
-
-            ' Creamos el directorio
-            If .CrearSubdirectorio And Not String.IsNullOrEmpty(.Nombre) Then
-                Dim packageSegment As String = PathGuard.SanitizeFileName(.Nombre, "package")
-                .RutaLocal = PathGuard.GetSafePathUnderRoot(.RutaLocal, packageSegment, allowRoot:=False)
-                System.IO.Directory.CreateDirectory(.RutaLocal)
-            End If
-
-            Log.WriteWarning("Adding package in " & .RutaLocal)
-
-            .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
-            For Each URL In URLs2
-
-                Dim ruta As String = PathGuard.GetSafePathUnderRoot(oPaquete.RutaLocal, If(URL.Path, String.Empty), allowRoot:=True)
-                System.IO.Directory.CreateDirectory(ruta)
-
-                Dim URLFile As String = URL.URL
-                Dim Visible As Boolean = True
-                If Not String.IsNullOrEmpty(URLFile) AndAlso URLFile.Contains(Fichero.HIDDEN_LINK) Then
-                    Visible = False
-                    URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
-                End If
-
-                Dim oFichero As New Fichero(URLFile)
-                With oFichero
-                    .LinkVisible = Visible
-                    .RutaLocal = ruta
-                    .RutaRelativa = URL.Path
-                    .NombreFichero = If(Visible, URLFile, Fichero.HIDDEN_LINK_DESC)
-                    .FileID = Fichero.ExtraerFileID(URLFile)
-                    .FileKey = Fichero.ExtraerFileKey(URLFile)
-                    .SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
-                    Log.WriteWarning("Adding file to the new package: " & .FileID)
-                End With
-                .AgregarFichero(oFichero)
-
+    Private Async Function FinishAddPackageAsync(urls As Generic.List(Of URLProcessor.FileURL)) As System.Threading.Tasks.Task(Of Boolean)
+        Dim name As String = txtNombre.Text
+        Dim path As String = txtRuta.Text
+        Dim create As Boolean = chkCrearDirectorio.Checked
+        Dim extract As Boolean = chkUnZip.Checked
+        Dim password As String = txtPassword.Text
+        Dim token As System.Threading.CancellationToken = importCancellation.Token
+        Dim progress As New PreflightProgress.ItemReporter(Sub(count) System.Threading.Volatile.Write(importCompleted, count))
+        Dim package As Paquete = Await System.Threading.Tasks.Task.Run(Function() DownloadPackageBuilder.Build(urls, name, path, create, extract, password, token, progress), token)
+        importCommitting = True
+        RefreshImportProgress()
+        ' Give the final stage a paint turn before the synchronous queue publication.
+        Await System.Threading.Tasks.Task.Yield()
+        If preflightDisposed OrElse token.IsCancellationRequested Then
+            For Each file As Fichero In package.ListaFicheros
+                file.Dispose()
             Next
-        End With
-
-        Main.AgregarPaquete(oPaquete, False)
-        If chkStartDownload.Checked Then Main.StartDownload()
-        Me.Close()
-    End Sub
+            token.ThrowIfCancellationRequested()
+            Return False
+        End If
+        Try
+            Main.AgregarPaquete(package, False, True)
+        Catch ex As Exception
+            If Not Main.IsPackageQueued(package) Then
+                For Each file As Fichero In package.ListaFicheros
+                    file.Dispose()
+                Next
+                Throw
+            End If
+            ' Queue ownership has already transferred. A later refresh/notification
+            ' failure must not report this batch as uncommitted or dispose its files.
+            Log.WriteError("Imported tasks were queued, but post-add updates failed: " & Log.SafeException(ex))
+            Main.SaveImportedQueueInBackground()
+        End Try
+        _LastImportedPackage = package
+        Return True
+    End Function
 
 
     ' 在线观看解析进行中标记：ResolveUrlsAsync 是异步的，连点/双击会并发跑两次
@@ -636,6 +502,7 @@ Public Class AddLinks
         If _watchResolving Then Return
         _watchResolving = True
         btnWatchOnline.Enabled = False
+        btnAgregar.Enabled = False
 
         ResolveUrlsAsync(URLs, AddressOf OnResolveForWatch)
     End Sub
@@ -671,6 +538,7 @@ Public Class AddLinks
         Finally
             _watchResolving = False
             If btnWatchOnline IsNot Nothing AndAlso Not btnWatchOnline.IsDisposed Then btnWatchOnline.Enabled = True
+            If btnAgregar IsNot Nothing AndAlso Not btnAgregar.IsDisposed Then btnAgregar.Enabled = True
         End Try
     End Sub
 
@@ -701,7 +569,8 @@ Public Class AddLinks
 
     Private Sub chkUnZip_CheckedChanged(sender As Object, e As EventArgs) Handles chkUnZip.CheckedChanged
         txtPassword.Enabled = chkUnZip.Checked
-        lblPassword.Enabled = chkUnZip.Checked
+        ' Labels are not interactive; use themed muted text instead of native disabled ink.
+        UiStyles.SetRole(lblPassword, If(chkUnZip.Checked, UiStyles.Role.BodyText, UiStyles.Role.Muted))
     End Sub
 
     Private Sub LinkLabel2_MouseHover(sender As Object, e As System.EventArgs) Handles LinkLabel2.MouseHover

@@ -26,7 +26,7 @@
     <UpdateEnabled>false</UpdateEnabled>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>2.5.9.0</ApplicationVersion>
+    <ApplicationVersion>2.6.0.0</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>false</BootstrapperEnabled>
@@ -204,6 +204,7 @@
     <Compile Include="Clases\Configuracion.vb" />
     <Compile Include="Clases\ConfiguracionUI.vb" />
     <Compile Include="Clases\ThemeManager.vb" />
+    <Compile Include="Clases\UiStyles.vb" />
     <Compile Include="Clases\Cryptography\AES.vb" />
     <Compile Include="Clases\ELCAccountHelper.vb" />
     <Compile Include="Clases\MegaFolderHelper.vb" />
@@ -236,6 +237,32 @@
     <Compile Include="Clases\MegaQuotaManager.vb" />
     <Compile Include="Clases\PathGuard.vb" />
     <Compile Include="Clases\AtomicFile.vb" />
+    <Compile Include="Clases\ProcessResourceMonitor.vb" />
+    <Compile Include="Clases\DownloadSchedule.vb" />
+    <Compile Include="Clases\BatchLinkPreflight.vb" />
+    <Compile Include="Clases\PreflightSession.vb" />
+    <Compile Include="Clases\PreflightProgress.vb" />
+    <Compile Include="Clases\PreflightTree.vb" />
+    <Compile Include="Clases\DownloadPackageBuilder.vb" />
+    <Compile Include="Clases\PreflightSelection.vb" />
+    <Compile Include="Forms\AddLinks.Preflight.vb">
+      <DependentUpon>AddLinks.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\AddLinks.Layout.vb">
+      <DependentUpon>AddLinks.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\AddLinks.Workflow.vb">
+      <DependentUpon>AddLinks.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\BatchPreflightView.vb">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Forms\DownloadScheduleForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Main.Scheduling.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
     <Compile Include="Clases\PreSharedKeyManager.vb" />
     <Compile Include="Clases\ResourceHelper.vb" />
     <Compile Include="Clases\ServidorWebController.vb" />
@@ -293,6 +320,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\Main.DetailPanel.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Main.Workbench.vb">
       <DependentUpon>Main.vb</DependentUpon>
     </Compile>
     <Compile Include="My Project\AssemblyInfo.vb" />

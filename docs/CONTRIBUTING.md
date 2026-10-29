@@ -77,9 +77,11 @@ MegaDownloader/
 │   ├── PantallaMsg.vb              #   Message dialog form
 │   └── PropiedadesDescarga.vb      #   Download properties form
 ├── docs/                           # Project documentation
-│   ├── README*.md                   #   Project readme (5 languages, root README.md is English)
+│   ├── README.*.md                  #   Translated readmes (root README.md is English)
 │   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
-│   └── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
+│   ├── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
+│   ├── release-notes/               #   Per-version release notes for the Release page
+│   └── screenshots/                 #   Banner and interface images used by the READMEs
 ├── Tests/                          # Executable regression checks and runner
 ├── MegaDownloader.sln              # VS solution
 ├── MegaDownloader.vbproj           # VS project
@@ -110,7 +112,7 @@ MegaDownloader/
 ```bash
 # After forking the repository to your own GitHub account:
 git clone https://github.com/<your-username>/MegaDownloader-Revival.git
-cd MegaDownloader
+cd MegaDownloader-Revival
 git remote add upstream https://github.com/a1175815821/MegaDownloader-Revival.git
 ```
 
@@ -247,21 +249,23 @@ UI strings live in `Resources/Language/<locale>-Language.xml`, one file per lang
 
 To improve a translation:
 
-1. Find the XML for the target language (e.g. `ja-JP-Language.xml`)
+1. Find the XML for the target language (e.g. `zh-CN-Language.xml`)
 2. Edit the CDATA content of the `<Text>` nodes — **do not change the `key` attribute**
 3. If you add a key, make sure `en-US-Language.xml` also has a key with the same name (it serves as the fallback baseline)
 
 ### Adding a new UI language
 
 1. Copy `Resources/Language/en-US-Language.xml` to `<locale>-Language.xml`
-2. Translate the CDATA content of every `<Text>` node
+2. Set the root `id` to a valid culture code (e.g. `ja-JP`) and `name` to the language display name; then translate the CDATA content of every `<Text>` node
 3. Register the embedded resource in `MegaDownloader.vbproj`:
 
 ```xml
 <EmbeddedResource Include="Resources\Language\ja-JP-Language.xml" />
 ```
 
-4. Run the app — the new language appears under **Settings → Language**
+4. Rebuild and run the app, then select the new language under **Settings → Language**
+
+> When testing changes to an existing language, the disk file at `%LOCALAPPDATA%\MegaDownloader\Language\<locale>.xml` takes priority over the embedded resource. Back it up and temporarily move it aside before restarting, or test in an isolated user account; do not overwrite a user’s custom translations.
 
 > Language key lookup falls back in three stages: disk file → embedded resource → `en-US` → the key itself. So even if some keys are missing, the app will not crash — it just shows English or the raw key.
 
@@ -274,22 +278,22 @@ When filing a bug, please include the following in the Issue:
 - **Link type** (paste a full example link; you may redact sensitive parts)
 - **Steps to reproduce**
 - **Expected behaviour** vs **actual behaviour**
-- **Error log** (if any — located in the application directory)
+- **Error log** (if any — located in `%LOCALAPPDATA%\MegaDownloader\Log\`)
 
 ## Release process (maintainers only)
 
 1. Confirm both `Debug` and `Release` build, and run `.\Tests\Run-RegressionTests.ps1`
 2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
-3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all five README languages (including both English entry points)
+3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all five READMEs (root English plus four translations)
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
-6. Write the release notes in Simplified Chinese (structure below, see "Writing the release notes"); after CI creates the GitHub Release, review and paste the body onto the release page
+6. Write `docs/release-notes/vX.Y.Z.md` using the structure below. CI uses that file as the Release body when it exists; without it, the generated notes are used
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash
-git tag -a v2.5.0 -m "Release v2.5.0"
+git tag -a v2.6.0 -m "Release v2.6.0"
 git push origin main
-git push origin v2.5.0
+git push origin v2.6.0
 ```
 
 On a `v*` tag, CI automatically:
@@ -301,13 +305,13 @@ On a `v*` tag, CI automatically:
 
 The release page is the only documentation most users read carefully. Organize it from conclusion to detail, so someone who reads only the first ten lines can still download and upgrade:
 
-1. **Download & upgrade** (blockquote): who should pick which of the two assets; upgrading is a simple exe replacement — settings and the download queue live in `%LOCALAPPDATA%\MegaDownloader\` and survive; system requirements (Windows 7 SP1+ · .NET Framework 4.8)
+1. **Download & upgrade** (blockquote): who should pick which of the two assets; upgrade the single-file edition by replacing the exe, or the ZIP edition by replacing its application files — settings and the download queue live in `%LOCALAPPDATA%\MegaDownloader\` and survive; system requirements (Windows 7 SP1+ · .NET Framework 4.8)
 2. **One-sentence summary**: the 3–5 most important changes of this release
 3. **What symptom does this fix**: 3–6 user-visible, symptom-style descriptions ("downloads failed every ~2 minutes → fixed") rather than lists of technical nouns
 4. **Full details**: sections per area (downloads / decompression / UI / i18n), developer-level depth welcome
 5. End with the **Full Changelog** compare link
 
-> For test pre-releases (RC builds), publish as `prerelease` first and promote to a full release once verified.
+> For a test pre-release, use a tag with a hyphen (e.g. `v2.7.0-rc.1`); CI marks it as a prerelease. After verification, push a stable tag (e.g. `v2.7.0`) for the full release.
 
 ## Contact
 

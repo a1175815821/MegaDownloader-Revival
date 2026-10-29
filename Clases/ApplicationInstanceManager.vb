@@ -186,7 +186,8 @@ Public NotInheritable Class ApplicationInstanceManager
         ' Cannot remote with mpress, arrrgh!! :(
         Dim PathFile As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Internal")
 
-        SyncLock Mutex.MEGAUriParameters
+        Using gate As System.Threading.Mutex = AcquireBufferMutex()
+          Try
             If Not System.IO.Directory.Exists(PathFile) Then
                 System.IO.Directory.CreateDirectory(PathFile)
             End If
@@ -195,81 +196,76 @@ Public NotInheritable Class ApplicationInstanceManager
                 ' One message per line so concurrent second-instance launches do not glue args together
                 t.WriteLine(String.Join("|", InstanceProxy.CommandLineArgs))
             End Using
-        End SyncLock
+          Finally
+            gate.ReleaseMutex()
+          End Try
+        End Using
     End Sub
 
+    Private Shared Function AcquireBufferMutex(Optional mutexName As String = Nothing) As System.Threading.Mutex
+        If String.IsNullOrEmpty(mutexName) Then mutexName = "Local\MegaDownloader-Buffer-" & Environment.UserName
+        Dim gate As New System.Threading.Mutex(False, mutexName)
+        Try
+            Try
+                If Not gate.WaitOne(TimeSpan.FromSeconds(10)) Then Throw New TimeoutException("Timed out waiting for the instance parameter buffer.")
+            Catch ex As AbandonedMutexException
+                ' The previous owner died; this thread now owns the mutex.
+            End Try
+            Return gate
+        Catch
+            gate.Dispose()
+            Throw
+        End Try
+    End Function
 
 
     ' Dirty trick... but works without using remote marshalling :(
-    Private Shared _getParametersLastCheck As Date = Date.MinValue
     Friend Shared Function GetParameters() As Boolean
         Dim PathLog As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), _
                                              "MegaDownloader/Internal/Buffer.dat")
-        If File.Exists(PathLog) Then
-            If _getParametersLastCheck = Date.MinValue OrElse File.GetLastWriteTimeUtc(PathLog) > _getParametersLastCheck.ToUniversalTime Then
-                SyncLock Mutex.MEGAUriParameters
-                    Dim args As New Generic.List(Of String)
-                    Dim rawLines As New Generic.List(Of String)
-                    Using t As New StreamReader(PathLog)
-                        While Not t.EndOfStream
-                            Dim line As String = t.ReadLine()
-                            If String.IsNullOrWhiteSpace(line) Then Continue While
-                            rawLines.Add(line)
-                            Dim l = line.Split("|"c)
-                            ' Each line starts with the program name as first parameter
-                            If l.Length > 1 Then
-                                args.AddRange(l.Skip(1))
-                            ElseIf l.Length = 1 AndAlso Not String.IsNullOrWhiteSpace(l(0)) Then
-                                args.Add(l(0))
-                            End If
-                        End While
-                    End Using
-                    Using t As New StreamWriter(PathLog, False)
-                        t.Write("")
-                    End Using
-                    _getParametersLastCheck = Now
-
-                    If args.Count > 0 Then
-                        Dim invoked As Boolean = False
-                        Try
-                            Dim mainFrm = My.MyApplication.Main_Form
-                            If mainFrm IsNot Nothing AndAlso Not mainFrm.IsDisposed AndAlso mainFrm.IsHandleCreated Then
-                                Dim d As Action(Of Boolean) = Sub(x As Boolean)
-                                                                  mainFrm.ProcessArgs(args.ToArray)
-                                                                  mainFrm.Activate()
-                                                              End Sub
-                                If mainFrm.InvokeRequired Then
-                                    mainFrm.Invoke(d, True)
-                                Else
-                                    d.Invoke(True)
-                                End If
-                                invoked = True
-                                Return True
-                            Else
-                                Log.WriteWarning("GetParameters: Main_Form not ready, deferring " & args.Count & " arg(s)")
-                            End If
-                        Catch ex As Exception
-                            Log.WriteError("GetParameters Invoke failed: " & Log.SafeException(ex))
-                        End Try
-                        If Not invoked Then
-                            ' Restore raw lines so next poll can retry; do not lose args
-                            Try
-                                Using t As New StreamWriter(PathLog, True)
-                                    For Each rl As String In rawLines
-                                        t.WriteLine(rl)
-                                    Next
-                                End Using
-                            Catch
-                            End Try
-                            _getParametersLastCheck = Date.MinValue
-                        End If
-                    End If
-
-                End SyncLock
+        If Not File.Exists(PathLog) Then Return False
+        Dim mainFrm = My.MyApplication.Main_Form
+        If mainFrm Is Nothing OrElse mainFrm.IsDisposed OrElse Not mainFrm.IsHandleCreated Then Return False
+        Dim rawLines As New Generic.List(Of String)
+        Using gate As System.Threading.Mutex = AcquireBufferMutex()
+            Try
+                If Not File.Exists(PathLog) Then Return False
+                rawLines.AddRange(File.ReadAllLines(PathLog))
+                If rawLines.Count = 0 Then Return False
+                File.WriteAllText(PathLog, "")
+            Finally
+                gate.ReleaseMutex()
+            End Try
+        End Using
+        Dim args As New Generic.List(Of String)
+        For Each line As String In rawLines
+            If String.IsNullOrWhiteSpace(line) Then Continue For
+            Dim parts As String() = line.Split("|"c)
+            If parts.Length > 1 Then args.AddRange(parts.Skip(1))
+        Next
+        If args.Count = 0 Then Return False
+        Try
+            Dim d As Action = Sub()
+                                  mainFrm.ProcessArgs(args.ToArray())
+                                  mainFrm.Activate()
+                              End Sub
+            If mainFrm.InvokeRequired Then
+                mainFrm.Invoke(d)
+            Else
+                d.Invoke()
             End If
-        End If
-        Return False
-
+            Return True
+        Catch ex As Exception
+            Log.WriteError("GetParameters Invoke failed: " & Log.SafeException(ex))
+            Using gate As System.Threading.Mutex = AcquireBufferMutex()
+                Try
+                    File.AppendAllLines(PathLog, rawLines)
+                Finally
+                    gate.ReleaseMutex()
+                End Try
+            End Using
+            Return False
+        End Try
     End Function
 
     ''' <summary>

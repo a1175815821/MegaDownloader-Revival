@@ -532,16 +532,17 @@ Partial Class Main
         'Main
         '
         Me.AllowDrop = True
-        Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
+        Me.AutoScaleDimensions = New System.Drawing.SizeF(7.0!, 15.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1024, 500)
+        Me.ClientSize = New System.Drawing.Size(1360, 800)
+        Me.Font = New System.Drawing.Font("Segoe UI", 9.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point)
         Me.Controls.Add(Me.StatusStrip1)
         Me.Controls.Add(Me.TableLayoutPanel1)
         Me.Controls.Add(Me.detailPanel)
         Me.Controls.Add(Me.navPanel)
         Me.Controls.Add(Me.ListaDescargas)
         Me.Icon = Global.MegaDownloader.My.Resources.Resources.icono
-        Me.MinimumSize = New System.Drawing.Size(640, 280)
+        Me.MinimumSize = New System.Drawing.Size(640, 440)
         Me.Name = "Main"
         Me.StartPosition = System.Windows.Forms.FormStartPosition.Manual
         Me.Text = "MegaDownloader"

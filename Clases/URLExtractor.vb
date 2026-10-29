@@ -139,7 +139,7 @@ Public Class URLExtractor
             For Each match As Match In matches
                 Dim url As String = match.Value.Trim
 
-                Dim fileid As String = ExtraerFileID(url)
+                Dim fileid As String = match.Groups("FileID").Value
                 If Not String.IsNullOrEmpty(fileid) Then
                     links.Add(url)
                 End If
@@ -199,7 +199,7 @@ Public Class URLExtractor
             For Each match As Match In matches
                 Dim url As String = match.Value.Trim
 
-                Dim fileid As String = ExtraerFileID(url)
+                Dim fileid As String = match.Groups("FileID").Value
                 If Not String.IsNullOrEmpty(fileid) Then
                     links.Add(url)
                 ElseIf EsUrlAcortador(url) Then
