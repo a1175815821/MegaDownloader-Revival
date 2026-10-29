@@ -302,7 +302,7 @@ MegaDownloader/
 │   ├── DLLs/               # Third-party DLL dependencies
 │   ├── Language/           # Localization XML (10 languages)
 │   └── Installer MSD/      # WiX installer project
-├── docs/                   # Docs, screenshots, release notes
+├── docs/                   # Docs and screenshots
 ├── Tests/                  # Download, extraction and streaming regression checks
 └── MegaDownloader.sln
 ```
@@ -321,7 +321,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6](docs/release-notes/v2.6.0.md) | The text used as the GitHub Release body |
+| [Release notes 2.6](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | Highlights and downloads for v2.6 |
 
 The README is maintained in five languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

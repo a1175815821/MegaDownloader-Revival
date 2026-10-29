@@ -302,7 +302,7 @@ MegaDownloader/
 │   ├── DLLs/               # 서드파티 DLL 의존성
 │   ├── Language/           # 로컬라이즈 XML(10개 언어)
 │   └── Installer MSD/      # WiX 설치 프로젝트
-├── docs/                   # 문서, 스크린샷, 릴리스 노트
+├── docs/                   # 문서, 스크린샷
 ├── Tests/                  # 다운로드·압축 해제·스트리밍 회귀 테스트
 └── MegaDownloader.sln
 ```
@@ -321,7 +321,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
 | [SECURITY](../SECURITY.md) | 취약점 신고 방법 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 커뮤니티 행동 강령 |
-| [2.6 릴리스 노트](release-notes/v2.6.0.md) | GitHub Release 본문으로 쓰는 문안 |
+| [2.6 릴리스 노트](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 주요 변경 사항과 다운로드 |
 
 README는 5개 언어로 직접 관리합니다. CONTRIBUTING은 영어와 중국어 간체, CHANGELOG는 중국어 간체만 있습니다. 하나를 고치면 나머지도 함께 갱신해 주세요:
 

@@ -80,7 +80,6 @@ MegaDownloader/
 │   ├── README.*.md                  #   各语言说明（根 README.md 为英文）
 │   ├── CHANGELOG.md                 #   变更日志（仅简体中文）
 │   ├── CONTRIBUTING*.md             #   贡献指南（英文 + 简体中文）
-│   ├── release-notes/               #   各版本发行说明（用于 Release 页面）
 │   └── screenshots/                 #   README 使用的横幅与界面截图
 ├── Tests/                          # 可执行回归验证与运行脚本
 ├── MegaDownloader.sln              # VS 解决方案
@@ -286,7 +285,7 @@ git push origin feature/你的功能名称
 3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步五种语言 README 的当前版本亮点（根目录英文 + 四份翻译）
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
-6. 按下方结构撰写 `docs/release-notes/vX.Y.Z.md`；该文件存在时 CI 会直接用作 Release 正文，否则回退到自动生成的说明
+6. 按下方结构准备发行说明；CI 会先自动生成，发布后可在 GitHub Release 页面编辑
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash

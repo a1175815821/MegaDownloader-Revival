@@ -80,7 +80,6 @@ MegaDownloader/
 │   ├── README.*.md                  #   Translated readmes (root README.md is English)
 │   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
 │   ├── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
-│   ├── release-notes/               #   Per-version release notes for the Release page
 │   └── screenshots/                 #   Banner and interface images used by the READMEs
 ├── Tests/                          # Executable regression checks and runner
 ├── MegaDownloader.sln              # VS solution
@@ -287,7 +286,7 @@ When filing a bug, please include the following in the Issue:
 3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all five READMEs (root English plus four translations)
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
-6. Write `docs/release-notes/vX.Y.Z.md` using the structure below. CI uses that file as the Release body when it exists; without it, the generated notes are used
+6. Prepare the release notes using the structure below. CI generates initial notes; edit them on the GitHub Release page after publishing
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash

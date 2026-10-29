@@ -302,7 +302,7 @@ MegaDownloader/
 │   ├── DLLs/               # 第三方 DLL 依赖
 │   ├── Language/           # 多语言 XML（10 种）
 │   └── Installer MSD/      # WiX 安装包工程
-├── docs/                   # 文档、截图、发行说明
+├── docs/                   # 文档、截图
 ├── Tests/                  # 下载、解压与流媒体回归验证
 └── MegaDownloader.sln
 ```
@@ -321,7 +321,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6 发行说明](release-notes/v2.6.0.md) | 用作 GitHub Release 正文的文案 |
+| [2.6 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 的更新亮点与下载 |
 
 README 为五种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 

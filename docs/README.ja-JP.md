@@ -302,7 +302,7 @@ MegaDownloader/
 │   ├── DLLs/               # サードパーティ DLL
 │   ├── Language/           # ローカライズ XML（10 言語）
 │   └── Installer MSD/      # WiX インストーラープロジェクト
-├── docs/                   # ドキュメント、スクリーンショット、リリースノート
+├── docs/                   # ドキュメント、スクリーンショット
 ├── Tests/                  # ダウンロード・解凍・ストリーミングの回帰テスト
 └── MegaDownloader.sln
 ```
@@ -321,7 +321,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.md) | 貢献の流れ、コードスタイル、リリース手順 |
 | [SECURITY](../SECURITY.md) | 脆弱性の報告方法 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | コミュニティの行動規範 |
-| [2.6 リリースノート](release-notes/v2.6.0.md) | GitHub Release の本文として使う文面 |
+| [2.6 リリースノート](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 の変更点とダウンロード |
 
 README は 5 言語で手動メンテナンスしています。CONTRIBUTING は英語と簡体中文、CHANGELOG は簡体中文のみです。更新時は揃えてください：
 
