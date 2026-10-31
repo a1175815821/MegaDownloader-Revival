@@ -635,4 +635,7 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Start with a link]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Drop a MEGA link here, or choose Add links. You can also paste with Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[No matching tasks]]></Text>
 </Language>

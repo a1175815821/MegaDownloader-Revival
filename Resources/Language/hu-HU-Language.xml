@@ -561,4 +561,7 @@ Egyébként le tudja tölteni a linkeket, de nem látja azokat.]]></Text>
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Kezdés egy hivatkozással]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Húzz ide egy MEGA-hivatkozást, vagy adj hozzá hivatkozásokat. A Ctrl+V is használható.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[Nincs egyező feladat]]></Text>
 </Language>

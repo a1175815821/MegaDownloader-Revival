@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="최신 릴리스 다운로드" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="변경 내역" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="변경 내역" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>도움이 되셨다면 <a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a>로 프로젝트를 응원해 주세요.</sub></p>
@@ -29,22 +29,30 @@
   <sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja-JP.md">日本語</a> · <b>한국어</b></sub>
 </p>
 
-> **v2.6 "워크벤치"를 소개합니다.** UI를 전면 재작업하고, 링크 추가를 2단계 흐름으로 묶어 일괄 사전 확인을 지원합니다. 작업 검색과 예약 다운로드도 새로 추가했습니다. 부활 프로젝트 시작 이후 가장 큰 업데이트이며, 콜드 스타트는 **150~200ms**로 줄었습니다. [새 기능 보기 ↓](#-26-새로운-기능)
+> **v2.6.1: 정돈된 화면, 빠르게 열리는 설정, 시스템 언어 자동 선택.** 라이트/다크 화면의 계층을 정리하고 첫 실행 메뉴를 수정했습니다. Windows 표시 언어에 맞는 번역이 없으면 영어를 사용합니다. [업데이트 보기 ↓](#-261-새로운-기능)
 >
 > MEGA(MEGA Ltd.)와 무관한 비공식 프로젝트입니다.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/v2.6-workbench-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/v2.6-workbench-light.png">
-    <img alt="MegaDownloader v2.6 workbench" src="screenshots/v2.6-workbench-light.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+    <img alt="MegaDownloader v2.6.1 workbench" src="screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6 워크벤치 · 스크린샷은 GitHub 테마에 맞춰 바뀝니다. 화면 언어는 중국어 간체입니다.</sub></p>
+<p align="center"><sub>v2.6.1 워크벤치 · 스크린샷은 GitHub 테마에 맞춰 바뀝니다. 화면 언어는 중국어 간체입니다.</sub></p>
 
 ---
 
-## ✨ 2.6 새로운 기능
+## ✨ 2.6.1 새로운 기능
+
+- **더 명확한 화면 구성** — 사이드바, 글꼴, 여백, 버튼을 통일하고 진행률 막대와 백분율을 한 열로 합쳤습니다. 상세 정보가 창 너비에 맞춰 이동하며 정지 버튼의 글자와 예약 다운로드의 시계 아이콘을 표시합니다.
+- **처음부터 모든 메뉴 표시** — 파일, 옵션, 스트리밍, 도움말이 크기 변경 없이 보입니다. 설정 버튼도 사이드바 왼쪽에 맞췄습니다.
+- **빠르게 열리는 설정** — 반복 레이아웃 계산을 줄이고 ELC 계정 편집기는 해당 탭을 열 때 불러옵니다. 격리 테스트의 첫 표시가 약 8.2초에서 약 1.1초로 줄었습니다. 실제 시간은 환경에 따라 다릅니다.
+- **Windows 표시 언어 따르기** — 새 설정은 자동 선택이 기본입니다. 지역별 언어와 중국어 간체/번체를 구분하고 지원하지 않는 언어는 영어를 사용합니다. 기존 수동 선택은 유지합니다. 설정의 일반 탭에서 변경한 뒤 저장하고 재시작하세요. 한국어 UI 번역은 기본 제공하지 않습니다.
+- **스크린샷과 회귀 검사 갱신** — 아래 이미지는 2.6.1의 실제 네이티브 UI와 데모 데이터입니다. 전체 수정 사항과 첫 업그레이드 시 6열 배치로의 이전은 [CHANGELOG](CHANGELOG.md)를 참고하세요.
+
+## 2.6에서 도입한 워크벤치 기능
 
 > **창은 하나, 단계는 둘, 추측은 없습니다.**
 >
@@ -202,10 +210,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 
 <table>
 <tr>
-  <td align="center" width="50%"><b>1. 링크 붙여넣기</b><br><img src="screenshots/v2.6-add-links.png" alt="링크 입력 창" width="100%"></td>
-  <td align="center" width="50%"><b>2. 미리 확인하고 파일 선택</b><br><img src="screenshots/v2.6-preflight.png" alt="사전 확인 및 파일 선택 창" width="100%"></td>
+  <td align="center" width="50%"><b>1. 링크 붙여넣기</b><br><img src="screenshots/add-links.png" alt="링크 입력 창" width="100%"></td>
+  <td align="center" width="50%"><b>2. 미리 확인하고 파일 선택</b><br><img src="screenshots/preflight.png" alt="사전 확인 및 파일 선택 창" width="100%"></td>
 </tr>
 </table>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
+    <img alt="MegaDownloader 2.6.1 settings" src="screenshots/settings-general.png" width="85%">
+  </picture>
+</p>
+<p align="center"><sub>2.6.1 설정 · 언어 자동 선택과 스크롤 가능한 구성. 데모 데이터를 사용했으며 화면은 중국어 간체입니다。</sub></p>
 
 ---
 
@@ -215,7 +232,7 @@ MegaDownloader는 스페인 개발자 **Andres Soliño**가 만든 MEGA 다운�
 
 이 저장소는 그것을 되살린 결과물입니다. v1.8을 디컴파일해 소스를 복원하고, 그 위에서 수정과 리팩터링을 이어왔습니다. 지금까지 **200건 이상의 수정과 강화**(크래시, 조용한 데이터 손실, 보안, 호환성)를 적용했고 시맨틱 버전 규칙으로 꾸준히 배포합니다.
 
-|  | 원본 v1.8 (2018년 중단) | **이 저장소 v2.6** |
+|  | 원본 v1.8 (2018년 중단) | **이 저장소 v2.6.1** |
 | --- | --- | --- |
 | 신형 `mega.nz/file` / `/folder` 링크 | ❌ 인식 못 함 | ✅ v1.9부터 지원 |
 | MEGA 할당량 소진 | 멈춤·오류 | ✅ 자동 정지 + 카운트다운 재개 (v2.5) |
@@ -321,7 +338,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.md) | 기여 절차, 코드 스타일, 릴리스 절차 |
 | [SECURITY](../SECURITY.md) | 취약점 신고 방법 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 커뮤니티 행동 강령 |
-| [2.6 릴리스 노트](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 주요 변경 사항과 다운로드 |
+| [2.6.1 릴리스 노트](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | v2.6.1 주요 변경 사항과 다운로드 |
 
 README는 5개 언어로 직접 관리합니다. CONTRIBUTING은 영어와 중국어 간체, CHANGELOG는 중국어 간체만 있습니다. 하나를 고치면 나머지도 함께 갱신해 주세요:
 

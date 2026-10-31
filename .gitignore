@@ -148,3 +148,10 @@ TODO/
 
 # Codebuff 本地工具标识
 .freebuff/
+
+# 本地旧界面截图，当前文档截图统一放在 docs/screenshots/
+docs/screenshots/visual-refresh/
+docs/screenshots/v2.6-add-links.png
+docs/screenshots/v2.6-preflight.png
+docs/screenshots/v2.6-workbench-dark.png
+docs/screenshots/v2.6-workbench-light.png

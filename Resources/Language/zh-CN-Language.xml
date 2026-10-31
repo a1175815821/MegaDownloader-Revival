@@ -573,4 +573,8 @@ B 是同行下载数。]]></Text>
   <Text key="UI_AllFiles"><![CDATA[全部文件]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[预检失败，可返回修改链接或点击“重新检查”。]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[任务已添加，但自动开始失败，请从主界面手动开始。]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[从一个链接开始]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[拖入 MEGA 链接，或点击“添加链接”。
+也可以使用 Ctrl + V。]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[没有匹配的任务]]></Text>
 </Language>

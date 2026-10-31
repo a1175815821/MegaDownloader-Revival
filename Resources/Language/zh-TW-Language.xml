@@ -568,4 +568,8 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="UI_AllFiles"><![CDATA[全部檔案]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[預檢失敗，可返回修改連結或按「重新檢查」。]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[任務已新增，但自動開始失敗，請從主畫面手動開始。]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[從一個連結開始]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[拖入 MEGA 連結，或按一下「新增連結」。
+也可以使用 Ctrl + V。]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[沒有符合的工作]]></Text>
 </Language>

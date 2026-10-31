@@ -15,7 +15,7 @@ Partial Public Class AddLinks
     Private Sub InitAddLinksLayout()
         ' Use the designer's Segoe UI 9 / 96-DPI baseline, before automatic scaling.
         Dim layout As New TableLayoutPanel With {
-            .Dock = DockStyle.Fill, .Padding = New Padding(18),
+            .Dock = DockStyle.Fill, .Padding = New Padding(24),
             .ColumnCount = 1, .RowCount = 2, .TabIndex = 0}
         addLinksInputPage = layout
         layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
@@ -70,7 +70,7 @@ Partial Public Class AddLinks
         OpcionesPaquete.Dock = DockStyle.Fill
         OpcionesPaquete.AutoSize = True
         OpcionesPaquete.AutoSizeMode = AutoSizeMode.GrowAndShrink
-        OpcionesPaquete.Padding = New Padding(12, 8, 12, 12)
+        OpcionesPaquete.Padding = New Padding(12, 16, 12, 12)
         OpcionesPaquete.Margin = New Padding(0, 0, 0, 12)
         OpcionesPaquete.TabIndex = 1
         Dim options As New TableLayoutPanel With {
@@ -141,8 +141,8 @@ Partial Public Class AddLinks
         Dim actions As New FlowLayoutPanel With {
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .WrapContents = True, .Margin = New Padding(0), .TabIndex = 1}
-        addLinksCancel = New Button With {.Text = Language.GetText("Cancel")}
+            .WrapContents = True, .FlowDirection = FlowDirection.RightToLeft, .Margin = New Padding(0), .TabIndex = 1}
+        addLinksCancel = New CommandButton With {.Text = Language.GetText("Cancel")}
         AddHandler addLinksCancel.Click, Sub() Close()
         For Each button As Button In New Button() {btnAgregar, btnWatchOnline, addLinksCancel}
             button.AutoSize = True
@@ -155,7 +155,7 @@ Partial Public Class AddLinks
         btnWatchOnline.TabIndex = 1
         LinkLabel1.Padding = New Padding(0, 8, 0, 0)
         LinkLabel1.TabIndex = 2
-        actions.Controls.AddRange(New Control() {btnAgregar, btnWatchOnline, LinkLabel1, addLinksCancel})
+        actions.Controls.AddRange(New Control() {btnAgregar, addLinksCancel, btnWatchOnline, LinkLabel1})
         layout.Controls.Add(actions, 0, 1)
         FlowLayoutPanel1.Visible = False
         Dim shell As New TableLayoutPanel With {
@@ -166,10 +166,10 @@ Partial Public Class AddLinks
         shell.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
         addLinksStepLabel = New Label With {
             .AutoSize = True, .Dock = DockStyle.Fill, .Text = Language.GetText("AddLinks_StepInput"),
-            .Margin = New Padding(18, 14, 18, 0)}
-        UiStyles.SetFont(addLinksStepLabel, 2, True, Me.Font)
+            .Margin = New Padding(24, 20, 24, 0)}
+        UiStyles.SetFont(addLinksStepLabel, 4, True, Me.Font)
         addLinksFeedback = New Label With {
-            .AutoSize = True, .Dock = DockStyle.Fill, .Visible = False, .Margin = New Padding(18, 8, 18, 0)}
+            .AutoSize = True, .Dock = DockStyle.Fill, .Visible = False, .Margin = New Padding(24, 8, 24, 0)}
         addLinksPageHost = New Panel With {.Dock = DockStyle.Fill, .Margin = New Padding(0)}
         addLinksPageHost.Controls.Add(layout)
         shell.Controls.Add(addLinksStepLabel, 0, 0)
@@ -183,6 +183,8 @@ Partial Public Class AddLinks
             UiStyles.SetRole(surface, UiStyles.Role.Surface)
         Next
         UiStyles.SetRole(btnAgregar, UiStyles.Role.PrimaryButton)
+        UiStyles.SetRole(btnWatchOnline, UiStyles.Role.QuietButton)
+        UiStyles.SetRole(addLinksCancel, UiStyles.Role.SecondaryButton)
         AcceptButton = btnAgregar
         CancelButton = addLinksCancel
         AddHandler addLinksViewport.ClientSizeChanged, AddressOf AddLinksViewportSizeChanged

@@ -7,6 +7,7 @@ Public Class AddLinks
         SuspendLayout()
         Try
             InitializeComponent()
+            UiStyles.InitializeForm(Me)
             InitAddLinksLayout()
         Finally
             ResumeLayout(True)

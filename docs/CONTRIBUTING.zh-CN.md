@@ -286,18 +286,21 @@ git push origin feature/你的功能名称
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
 6. 按下方结构准备发行说明；CI 会先自动生成，发布后可在 GitHub Release 页面编辑
+   界面变化时更新原生截图，使用 [Tests/README.md](../Tests/README.md) 说明的隔离界面夹具。
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
-git tag -a v2.6.0 -m "Release v2.6.0"
+git tag -a v2.6.1 -m "Release v2.6.1"
 git push origin main
-git push origin v2.6.0
+git push origin v2.6.1
 ```
 
 CI 在 tag `v*` 上会自动：
 - 构建 Release 配置
 - 校验单文件版的 15 个内嵌 DLL 是否齐全（缺失则构建失败，避免发出「双击没反应」的包）
 - 打包为 zip 并上传 GitHub Release
+
+ZIP 使用明确文件清单：主程序、15 个依赖 DLL 与 `MegaDownloader.exe.config`。正式公布前，检查已发布 ZIP 恰好包含这 17 个文件、其中的 EXE 与单文件资产一致，且没有混入日志、PDB、用户配置、临时截图或本地工具文件。资产继续使用原有名称：`MegaDownloader.exe` 与 `MegaDownloader-Revival-win-x86.zip`。
 
 ### 发布说明怎么写
 

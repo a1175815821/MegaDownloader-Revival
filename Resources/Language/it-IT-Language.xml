@@ -575,4 +575,7 @@ In caso contrario, potrà scaricare i link ma non visualizzarli.]]></Text>
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Inizia con un link]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Trascina un link MEGA o aggiungi link. Puoi anche usare Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[Nessuna attività corrispondente]]></Text>
 </Language>

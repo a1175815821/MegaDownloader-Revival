@@ -287,18 +287,21 @@ When filing a bug, please include the following in the Issue:
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
 6. Prepare the release notes using the structure below. CI generates initial notes; edit them on the GitHub Release page after publishing
+   Refresh the native UI screenshots if the interface changed; use the isolated presentation fixtures described in [Tests/README.md](../Tests/README.md).
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash
-git tag -a v2.6.0 -m "Release v2.6.0"
+git tag -a v2.6.1 -m "Release v2.6.1"
 git push origin main
-git push origin v2.6.0
+git push origin v2.6.1
 ```
 
 On a `v*` tag, CI automatically:
 - Builds the Release configuration
 - Verifies that all 15 embedded DLLs are present in the single-file build (the build fails if any are missing, so we never ship a "double-click does nothing" package)
 - Packages the zip and uploads it to the GitHub Release
+
+The ZIP uses an explicit file list: the executable, 15 dependency DLLs and `MegaDownloader.exe.config`. Before announcing a release, verify the published ZIP contains exactly those 17 files, that its executable matches the standalone asset, and that no logs, PDBs, user configuration, temporary screenshots or local tooling files were committed or uploaded. Release assets keep their established names: `MegaDownloader.exe` and `MegaDownloader-Revival-win-x86.zip`.
 
 ### Writing the release notes
 

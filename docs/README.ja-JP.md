@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="最新版をダウンロード" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="変更履歴" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="変更履歴" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>お役に立ったら、<a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a> でプロジェクトを応援してください。</sub></p>
@@ -29,22 +29,30 @@
   <sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <b>日本語</b> · <a href="README.ko-KR.md">한국어</a></sub>
 </p>
 
-> **v2.6「ワークベンチ」のご紹介。** UI を全面的に作り直し、リンク追加を 2 ステップの流れに集約して一括事前確認に対応。タスク検索とスケジュールダウンロードも追加しました。復活プロジェクト開始以来、最大の更新です。コールドスタートも **150〜200 ミリ秒** まで短縮しました。[新機能を見る ↓](#-26-の新機能)
+> **v2.6.1：見やすい画面、速く開く設定、OS に合わせた言語選択。** ライト／ダークの階層を整え、初回表示のメニューを修正。Windows の表示言語に対応する翻訳がなければ英語を使います。[更新内容を見る ↓](#-261-の新機能)
 >
 > MEGA（MEGA Ltd.）とは無関係の非公式プロジェクトです。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/v2.6-workbench-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/v2.6-workbench-light.png">
-    <img alt="MegaDownloader v2.6 workbench" src="screenshots/v2.6-workbench-light.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+    <img alt="MegaDownloader v2.6.1 workbench" src="screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6 ワークベンチ · 画像は GitHub のテーマに合わせて切り替わります。画面の言語は簡体字中国語です。</sub></p>
+<p align="center"><sub>v2.6.1 ワークベンチ · 画像は GitHub のテーマに合わせて切り替わります。画面の言語は簡体字中国語です。</sub></p>
 
 ---
 
-## ✨ 2.6 の新機能
+## ✨ 2.6.1 の新機能
+
+- **画面の情報を整理** — サイドバー、文字、余白、ボタンを統一し、進捗バーと割合を 1 列に集約。詳細はウィンドウ幅に追従し、停止ボタンの文字と予約の時計アイコンを表示します。
+- **最初から全メニューを表示** — ファイル、オプション、ストリーミング、ヘルプを、サイズ変更なしで表示。設定ボタンの左位置も修正しました。
+- **設定を速く開く** — 繰り返すレイアウト計算を減らし、ELC アカウント編集はタブを開いたときに読み込みます。隔離テストの初回表示は約 8.2 秒から約 1.1 秒になりました。時間は環境によって異なります。
+- **Windows の表示言語に追従** — 新規設定は自動選択が既定です。地域差と簡体字／繁体字を区別し、未対応の言語は英語へ切り替えます。手動設定は維持します。設定の一般タブで変更し、保存後に再起動してください。日本語の UI 翻訳は内蔵していません。
+- **画面画像と回帰検証を更新** — 以下は 2.6.1 の実際のネイティブ UI とデモデータです。修正の詳細と初回アップグレード時の 6 列配置への移行は [CHANGELOG](CHANGELOG.md) を参照してください。
+
+## 2.6 で導入したワークベンチ機能
 
 > **ウィンドウは 1 つ、操作は 2 ステップ、迷うところはゼロ。**
 >
@@ -202,10 +210,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 
 <table>
 <tr>
-  <td align="center" width="50%"><b>1. リンクを貼り付け</b><br><img src="screenshots/v2.6-add-links.png" alt="リンク入力画面" width="100%"></td>
-  <td align="center" width="50%"><b>2. 事前確認してファイルを選択</b><br><img src="screenshots/v2.6-preflight.png" alt="事前確認とファイル選択画面" width="100%"></td>
+  <td align="center" width="50%"><b>1. リンクを貼り付け</b><br><img src="screenshots/add-links.png" alt="リンク入力画面" width="100%"></td>
+  <td align="center" width="50%"><b>2. 事前確認してファイルを選択</b><br><img src="screenshots/preflight.png" alt="事前確認とファイル選択画面" width="100%"></td>
 </tr>
 </table>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
+    <img alt="MegaDownloader 2.6.1 settings" src="screenshots/settings-general.png" width="85%">
+  </picture>
+</p>
+<p align="center"><sub>2.6.1 の設定 · 言語の自動選択とスクロール対応。デモデータを使用し、画面は簡体字中国語です。</sub></p>
 
 ---
 
@@ -215,7 +232,7 @@ MegaDownloader はスペインの開発者 **Andres Soliño** による MEGA ダ
 
 本リポジトリはそれを復活させたものです。v1.8 を逆コンパイルしてソースを復元し、そこから修正とリファクタリングを継続しています。これまでに **200 件以上の修正と堅牢化**（クラッシュ、無言のデータ損失、セキュリティ、互換性）を行い、セマンティックバージョニングで継続的にリリースしています。
 
-|  | オリジナル v1.8（2018 年で停止） | **本リポジトリ v2.6** |
+|  | オリジナル v1.8（2018 年で停止） | **本リポジトリ v2.6.1** |
 | --- | --- | --- |
 | 新 `mega.nz/file` / `/folder` リンク | ❌ 認識しない | ✅ v1.9 以降で対応 |
 | MEGA のクォータ切れ | 停止・エラー | ✅ 自動停止＋カウントダウン再開（v2.5） |
@@ -321,7 +338,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.md) | 貢献の流れ、コードスタイル、リリース手順 |
 | [SECURITY](../SECURITY.md) | 脆弱性の報告方法 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | コミュニティの行動規範 |
-| [2.6 リリースノート](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 の変更点とダウンロード |
+| [2.6.1 リリースノート](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | v2.6.1 の変更点とダウンロード |
 
 README は 5 言語で手動メンテナンスしています。CONTRIBUTING は英語と簡体中文、CHANGELOG は簡体中文のみです。更新時は揃えてください：
 

@@ -81,6 +81,7 @@ Public Class Configuracion
 	''' <summary>P0-1 UI 一次性列默认集:开 Progreso%、藏 Descargado、Estado 加宽。True=已迁移,不再覆盖用户后续手动调整。
 	''' 注:V26 是 UI 修订号,不是 App 版本(当前发布线 v2.5),为兼容已迁移用户保留原名,RC 起双写 V25 别名。</summary>
 	Public ColumnUIDefaultsMigratedV26 As Boolean
+    Public WorkbenchColumnsMigrated As Boolean
 	
 	Public UsarProxy As Boolean
 	
@@ -274,6 +275,7 @@ Public Class Configuracion
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErrores")).InnerText = ResetearErrores.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("QuotaBreakthroughMode")).InnerText = QuotaBreakthroughMode.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ResetearErroresMigratedV25")).InnerText = ResetearErroresMigratedV25.ToString
+		Xml.DocumentElement.AppendChild(Xml.CreateElement("WorkbenchColumnsMigrated")).InnerText = WorkbenchColumnsMigrated.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV26")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("ColumnUIDefaultsMigratedV25")).InnerText = ColumnUIDefaultsMigratedV26.ToString
 
@@ -468,13 +470,7 @@ Public Class Configuracion
 			End If
 		End SyncLock
 		
-		Idioma = LeerNodo(Xml, "Language", "")
-		Try
-			Idioma = System.Globalization.CultureInfo.GetCultureInfo(Idioma).Name
-			If String.IsNullOrEmpty(Idioma) Then Throw New ApplicationException("Empty culture")
-		Catch ex As Exception
-			Me.Idioma = System.Threading.Thread.CurrentThread.CurrentUICulture.Name
-		End Try
+		Idioma = Language.NormalizeLanguagePreference(LeerNodo(Xml, "Language", ""))
 		
 		
 		VersionConfig = LeerNodo(Xml, "VersionConfig", "0")
@@ -510,7 +506,8 @@ Public Class Configuracion
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErrores", "true"), ResetearErrores)
 		Boolean.TryParse(LeerNodo(Xml, "QuotaBreakthroughMode", "false"), QuotaBreakthroughMode)
 		Boolean.TryParse(LeerNodo(Xml, "ResetearErroresMigratedV25", "false"), ResetearErroresMigratedV25)
-		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV26", "false"), ColumnUIDefaultsMigratedV26)
+		Boolean.TryParse(LeerNodo(Xml, "WorkbenchColumnsMigrated", "false"), WorkbenchColumnsMigrated)
+        Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV26", "false"), ColumnUIDefaultsMigratedV26)
 		Dim migratedV25Alias As Boolean = False
 		Boolean.TryParse(LeerNodo(Xml, "ColumnUIDefaultsMigratedV25", "false"), migratedV25Alias)
 		If migratedV25Alias Then ColumnUIDefaultsMigratedV26 = True
@@ -638,7 +635,7 @@ Public Class Configuracion
 		Me.ResetearErrores = True
 		Me.ResetearErroresMigratedV25 = True
 		Me.ResetearErroresPeriodoMinutos = 15
-		Me.Idioma = System.Threading.Thread.CurrentThread.CurrentUICulture.Name
+		Me.Idioma = Language.FollowSystemLanguageCode
 		Me.ExtraerAutomaticamente = False
 		Me.CondicionesAceptadas = False
 		Me.CrearDirectorioPaquete = True

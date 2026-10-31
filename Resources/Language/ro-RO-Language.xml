@@ -564,4 +564,7 @@ Pentru a utiliza această opțiune, trebuie doar să urmați acești 3 pași sim
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Începe cu un link]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Trage un link MEGA aici sau adaugă linkuri. Poți folosi și Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[Nicio sarcină corespunzătoare]]></Text>
 </Language>

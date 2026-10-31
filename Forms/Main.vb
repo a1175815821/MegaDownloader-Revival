@@ -5,6 +5,13 @@ Imports System.Runtime.InteropServices
 Public Class Main
     Implements IDownloaderService
 
+    Public Sub New()
+        SuspendLayout()
+        InitializeComponent()
+        UiStyles.InitializeForm(Me)
+        ResumeLayout(False)
+    End Sub
+
 #Region "Variables internas"
 
     ''' <summary>
@@ -44,12 +51,22 @@ Public Class Main
     ''' </summary>
     Private progressBarRenderer As ThemeBarRenderer
 
-    ''' <summary>RC:主题感知进度条。背景透明露出行底色,边框随主题,小进度保底 2px,只画条不画字(% 另有独立文本列)。</summary>
+    Private Class QueueTreeRenderer
+        Inherits BrightIdeasSoftware.TreeListView.TreeRenderer
+
+        Public Overrides Sub Render(g As Drawing.Graphics, r As Drawing.Rectangle)
+            DrawBackground(g, r)
+            MyBase.Render(g, r)
+        End Sub
+    End Class
+
+    ''' <summary>进度条与百分比共用一列，先清除原生单元格文字，再绘制主题感知的进度与数值。</summary>
     Private Class ThemeBarRenderer
         Inherits BrightIdeasSoftware.BarRenderer
 
         Public Overrides Sub Render(g As Drawing.Graphics, r As Drawing.Rectangle)
             Try
+                DrawBackground(g, r)
                 Dim minV As Double = Me.MinimumValue
                 Dim maxV As Double = Me.MaximumValue
                 Dim cur As Double = 0.0
@@ -62,25 +79,32 @@ Public Class Main
                 End If
                 If frac < 0.0 Then frac = 0.0
                 If frac > 1.0 Then frac = 1.0
-                Dim wantH As Integer = If(Me.MaximumHeight > 0, Me.MaximumHeight, 18)
-                Dim barH As Integer = Math.Min(r.Height - 4, wantH)
-                If barH < 6 Then barH = Math.Max(2, r.Height - 4)
-                Dim barY As Integer = r.Y + (r.Height - barH) \ 2
-                Dim barR As New Drawing.Rectangle(r.X + 2, barY, Math.Max(0, r.Width - 4), barH)
-                If barR.Width <= 0 OrElse barR.Height <= 0 Then Return
-                Dim fw As Single = If(Me.FrameWidth > 0, Me.FrameWidth, 1.0F)
-                Using pen As New Drawing.Pen(Me.FrameColor, fw)
-                    g.DrawRectangle(pen, barR)
+                Dim scale As Single = g.DpiX / 96.0F
+                Dim labelWidth As Integer = CInt(46 * scale)
+                Dim barH As Integer = Math.Max(3, CInt(5 * scale))
+                Dim barR As New Drawing.Rectangle(r.X + CInt(8 * scale), r.Y + (r.Height - barH) \ 2,
+                                                  Math.Max(0, r.Width - labelWidth - CInt(20 * scale)), barH)
+                Dim model = TryCast(RowObject, IDescarga)
+                Dim fill As Drawing.Color = ThemeManager.GetColor("ProgressFill")
+                If model IsNot Nothing Then
+                    If model.DescargaEstado = Estado.Completado Then fill = ThemeManager.GetColor("SuccessFore")
+                    If model.DescargaEstado = Estado.Erroneo Then fill = ThemeManager.GetColor("ErrorFore")
+                End If
+                Using brush As New Drawing.SolidBrush(ThemeManager.GetColor("ProgressBack"))
+                    g.FillRectangle(brush, barR)
                 End Using
-                Dim inner As Drawing.Rectangle = Drawing.Rectangle.Inflate(barR, -1, -1)
-                If inner.Width > 0 AndAlso inner.Height > 0 AndAlso frac > 0.0 Then
-                    Dim fillW As Integer = CInt(Math.Floor(inner.Width * frac))
-                    If fillW < 2 Then fillW = 2
-                    If fillW > inner.Width Then fillW = inner.Width
-                    Using br As New Drawing.SolidBrush(Me.FillColor)
-                        g.FillRectangle(br, New Drawing.Rectangle(inner.X, inner.Y, fillW, inner.Height))
+                If frac > 0 AndAlso barR.Width > 0 Then
+                    Using brush As New Drawing.SolidBrush(fill)
+                        g.FillRectangle(brush, New Drawing.Rectangle(barR.X, barR.Y, Math.Min(barR.Width, Math.Max(1, CInt(barR.Width * frac))), barR.Height))
                     End Using
                 End If
+                Dim label As New Drawing.Rectangle(r.Right - labelWidth - CInt(4 * scale), r.Top, labelWidth, r.Height)
+                Using format As New Drawing.StringFormat With {.Alignment = Drawing.StringAlignment.Far, .LineAlignment = Drawing.StringAlignment.Center}
+                    Using brush As New Drawing.SolidBrush(ThemeManager.GetColor("Muted"))
+                        g.DrawString(cur.ToString("0") & "%", ListView.Font, brush, label, format)
+                    End Using
+                End Using
+
             Catch ex As Exception
                 MyBase.Render(g, r)
             End Try
@@ -257,6 +281,7 @@ Public Class Main
         LogStartupStage("configuration loaded")
         Log.SetLogLevel = Config.NivelLog
         Language.InitLanguage(Config.Idioma)
+        UiStyles.SetAppFont(Me, Me.Font.SizeInPoints)
         LogStartupStage("language loaded")
 
         Dim Silent As Boolean = IsSilent()
@@ -285,12 +310,6 @@ Public Class Main
         'btnCollaborate.Visible = Not Config.HideCollaborateButton
         btnCollaborate.Visible = False ' Lo quitamos... nadie lo usa...
         btnUpdate.Visible = False
-        ' RC:右上协作按钮隐藏后回收 Panel 宽度+修正齿轮 1px 裁剪(80->45,46->11)。
-        Try
-            PanelButtonsRight.Width = 45
-            btnConfig.Location = New Drawing.Point(10, 0)
-        Catch
-        End Try
         ' RC:状态栏 RAM/Proc 固定 90px 运行时必截断,改自动宽度。
         Try
             RAMProcToolStripStatusLabel.AutoSize = True
@@ -412,20 +431,16 @@ Public Class Main
             If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
         End If
 
-        ' 进度数字列(IndiceColumnaPorcentajeTexto)与条形列并排展示:每次启动强制显示一次,
-        ' 把 2.5.2/2.5.3 隐藏期落盘的不可见状态翻回来(右键列菜单当次仍可手动隐藏,重启后继续显示)。
-        Try
-            If ListaDescargas IsNot Nothing AndAlso ListaDescargas.AllColumns IsNot Nothing _
-                AndAlso ListaDescargas.AllColumns.Count > 5 _
-                AndAlso Not ListaDescargas.AllColumns(5).IsVisible Then
-                ListaDescargas.AllColumns(5).IsVisible = True
-                ListaDescargas.RebuildColumns()
-                Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
-                If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
-            End If
-        Catch ex As Exception
-            Log.WriteError("ShowPctTextColumn failed: " & ex.ToString)
-        End Try
+        ' The first visual upgrade replaces the old index-based column layout.
+        ' Later column-menu choices remain authoritative across restarts.
+        If Not Config.WorkbenchColumnsMigrated Then
+            ' TreeListView uses its first column for the tree. Move the name to
+            ' that slot and migrate the old index-based column state once.
+            ApplyColumnDefaults()
+            Config.WorkbenchColumnsMigrated = True
+            Config.ConfigUI.EstadoLista = ListaDescargas.SaveState
+            If Config.LoadErrorConfig = Configuracion.ErrorConfigClass.SinErrores AndAlso Config.CondicionesAceptadas Then Config.GuardarXML(False)
+        End If
         ' RestoreState / RebuildColumns can recreate the native list and its header.
         ThemeManager.RefreshListTheme(ListaDescargas)
 
@@ -581,8 +596,13 @@ Public Class Main
     ''' MenuStrip 走 ToolStripManager.Renderer + ThemeColorTable,随主题自动换肤。
     ''' </summary>
     Private Sub CrearMenus()
-
-        Dim menuPrincipal As New MenuStrip
+        If MainMenuStrip IsNot Nothing Then
+            Dim previous = MainMenuStrip
+            MainMenuStrip = Nothing
+            Controls.Remove(previous)
+            previous.Dispose()
+        End If
+        Dim menuPrincipal As New MenuStrip With {.AutoSize = False, .CanOverflow = False, .Font = Me.Font}
         Me.MainMenuStrip = menuPrincipal
         menuPrincipal.Name = "MenuPrincipal"
         menuPrincipal.Dock = DockStyle.Top
@@ -688,14 +708,12 @@ Public Class Main
         ' (用户实测到的"顶栏挡住下面主窗口 UI")。现在几何一次写死,与停靠顺序无关。
         menuPrincipal.Dock = DockStyle.None
         Me.Controls.Add(menuPrincipal)
-        menuPrincipal.Location = New Point(0, 0)
-        menuPrincipal.Width = Me.ClientSize.Width
         menuPrincipal.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
-        menuPrincipal.PerformLayout()
+        LayoutMainMenu()
 
         ' 工具栏紧接菜单条之下;宽度靠 Anchor 跟随,高度沿用设计器里的 40。
         ' 下载区 LayoutDownloadArea() 用 TableLayoutPanel1.Bottom 起算,无需手工偏移。
-        If TableLayoutPanel1 IsNot Nothing Then
+        If Not workbenchReady AndAlso TableLayoutPanel1 IsNot Nothing Then
             TableLayoutPanel1.Dock = DockStyle.None
             TableLayoutPanel1.Location = New Point(0, menuPrincipal.Height)
             TableLayoutPanel1.Width = Me.ClientSize.Width
@@ -703,6 +721,18 @@ Public Class Main
         End If
 
         Me.PerformLayout()
+        If workbenchReady Then LayoutDownloadArea()
+    End Sub
+
+    Private Sub LayoutMainMenu()
+        Dim menu = MainMenuStrip
+        If menu Is Nothing OrElse menu.IsDisposed Then Return
+        Dim scale As Single = GetUiScale()
+        Dim height As Integer = Math.Max(CInt(30 * scale), Font.Height + CInt(8 * scale))
+        menu.AutoSize = False
+        menu.Padding = New Padding(CInt(8 * scale), CInt(2 * scale), CInt(8 * scale), CInt(2 * scale))
+        menu.SetBounds(0, 0, ClientSize.Width, height)
+        menu.PerformLayout()
     End Sub
 
     Private Function IsSilent() As Boolean
@@ -917,7 +947,9 @@ Public Class Main
             ' 第19项:关机期 DoEvents 泵出的 Resize 不得把已隐藏的窗口重新显示
             If Not Cerrando Then
                 Me.IconoMinimizado.Visible = False
-                Me.Visible = True
+                ' Resizing is also raised during construction and DPI layout.
+                ' Startup and tray restoration own visibility explicitly; showing
+                ' here can re-enter Load and rebuild the entire workbench.
             End If
         End If
         LayoutQuotaBanner()
@@ -968,10 +1000,9 @@ Public Class Main
     ''' </summary>
     ''' <remarks></remarks>
     Private Sub DefinirColumnas()
-
-
-        Dim IndiceColumnaPrioridad As Integer = 0
-        Dim IndiceColumnaNombre As Integer = 1
+        ListaDescargas.TreeColumnRenderer = New QueueTreeRenderer()
+        Dim IndiceColumnaPrioridad As Integer = 1
+        Dim IndiceColumnaNombre As Integer = 0
         Dim IndiceColumnaDescargado As Integer = 2
         Dim IndiceColumnaTamano As Integer = 3
         Dim IndiceColumnaEstado As Integer = 4
@@ -1133,8 +1164,8 @@ Public Class Main
                                               End Try
                                           End Function
         ListaDescargas.AllColumns(IndiceColumnaPorcentajeTexto).TextAlign = HorizontalAlignment.Right
-        ' 进度数字列(IndiceColumnaPorcentajeTexto)与条形列(IndiceColumnaPorcentaje)并排展示:
-        ' 条只画条不画字,% 文案由本列负责,两者各干各的不打架。
+        ' The separate numeric column remains optional; the default progress
+        ' renderer already includes a percentage beside its bar.
 
 
 
@@ -1188,7 +1219,7 @@ Public Class Main
         ApplyColumnWidthLimits()
 
         ' 行高随当前 DPI / 字体留出间距；空态复用语言包。
-        ListaDescargas.RowHeight = Math.Max(CInt(32 * GetUiScale()), Font.Height + 12)
+        ListaDescargas.RowHeight = Math.Max(CInt(40 * GetUiScale()), Font.Height + 16)
         ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
         ' P2-11b:导航初始化(计数+分组;过滤走 Roots 子集,禁用 OLV UseFiltering/ModelFilter)
         InitNavList()
@@ -1199,13 +1230,22 @@ Public Class Main
         Else
             e.Item.BackColor = ThemeManager.GetColor("AltBack")
         End If
-        Dim desc As IDescarga = CType(e.Model, IDescarga)
+        e.Item.ForeColor = ThemeManager.GetColor("Fore")
+        e.UseCellFormatEvents = True
+    End Sub
+
+    Private Sub ListaDescargas_FormatCell(sender As Object, e As BrightIdeasSoftware.FormatCellEventArgs) Handles ListaDescargas.FormatCell
+        If e.ColumnIndex <> OlvColumnEstado.Index Then Return
+        Dim desc = TryCast(e.Model, IDescarga)
+        If desc Is Nothing Then Return
         If desc.DescargaEstado = Estado.Erroneo Then
-            e.Item.ForeColor = ThemeManager.GetColor("ErrorFore")
+            e.SubItem.ForeColor = ThemeManager.GetColor("ErrorFore")
         ElseIf desc.DescargaEstado = Estado.Completado Then
-            e.Item.ForeColor = ThemeManager.GetColor("SuccessFore")
+            e.SubItem.ForeColor = ThemeManager.GetColor("SuccessFore")
+        ElseIf desc.DescargaEstado = Estado.Descargando Then
+            e.SubItem.ForeColor = ThemeManager.GetColor("Link")
         Else
-            e.Item.ForeColor = ThemeManager.GetColor("Fore")
+            e.SubItem.ForeColor = ThemeManager.GetColor("Muted")
         End If
     End Sub
 
@@ -1245,7 +1285,7 @@ Public Class Main
         progressBarRenderer.GradientEndColor = Drawing.Color.Empty
         progressBarRenderer.FrameColor = ThemeManager.GetColor("Border")
         progressBarRenderer.FrameWidth = 1.0F
-        progressBarRenderer.MaximumHeight = 18
+        progressBarRenderer.MaximumHeight = 5
     End Sub
 
     ' Line icons are drawn once for each theme / DPI change.
@@ -1323,7 +1363,8 @@ Public Class Main
             navOverviewSpeedValue = New Label()
             navOverviewSpeedValue.Name = "navOverviewSpeedValue"
             navOverviewSpeedValue.AutoSize = False
-            navOverviewSpeedValue.TextAlign = Drawing.ContentAlignment.MiddleRight
+            navOverviewSpeedValue.TextAlign = Drawing.ContentAlignment.MiddleLeft
+            UiStyles.SetFont(navOverviewSpeedValue, 7, False, Me.Font)
             navOverviewSpeedValue.Height = rowH
             navOverviewSpeedValue.Text = "-"
 
@@ -1348,7 +1389,7 @@ Public Class Main
             navOverviewProgressText.Height = rowH
             navOverviewProgressText.Text = "0%"
 
-            navOverviewProgressBar = New ProgressBar()
+            navOverviewProgressBar = New SlimProgressBar()
             navOverviewProgressBar.Name = "navOverviewProgressBar"
             navOverviewProgressBar.Minimum = 0
             navOverviewProgressBar.Maximum = 100
@@ -1427,19 +1468,20 @@ Public Class Main
         lbl.Text = text
         ' 分节标题用加粗主色(与说明性灰字区分)。Font 只在此处建一次,
         ' 换肤只改颜色——避免每次 ApplyTheme 都 New Font 造成 GDI 对象堆积。
-        UiStyles.SetFont(lbl, 0, True, Me.Font)
+        UiStyles.SetFont(lbl, -1, False, Me.Font)
         Return lbl
     End Function
 
     Private Function CreateNavQuickButton(name As String, text As String, width As Integer, sc As Single) As Button
-        Dim btn As New Button()
+        Dim btn As New CommandButton()
         btn.Name = name
         btn.Text = text
         btn.TextAlign = Drawing.ContentAlignment.MiddleLeft
-        btn.Height = CInt(26 * sc)
+        btn.Height = Math.Max(CInt(34 * sc), Font.Height + 12)
         btn.Width = width
         btn.UseVisualStyleBackColor = False
         btn.FlatStyle = FlatStyle.Flat
+        UiStyles.SetRole(btn, UiStyles.Role.QuietButton)
         Return btn
     End Function
 
@@ -1464,47 +1506,44 @@ Public Class Main
                 FitNavListBoxNoScroll()
             End If
 
-            Dim y As Integer = navListBox.Bottom + CInt(8 * sc)
-
-            ' Keep both sections reachable on short windows through the sidebar scrollbar.
-            SetNavRailSectionVisible(True, True)
-
-            ' --- B 段:任务总览 ---
-            navOverviewHeader.SetBounds(pad, y, innerW, CInt(20 * sc))
-            y += navOverviewHeader.Height + CInt(2 * sc)
-
-            Dim speedLbl As Label = FindNavLabel("overviewSpeedLabel")
-            If speedLbl IsNot Nothing Then speedLbl.SetBounds(pad, y, CInt(66 * sc), rowH)
-            navOverviewSpeedValue.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
-            y += rowH
-
-            navOverviewCountsValue.SetBounds(pad, y, innerW, CInt(34 * sc))
-            y += navOverviewCountsValue.Height + CInt(2 * sc)
-
-            Dim progCap As Label = FindNavLabel("overviewProgressCaption")
-            If progCap IsNot Nothing Then progCap.SetBounds(pad, y, CInt(66 * sc), rowH)
-            navOverviewProgressText.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
-            y += rowH
-
-            navOverviewProgressBar.SetBounds(pad, y, innerW, navOverviewProgressBar.Height)
-            y += navOverviewProgressBar.Height + CInt(4 * sc)
-
+            Dim y As Integer = navListBox.Bottom + CInt(24 * sc)
+            SetNavRailSectionVisible(False, True)
+            navOverviewHeader.Visible = False
+            navOverviewCountsValue.Visible = False
+            navOverviewRemainingValue.Visible = False
             Dim remCap As Label = FindNavLabel("overviewRemainingCaption")
-            If remCap IsNot Nothing Then remCap.SetBounds(pad, y, CInt(66 * sc), rowH)
-            navOverviewRemainingValue.SetBounds(pad + CInt(66 * sc), y, innerW - CInt(66 * sc), rowH)
-            y += rowH + CInt(10 * sc)
-
-            ' --- C 段:快捷入口 ---
-            navQuickHeader.SetBounds(pad, y, innerW, CInt(20 * sc))
-            y += navQuickHeader.Height + CInt(2 * sc)
-
-            For Each btn As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
-                If btn IsNot Nothing Then
-                    btn.SetBounds(pad, y, innerW, btn.Height)
-                    y += btn.Height + CInt(3 * sc)
-                End If
+            If remCap IsNot Nothing Then remCap.Visible = False
+            navQuickHeader.SetBounds(pad + CInt(6 * sc), y, innerW, CInt(22 * sc))
+            y = navQuickHeader.Bottom + CInt(6 * sc)
+            For Each button As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
+                button.SetBounds(pad, y, innerW, CInt(34 * sc))
+                y = button.Bottom + CInt(4 * sc)
             Next
-            navPanel.AutoScrollMinSize = New Drawing.Size(0, y + pad)
+            y = Math.Max(y + CInt(24 * sc), navPanel.ClientSize.Height - CInt(180 * sc))
+            Dim speedLabel As Label = FindNavLabel("overviewSpeedLabel")
+            If speedLabel IsNot Nothing Then
+                speedLabel.Visible = True
+                speedLabel.SetBounds(pad + CInt(6 * sc), y, innerW, rowH)
+            End If
+            y += rowH
+            navOverviewSpeedValue.Visible = True
+            navOverviewSpeedValue.SetBounds(pad + CInt(6 * sc), y, innerW, CInt(38 * sc))
+            y += CInt(42 * sc)
+            Dim progressLabel As Label = FindNavLabel("overviewProgressCaption")
+            If progressLabel IsNot Nothing Then
+                progressLabel.Visible = True
+                progressLabel.SetBounds(pad + CInt(6 * sc), y, innerW - CInt(44 * sc), rowH)
+            End If
+            navOverviewProgressText.Visible = True
+            navOverviewProgressText.SetBounds(pad + innerW - CInt(44 * sc), y, CInt(44 * sc), rowH)
+            y += rowH + CInt(4 * sc)
+            navOverviewProgressBar.Visible = True
+            navOverviewProgressBar.SetBounds(pad + CInt(6 * sc), y, innerW - CInt(12 * sc), CInt(5 * sc))
+            y += CInt(24 * sc)
+            btnConfig.SetBounds(pad, y, innerW, CInt(36 * sc))
+            y = btnConfig.Bottom
+            navPanel.AutoScrollMinSize = New Drawing.Size(0, y + CInt(12 * sc))
+
         Catch ex As Exception
             Log.WriteDebug("LayoutNavRail failed: " & Log.SafeException(ex))
         Finally
@@ -1665,7 +1704,7 @@ Public Class Main
             ' 改用主题 Muted 专用色(对 ControlBack:浅 5.16:1 / 深 4.97:1)。
             Dim subtle As Drawing.Color = ThemeManager.GetColor("Muted")
             Dim fore As Drawing.Color = ThemeManager.GetColor("Fore")
-            Dim accent As Drawing.Color = ThemeManager.GetColor("Link")
+            Dim accent As Drawing.Color = ThemeManager.GetColor("Muted")
 
             ' 分节标题:强调色+加粗(换肤可见),不再用灰。
             For Each hdr As Label In New Label() {navOverviewHeader, navQuickHeader}
@@ -1695,20 +1734,9 @@ Public Class Main
             End Try
 
             ' 快捷入口按钮:沿用主题按钮配色(与工具栏一致的 Flat + 边框)
-            Dim btnBack As Drawing.Color = ThemeManager.GetColor("ButtonBack")
-            Dim btnBorder As Drawing.Color = ThemeManager.GetColor("ButtonBorder")
-            Dim btnHover As Drawing.Color = ThemeManager.GetColor("ButtonHover")
-            Dim btnPressed As Drawing.Color = ThemeManager.GetColor("ButtonPressed")
             For Each btn As Button In New Button() {navQuickExtractButton, navQuickLibraryButton, navQuickLogsButton}
                 If btn IsNot Nothing Then
-                    btn.BackColor = btnBack
-                    btn.ForeColor = fore
-                    btn.FlatStyle = FlatStyle.Flat
-                    btn.FlatAppearance.BorderSize = 1
-                    btn.FlatAppearance.BorderColor = btnBorder
-                    btn.FlatAppearance.MouseOverBackColor = btnHover
-                    btn.FlatAppearance.MouseDownBackColor = btnPressed
-                    btn.UseVisualStyleBackColor = False
+                    UiStyles.SetRole(btn, UiStyles.Role.QuietButton)
                 End If
             Next
 
@@ -1726,12 +1754,7 @@ Public Class Main
     ''' <summary>总速度数值语义色:下载中绿色强调, idle 显示 - 时回主色,换肤/每次刷新都重调。</summary>
     Private Sub TintNavSpeedValue()
         If navOverviewSpeedValue Is Nothing OrElse navOverviewSpeedValue.IsDisposed Then Return
-        Dim hasSpeed As Boolean = VelocidadGlobalDescarga.HasValue AndAlso VelocidadGlobalDescarga.Value > 0
-        If hasSpeed Then
-            navOverviewSpeedValue.ForeColor = ThemeManager.GetColor("SuccessFore")
-        Else
-            navOverviewSpeedValue.ForeColor = ThemeManager.GetColor("Fore")
-        End If
+        navOverviewSpeedValue.ForeColor = ThemeManager.GetColor("Fore")
     End Sub
 
 #End Region
@@ -1777,7 +1800,7 @@ Public Class Main
         quotaBannerLabel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         quotaBannerLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft
 
-        quotaRetryNowButton = New Button()
+        quotaRetryNowButton = New CommandButton()
         quotaRetryNowButton.Name = "quotaRetryNowButton"
         quotaRetryNowButton.Height = CInt(23 * sc)
         quotaRetryNowButton.Width = CInt(110 * sc)
@@ -2038,7 +2061,7 @@ Public Class Main
 
     ''' <summary>
     ''' P0-1 UI:应用一次性列默认集。AllColumns 顺序固定 = Designer Add 顺序:
-    ''' 0 # / 1 Nombre / 2 Descargado / 3 Tamaño / 4 Estado / 5 Progreso% / 6 Progreso / 7 Velocidad / 8 EDT / 9 Restante。
+    ''' 0 Nombre / 1 # / 2 Descargado / 3 Tamaño / 4 Estado / 5 Progreso% / 6 Progreso / 7 Velocidad / 8 EDT / 9 Restante。
     ''' RC:升级为全量默认(含顺序/显隐/宽度),复用为右键"恢复默认列宽"与坏状态自愈的唯一入口。
     ''' </summary>
     Private Sub ApplyColumnUIDefaultsV26()
@@ -2050,18 +2073,18 @@ Public Class Main
         Try
             If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
             If ListaDescargas.AllColumns.Count < 10 Then Return
-            SetColumnWidthLimit(0, 20, 40)
-            SetColumnWidthLimit(1, 150, 700)
+            SetColumnWidthLimit(0, 180, 900)
+            SetColumnWidthLimit(1, 40, 64)
             SetColumnWidthLimit(2, 60, 120)
             SetColumnWidthLimit(3, 60, 120)
             SetColumnWidthLimit(4, 90, 320)
             SetColumnWidthLimit(5, 45, 80)
-            SetColumnWidthLimit(6, 60, 200)
+            SetColumnWidthLimit(6, 120, 260)
             SetColumnWidthLimit(7, 55, 120)
             SetColumnWidthLimit(8, 55, 120)
             SetColumnWidthLimit(9, 55, 120)
             ' 文件名列保持自动吃剩余空间(窗口拉宽不留白);"反向"手感由上下限兜底:它永远不会被压成 0。
-            ListaDescargas.AllColumns(1).FillsFreeSpace = True
+            ListaDescargas.AllColumns(0).FillsFreeSpace = True
         Catch ex As Exception
             Log.WriteError("ApplyColumnWidthLimits failed: " & ex.ToString)
         End Try
@@ -2071,8 +2094,8 @@ Public Class Main
         Try
             Dim col As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(idx)
             If col Is Nothing Then Return
-            col.MinimumWidth = minW
-            col.MaximumWidth = maxW
+            col.MinimumWidth = CInt(minW * GetUiScale())
+            col.MaximumWidth = CInt(maxW * GetUiScale())
         Catch ex As Exception
             Log.WriteError("SetColumnWidthLimit failed: " & ex.ToString)
         End Try
@@ -2084,22 +2107,23 @@ Public Class Main
             If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return
             If ListaDescargas.AllColumns.Count < 10 Then Return
             ApplyColumnWidthLimits()
-            Dim widths() As Integer = {20, 185, 70, 70, 90, 55, 80, 77, 70, 60}
+            Dim widths() As Integer = {240, 44, 76, 84, 112, 55, 144, 92, 92, 68}
             For i As Integer = 0 To 9
                 Dim col As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(i)
-                col.Width = widths(i)
+                col.Width = CInt(widths(i) * GetUiScale())
+                col.IsVisible = i <> 1 AndAlso i <> 2 AndAlso i <> 5 AndAlso i <> 9
                 Try
                     col.DisplayIndex = i
                 Catch
                 End Try
             Next
-            ' Descargado 可由 Tamaño×% 推算,默认隐藏降噪(用户可从列菜单恢复);Restante 默认隐藏
-            ' 进度数字列(5)与条形列(6)并排展示,两者都默认可见
+            ' Name is the native tree column. Priority, downloaded, numeric-only
+            ' percentage and remaining bytes stay available from the column menu.
             ListaDescargas.AllColumns(2).IsVisible = False
             ListaDescargas.AllColumns(9).IsVisible = False
-            ListaDescargas.AllColumns(1).FillsFreeSpace = True
+            ListaDescargas.AllColumns(0).FillsFreeSpace = True
             For i As Integer = 0 To 9
-                If i <> 1 Then
+                If i <> 0 Then
                     Try
                         ListaDescargas.AllColumns(i).FillsFreeSpace = False
                     Catch
@@ -2107,6 +2131,7 @@ Public Class Main
                 End If
             Next
             ListaDescargas.RebuildColumns()
+            ThemeManager.RefreshListTheme(ListaDescargas)
             Log.WriteWarning("Applied column defaults (widths/order/visibility).")
         Catch ex As Exception
             Log.WriteError("ApplyColumnDefaults failed: " & ex.ToString)
@@ -2121,8 +2146,8 @@ Public Class Main
         Try
             If ListaDescargas Is Nothing OrElse ListaDescargas.AllColumns Is Nothing Then Return False
             If ListaDescargas.AllColumns.Count < 10 Then Return False
-            Dim hashCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(0)
-            Dim nameCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(1)
+            Dim hashCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(1)
+            Dim nameCol As BrightIdeasSoftware.OLVColumn = ListaDescargas.AllColumns(0)
             If hashCol.Width < 20 OrElse nameCol.Width < 50 Then
                 Log.WriteWarning("Column state corrupted (#=" & hashCol.Width & ", Nombre=" & nameCol.Width & "); resetting to defaults.")
                 ApplyColumnDefaults()
@@ -2204,7 +2229,7 @@ Public Class Main
         Catch
         End Try
         Try
-            navListBox.ItemHeight = Math.Max(CInt(34 * GetUiScale()), navListBox.Font.Height + 14)
+            navListBox.ItemHeight = Math.Max(CInt(40 * GetUiScale()), navListBox.Font.Height + 14)
         Catch
         End Try
         UpdateNavCounts()
@@ -2246,7 +2271,7 @@ Public Class Main
         Try
             If navListBox Is Nothing OrElse navListBox.IsDisposed Then Return
             ' ListBox 不在 ThemeManager 递归覆盖范围,手动同步
-            navListBox.BackColor = ThemeManager.GetColor("Back")
+            navListBox.BackColor = ThemeManager.GetColor("ControlBack")
             navListBox.ForeColor = ThemeManager.GetColor("Fore")
         Catch ex As Exception
             Log.WriteDebug("ApplyNavListColors failed: " & Log.SafeException(ex))
@@ -2423,6 +2448,7 @@ Public Class Main
     End Sub
 
     Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
+        If workbenchReady Then LayoutDownloadArea()
         UpdateDetailPanel()
     End Sub
 

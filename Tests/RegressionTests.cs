@@ -49,8 +49,17 @@ public class RegressionTests {
         root=Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),"run-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         Directory.SetCurrentDirectory(root);
-        try { Run(); Console.WriteLine("PASS: " + assertions + " assertions. Temporary files: " + root); }
+        try {
+            if(args.Length>2 && args[2]=="--ui-only") {
+                RunUiOnly();
+            } else Run();
+            Console.WriteLine("PASS: " + assertions + " assertions. Temporary files: " + root);
+        }
         catch(Exception ex) { Console.WriteLine(ex); Environment.ExitCode=1; }
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void RunUiOnly() {
+        typeof(Log).GetField("_LogLevel",shared).SetValue(null,Enum.ToObject(typeof(Log.LevelLogType),-1));FeatureDialogs();
     }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     static void Run() {
@@ -135,6 +144,7 @@ public class RegressionTests {
         ScheduledQueueIntegration();
         InstanceBufferMutex();
         LanguageBuiltinWrites();
+        SystemLanguageSelection();
         FeatureDialogs();
         ArchiveEdges();
         PreserveCompletedName(plain,key,encrypted);
@@ -184,6 +194,77 @@ public class RegressionTests {
         save.Invoke(null,new object[]{xml,path});
         var read=new System.Xml.XmlDocument(); read.Load(path);
         Check(read.DocumentElement.FirstChild.InnerText=="updated","changed builtin language file is updated");
+    }
+    static void SystemLanguageSelection() {
+        var resolve=typeof(Language).GetMethod("ResolveLanguageCode",shared);
+        string[] codes={"zh-TW","fr-FR","de-DE","es-ES","en-US","zh-CN","hu-HU","it-IT","pt-BR","ro-RO"};
+        string[][] cases={
+            new[]{"auto","zh-CN","zh-CN"}, new[]{"auto","zh-SG","zh-CN"},
+            new[]{"auto","zh-TW","zh-TW"}, new[]{"auto","zh-HK","zh-TW"}, new[]{"auto","zh-MO","zh-TW"},
+            new[]{"auto","zh-Hans","zh-CN"}, new[]{"auto","zh-Hant","zh-TW"}, new[]{"auto","zh","zh-CN"},
+            new[]{"auto","en-GB","en-US"}, new[]{"auto","fr-CA","fr-FR"}, new[]{"auto","pt-PT","pt-BR"},
+            new[]{"auto","ja-JP","en-US"}, new[]{"auto","ko-KR","en-US"}, new[]{"auto","ar-SA","en-US"},
+            new[]{"es-ES","zh-CN","es-ES"}, new[]{"ja-JP","zh-CN","en-US"},
+            new[]{"","de-DE","de-DE"}, new[]{"not_a_language!!!","fr-FR","fr-FR"},
+            new[]{"ZH-cn","en-US","zh-CN"}, new[]{" auto ","zh-TW","zh-TW"},
+            new[]{"zh-CHS","en-US","zh-CN"}, new[]{"zh-CHT","en-US","zh-TW"}
+        };
+        foreach(var c in cases) {
+            var system=System.Globalization.CultureInfo.GetCultureInfo(c[1]);
+            string selected=(string)resolve.Invoke(null,new object[]{c[0],system,codes});
+            Check(selected==c[2],"language selection: preference="+c[0]+", system="+c[1]+" -> "+c[2]);
+            Check((string)resolve.Invoke(null,new object[]{c[0],system,codes.Reverse().ToArray()})==selected,"language matching does not depend on pack enumeration order: "+c[1]);
+        }
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.InvariantCulture,codes})=="en-US","an unavailable system display language falls back to English");
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-TW"),new[]{"en-US","zh-CN"}})=="en-US","missing Traditional Chinese does not silently select Simplified Chinese");
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("fr-BE"),codes.Concat(new[]{"fr-CA"}).ToArray()})=="fr-FR","regional matching prefers the built-in language over another custom region");
+        Check(Language.NormalizeLanguagePreference(null)=="auto" && Language.NormalizeLanguagePreference(" AUTO ")=="auto","missing and automatic preferences remain automatic");
+        Check(Language.NormalizeLanguagePreference("de-de")=="de-DE","saved manual language preferences are preserved and canonicalized");
+        var defaults=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        defaults.ConfigUI=new ConfiguracionUI();defaults.ConfiguracionDefectoVacia();
+        Check(defaults.Idioma=="auto","new configurations follow the system rather than pinning its current language");
+
+        string[] fields={"LanguageFileDisk","LanguageFileInternal","LanguageFileEnUs","culture"};
+        var before=fields.Select(n=>typeof(Language).GetField(n,shared).GetValue(null)).ToArray();
+        var oldFormat=Thread.CurrentThread.CurrentCulture;
+        var oldUi=Thread.CurrentThread.CurrentUICulture;
+        var init=typeof(Language).GetMethod("InitializeLanguage",shared);
+        string directory=Path.Combine(root,"isolated-language-packs");
+        try {
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            Thread.CurrentThread.CurrentUICulture=System.Globalization.CultureInfo.GetCultureInfo("zh-SG");
+            init.Invoke(null,new object[]{"auto",Thread.CurrentThread.CurrentUICulture,directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-CN" && Language.GetText("Stop")=="停止","automatic initialization loads the matching display language, independently of number/date formatting");
+            Check(Thread.CurrentThread.CurrentCulture.Name=="fr-FR","selecting the UI language does not change number/date formatting");
+            Check(((System.Xml.XmlDocument)typeof(Language).GetField("LanguageFileEnUs",shared).GetValue(null)).DocumentElement.GetAttribute("id")=="en-US","English remains the per-key fallback after initializing Chinese");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="en-US" && Language.GetText("Stop")=="Stop","an unsupported system language loads actual English text without retaining the previous language");
+            init.Invoke(null,new object[]{"de-DE",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),directory});
+            Check(Language.GetCurrentLanguageCode()=="de-DE","manual language selection overrides the detected system language");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-HK"),directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-TW","a later automatic startup follows a changed display language");
+
+            string custom=Path.Combine(directory,"ja-JP.xml");
+            string customized="<Language id='ja-JP' name='日本語'><Text key='Stop'>カスタム停止</Text></Language>";
+            File.WriteAllText(custom,customized,Encoding.UTF8);
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="ja-JP" && Language.GetText("Stop")=="カスタム停止","an installed user language pack participates in automatic matching");
+            Check(Language.GetText("Start")=="Start","missing custom translations fall back to English");
+            Check(File.ReadAllText(custom)==customized,"automatic initialization preserves user translation edits");
+            File.WriteAllText(Path.Combine(directory,"fr-CA.xml"),"<Language id='fr-CA' name='Français (Canada)'><Text key='Stop'>Arrêt personnalisé</Text></Language>",Encoding.UTF8);
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("fr-CA"),directory});
+            Check(Language.GetCurrentLanguageCode()=="fr-CA" && Language.GetText("Stop")=="Arrêt personnalisé" && Language.GetText("Start")=="Démarrer","a regional custom pack retains its same-language built-in fallback for missing text");
+            File.WriteAllText(custom,"<broken");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="en-US" && Language.GetText("Stop")=="Stop","a corrupt custom-only language pack falls back to English");
+            File.WriteAllText(Path.Combine(directory,"zh-CN.xml"),"<broken");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-CN" && Language.GetText("Stop")=="停止","a corrupt customized built-in pack falls back to its embedded translation");
+        } finally {
+            for(int i=0;i<fields.Length;i++)typeof(Language).GetField(fields[i],shared).SetValue(null,before[i]);
+            Thread.CurrentThread.CurrentCulture=oldFormat;
+            Thread.CurrentThread.CurrentUICulture=oldUi;
+        }
     }
     static void DownloadScheduling() {
         var day=new DateTime(2026,10,28);
@@ -472,12 +553,15 @@ public class RegressionTests {
         var thread=new Thread(()=>{
             var languageFields=new[]{"LanguageFileDisk","LanguageFileInternal","LanguageFileEnUs"};
             var before=languageFields.Select(n=>typeof(Language).GetField(n,shared).GetValue(null)).ToArray();
+            var oldCulture=typeof(Language).GetField("culture",shared).GetValue(null);
             try {
                 System.Windows.Forms.Application.EnableVisualStyles();
                 var lang=new System.Xml.XmlDocument();
                 string resource=typeof(Main).Assembly.GetManifestResourceNames().First(n=>n.EndsWith("zh-CN-Language.xml",StringComparison.Ordinal));
                 using(var stream=typeof(Main).Assembly.GetManifestResourceStream(resource))lang.Load(stream);
                 foreach(string name in languageFields)typeof(Language).GetField(name,shared).SetValue(null,lang);
+                typeof(Language).GetField("culture",shared).SetValue(null,System.Globalization.CultureInfo.GetCultureInfo("zh-CN"));
+                FirstOpenUiCases();
                 var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
                 WarmInboxUiCases(config);
                 WorkbenchUiCases();
@@ -582,37 +666,244 @@ public class RegressionTests {
             } catch(Exception ex) {failure=ex;}
             finally {
                 for(int i=0;i<languageFields.Length;i++)typeof(Language).GetField(languageFields[i],shared).SetValue(null,before[i]);
+                typeof(Language).GetField("culture",shared).SetValue(null,oldCulture);
                 using(var blank=new System.Windows.Forms.Form())ThemeManager.ApplyTheme(blank,ConfiguracionUI.ThemeModeType.Auto);
             }
         });
         thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
         if(failure!=null)throw new Exception("Native feature dialog regression failed",failure);
     }
-    static void WorkbenchUiCases() {
-        using(var main=new Main()) {
+    static void FirstOpenUiCases() {
+        using(var main=new PresentationMain()) {
             var type=typeof(Main);
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.ConfigUI=new ConfiguracionUI {Tema=ConfiguracionUI.ThemeModeType.Light};
+            main.SuspendLayout();
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
-            type.GetMethod("InitNavList",hidden).Invoke(main,null);
+            type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
             type.GetMethod("InitNavRail",hidden).Invoke(main,null);
+            main.ApplyCurrentTheme();
+            main.ResumeLayout(true);
+            main.ShowInTaskbar=false;main.StartPosition=System.Windows.Forms.FormStartPosition.Manual;main.Location=new System.Drawing.Point(-30000,-30000);
+            main.Show();System.Windows.Forms.Application.DoEvents();
+            var menu=main.MainMenuStrip;
+            Print("menu_first_open","width="+menu.Width,"client="+main.ClientSize.Width,string.Join("|",menu.Items.Cast<System.Windows.Forms.ToolStripItem>().Select(i=>i.Text+":"+i.Placement+":"+i.Bounds)));
+            Check(menu.Width==main.ClientSize.Width && !menu.AutoSize,"menu keeps the full client width on first show without a resize");
+            Check(menu.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main && i.Bounds.Right<=menu.ClientSize.Width),"all four menu entries are visible on the first frame");
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
+            main.ClientSize=new System.Drawing.Size(640,600);
+            Check(main.MainMenuStrip.Width==main.ClientSize.Width && main.MainMenuStrip.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main),"menu entries stay visible after narrowing the window");
+            main.Hide();
+        }
+        var timer=System.Diagnostics.Stopwatch.StartNew();
+        using(var settings=new PresentationSettings()) {
+            double construct=timer.Elapsed.TotalMilliseconds;
+            var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            cfg.ConfigUI=new ConfiguracionUI {Tema=ConfiguracionUI.ThemeModeType.Light};
+            cfg.ELCAccounts=new List<ELCAccountHelper.Account>{new ELCAccountHelper.Account {Alias="Fixture",URL="https://example.invalid",User=new System.Security.SecureString(),Key=new System.Security.SecureString()}};
+            cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
+            cfg.Usuario="";cfg.Password="";cfg.Idioma=Language.FollowSystemLanguageCode;cfg.RutaDefecto=@"D:\Downloads";cfg.VLCPath=root;
+            cfg.NivelLog=Log.LevelLogType.Normal;cfg.PrioridadDescompresion=DescompresionPriority.Normal;
+            settings.Config=cfg;
+            int layouts=0;foreach(var control in DescendantControls(settings))control.Layout+=(sender,args)=>layouts++;
+            timer.Restart();
+            typeof(Configuration).GetMethod("Configuration_Load",hidden).Invoke(settings,new object[]{settings,EventArgs.Empty});
+            double load=timer.Elapsed.TotalMilliseconds;
+            timer.Restart();
+            settings.ShowInTaskbar=false;settings.StartPosition=System.Windows.Forms.FormStartPosition.Manual;settings.Location=new System.Drawing.Point(-30000,-30000);
+            settings.Show();System.Windows.Forms.Application.DoEvents();
+            Print("settings_first_open","constructMs="+construct.ToString("F2"),"loadMs="+load.ToString("F2"),"firstFrameMs="+timer.Elapsed.TotalMilliseconds.ToString("F2"),"layoutCalls="+layouts);
+            Check(construct+load+timer.Elapsed.TotalMilliseconds<3000,"settings first open avoids the previous multi-second layout stall");
+            var languageChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboIdiomas",hidden).GetValue(settings,null);
+            Check((string)languageChoice.SelectedValue==Language.FollowSystemLanguageCode && languageChoice.Text=="跟随系统","settings shows the saved automatic language mode instead of pinning the detected language");
+            languageChoice.SelectedValue="de-DE";
+            Check((string)languageChoice.SelectedValue=="de-DE","manual languages remain selectable alongside automatic mode");
+            languageChoice.SelectedValue=Language.FollowSystemLanguageCode;
+            Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"opening general settings does not rebuild unused account data");
+            Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text==cfg.RutaDefecto,"opening settings preserves an unavailable download path without probing or replacing it");
+            var accountControl=(ELCAccountControl)typeof(Configuration).GetProperty("ElcAccountControl",hidden).GetValue(settings,null);
+            var originalAccounts=cfg.ELCAccounts;
+            accountControl.SaveToConfig(ref cfg);
+            Check(Object.ReferenceEquals(originalAccounts,cfg.ELCAccounts) && cfg.ELCAccounts.Count==1,"saving unopened account settings preserves the existing collection");
+            var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetProperty("TabControl1",hidden).GetValue(settings,null);
+            tabs.SelectedIndex=tabs.TabPages.Count-1;
+            Check((bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"account editing initializes when its tab is selected");
+            accountControl.Cerrar();accountControl.Cerrar();
+            Check(true,"account cleanup is safe before or after repeated close calls");
+            tabs.SelectedIndex=0;
+            foreach(int width in new[]{880,720,1080}) {
+                settings.ClientSize=new System.Drawing.Size(width,650);
+                foreach(System.Windows.Forms.TabPage page in tabs.TabPages.Cast<System.Windows.Forms.TabPage>().Take(5)) {
+                    tabs.SelectedTab=page;System.Windows.Forms.Application.DoEvents();
+                    foreach(var row in DescendantControls(page).Where(c=>c.GetType().Name=="SettingsFieldRow" && c.Visible)) {
+                        Check(row.Controls[0].Right<=row.Controls[1].Left && row.Controls[1].Right<=row.ClientSize.Width,"setting labels and inputs do not overlap at width "+width);
+                    }
+                }
+            }
+            settings.ClientSize=new System.Drawing.Size(880,650);
+            typeof(Configuration).GetMethod("LocateConfigText",hidden).Invoke(settings,new object[]{"代理"});
+            Check(tabs.SelectedTab.Text.Contains("连接") && tabs.SelectedTab.AutoScrollPosition.Y<0,"settings search scrolls to a matching section below the fold");
+            tabs.SelectedIndex=0;
+            DrawFeatureDialog(settings,"settings-loaded-first-open.png");
+            var themeChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboTheme",hidden).GetValue(settings,null);
+            themeChoice.SelectedValue=ConfiguracionUI.ThemeModeType.Dark.ToString();
+            ThemeManager.ApplyTheme(settings,ConfiguracionUI.ThemeModeType.Dark);
+            DrawFeatureDialog(settings,"settings-loaded-dark.png");
+            themeChoice.SelectedValue=ConfiguracionUI.ThemeModeType.Light.ToString();
+            ThemeManager.ApplyTheme(settings,ConfiguracionUI.ThemeModeType.Light);
+            tabs.SelectedIndex=2;
+            tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
+            DrawFeatureDialog(settings,"settings-loaded-advanced.png");
+            tabs.SelectedIndex=1;
+            tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
+            DrawFeatureDialog(settings,"settings-loaded-connection.png");
+            settings.Hide();
+        }
+        using(var emptyAccounts=new ELCAccountControl()) {
+            var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            config.ELCAccounts=new List<ELCAccountHelper.Account>();emptyAccounts.Config=config;emptyAccounts.CargarDatos();
+            var grid=(System.Windows.Forms.DataGridView)typeof(ELCAccountControl).GetProperty("dgELCUsers",hidden).GetValue(emptyAccounts,null);
+            using(var bitmap=new System.Drawing.Bitmap(300,80))using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) {
+                typeof(ELCAccountControl).GetMethod("dgELCUsers_Paint",hidden).Invoke(emptyAccounts,new object[]{grid,new System.Windows.Forms.PaintEventArgs(graphics,new System.Drawing.Rectangle(0,0,300,80))});
+                graphics.FillRectangle(System.Drawing.Brushes.Black,0,0,1,1);
+                Check(bitmap.GetPixel(0,0).ToArgb()==System.Drawing.Color.Black.ToArgb(),"empty-account painting leaves the caller-owned graphics usable");
+            }
+        }
+    }
+    static IEnumerable<System.Windows.Forms.Control> DescendantControls(System.Windows.Forms.Control rootControl) {
+        yield return rootControl;
+        foreach(System.Windows.Forms.Control child in rootControl.Controls)
+            foreach(var descendant in DescendantControls(child))yield return descendant;
+    }
+    static void WorkbenchUiCases() {
+        using(var main=new PresentationMain()) {
+            var type=typeof(Main);
+            Check(main.Config==null && !main.Visible,"constructing a workbench does not load real configuration or show a window");
+            int loads=0;main.Load+=(sender,args)=>loads++;
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.ConfigUI=new ConfiguracionUI();
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
+            type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
+            type.GetMethod("InitNavRail",hidden).Invoke(main,null);
+            type.GetMethod("Translate",hidden).Invoke(main,null);
+            main.Text=InternalConfiguration.ObtenerNombreApp()+InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER");
             var panel=(System.Windows.Forms.Panel)type.GetProperty("navPanel",hidden).GetValue(main,null);
-            panel.Size=new System.Drawing.Size(184,220);
+            panel.Size=new System.Drawing.Size(192,220);
             type.GetMethod("LayoutNavRail",hidden).Invoke(main,null);
-            Check(panel.AutoScroll && panel.AutoScrollMinSize.Height>panel.ClientSize.Height,"short sidebar keeps overview and shortcuts reachable by scrolling");
+            Check(panel.AutoScroll && panel.AutoScrollMinSize.Height>panel.ClientSize.Height,"short sidebar keeps tools and queue summary reachable by scrolling");
             var nav=(System.Windows.Forms.ListBox)type.GetProperty("navListBox",hidden).GetValue(main,null);
             Check(nav.Top==8,"sidebar navigation retains its unscrolled position after layout");
             var play=(System.Windows.Forms.Button)type.GetProperty("btnPlay",hidden).GetValue(main,null);
             main.ClientSize=new System.Drawing.Size(700,440);
             type.GetMethod("LayoutWorkbenchToolbar",hidden).Invoke(main,null);
             Check(play.Text=="" && !String.IsNullOrEmpty(play.AccessibleName),"compact icon button keeps an accessible name");
+            Check(main.AutoScaleMode==System.Windows.Forms.AutoScaleMode.Dpi,"font selection and per-monitor DPI use one geometry scaling mode");
+            var list=(BrightIdeasSoftware.TreeListView)type.GetProperty("ListaDescargas",hidden).GetValue(main,null);
+            var details=(System.Windows.Forms.Panel)type.GetProperty("detailPanel",hidden).GetValue(main,null);
+            var empty=(System.Windows.Forms.Panel)type.GetField("workbenchEmpty",hidden).GetValue(main);
             foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
-                ThemeManager.ApplyTheme(main,mode);
-                main.ApplyCurrentTheme();
-                var quick=(System.Windows.Forms.Button)type.GetProperty("navQuickLogsButton",hidden).GetValue(main,null);
-                Check(play.BackColor==ThemeManager.GetColor("ButtonBack") && quick.BackColor==play.BackColor,"toolbar and sidebar use the same button surface in "+mode);
-                Check(play.FlatAppearance.BorderColor==ThemeManager.GetColor("ButtonBorder"),"button boundary follows "+mode+" theme");
-                main.ClientSize=new System.Drawing.Size(1100,700);
+                main.Config.ConfigUI.Tema=mode;
+                ThemeManager.ApplyTheme(main,mode);main.ApplyCurrentTheme();
+                Check(ThemeManager.Current==(mode==ConfiguracionUI.ThemeModeType.Light?ThemeManager.ResolvedTheme.Light:ThemeManager.ResolvedTheme.Dark),"workbench renders the requested theme: "+mode);
+                main.ClientSize=new System.Drawing.Size(1180,720);
                 type.GetMethod("InitDownloadAreaLayout",hidden).Invoke(main,null);
-                DrawFeatureDialog(main,"workbench-"+mode+".png");
+                DrawFeatureDialog(main,"workbench-empty-"+mode+".png");
+                var quick=(System.Windows.Forms.Button)type.GetProperty("navQuickLogsButton",hidden).GetValue(main,null);
+                var primary=(System.Windows.Forms.Button)type.GetProperty("btnAddLink",hidden).GetValue(main,null);
+                Check(play.FlatAppearance.BorderSize==0 && quick.FlatAppearance.BorderSize==0,"quiet commands stay borderless after a theme switch: "+mode);
+                Check(primary.BackColor!=play.BackColor && primary.ForeColor!=play.ForeColor,"primary action keeps its visual hierarchy after a theme switch: "+mode);
+                Check(!details.Visible && empty.Bounds==list.Bounds,"empty queue dedicates its content area to the empty state: "+mode);
+                var packages=new List<Paquete>();
+                string[] names={"Design Resources / 设计资源包","产品演示视频.mp4","October Archive.zip","Reference Photos","Brand Guidelines.pdf","素材备份.7z"};
+                Estado[] statuses={Estado.Descargando,Estado.Descargando,Estado.EnCola,Estado.Erroneo,Estado.Completado,Estado.Completado};
+                for(int i=0;i<names.Length;i++) {
+                    var pack=new Paquete {Nombre=names[i],RutaLocal=root,Prioridad=i,TamanoBytes=(long)(i+1)*100*1024*1024,Porcentaje=i>3?100:32+i*7,ListaFicheros=new List<Fichero>()};
+                    typeof(Paquete).GetField("EstadoDescarga",hidden).SetValue(pack,statuses[i]);packages.Add(pack);
+                }
+                type.GetField("ListaPaquetes",hidden).SetValue(main,packages);
+                list.SetObjects(packages);
+                type.GetMethod("ApplyColumnDefaults",hidden).Invoke(main,null);
+                Check(list.Items[0].SubItems.Count==list.Columns.Count,"column reset clears stale virtual cell presentation");
+                Check(list.Items[0].Text==names[0],"hiding priority makes the task name the primary visible cell");
+                Check(Convert.ToInt32(list.PrimarySortColumn.AspectGetter(packages[5]))==5,"hidden priority retains queue ordering independently of task names");
+                Check(list.Items[0].SubItems[list.AllColumns[6].Index].Text=="32","combined progress keeps the numeric aspect after column reset");
+                type.GetMethod("UpdateNavCounts",hidden).Invoke(main,null);
+                Check(!list.AllColumns[5].IsVisible && list.AllColumns[6].IsVisible,"default progress has one visible column and retains the optional numeric column");
+                using(var child=new Fichero {NombreFichero="说明文件.txt"}) {
+                    packages[0].AgregarFichero(child);
+                    list.Expand(packages[0]);
+                    Check(list.Items.Count==7,"the task-name tree column still expands package children");
+                    list.Collapse(packages[0]);
+                    Check(list.Items.Count==6,"collapsing a package restores the six root rows");
+                    packages[0].ListaFicheros.Clear();
+                }
+                main.ClientSize=new System.Drawing.Size(1180,720);
+                type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
+                DrawFeatureDialog(main,"workbench-tasks-"+mode+".png");
+                list.SelectedObject=packages[0];
+                foreach(int width in new[]{1400,900,700}) {
+                    list.SelectedObject=packages[0];
+                    main.ClientSize=new System.Drawing.Size(width,720);
+                    type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
+                    Check(width>=1280?list.Right<details.Left:list.Bottom<details.Top,"selected-task details never overlap the list at width "+width+" in "+mode);
+                    DrawFeatureDialog(main,"workbench-details-"+width+"-"+mode+".png");
+                }
+                list.SelectedObject=null;
+                type.GetField("ListaPaquetes",hidden).SetValue(main,new List<Paquete>());
+                list.SetObjects(new Paquete[0]);
+            }
+            Check(loads==0 && !main.Visible,"resizing and native presentation capture never start the real application");
+        }
+        using(var settings=new PresentationSettings()) {
+            typeof(Configuration).GetMethod("Translate",hidden).Invoke(settings,null);
+            ((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text=@"D:\Downloads";
+            var language=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboIdiomas",hidden).GetValue(settings,null);
+            language.Items.Add("简体中文");language.SelectedIndex=0;
+            var appearance=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboTheme",hidden).GetValue(settings,null);
+            appearance.Items.AddRange(new object[]{"浅色","深色"});
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                appearance.SelectedIndex=mode==ConfiguracionUI.ThemeModeType.Light?0:1;
+                ThemeManager.ApplyTheme(settings,mode);
+                DrawFeatureDialog(settings,"settings-general-"+mode+".png");
+                var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetProperty("TabControl1",hidden).GetValue(settings,null);
+                Check(tabs.TabPages.Count==6,"settings preserves the original pages and exposes connection settings separately");
+                tabs.SelectedIndex=1;
+                DrawFeatureDialog(settings,"settings-connection-"+mode+".png");
+                tabs.SelectedIndex=0;
+            }
+        }
+        using(var add=new PresentationAddLinks()) {
+            typeof(AddLinks).GetMethod("Translate",hidden).Invoke(add,null);
+            ((System.Windows.Forms.TextBox)typeof(AddLinks).GetProperty("txtRuta",hidden).GetValue(add,null)).Text=@"D:\Downloads";
+            ((System.Windows.Forms.TextBox)typeof(AddLinks).GetProperty("txtNombre",hidden).GetValue(add,null)).Text="Design Resources / 设计资源包";
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                ThemeManager.ApplyTheme(add,mode);
+                DrawFeatureDialog(add,"add-links-"+mode+".png");
+            }
+            // Capture the actual second page inside its normal host, using
+            // demonstration metadata without starting inspection or downloads.
+            using(var preview=new BatchPreflightView(new List<string>(),null,new Dictionary<string,URLProcessor.FileURL>(),@"D:\Downloads")) {
+                var rows=new List<BatchLinkPreflight.Entry>();
+                string[] names={"Brand Guidelines.pdf","产品演示视频.mp4","Design Assets.zip","Reference Photos.zip"};
+                for(int i=0;i<names.Length;i++)rows.Add(new BatchLinkPreflight.Entry {
+                    Source=new URLProcessor.FileURL("https://mega.nz/file/DEMO000"+i+"#"+new string('A',43),""),
+                    Name=names[i],SizeBytes=(long)(i+1)*20*1024*1024,State=BatchLinkPreflight.LinkState.Ready,Selected=true});
+                typeof(BatchPreflightView).GetField("entries",hidden).SetValue(preview,rows);
+                typeof(BatchPreflightView).GetField("freeSpace",hidden).SetValue(preview,(long)200*1024*1024*1024);
+                typeof(BatchPreflightView).GetMethod("BindRows",hidden).Invoke(preview,null);
+                var progress=(System.Windows.Forms.ProgressBar)typeof(BatchPreflightView).GetField("progressBar",hidden).GetValue(preview);
+                progress.Value=progress.Maximum;
+                var input=(System.Windows.Forms.Control)typeof(AddLinks).GetField("addLinksInputPage",hidden).GetValue(add);
+                var host=(System.Windows.Forms.Control)typeof(AddLinks).GetField("addLinksPageHost",hidden).GetValue(add);
+                var step=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksStepLabel",hidden).GetValue(add);
+                input.Visible=false;preview.Dock=System.Windows.Forms.DockStyle.Fill;host.Controls.Add(preview);
+                step.Text=Language.GetText("AddLinks_StepSelection");
+                ThemeManager.ApplyTheme(add,ConfiguracionUI.ThemeModeType.Light);
+                DrawFeatureDialog(add,"add-preflight-Light.png");
+                host.Controls.Remove(preview);
             }
         }
     }
@@ -625,27 +916,69 @@ public class RegressionTests {
             finally {host.Controls.Remove(control);}
         }
     }
-    static void DrawFeatureDialog(System.Windows.Forms.Control form,string name) {
-        // Create a hidden top-level handle first. Mark only the managed visibility
-        // state for child rendering; never call Show/SetVisibleCore/OnShown, which
-        // would start real network inspection or display a user-facing window.
-        var handle=form.Handle;
-        var setState=typeof(System.Windows.Forms.Control).GetMethod("SetState",hidden);
-        var visibleFlag=typeof(System.Windows.Forms.Control).GetField("STATE_VISIBLE",shared);
-        if(setState==null || visibleFlag==null)throw new Exception("Hidden rendering support unavailable");
-        int flag=(int)visibleFlag.GetRawConstantValue();
-        setState.Invoke(form,new object[]{flag,true});
+    // Presentation fixtures suppress business lifecycle events. They exercise
+    // the real native control tree without moving its HWNDs to another parent.
+    class PresentationMain : Main {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class PresentationSettings : Configuration {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class PresentationAddLinks : AddLinks {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class CaptureHost : System.Windows.Forms.Form {
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool PrintWindow(IntPtr window,IntPtr deviceContext,uint flags);
+    static void DrawFeatureDialog(System.Windows.Forms.Control source,string name) {
+        var presentation=source as System.Windows.Forms.Form;
+        var originalParent=source.Parent;
+        var taskList=source is Main?(BrightIdeasSoftware.TreeListView)typeof(Main).GetProperty("ListaDescargas",hidden).GetValue(source,null):null;
+        object selection=taskList==null?null:taskList.SelectedObject;
+        bool wrapped=presentation==null;
+        if(wrapped) {
+            presentation=new CaptureHost {AutoScaleMode=System.Windows.Forms.AutoScaleMode.None,Font=source.Font,
+                ClientSize=source.Size,BackColor=source.BackColor};
+            presentation.Controls.Add(source);
+        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm)) {
+            throw new Exception("Refusing to show a business form from a presentation test");
+        }
         try {
-            CreateChildHandles(form);
-            form.PerformLayout();
-            using(var bitmap=new System.Drawing.Bitmap(form.Width,form.Height)) {
-                form.DrawToBitmap(bitmap,new System.Drawing.Rectangle(0,0,form.Width,form.Height));
+            presentation.ShowInTaskbar=false;
+            presentation.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+            presentation.Location=new System.Drawing.Point(-30000,-30000);
+            presentation.Show();
+            if(taskList!=null) {
+                taskList.SelectedObject=selection;
+                typeof(Main).GetMethod("LayoutDownloadArea",hidden).Invoke(source,null);
+                typeof(Main).GetMethod("UpdateDetailPanel",hidden).Invoke(source,null);
+            }
+            presentation.Refresh();System.Windows.Forms.Application.DoEvents();
+            using(var bitmap=new System.Drawing.Bitmap(presentation.Width,presentation.Height)) {
+                using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) {
+                    var dc=graphics.GetHdc();
+                    try {Check(PrintWindow(presentation.Handle,dc,2),"native presentation fixture captures: "+name);}
+                    finally {graphics.ReleaseHdc(dc);}
+                }
                 bitmap.Save(Path.Combine(root,name),System.Drawing.Imaging.ImageFormat.Png);
             }
         } finally {
-            setState.Invoke(form,new object[]{flag,false});
+            presentation.Hide();
+            if(wrapped) {
+                presentation.Controls.Remove(source);
+                if(originalParent!=null)originalParent.Controls.Add(source);
+                presentation.Dispose();
+            }
         }
-        Check(form.Width>0 && form.Height>0,"hidden native dialog renders: "+name);
+        Check(source.Width>0 && source.Height>0,"isolated native dialog renders: "+name);
     }
     static void WarmInboxUiCases(Configuracion config) {
         int calls=0;string key=new string('A',43);
@@ -654,7 +987,7 @@ public class RegressionTests {
             token.ThrowIfCancellationRequested();Interlocked.Increment(ref calls);
             return new List<BatchLinkPreflight.Entry>{new BatchLinkPreflight.Entry {Source=new URLProcessor.FileURL(url,""),Name="inbox.zip",State=BatchLinkPreflight.LinkState.Ready,SizeBytes=1024,Selected=true}};
         });
-        using(var inbox=new AddLinks()) {
+        using(var inbox=new PresentationAddLinks()) {
             inbox.Config=config;
             typeof(AddLinks).GetField("preflightSession",hidden).SetValue(inbox,session);
             var count=typeof(AddLinks).GetMethod("UpdateLinkCount",hidden);
@@ -723,13 +1056,6 @@ public class RegressionTests {
         while(!done()) {
             if(timer.ElapsedMilliseconds>5000)throw new Exception("Native async fixture did not complete");
             System.Windows.Forms.Application.DoEvents();Thread.Sleep(1);
-        }
-    }
-    static void CreateChildHandles(System.Windows.Forms.Control parent) {
-        foreach(System.Windows.Forms.Control child in parent.Controls) {
-            var handle=child.Handle;
-            CreateChildHandles(child);
-            child.PerformLayout();
         }
     }
     static void ProcessResourceMonitoring() {

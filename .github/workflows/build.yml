@@ -85,7 +85,9 @@ jobs:
             if (Test-Path $src) { Copy-Item $src $staging -Force } else { throw "Missing artifact dependency: $src" }
           }
           # 打包为 zip
-          Compress-Archive -Path "$staging\*" -DestinationPath "$staging\MegaDownloader-Revival-win-x86.zip" -Force
+          $releaseFiles = @('MegaDownloader.exe') + $deps
+          $archiveFiles = @($releaseFiles | ForEach-Object { Join-Path $staging $_ })
+          Compress-Archive -LiteralPath $archiveFiles -DestinationPath "$staging\MegaDownloader-Revival-win-x86.zip" -Force
           Write-Host "--- Artifacts ---"
           Get-ChildItem $staging | Select-Object Name, Length
 

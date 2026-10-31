@@ -2,6 +2,16 @@ Imports System.IO
 
 Public Class Configuration
 
+    Public Sub New()
+        SuspendLayout()
+        InitializeComponent()
+        UiStyles.InitializeForm(Me)
+        InitConfigurationLayout()
+        ResumeLayout(True)
+        AddHandler TabControl1.SelectedIndexChanged, AddressOf SettingsTabChanged
+        AddHandler Shown, AddressOf ConfigurationShown
+    End Sub
+
     Public Config As Configuracion
     Public MainForm As Main
     Public RequiereConfiguracion As Boolean = False
@@ -43,6 +53,8 @@ Public Class Configuration
 				Dim hit As Control = FindConfigControl(tp, q)
 				If hit IsNot Nothing Then
 					TabControl1.SelectedTab = tp
+                        tp.PerformLayout()
+                        tp.ScrollControlIntoView(hit)
 					If hit.CanSelect Then
 						hit.Focus()
 					ElseIf hit.Parent IsNot Nothing AndAlso hit.Parent.CanSelect Then
@@ -102,164 +114,196 @@ Public Class Configuration
 	End Function
 
     Private ListaPreSharedKey As List(Of String)
+    Private configurationLoaded As Boolean
+    Private elcAccountsLoaded As Boolean
 
     Private Sub Configuration_Load(sender As Object, e As System.EventArgs) Handles Me.Load
 
-	ElcAccountControl.Config = Config
-	ElcAccountControl.CargarDatos()
+        Dim suspended = UiStyles.SuspendLayouts(Me)
+        Try
+            ElcAccountControl.Config = Config
 
-        Translate()
-	TrySetSearchCue()
+            Translate()
+            TrySetSearchCue()
 
-        Dim ListaLogs As New Generic.Dictionary(Of String, String)
-        ListaLogs(Log.LevelLogType.Minimal.ToString) = Language.GetText("Log_Minimum")
-        ListaLogs(Log.LevelLogType.Normal.ToString) = Language.GetText("Log_Normal")
-        ListaLogs(Log.LevelLogType.Info.ToString) = Language.GetText("Log_Informative")
-        ListaLogs(Log.LevelLogType.Debug.ToString) = Language.GetText("Log_Debug")
-        comboLog.DataSource = New BindingSource(ListaLogs, Nothing)
-        comboLog.DisplayMember = "Value"
-        comboLog.ValueMember = "Key"
-
-
-        Dim ListaPrioridadExtraccion As New Generic.Dictionary(Of String, String)
-        ListaPrioridadExtraccion(DescompresionPriority.Normal.ToString) = Language.GetText("Priority_Normal")
-        ListaPrioridadExtraccion(DescompresionPriority.Low.ToString) = Language.GetText("Priority_Low")
-        ' P2-9:VeryLow 必须也在列表里。DescompresionPriority 枚举定义了该成员且
-        ' DescompresionThrottle 有对应实现(Sleep 3ms),存量 Configuration.xml 也可能存着
-        ' "VeryLow"(v1.8 继承或手工编辑)。此前下拉只有 Normal/Low → 绑定该存量值失败 →
-        ' SelectedIndex=-1、SelectedValue=Nothing → 保存时 Enum.IsDefined(type, Nothing) 抛
-        ' ArgumentNullException → 整份配置静默丢失。让下拉能表示枚举的每个合法值即可
-        ' 从根上消除该触发条件(与 :591 的空值守卫互为双保险)。
-        ListaPrioridadExtraccion(DescompresionPriority.VeryLow.ToString) = Language.GetText("Priority_VeryLow")
-        comboPrioridad.DataSource = New BindingSource(ListaPrioridadExtraccion, Nothing)
-        comboPrioridad.DisplayMember = "Value"
-        comboPrioridad.ValueMember = "Key"
+            Dim ListaLogs As New Generic.Dictionary(Of String, String)
+            ListaLogs(Log.LevelLogType.Minimal.ToString) = Language.GetText("Log_Minimum")
+            ListaLogs(Log.LevelLogType.Normal.ToString) = Language.GetText("Log_Normal")
+            ListaLogs(Log.LevelLogType.Info.ToString) = Language.GetText("Log_Informative")
+            ListaLogs(Log.LevelLogType.Debug.ToString) = Language.GetText("Log_Debug")
+            comboLog.DataSource = New BindingSource(ListaLogs, Nothing)
+            comboLog.DisplayMember = "Value"
+            comboLog.ValueMember = "Key"
 
 
-        Dim ListaIdiomas As Generic.Dictionary(Of String, String) = Language.GetAvailableLanguages
-        comboIdiomas.DataSource = New BindingSource(ListaIdiomas, Nothing)
-        comboIdiomas.DisplayMember = "Value"
-        comboIdiomas.ValueMember = "Key"
+            Dim ListaPrioridadExtraccion As New Generic.Dictionary(Of String, String)
+            ListaPrioridadExtraccion(DescompresionPriority.Normal.ToString) = Language.GetText("Priority_Normal")
+            ListaPrioridadExtraccion(DescompresionPriority.Low.ToString) = Language.GetText("Priority_Low")
+            ' P2-9:VeryLow 必须也在列表里。DescompresionPriority 枚举定义了该成员且
+            ' DescompresionThrottle 有对应实现(Sleep 3ms),存量 Configuration.xml 也可能存着
+            ' "VeryLow"(v1.8 继承或手工编辑)。此前下拉只有 Normal/Low → 绑定该存量值失败 →
+            ' SelectedIndex=-1、SelectedValue=Nothing → 保存时 Enum.IsDefined(type, Nothing) 抛
+            ' ArgumentNullException → 整份配置静默丢失。让下拉能表示枚举的每个合法值即可
+            ' 从根上消除该触发条件(与 :591 的空值守卫互为双保险)。
+            ListaPrioridadExtraccion(DescompresionPriority.VeryLow.ToString) = Language.GetText("Priority_VeryLow")
+            comboPrioridad.DataSource = New BindingSource(ListaPrioridadExtraccion, Nothing)
+            comboPrioridad.DisplayMember = "Value"
+            comboPrioridad.ValueMember = "Key"
 
 
-        txtRuta.Text = Config.RutaDefecto
-        If String.IsNullOrEmpty(txtRuta.Text) OrElse Not System.IO.Directory.Exists(Config.RutaDefecto) Then
-            txtRuta.Text = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-        End If
-        txtUsuario.Text = Config.Usuario
-        txtPassword.Text = PASSWORDDEFECTO
+            Dim ListaIdiomas As New Generic.List(Of Generic.KeyValuePair(Of String, String)) From {
+                New Generic.KeyValuePair(Of String, String)(Language.FollowSystemLanguageCode, Language.GetText("Theme_Auto"))}
+            ListaIdiomas.AddRange(Language.GetAvailableLanguages())
+            comboIdiomas.DataSource = New BindingSource(ListaIdiomas, Nothing)
+            comboIdiomas.DisplayMember = "Value"
+            comboIdiomas.ValueMember = "Key"
 
-        txtVLCPath.Text = Config.VLCPath
-        If String.IsNullOrEmpty(Config.VLCPath) Then
+
+            txtRuta.Text = Config.RutaDefecto
+            If String.IsNullOrEmpty(txtRuta.Text) Then
+                txtRuta.Text = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            End If
+            txtUsuario.Text = Config.Usuario
+            txtPassword.Text = PASSWORDDEFECTO
+
+            txtVLCPath.Text = Config.VLCPath
+            If String.IsNullOrEmpty(Config.VLCPath) Then
+                Try
+                    Dim registryKey As Microsoft.Win32.RegistryKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\VideoLan\VLC", False)
+                    If registryKey Is Nothing Then
+                        registryKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\Wow6432Node\VideoLan\VLC", False)
+                    End If
+                    If registryKey IsNot Nothing AndAlso registryKey.GetValue("InstallDir") IsNot Nothing Then
+                        Dim VLCInstallDir As Object = registryKey.GetValue("InstallDir")
+                        txtVLCPath.Text = CStr(VLCInstallDir)
+                    End If
+                Catch ex As Security.SecurityException
+                    Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry. Can't read VLC path.")
+                End Try
+            End If
+
+            chkAnalisisPortapapeles.Checked = Config.AnalizarPortapapeles
+            chkCrearDirectorio.Checked = Config.CrearDirectorioPaquete
+            chkUnZip.Checked = Config.ExtraerAutomaticamente
+            chkApagarPC.Checked = Config.ApagarPC
+            chkCheckUpdates.Checked = Config.CheckUpdates
+            chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
+            chkComenzarPlay.Checked = Config.ComenzarDescargando
+            chkStartWindows.Checked = Config.IniciarConWindows
+            comboLog.SelectedValue = Config.NivelLog.ToString
+            comboPrioridad.SelectedValue = Config.PrioridadDescompresion.ToString
+            comboIdiomas.SelectedValue = Language.NormalizeLanguagePreference(Config.Idioma)
+            If String.IsNullOrEmpty(CStr(comboIdiomas.SelectedValue)) Then
+                comboIdiomas.SelectedValue = Language.GetCurrentLanguageCode()
+                If String.IsNullOrEmpty(CStr(comboIdiomas.SelectedValue)) Then comboIdiomas.SelectedValue = Language.FollowSystemLanguageCode
+            End If
+
+            Dim ListaTemas As New Generic.Dictionary(Of String, String)
+            ListaTemas(ConfiguracionUI.ThemeModeType.Auto.ToString) = Language.GetText("Theme_Auto")
+            ListaTemas(ConfiguracionUI.ThemeModeType.Light.ToString) = Language.GetText("Theme_Light")
+            ListaTemas(ConfiguracionUI.ThemeModeType.Dark.ToString) = Language.GetText("Theme_Dark")
+            comboTheme.DataSource = New BindingSource(ListaTemas, Nothing)
+            comboTheme.DisplayMember = "Value"
+            comboTheme.ValueMember = "Key"
+            comboTheme.SelectedValue = Config.ConfigUI.Tema.ToString
+            If String.IsNullOrEmpty(CStr(comboTheme.SelectedValue)) AndAlso comboTheme.Items.Count > 0 Then
+                comboTheme.SelectedIndex = 0
+            End If
+
+            chkReintentarError.Checked = Config.ResetearErrores
+            chkQuotaBreak.Checked = Config.QuotaBreakthroughMode
+            If Config.ResetearErrores Then
+                txtPeriodoReintento.Text = Config.ResetearErroresPeriodoMinutos.ToString
+            End If
+
+
+            If Config.TamanoPaqueteKB > 0 Then
+                txtTamanoPaquete.Text = Config.TamanoPaqueteKB.ToString
+            End If
+            If Config.TamanoBufferKB > 0 Then
+                txtTamanoBuffer.Text = Config.TamanoBufferKB.ToString
+            End If
+
+            If Config.ConexionesPorFichero > 0 Then
+                txtConFic.Text = Config.ConexionesPorFichero.ToString
+            End If
+            If Config.DescargasSimultaneas > 0 Then
+                txtDescSimult.Text = Config.DescargasSimultaneas.ToString
+            End If
+
+
+            chkLimitarVelocidad.Checked = (Config.LimiteVelocidadKBs > 0)
+            txtLimiteVelocidadKBs.Enabled = chkLimitarVelocidad.Checked
+            If (Config.LimiteVelocidadKBs > 0) Then
+                ' ⑪:限长小数(1500KB→1.46484375)。4 位小数约 0.1KB 精度,回乘 Round 后误差 <1KB。
+                txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString("0.####")
+            End If
+
+            chkProxy.Checked = Config.UsarProxy
+            txtProxyIP.Text = Config.ProxyIP
+            txtProxyPort.Text = Config.ProxyPort.ToString
+            txtProxyName.Text = Config.ProxyUser
+            txtProxyPassword.Text = Config.ProxyPassword
+            If Config.ProxyPort = 0 Then txtProxyPort.Text = ""
+
+            txtStreamingPassword.Text = Config.ServidorStreamingPassword
+            chkStreamingServer.Checked = Config.ServidorStreamingActivo
+            txtStreamingPort.Text = Config.ServidorStreamingPuerto.ToString
+            If Config.ServidorStreamingPuerto = 0 Then txtStreamingPort.Text = ""
+
+            chkServidorWeb.Checked = Config.ServidorWebActivo
+            chkServidorWebLAN.Checked = Config.ServidorWebPermitirLAN
+            txtServidorWebBindIP.Text = Config.ServidorWebBindIP
+            txtServidorWebNombre.Text = Config.ServidorWebNombre
+            txtServidorWebPassword.Text = Config.ServidorWebPassword
+            txtServidorWebPort.Text = Config.ServidorWebPuerto.ToString
+            txtServidorWebTemplate.Text = Config.ServidorWebRutaPlantilla
+            txtServidorWebTimeout.Text = Config.ServidorWebTimeout.ToString
+            If Config.ServidorWebPuerto = 0 Then txtServidorWebPort.Text = ""
+            ' 与保存逻辑(0-99)保持同一边界:此前载入侧 >60 就清空,导致保存 61-99 后重开被静默改回 5
+            If Config.ServidorWebTimeout < 0 Or Config.ServidorWebTimeout > 99 Then txtServidorWebTimeout.Text = ""
+
+            comboPrioridad.Enabled = chkUnZip.Checked
+
+
+            Dim keys As New System.Text.StringBuilder()
+            If Config.ListaPreSharedKeys IsNot Nothing Then
+                For Each key As Security.SecureString In Config.ListaPreSharedKeys
+                    If key IsNot Nothing Then keys.AppendLine(Criptografia.ToInsecureString(key))
+                Next
+            End If
+            txtKeyList.Text = keys.ToString()
+
+            chkProxy_CheckedChanged(Nothing, Nothing)
+            chkServidorWeb_CheckedChanged(Nothing, Nothing)
+            chkServidorStreaming_CheckedChanged(Nothing, Nothing)
+            chkReintentarError_CheckedChanged(Nothing, Nothing)
+
+            ' 应用主题到设置窗体本身
             Try
-                Dim registryKey As Microsoft.Win32.RegistryKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\VideoLan\VLC", False)
-                If registryKey Is Nothing Then
-                    registryKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\Wow6432Node\VideoLan\VLC", False)
-                End If
-                If registryKey IsNot Nothing AndAlso registryKey.GetValue("InstallDir") IsNot Nothing Then
-                    Dim VLCInstallDir As Object = registryKey.GetValue("InstallDir")
-                    txtVLCPath.Text = CStr(VLCInstallDir)
-                End If
-            Catch ex As Security.SecurityException
-                Log.WriteError("SECURITY ERROR: Not enough privileges to access the registry. Can't read VLC path.")
+                ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
+            Catch ex As Exception
+                Log.WriteError("Failed to apply theme to Configuration form: " & ex.ToString)
             End Try
+            configurationLoaded = True
+            EnsureElcAccounts()
+        Finally
+            UiStyles.ResumeLayouts(suspended)
+        End Try
+
+    End Sub
+
+    Private Sub ConfigurationShown(sender As Object, e As EventArgs)
+        ' Show warnings only after the settings window has painted, with a real
+        ' owner, instead of blocking Load behind an otherwise blank window.
+        If Config IsNot Nothing AndAlso ((Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy) OrElse
+            (Config.ServidorStreamingPasswordNeedsReentry AndAlso Config.ServidorStreamingActivo)) Then
+            BeginInvoke(New MethodInvoker(AddressOf ShowCredentialWarning))
         End If
+    End Sub
 
-        chkAnalisisPortapapeles.Checked = Config.AnalizarPortapapeles
-        chkCrearDirectorio.Checked = Config.CrearDirectorioPaquete
-        chkUnZip.Checked = Config.ExtraerAutomaticamente
-        chkApagarPC.Checked = Config.ApagarPC
-        chkCheckUpdates.Checked = Config.CheckUpdates
-        chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
-        chkComenzarPlay.Checked = Config.ComenzarDescargando
-        chkStartWindows.Checked = Config.IniciarConWindows
-        comboLog.SelectedValue = Config.NivelLog.ToString
-        comboPrioridad.SelectedValue = Config.PrioridadDescompresion.ToString
-        comboIdiomas.SelectedValue = Config.Idioma
-        If String.IsNullOrEmpty(CStr(comboIdiomas.SelectedValue)) AndAlso comboIdiomas.Items.Count > 0 Then
-            comboIdiomas.SelectedIndex = 0
-        End If
-
-        Dim ListaTemas As New Generic.Dictionary(Of String, String)
-        ListaTemas(ConfiguracionUI.ThemeModeType.Auto.ToString) = Language.GetText("Theme_Auto")
-        ListaTemas(ConfiguracionUI.ThemeModeType.Light.ToString) = Language.GetText("Theme_Light")
-        ListaTemas(ConfiguracionUI.ThemeModeType.Dark.ToString) = Language.GetText("Theme_Dark")
-        comboTheme.DataSource = New BindingSource(ListaTemas, Nothing)
-        comboTheme.DisplayMember = "Value"
-        comboTheme.ValueMember = "Key"
-        comboTheme.SelectedValue = Config.ConfigUI.Tema.ToString
-        If String.IsNullOrEmpty(CStr(comboTheme.SelectedValue)) AndAlso comboTheme.Items.Count > 0 Then
-            comboTheme.SelectedIndex = 0
-        End If
-
-        chkReintentarError.Checked = Config.ResetearErrores
-        chkQuotaBreak.Checked = Config.QuotaBreakthroughMode
-        If Config.ResetearErrores Then
-            txtPeriodoReintento.Text = Config.ResetearErroresPeriodoMinutos.ToString
-        End If
-
-
-        If Config.TamanoPaqueteKB > 0 Then
-            txtTamanoPaquete.Text = Config.TamanoPaqueteKB.ToString
-        End If
-        If Config.TamanoBufferKB > 0 Then
-            txtTamanoBuffer.Text = Config.TamanoBufferKB.ToString
-        End If
-
-        If Config.ConexionesPorFichero > 0 Then
-            txtConFic.Text = Config.ConexionesPorFichero.ToString
-        End If
-        If Config.DescargasSimultaneas > 0 Then
-            txtDescSimult.Text = Config.DescargasSimultaneas.ToString
-        End If
-
-
-        chkLimitarVelocidad.Checked = (Config.LimiteVelocidadKBs > 0)
-        txtLimiteVelocidadKBs.Enabled = chkLimitarVelocidad.Checked
-        If (Config.LimiteVelocidadKBs > 0) Then
-            ' ⑪:限长小数(1500KB→1.46484375)。4 位小数约 0.1KB 精度,回乘 Round 后误差 <1KB。
-            txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString("0.####")
-        End If
-
-        chkProxy.Checked = Config.UsarProxy
-        txtProxyIP.Text = Config.ProxyIP
-        txtProxyPort.Text = Config.ProxyPort.ToString
-        txtProxyName.Text = Config.ProxyUser
-        txtProxyPassword.Text = Config.ProxyPassword
-        If Config.ProxyPort = 0 Then txtProxyPort.Text = ""
-
-        txtStreamingPassword.Text = Config.ServidorStreamingPassword
-        chkStreamingServer.Checked = Config.ServidorStreamingActivo
-        txtStreamingPort.Text = Config.ServidorStreamingPuerto.ToString
-        If Config.ServidorStreamingPuerto = 0 Then txtStreamingPort.Text = ""
-
-        chkServidorWeb.Checked = Config.ServidorWebActivo
-        chkServidorWebLAN.Checked = Config.ServidorWebPermitirLAN
-        txtServidorWebBindIP.Text = Config.ServidorWebBindIP
-        txtServidorWebNombre.Text = Config.ServidorWebNombre
-        txtServidorWebPassword.Text = Config.ServidorWebPassword
-        txtServidorWebPort.Text = Config.ServidorWebPuerto.ToString
-        txtServidorWebTemplate.Text = Config.ServidorWebRutaPlantilla
-        txtServidorWebTimeout.Text = Config.ServidorWebTimeout.ToString
-        If Config.ServidorWebPuerto = 0 Then txtServidorWebPort.Text = ""
-        ' 与保存逻辑(0-99)保持同一边界:此前载入侧 >60 就清空,导致保存 61-99 后重开被静默改回 5
-        If Config.ServidorWebTimeout < 0 Or Config.ServidorWebTimeout > 99 Then txtServidorWebTimeout.Text = ""
-
-        comboPrioridad.Enabled = chkUnZip.Checked
-
-
-        Me.txtKeyList.Text = ""
-        If Config.ListaPreSharedKeys IsNot Nothing Then
-            For Each Str As Security.SecureString In Config.ListaPreSharedKeys
-                Me.txtKeyList.Text &= Criptografia.ToInsecureString(Str) & vbNewLine
-            Next
-        End If
-
-        chkProxy_CheckedChanged(Nothing, Nothing)
-        chkServidorWeb_CheckedChanged(Nothing, Nothing)
-        chkServidorStreaming_CheckedChanged(Nothing, Nothing)
-        chkReintentarError_CheckedChanged(Nothing, Nothing)
-
+    Private Sub ShowCredentialWarning()
+        If IsDisposed OrElse Disposing Then Return
         ' P0-4：DPAPI 口令换机/换账户恢复后解密失败，需用户重填。仅所用功能启用时弹窗，
         ' 否则只留日志（Configuracion 读盘时已记 Warning），避免打扰未用该功能的用户。
         Try
@@ -267,7 +311,7 @@ Public Class Configuration
             If Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy Then needReentry.Add("代理口令 Proxy password")
             If Config.ServidorStreamingPasswordNeedsReentry AndAlso Config.ServidorStreamingActivo Then needReentry.Add("流媒体口令 Streaming password")
             If needReentry.Count > 0 Then
-                MessageBox.Show("以下口令无法在本机解密（配置可能从备份恢复到了其他机器/账户），请重新输入，否则相关功能会连接失败：" & vbCrLf & _
+                MessageBox.Show(Me, "以下口令无法在本机解密（配置可能从备份恢复到了其他机器/账户），请重新输入，否则相关功能会连接失败：" & vbCrLf & _
                     " * " & String.Join(vbCrLf & " * ", needReentry.ToArray()) & vbCrLf & _
                     "The password(s) cannot be decrypted on this machine/user (config may have been restored from backup). Please re-enter, otherwise the feature will fail to connect: " & String.Join(", ", needReentry.ToArray()), _
                     Language.GetText("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
@@ -276,19 +320,16 @@ Public Class Configuration
             Log.WriteError("Password re-entry prompt failed: " & ex.ToString)
         End Try
 
-        ' 应用主题到设置窗体本身
-        Try
-            ThemeManager.ApplyTheme(Me, Config.ConfigUI.Tema)
-        Catch ex As Exception
-            Log.WriteError("Failed to apply theme to Configuration form: " & ex.ToString)
-        End Try
-        ' RC:ELC 表格首绘取色早于换肤会闪旧主题色,换肤后重绘一次。
-        Try
-            ElcAccountControl.CargarDatos()
-        Catch ex As Exception
-            Log.WriteError("Failed to refresh ELC grid after theme apply: " & ex.ToString)
-        End Try
+    End Sub
 
+    Private Sub SettingsTabChanged(sender As Object, e As EventArgs)
+        If configurationLoaded Then EnsureElcAccounts()
+    End Sub
+
+    Private Sub EnsureElcAccounts()
+        If elcAccountsLoaded OrElse Not configurationLoaded OrElse TabControl1.SelectedTab IsNot TabPage5 Then Return
+        ElcAccountControl.CargarDatos()
+        elcAccountsLoaded = True
     End Sub
 
     Private Sub Configuration_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
@@ -585,7 +626,7 @@ Public Class Configuration
         ElcAccountControl.SaveToConfig(Config)
 
         Dim AvisoReiniciarAppParaIdioma As Boolean = False
-        If Language.IsValidLanguageCode(CStr(comboIdiomas.SelectedValue)) Then
+        If CStr(comboIdiomas.SelectedValue) = Language.FollowSystemLanguageCode OrElse Language.IsValidLanguageCode(CStr(comboIdiomas.SelectedValue)) Then
             AvisoReiniciarAppParaIdioma = Config.Idioma <> CStr(comboIdiomas.SelectedValue)
             Config.Idioma = CStr(comboIdiomas.SelectedValue)
         End If

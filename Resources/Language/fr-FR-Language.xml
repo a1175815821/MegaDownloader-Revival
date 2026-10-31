@@ -559,4 +559,7 @@ Sinon, il pourra télécharger les liens mais pas les voir.]]></Text>
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Commencez avec un lien]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Déposez un lien MEGA ou ajoutez des liens. Vous pouvez aussi utiliser Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[Aucune tâche correspondante]]></Text>
 </Language>

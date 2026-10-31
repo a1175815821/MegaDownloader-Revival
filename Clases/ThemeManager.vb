@@ -33,20 +33,21 @@ Public NotInheritable Class ThemeManager
     Private Shared ReadOnly LightColors As New Dictionary(Of String, Color) From
     {
         {"Back", Color.White},
-        {"Fore", Color.FromArgb(32, 42, 58)},
-        {"AltBack", Color.FromArgb(248, 250, 252)},
-        {"ControlBack", Color.FromArgb(244, 246, 249)},
-        {"Canvas", Color.FromArgb(231, 236, 243)},
-        {"Border", Color.FromArgb(216, 222, 231)},
-        {"ButtonBack", Color.FromArgb(246, 248, 251)},
-        {"ButtonBorder", Color.FromArgb(164, 177, 194)},
+        {"Fore", Color.FromArgb(35, 41, 52)},
+        {"AltBack", Color.FromArgb(251, 252, 253)},
+        {"ControlBack", Color.FromArgb(247, 248, 250)},
+        {"Canvas", Color.FromArgb(241, 243, 246)},
+        {"InputBack", Color.FromArgb(247, 248, 250)},
+        {"Border", Color.FromArgb(229, 232, 237)},
+        {"ButtonBack", Color.White},
+        {"ButtonBorder", Color.FromArgb(207, 213, 222)},
         {"ButtonDisabledBack", Color.FromArgb(239, 242, 247)},
         {"ButtonDisabledFore", Color.FromArgb(102, 113, 129)},
         {"ButtonDisabledBorder", Color.FromArgb(193, 202, 214)},
-        {"Muted", Color.FromArgb(92, 105, 124)},
-        {"Selection", Color.FromArgb(225, 236, 252)},
-        {"SelectionFore", Color.FromArgb(25, 58, 104)},
-        {"Accent", Color.FromArgb(199, 45, 60)},
+        {"Muted", Color.FromArgb(101, 113, 132)},
+        {"Selection", Color.FromArgb(251, 236, 239)},
+        {"SelectionFore", Color.FromArgb(158, 34, 51)},
+        {"Accent", Color.FromArgb(199, 53, 72)},
         {"AccentFore", Color.White},
         {"AccentHover", Color.FromArgb(179, 37, 51)},
         {"AccentPressed", Color.FromArgb(154, 30, 43)},
@@ -57,12 +58,12 @@ Public NotInheritable Class ThemeManager
         {"QuotaBack", Color.FromArgb(178, 34, 34)},
         {"QuotaFore", Color.White},
         {"SuccessFore", Color.FromArgb(26, 121, 90)},
-        {"ProgressBack", Color.White},
-        {"ProgressFill", Color.FromArgb(40, 148, 113)},
+        {"ProgressBack", Color.FromArgb(233, 237, 241)},
+        {"ProgressFill", Color.FromArgb(50, 110, 170)},
         {"ProgressGradientStart", Color.FromArgb(40, 148, 113)},
         {"ProgressGradientEnd", Color.FromArgb(40, 148, 113)},
-        {"ButtonHover", Color.FromArgb(235, 240, 248)},
-        {"ButtonPressed", Color.FromArgb(221, 230, 243)}
+        {"ButtonHover", Color.FromArgb(240, 242, 246)},
+        {"ButtonPressed", Color.FromArgb(229, 233, 239)}
     }
 
     ' Muted:深色主题下的次要说明文字色,对 ControlBack(51,51,55)对比度 4.97:1
@@ -70,37 +71,38 @@ Public NotInheritable Class ThemeManager
     ' 深色配色(VS Code Dark+ 风格)
     Private Shared ReadOnly DarkColors As New Dictionary(Of String, Color) From
     {
-        {"Back", Color.FromArgb(30, 36, 47)},
-        {"Fore", Color.FromArgb(230, 235, 243)},
-        {"AltBack", Color.FromArgb(34, 42, 54)},
-        {"ControlBack", Color.FromArgb(37, 45, 58)},
-        {"Canvas", Color.FromArgb(17, 23, 33)},
-        {"Border", Color.FromArgb(64, 77, 96)},
-        {"ButtonBack", Color.FromArgb(46, 57, 73)},
-        {"ButtonBorder", Color.FromArgb(100, 116, 139)},
+        {"Back", Color.FromArgb(32, 37, 45)},
+        {"Fore", Color.FromArgb(231, 235, 241)},
+        {"AltBack", Color.FromArgb(34, 40, 49)},
+        {"ControlBack", Color.FromArgb(26, 31, 38)},
+        {"Canvas", Color.FromArgb(21, 25, 31)},
+        {"InputBack", Color.FromArgb(26, 31, 38)},
+        {"Border", Color.FromArgb(52, 60, 72)},
+        {"ButtonBack", Color.FromArgb(38, 44, 54)},
+        {"ButtonBorder", Color.FromArgb(73, 83, 99)},
         {"ButtonDisabledBack", Color.FromArgb(37, 45, 58)},
         {"ButtonDisabledFore", Color.FromArgb(153, 169, 191)},
         {"ButtonDisabledBorder", Color.FromArgb(73, 87, 106)},
-        {"Muted", Color.FromArgb(166, 180, 199)},
-        {"Selection", Color.FromArgb(46, 68, 99)},
-        {"SelectionFore", Color.FromArgb(238, 245, 255)},
-        {"Accent", Color.FromArgb(190, 46, 61)},
-        {"AccentFore", Color.White},
-        {"AccentHover", Color.FromArgb(211, 57, 73)},
-        {"AccentPressed", Color.FromArgb(164, 35, 49)},
+        {"Muted", Color.FromArgb(164, 175, 191)},
+        {"Selection", Color.FromArgb(56, 39, 46)},
+        {"SelectionFore", Color.FromArgb(244, 155, 166)},
+        {"Accent", Color.FromArgb(228, 92, 108)},
+        {"AccentFore", Color.FromArgb(21, 25, 31)},
+        {"AccentHover", Color.FromArgb(238, 122, 135)},
+        {"AccentPressed", Color.FromArgb(220, 86, 103)},
         {"Link", Color.FromArgb(135, 184, 250)},
-        {"ToolBack", Color.FromArgb(30, 36, 47)},
-        {"ToolBorder", Color.FromArgb(64, 77, 96)},
+        {"ToolBack", Color.FromArgb(32, 37, 45)},
+        {"ToolBorder", Color.FromArgb(52, 60, 72)},
         {"ErrorFore", Color.FromArgb(244, 135, 113)},
         {"QuotaBack", Color.FromArgb(122, 28, 28)},
         {"QuotaFore", Color.White},
         {"SuccessFore", Color.FromArgb(78, 201, 176)},
-        {"ProgressBack", Color.FromArgb(45, 45, 48)},
-        {"ProgressFill", Color.FromArgb(67, 184, 146)},
+        {"ProgressBack", Color.FromArgb(51, 60, 72)},
+        {"ProgressFill", Color.FromArgb(144, 185, 230)},
         {"ProgressGradientStart", Color.FromArgb(67, 184, 146)},
         {"ProgressGradientEnd", Color.FromArgb(67, 184, 146)},
-        {"ButtonHover", Color.FromArgb(62, 78, 100)},
-        {"ButtonPressed", Color.FromArgb(77, 95, 119)}
+        {"ButtonHover", Color.FromArgb(42, 49, 60)},
+        {"ButtonPressed", Color.FromArgb(51, 61, 75)}
     }
 
     Private Shared Function CurrentColors() As Dictionary(Of String, Color)
@@ -157,6 +159,9 @@ Public NotInheritable Class ThemeManager
         Dim resolved As ResolvedTheme = Resolve(mode)
         _current = resolved
         _currentMode = mode
+        RemoveHandler form.HandleCreated, AddressOf ThemedForm_HandleCreated
+        AddHandler form.HandleCreated, AddressOf ThemedForm_HandleCreated
+        ApplyWindowFrame(form)
         Dim colors As Dictionary(Of String, Color) = If(resolved = ResolvedTheme.Dark, DarkColors, LightColors)
 
         ' 设置全局 ToolStrip 渲染器(影响 MenuStrip/StatusStrip/ContextMenuStrip 等)
@@ -171,6 +176,30 @@ Public NotInheritable Class ThemeManager
 
         RegisterFormForSystemThemeWatch(form)
         EnsureSystemThemeWatch()
+    End Sub
+
+    <Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig:=True)>
+    Private Shared Function DwmSetWindowAttribute(window As IntPtr, attribute As Integer, ByRef value As Integer, size As Integer) As Integer
+    End Function
+
+    Private Shared Sub ThemedForm_HandleCreated(sender As Object, e As EventArgs)
+        ApplyWindowFrame(DirectCast(sender, Form))
+    End Sub
+
+    Private Shared Sub ApplyWindowFrame(form As Form)
+        If Not form.IsHandleCreated OrElse form.IsDisposed Then Return
+        Try
+            Dim dark As Integer = If(_current = ResolvedTheme.Dark, 1, 0)
+            DwmSetWindowAttribute(form.Handle, 20, dark, 4)
+            ' Newer Windows versions accept explicit caption colours. Older
+            ' systems reject unsupported attributes and retain their native frame.
+            Dim caption As Integer = ColorTranslator.ToWin32(GetColor("Back"))
+            Dim text As Integer = ColorTranslator.ToWin32(GetColor("Fore"))
+            DwmSetWindowAttribute(form.Handle, 35, caption, 4)
+            DwmSetWindowAttribute(form.Handle, 36, text, 4)
+        Catch ex As DllNotFoundException
+        Catch ex As EntryPointNotFoundException
+        End Try
     End Sub
 
     Private Shared Sub RegisterFormForSystemThemeWatch(form As Form)
@@ -399,6 +428,8 @@ Public NotInheritable Class ThemeManager
     End Sub
 
     Private Shared Sub ApplyThemeToToolStrip(ts As ToolStrip, colors As Dictionary(Of String, Color))
+        Dim form As Form = ts.FindForm()
+        If form IsNot Nothing Then ts.Font = form.Font
         ts.BackColor = colors("ToolBack")
         ts.ForeColor = colors("Fore")
         ts.RenderMode = ToolStripRenderMode.ManagerRenderMode
@@ -431,7 +462,7 @@ Public NotInheritable Class ThemeManager
         ' GroupBox: Flat 避免系统 3D 浅色边框
         If TypeOf control Is GroupBox Then
             Dim gb As GroupBox = CType(control, GroupBox)
-            gb.BackColor = colors("ControlBack")
+            gb.BackColor = colors("Back")
             gb.ForeColor = colors("Fore")
             gb.FlatStyle = FlatStyle.Flat
             GoTo RecurseChildren
@@ -472,6 +503,7 @@ Public NotInheritable Class ThemeManager
         ' Draw the item with theme colors, including the closed selected value.
         If TypeOf control Is ComboBox Then
             Dim combo As ComboBox = CType(control, ComboBox)
+            combo.FlatStyle = FlatStyle.Flat
             combo.BackColor = colors("Back")
             combo.ForeColor = colors("Fore")
             If combo.DropDownStyle = ComboBoxStyle.DropDownList AndAlso combo.DrawMode = DrawMode.Normal Then
@@ -661,6 +693,8 @@ RecurseChildren:
         Try
             Dim renderer As Object = olv.GetType().GetProperty("TreeColumnRenderer").GetValue(olv, Nothing)
             If renderer IsNot Nothing Then
+                TrySetProperty(renderer, "IsShowLines", False)
+                TrySetProperty(renderer, "UseTriangles", True)
                 TrySetProperty(renderer, "BranchColor", colors("Border"))
                 TrySetProperty(renderer, "LineColor", colors("Border"))
             End If
@@ -747,7 +781,7 @@ RecurseChildren:
         ' 有图标的工具栏按钮禁用时保持边框可见
         btn.FlatAppearance.CheckedBackColor = colors("Selection")
         RemoveHandler btn.Paint, AddressOf DrawDisabledButton
-        AddHandler btn.Paint, AddressOf DrawDisabledButton
+        If Not TypeOf btn Is CommandButton Then AddHandler btn.Paint, AddressOf DrawDisabledButton
     End Sub
 
     Private Shared Sub DrawDisabledButton(sender As Object, e As PaintEventArgs)

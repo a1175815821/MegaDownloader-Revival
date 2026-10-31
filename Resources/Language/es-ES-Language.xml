@@ -634,4 +634,7 @@ Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen m�
   <Text key="UI_AllFiles"><![CDATA[All files]]></Text>
   <Text key="AddLinks_CheckFailed"><![CDATA[Checking failed. Go back to edit the links or check again.]]></Text>
   <Text key="AddLinks_AddedPaused"><![CDATA[Tasks were added, but could not start automatically. Start them from the main window.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Empieza con un enlace]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Arrastra un enlace de MEGA o pulsa Añadir enlaces. También puedes usar Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[No hay tareas coincidentes]]></Text>
 </Language>

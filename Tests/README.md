@@ -1,5 +1,24 @@
 # 回归验证
 
+2.6.1 发布检查：Debug / Release 构建通过；Release 完整回归通过 **509 项断言**。原生截图额外覆盖已加载设置的深色、连接与高级页面，以及嵌入真实添加窗口的第二步文件选择页。
+
+系统语言功能加入完整语言代码、地区变体、简繁中文、缺失语言英文回退、手动选择优先、自定义语言包与损坏文件验证，并检查设置页的“跟随系统”选项。语言初始化使用临时目录，详见 `docs/SYSTEM-LANGUAGE.zh-CN.md`。
+
+第二轮 UI 复查加入菜单首次显示、真实设置加载计时、未使用账号页的保存与关闭、空账号列表画布所有权、搜索滚动，以及多页多尺寸布局验证。2026-10-31 的完整回归通过 437 项断言；设置首次打开的隔离采样从约 8.2 秒降至约 0.92 秒。详见 `docs/UI-BUG-REVIEW-20261031.zh-CN.md`。
+
+视觉整理新增原生界面夹具，可在不执行窗体业务加载的情况下检查深浅主题、列布局、包树、详情适配和弹窗。使用独立输出目录及界面专项检查：
+
+```powershell
+.\Tests\Run-RegressionTests.ps1 -OutputDirectory bin\Release-VisualRefresh
+.\Tests\Run-RegressionTests.ps1 -OutputDirectory bin\Release-VisualRefresh -UiOnly
+```
+
+界面夹具禁止业务 `Load` / `Shown`，并校验构造与缩放不会启动真实应用；旧的 Resize 隐式显示问题修复后，截图不再依靠改变可见标记和递归 DrawToBitmap。实际截图使用屏幕外的原生界面夹具及 PrintWindow，保留控件层级和自绘路径。
+
+更新文档截图时，运行上述完整或界面专项检查，从输出的临时目录按 [截图清单](../docs/screenshots/README.md) 复制精选图片。发布截图使用示例任务、`D:\Downloads` 路径及程序内版本标题，不加载真实用户配置；不要把整个临时目录提交到仓库。
+
+2026-10-31 视觉整理后的 Release 完整回归通过 354 项断言，界面专项通过 116 项；Debug / Release 编译通过。验证记录见 `docs/UI-VISUAL-REFRESH.zh-CN.md`。
+
 在 Windows 项目根目录运行：
 
 ```powershell

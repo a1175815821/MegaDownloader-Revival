@@ -25,11 +25,11 @@ Public NotInheritable Class BatchPreflightView
     Private ReadOnly spaceLabel As New Label()
     Private ReadOnly search As New TextBox()
     Private ReadOnly category As New ComboBox()
-    Private ReadOnly addButton As New Button()
-    Private ReadOnly retryButton As New Button()
-    Private ReadOnly backButton As New Button()
-    Private ReadOnly cancelButton As New Button()
-    Private ReadOnly stopButton As New Button()
+    Private ReadOnly addButton As New CommandButton()
+    Private ReadOnly retryButton As New CommandButton()
+    Private ReadOnly backButton As New CommandButton()
+    Private ReadOnly cancelButton As New CommandButton()
+    Private ReadOnly stopButton As New CommandButton()
     Private ReadOnly notice As New Label()
     Private ReadOnly targetLabel As New Label()
     Private ReadOnly filters As New FlowLayoutPanel()
@@ -73,8 +73,8 @@ Public NotInheritable Class BatchPreflightView
         session = If(sharedSession, New PreflightSession(configuration))
         request = prepared
         queueProvider = getQueue
-        AutoScaleDimensions = New SizeF(7, 15)
-        AutoScaleMode = AutoScaleMode.Font
+        AutoScaleDimensions = New SizeF(96, 96)
+        AutoScaleMode = AutoScaleMode.Dpi
         UiStyles.SetAppFont(Me)
         Size = New Size(960, 600)
         Dock = DockStyle.Fill
@@ -176,7 +176,7 @@ Public NotInheritable Class BatchPreflightView
         grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing
         grid.ColumnHeadersHeight = Math.Max(34, Font.Height + 16)
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None
         grid.DefaultCellStyle.Padding = New Padding(4, 0, 4, 0)
         grid.Columns.Add(New DataGridViewCheckBoxColumn With {.Name = "Selected", .HeaderText = "", .Width = 34, .ThreeState = True, .ValueType = GetType(CheckState), .ReadOnly = True})
         grid.Columns.Add(New DataGridViewTextBoxColumn With {.Name = "FileName", .HeaderText = Language.GetText("Name"), .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, .FillWeight = 55, .ReadOnly = True})
@@ -215,8 +215,8 @@ Public NotInheritable Class BatchPreflightView
         retryButton.AutoSize = True
         retryButton.Text = Language.GetText("Preflight_Retry")
         retryButton.Enabled = False
-        buttons.Controls.Add(cancelButton)
         buttons.Controls.Add(addButton)
+        buttons.Controls.Add(cancelButton)
         buttons.Controls.Add(backButton)
         buttons.Controls.Add(retryButton)
         For Each button As Button In New Button() {cancelButton, addButton, backButton, retryButton, stopButton}
@@ -519,7 +519,7 @@ Public NotInheritable Class BatchPreflightView
         grid.EnableHeadersVisualStyles = False
         grid.BackgroundColor = ThemeManager.GetColor("Back")
         grid.GridColor = ThemeManager.GetColor("Border")
-        grid.BorderStyle = BorderStyle.FixedSingle
+        grid.BorderStyle = BorderStyle.None
         grid.DefaultCellStyle.BackColor = ThemeManager.GetColor("Back")
         grid.DefaultCellStyle.ForeColor = ThemeManager.GetColor("Fore")
         grid.DefaultCellStyle.SelectionBackColor = ThemeManager.GetColor("Selection")

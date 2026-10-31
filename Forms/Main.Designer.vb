@@ -35,8 +35,8 @@ Partial Class Main
         Me.OlvColumnEDT = CType(New BrightIdeasSoftware.OLVColumn(), BrightIdeasSoftware.OLVColumn)
         Me.OlvColumnRestante = CType(New BrightIdeasSoftware.OLVColumn(), BrightIdeasSoftware.OLVColumn)
         Me.PanelButtonsRight = New System.Windows.Forms.Panel()
-        Me.btnCollaborate = New System.Windows.Forms.Button()
-        Me.btnConfig = New System.Windows.Forms.Button()
+        Me.btnCollaborate = New CommandButton()
+        Me.btnConfig = New CommandButton()
         Me.MenuDescarga = New System.Windows.Forms.ContextMenuStrip(Me.components)
         Me.AbrirEnCarpetaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ToolStripSeparator2 = New System.Windows.Forms.ToolStripSeparator()
@@ -59,7 +59,7 @@ Partial Class Main
         Me.navPanel = New System.Windows.Forms.Panel()
         Me.navListBox = New System.Windows.Forms.ListBox()
         Me.detailPanel = New System.Windows.Forms.Panel()
-        Me.detailGroup = New System.Windows.Forms.GroupBox()
+        Me.detailGroup = New SectionGroupBox()
         Me.detailLabel = New System.Windows.Forms.Label()
         Me.MenuPanel = New System.Windows.Forms.ContextMenuStrip(Me.components)
         Me.AgregarLinksToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
@@ -70,11 +70,11 @@ Partial Class Main
         Me.AgregarLinkStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.CerrarToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TableLayoutPanel1 = New System.Windows.Forms.TableLayoutPanel()
-        Me.btnPlay = New System.Windows.Forms.Button()
-        Me.btnPause = New System.Windows.Forms.Button()
-        Me.btnStop = New System.Windows.Forms.Button()
-        Me.btnAddLink = New System.Windows.Forms.Button()
-        Me.btnUpdate = New System.Windows.Forms.Button()
+        Me.btnPlay = New CommandButton()
+        Me.btnPause = New CommandButton()
+        Me.btnStop = New CommandButton()
+        Me.btnAddLink = New CommandButton()
+        Me.btnUpdate = New CommandButton()
         Me.StatusStrip1 = New System.Windows.Forms.StatusStrip()
         Me.StatusToolStripStatusLabel = New System.Windows.Forms.ToolStripStatusLabel()
         Me.RAMProcToolStripStatusLabel = New System.Windows.Forms.ToolStripStatusLabel()
@@ -93,8 +93,8 @@ Partial Class Main
         '
         'ListaDescargas
         '
-        Me.ListaDescargas.AllColumns.Add(Me.OlvColumnPrioridad)
         Me.ListaDescargas.AllColumns.Add(Me.OlvColumnNombre)
+        Me.ListaDescargas.AllColumns.Add(Me.OlvColumnPrioridad)
         Me.ListaDescargas.AllColumns.Add(Me.OlvColumnDescargado)
         Me.ListaDescargas.AllColumns.Add(Me.OlvColumnTamano)
         Me.ListaDescargas.AllColumns.Add(Me.OlvColumnEstado)
@@ -106,7 +106,7 @@ Partial Class Main
         Me.ListaDescargas.Anchor = CType((((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
             Or System.Windows.Forms.AnchorStyles.Left) _
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.ListaDescargas.Columns.AddRange(New System.Windows.Forms.ColumnHeader() {Me.OlvColumnPrioridad, Me.OlvColumnNombre, Me.OlvColumnDescargado, Me.OlvColumnTamano, Me.OlvColumnEstado, Me.OlvColumnProgreso, Me.OlvColumnVelocidad, Me.OlvColumnEDT})
+        Me.ListaDescargas.Columns.AddRange(New System.Windows.Forms.ColumnHeader() {Me.OlvColumnNombre, Me.OlvColumnPrioridad, Me.OlvColumnDescargado, Me.OlvColumnTamano, Me.OlvColumnEstado, Me.OlvColumnProgreso, Me.OlvColumnVelocidad, Me.OlvColumnEDT})
         Me.ListaDescargas.Location = New System.Drawing.Point(148, 46)
         Me.ListaDescargas.Name = "ListaDescargas"
         Me.ListaDescargas.OwnerDraw = True
@@ -179,7 +179,7 @@ Partial Class Main
         '
         'OlvColumnPrioridad
         '
-        Me.OlvColumnPrioridad.Hideable = False
+        Me.OlvColumnPrioridad.Hideable = True
         Me.OlvColumnPrioridad.Text = "#"
         Me.OlvColumnPrioridad.Width = 20
         '
@@ -619,13 +619,6 @@ Partial Class Main
     Friend WithEvents AgregarLinkStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents PanelButtonsRight As System.Windows.Forms.Panel
 
-    Public Sub New()
-
-        ' This call is required by the designer.
-        InitializeComponent()
-
-        ' Add any initialization after the InitializeComponent() call.
-    End Sub
     Friend WithEvents VerProgresoDescompresionToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents ForceDownloadStripMenuItem As System.Windows.Forms.ToolStripMenuItem
 End Class

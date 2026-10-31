@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>如果这个项目帮到了你，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>，让更多人发现它。</sub></p>
@@ -29,22 +29,30 @@
   <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja-JP.md">日本語</a> · <a href="README.ko-KR.md">한국어</a></sub>
 </p>
 
-> **认识 v2.6「工作台」。** 界面整体重做，添加链接收进两步流程并支持批量预检，新增任务搜索与定时下载 —— 复活计划启动以来改动最大的一版，冷启动同时降到 **150–200 毫秒**。[看看新在哪 ↓](#-26-新在哪)
+> **v2.6.1：界面更清晰，设置更快，语言跟随系统。** 统一深浅色视觉层次，修复菜单首次显示，新增根据 Windows 显示语言自动选择界面语言，没有对应翻译就用英文。[看看新在哪 ↓](#-261-新在哪)
 >
 > 非官方项目，与 MEGA（MEGA Ltd.）无关联。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/v2.6-workbench-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/v2.6-workbench-light.png">
-    <img alt="MegaDownloader v2.6 workbench" src="screenshots/v2.6-workbench-light.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
+    <img alt="MegaDownloader v2.6.1 workbench" src="screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6 工作台 · 截图随 GitHub 主题切换。</sub></p>
+<p align="center"><sub>v2.6.1 工作台 · 截图随 GitHub 主题切换。</sub></p>
 
 ---
 
-## ✨ 2.6 新在哪
+## ✨ 2.6.1 新在哪
+
+- **更清晰的视觉层次**：侧栏、字体、间距和按钮统一整理，进度条与百分比合并，详情随窗口宽度调整；停止保留文字，定时下载补上时钟图标。
+- **首次打开就能看到完整菜单**：文件、选项、流媒体、说明均正常显示，不必放大再缩小；设置按钮与侧栏左侧对齐。
+- **设置打开更快**：减少重复布局计算，ELC 账号页按需加载。隔离环境下首次打开从约 8.2 秒降至约 1.1 秒，实际耗时取决于设备。
+- **界面语言跟随 Windows**：新配置默认自动识别，支持地区变体及简繁中文区分，未支持的语言回退英文；已有手动选择保留。在设置 → 一般中切换，保存并重启生效。
+- **截图与回归同步更新**：下方图片均为 2.6.1 原生界面与示例数据。完整修复及首次升级的六列布局迁移见 [CHANGELOG](CHANGELOG.md)。
+
+## 2.6 引入的工作台功能
 
 > **一个窗口，两步操作，不用猜。**
 >
@@ -202,10 +210,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 
 <table>
 <tr>
-  <td align="center" width="50%"><b>1. 粘贴链接</b><br><img src="screenshots/v2.6-add-links.png" alt="添加链接窗口" width="100%"></td>
-  <td align="center" width="50%"><b>2. 预检并选择文件</b><br><img src="screenshots/v2.6-preflight.png" alt="文件预检与选择窗口" width="100%"></td>
+  <td align="center" width="50%"><b>1. 粘贴链接</b><br><img src="screenshots/add-links.png" alt="添加链接窗口" width="100%"></td>
+  <td align="center" width="50%"><b>2. 预检并选择文件</b><br><img src="screenshots/preflight.png" alt="文件预检与选择窗口" width="100%"></td>
 </tr>
 </table>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
+    <img alt="MegaDownloader 2.6.1 settings" src="screenshots/settings-general.png" width="85%">
+  </picture>
+</p>
+<p align="center"><sub>2.6.1 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
 
 ---
 
@@ -215,7 +232,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.1** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
@@ -321,7 +338,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | v2.6 的更新亮点与下载 |
+| [2.6.1 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | v2.6.1 的更新亮点与下载 |
 
 README 为五种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 

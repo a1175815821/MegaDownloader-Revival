@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>If MegaDownloader helps you, <a href="https://github.com/a1175815821/MegaDownloader-Revival">give the project a ⭐</a> so more people can find it.</sub></p>
@@ -29,22 +29,30 @@
   <sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.zh-TW.md">繁體中文</a> · <a href="docs/README.ja-JP.md">日本語</a> · <a href="docs/README.ko-KR.md">한국어</a></sub>
 </p>
 
-> **Meet the v2.6 Workbench.** A rebuilt interface, a two-step add flow with batch pre-flight, task search and scheduled downloads — the largest update since the revival began. Cold start is now **150–200 ms**. [See what's new ↓](#-whats-new-in-26)
+> **v2.6.1 — a cleaner workbench, faster settings, automatic language selection.** Refined light and dark themes, reliable first-open menus, and a language option that follows Windows with English as the fallback. [See what's new ↓](#-whats-new-in-261)
 >
 > Unofficial project, not affiliated with MEGA (MEGA Ltd.).
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/v2.6-workbench-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/v2.6-workbench-light.png">
-    <img alt="MegaDownloader v2.6 workbench" src="docs/screenshots/v2.6-workbench-light.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-light.png">
+    <img alt="MegaDownloader v2.6.1 workbench" src="docs/screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6 workbench · The screenshot follows your GitHub theme. Interface shown in Simplified Chinese.</sub></p>
+<p align="center"><sub>v2.6.1 workbench · The screenshot follows your GitHub theme. Interface shown in Simplified Chinese.</sub></p>
 
 ---
 
-## ✨ What's new in 2.6
+## ✨ What's new in 2.6.1
+
+- **Clearer visual hierarchy** — a quieter sidebar, consistent typography and spacing, one progress column, and details that adapt to the window width. Stop keeps its caption; scheduled downloads gains a clock icon.
+- **Menus work on first open** — all four top-level menus appear without resizing the window. The Settings button stays aligned with the sidebar.
+- **Settings opens faster** — the layout avoids repeated sizing passes and the ELC account editor loads when its tab is opened. An isolated first-open measurement fell from about 8.2 s to about 1.1 s; results vary by machine.
+- **Follow the Windows display language** — new configurations default to automatic selection, with regional and Simplified/Traditional Chinese matching; unsupported languages use English. Existing manual choices are kept. Change the language in Settings → General, save, then restart.
+- **Updated screenshots and regression coverage** — the images below show the 2.6.1 native interface with demonstration data. See the [changelog](docs/CHANGELOG.md) for the full fixes and the one-time six-column layout migration.
+
+## Workbench features introduced in 2.6
 
 > **One window. Two steps. Zero guesswork.**
 >
@@ -202,10 +210,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
 
 <table>
 <tr>
-  <td align="center" width="50%"><b>1. Paste links</b><br><img src="docs/screenshots/v2.6-add-links.png" alt="Add links window" width="100%"></td>
-  <td align="center" width="50%"><b>2. Preview and select files</b><br><img src="docs/screenshots/v2.6-preflight.png" alt="File selection and pre-flight window" width="100%"></td>
+  <td align="center" width="50%"><b>1. Paste links</b><br><img src="docs/screenshots/add-links.png" alt="Add links window" width="100%"></td>
+  <td align="center" width="50%"><b>2. Preview and select files</b><br><img src="docs/screenshots/preflight.png" alt="File selection and pre-flight window" width="100%"></td>
 </tr>
 </table>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
+    <img alt="MegaDownloader 2.6.1 settings" src="docs/screenshots/settings-general.png" width="85%">
+  </picture>
+</p>
+<p align="center"><sub>Settings in 2.6.1 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
 
 ---
 
@@ -215,7 +232,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.1** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -321,7 +338,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.0) | Highlights and downloads for v2.6 |
+| [Release notes 2.6.1](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | Highlights and downloads for v2.6.1 |
 
 The README is maintained in five languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

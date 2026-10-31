@@ -15,7 +15,7 @@ body:
     attributes:
       label: MegaDownloader version
       description: "About → Version, or the title bar"
-      placeholder: "v2.6.0"
+      placeholder: "v2.6.1"
     validations:
       required: true
 
@@ -65,7 +65,7 @@ body:
       label: Steps to reproduce
       description: Numbered steps, starting from a cold start if possible
       placeholder: |
-        1. Start MegaDownloader 2.6.0
+        1. Start MegaDownloader 2.6.1
         2. Paste <link type, redacted>
         3. Select 3 files in the pre-flight tree
         4. Click "Add to download queue"

@@ -1,7 +1,12 @@
 Imports System.IO
 Imports System.Xml
+Imports System.Globalization
+Imports System.Collections.Generic
 
 Public Class Language
+    Public Const FollowSystemLanguageCode As String = "auto"
+    Private Const EnglishLanguageCode As String = "en-US"
+    Private Shared ReadOnly builtinPacks As New Lazy(Of Dictionary(Of String, XmlDocument))(AddressOf LoadBuiltinPacks)
 
 
 
@@ -26,96 +31,124 @@ Public Class Language
     End Function
 
 
-    Public Shared Sub InitLanguage(ByVal CultureCode As String)
-        Try
-            culture = System.Globalization.CultureInfo.GetCultureInfo(CultureCode)
-            If String.IsNullOrEmpty(culture.Name) Then Throw New ApplicationException("Empty culture")
-        Catch ex As Exception
-            culture = System.Threading.Thread.CurrentThread.CurrentUICulture
-        End Try
-
-        ' Ponemos los ficheros en la carpeta Lang
-        Dim LangPath As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Language")
-
-        If Not System.IO.Directory.Exists(LangPath) Then
-            System.IO.Directory.CreateDirectory(LangPath)
+    Public Shared Function NormalizeLanguagePreference(code As String) As String
+        If String.IsNullOrWhiteSpace(code) OrElse String.Equals(code.Trim(), FollowSystemLanguageCode, StringComparison.OrdinalIgnoreCase) Then
+            Return FollowSystemLanguageCode
         End If
-        For Each resname As String In Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames
+        Try
+            Dim name As String = CultureInfo.GetCultureInfo(code.Trim()).Name
+            Return If(name.Length = 0, FollowSystemLanguageCode, name)
+        Catch ex As Exception
+            Return FollowSystemLanguageCode
+        End Try
+    End Function
 
-            If resname.ToUpper.EndsWith("-Language.xml".ToUpper) Then
+    Public Shared Sub InitLanguage(ByVal CultureCode As String)
+        InitializeLanguage(CultureCode, CultureInfo.CurrentUICulture, GetLanguageDirectory())
+    End Sub
 
-                Dim file As System.IO.Stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname)
+    Private Shared Function GetLanguageDirectory() As String
+        Return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Language")
+    End Function
 
-                If file Is Nothing Then
-                    Log.WriteError("Language resource stream could not be opened: " & resname)
-                    Continue For
+    Private Shared Function LoadBuiltinPacks() As Dictionary(Of String, XmlDocument)
+        Dim packs As New Dictionary(Of String, XmlDocument)(StringComparer.OrdinalIgnoreCase)
+        For Each resource As String In GetType(Language).Assembly.GetManifestResourceNames()
+            If Not resource.EndsWith("-Language.xml", StringComparison.OrdinalIgnoreCase) Then Continue For
+            Dim pack As New XmlDocument()
+            Using stream As Stream = GetType(Language).Assembly.GetManifestResourceStream(resource)
+                If stream Is Nothing Then Throw New InvalidDataException("Language resource could not be opened: " & resource)
+                pack.Load(stream)
+            End Using
+            Dim code As String = pack.DocumentElement.GetAttribute("id")
+            If pack.DocumentElement.Name <> "Language" OrElse Not IsValidLanguageCode(code) Then
+                Throw New InvalidDataException("Invalid built-in language pack: " & resource)
+            End If
+            packs(CultureInfo.GetCultureInfo(code).Name) = pack
+        Next
+        If Not packs.ContainsKey(EnglishLanguageCode) Then Throw New InvalidDataException("The English language pack is missing.")
+        Return packs
+    End Function
+
+    Private Shared Function LoadUserPacks(directory As String) As Dictionary(Of String, XmlDocument)
+        Dim packs As New Dictionary(Of String, XmlDocument)(StringComparer.OrdinalIgnoreCase)
+        If Not IO.Directory.Exists(directory) Then Return packs
+        For Each file As String In IO.Directory.GetFiles(directory, "*.xml").OrderBy(Function(value) value, StringComparer.OrdinalIgnoreCase)
+            Try
+                Dim pack As New XmlDocument()
+                pack.Load(file)
+                If pack.DocumentElement Is Nothing OrElse pack.DocumentElement.Name <> "Language" Then Continue For
+                Dim code As String = pack.DocumentElement.GetAttribute("id")
+                If IsValidLanguageCode(code) AndAlso Not String.Equals(code, FollowSystemLanguageCode, StringComparison.OrdinalIgnoreCase) Then
+                    packs(CultureInfo.GetCultureInfo(code).Name) = pack
                 End If
+            Catch ex As Exception
+                Log.WriteError("User language file could not be loaded: " & file & " (" & Log.SafeException(ex) & ")")
+            End Try
+        Next
+        Return packs
+    End Function
 
-                Dim xmlIdioma As New XmlDocument
-                Try
-                    xmlIdioma.Load(file)
-                Finally
-                    file.Close()
-                End Try
+    Private Shared Function GetLanguageFamily(value As CultureInfo) As String
+        Dim parent As CultureInfo = value
+        While Not parent.IsNeutralCulture AndAlso parent.Parent.Name.Length > 0
+            parent = parent.Parent
+        End While
+        ' Preserve script distinctions, including the older .NET Chinese aliases.
+        If String.Equals(parent.Name, "zh-CHS", StringComparison.OrdinalIgnoreCase) Then Return "zh-Hans"
+        If String.Equals(parent.Name, "zh-CHT", StringComparison.OrdinalIgnoreCase) Then Return "zh-Hant"
+        Return parent.Name
+    End Function
 
-                Dim CodigoIdioma As String = xmlIdioma.DocumentElement.Attributes("id").Value
-                ' Built-in packs go under Language/Builtin so user customizations are never overwritten
-                Dim builtinDir As String = Path.Combine(LangPath, "Builtin")
-                If Not Directory.Exists(builtinDir) Then Directory.CreateDirectory(builtinDir)
-                Dim XMLFile As String = Path.Combine(builtinDir, CodigoIdioma & ".xml")
-                SaveBuiltinIfChanged(xmlIdioma, XMLFile)
-
-                ' Seed user language file only if missing (do not overwrite custom edits)
-                Dim userLangFile As String = Path.Combine(LangPath, CodigoIdioma & ".xml")
-                If Not IO.File.Exists(userLangFile) Then
-                    xmlIdioma.Save(userLangFile)
-                End If
-
-                If CodigoIdioma.ToLowerInvariant = culture.Name.ToLowerInvariant Then
-                    LanguageFileInternal = xmlIdioma
-                ElseIf CodigoIdioma.ToLowerInvariant.Contains("-") And culture.Name.ToLowerInvariant.Contains("-") AndAlso
-                       CodigoIdioma.ToLowerInvariant.Split("-"c)(0) = culture.Name.ToLowerInvariant.Split("-"c)(0) Then
-                    If LanguageFileInternal Is Nothing OrElse LanguageFileInternal.DocumentElement.Attributes("id").Value.ToLowerInvariant <> culture.Name.ToLowerInvariant Then
-                        LanguageFileInternal = xmlIdioma
-                    End If
-                ElseIf CodigoIdioma.ToLowerInvariant = "en-us" Then
-                    If LanguageFileInternal Is Nothing Then LanguageFileInternal = xmlIdioma
-                    LanguageFileEnUs = xmlIdioma
-                End If
-
+    Friend Shared Function ResolveLanguageCode(preference As String, systemLanguage As CultureInfo, availableCodes As IEnumerable(Of String)) As String
+        Dim normalized As String = NormalizeLanguagePreference(preference)
+        Dim preferred As CultureInfo = If(normalized = FollowSystemLanguageCode,
+                                         If(systemLanguage, CultureInfo.InvariantCulture), CultureInfo.GetCultureInfo(normalized))
+        If preferred.Name.Length = 0 Then Return EnglishLanguageCode
+        Dim available As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+        For Each code As String In availableCodes
+            If IsValidLanguageCode(code) Then
+                Dim canonical As String = CultureInfo.GetCultureInfo(code).Name
+                available(canonical) = canonical
             End If
         Next
-        If LanguageFileInternal Is Nothing Then
-            Log.WriteError("Internal error: LanguageFileInternal is nothing")
-            Throw New ApplicationException("LanguageFileInternal could not be intialized")
-        End If
-        If LanguageFileEnUs Is Nothing Then LanguageFileEnUs = LanguageFileInternal
-        Log.WriteDebug("LanguageFileInternal loaded: " & LanguageFileInternal.DocumentElement.Attributes("id").Value)
+        Dim exact As String = Nothing
+        If available.TryGetValue(preferred.Name, exact) Then Return exact
 
+        Dim family As String = GetLanguageFamily(preferred)
+        Dim genericNeutral As Boolean = preferred.IsNeutralCulture AndAlso preferred.Name.IndexOf("-"c) < 0
+        Dim related As String = available.Keys.Where(
+            Function(code)
+                Dim candidate As CultureInfo = CultureInfo.GetCultureInfo(code)
+                Return If(genericNeutral,
+                          String.Equals(candidate.TwoLetterISOLanguageName, preferred.TwoLetterISOLanguageName, StringComparison.OrdinalIgnoreCase),
+                          String.Equals(GetLanguageFamily(candidate), family, StringComparison.OrdinalIgnoreCase))
+            End Function).OrderBy(Function(code) If(builtinPacks.Value.ContainsKey(code), 0, 1)).
+            ThenBy(Function(code) code, StringComparer.OrdinalIgnoreCase).FirstOrDefault()
+        Return If(related, EnglishLanguageCode)
+    End Function
 
-        Dim XMLDiskFile As String = Path.Combine(LangPath, culture.Name & ".xml")
-        If IO.File.Exists(XMLDiskFile) Then
-            Dim xmlIdioma As New XmlDocument
-            ' N-P2-2: a corrupted/truncated user language file (killed mid-seed, manual
-            ' edit with a syntax error) used to throw XmlException out of InitLanguage,
-            ' which is called from Main_Load without a Try — the app then kept running
-            ' with no main window and no error dialog (MyApplication_UnhandledException
-            ' sets ExitApplication = False). Fall back to the built-in pack instead.
-            Try
-                xmlIdioma.Load(XMLDiskFile)
-                LanguageFileDisk = xmlIdioma
+    ' Exercise this same initialization path with a temporary directory in tests.
+    Private Shared Sub InitializeLanguage(preference As String, systemLanguage As CultureInfo, languageDirectory As String)
+        Dim builtin As Dictionary(Of String, XmlDocument) = builtinPacks.Value
+        Dim builtinDirectory As String = Path.Combine(languageDirectory, "Builtin")
+        Directory.CreateDirectory(builtinDirectory)
+        For Each entry As KeyValuePair(Of String, XmlDocument) In builtin
+            SaveBuiltinIfChanged(entry.Value, Path.Combine(builtinDirectory, entry.Key & ".xml"))
+            Dim userFile As String = Path.Combine(languageDirectory, entry.Key & ".xml")
+            If Not File.Exists(userFile) Then entry.Value.Save(userFile)
+        Next
 
-                Log.WriteDebug("LanguageFileDisk loaded from disk: " & LanguageFileDisk.DocumentElement.Attributes("id").Value)
-            Catch ex As Exception
-                Log.WriteError("User language file '" & XMLDiskFile & "' could not be loaded (" & Log.SafeException(ex) & "); using the built-in language pack.")
-                LanguageFileDisk = LanguageFileInternal
-            End Try
-        Else
-            LanguageFileDisk = LanguageFileInternal
-
-            Log.WriteDebug("LanguageFileDisk loaded from LanguageFileInternal: " & LanguageFileDisk.DocumentElement.Attributes("id").Value)
-        End If
-
+        Dim users As Dictionary(Of String, XmlDocument) = LoadUserPacks(languageDirectory)
+        Dim selected As String = ResolveLanguageCode(preference, systemLanguage, builtin.Keys.Concat(users.Keys))
+        Dim internalPack As XmlDocument = builtin(ResolveLanguageCode(selected, systemLanguage, builtin.Keys))
+        Dim diskPack As XmlDocument = Nothing
+        If Not users.TryGetValue(selected, diskPack) Then diskPack = internalPack
+        LanguageFileEnUs = builtin(EnglishLanguageCode)
+        LanguageFileInternal = internalPack
+        LanguageFileDisk = diskPack
+        culture = CultureInfo.GetCultureInfo(selected)
+        Log.WriteDebug("Language selected: " & selected & " (preference: " & NormalizeLanguagePreference(preference) & ")")
     End Sub
 
 
@@ -165,24 +198,14 @@ Public Class Language
     End Function
 
     Public Shared Function GetAvailableLanguages() As Generic.Dictionary(Of String, String)
-        Dim Lista As New Generic.Dictionary(Of String, String)
-        Dim LangPath As String = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Language")
-        If IO.Directory.Exists(LangPath) Then
-            For Each File In IO.Directory.GetFiles(LangPath)
-                If File.ToLower.EndsWith(".xml") Then
-                    Try
-                        Dim xmlIdioma As New XmlDocument
-                        xmlIdioma.Load(File)
-                        Dim CodigoIdioma As String = xmlIdioma.DocumentElement.Attributes("id").Value
-                        Dim NombreIdioma As String = xmlIdioma.DocumentElement.Attributes("name").Value
-                        If IsValidLanguageCode(CodigoIdioma) AndAlso Not Lista.ContainsKey(CodigoIdioma) Then
-                            Lista.Add(CodigoIdioma, NombreIdioma)
-                        End If
-                    Catch ex As Exception
-                    End Try
-                End If
-            Next
-        End If
+        Dim Lista As New Generic.Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+        For Each entry As KeyValuePair(Of String, XmlDocument) In builtinPacks.Value.OrderBy(Function(value) value.Key, StringComparer.OrdinalIgnoreCase)
+            Lista(entry.Key) = entry.Value.DocumentElement.GetAttribute("name")
+        Next
+        For Each entry As KeyValuePair(Of String, XmlDocument) In LoadUserPacks(GetLanguageDirectory())
+            Dim name As String = entry.Value.DocumentElement.GetAttribute("name")
+            Lista(entry.Key) = If(String.IsNullOrWhiteSpace(name), entry.Key, name)
+        Next
         Return Lista
     End Function
 

@@ -23,8 +23,7 @@ Public NotInheritable Class DownloadScheduleForm
         Me.MaximizeBox = False
         Me.MinimizeBox = False
         Me.ShowInTaskbar = False
-        Me.AutoScaleMode = AutoScaleMode.Font
-        UiStyles.SetAppFont(Me)
+        UiStyles.InitializeForm(Me)
         Me.ClientSize = New Size(580, 340)
 
         Dim layout As New TableLayoutPanel With {.Dock = DockStyle.Fill, .Padding = New Padding(16), .ColumnCount = 2, .RowCount = 6}
@@ -74,8 +73,8 @@ Public NotInheritable Class DownloadScheduleForm
         layout.Controls.Add(note, 0, 4)
         layout.SetColumnSpan(note, 2)
         Dim buttons As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .FlowDirection = FlowDirection.RightToLeft}
-        Dim cancel As New Button With {.Text = Language.GetText("Cancel"), .DialogResult = DialogResult.Cancel, .AutoSize = True}
-        Dim save As New Button With {.Text = Language.GetText("Save"), .AutoSize = True}
+        Dim cancel As New CommandButton With {.Text = Language.GetText("Cancel"), .DialogResult = DialogResult.Cancel, .AutoSize = True}
+        Dim save As New CommandButton With {.Text = Language.GetText("Save"), .AutoSize = True}
         UiStyles.SetRole(buttons, UiStyles.Role.Surface)
         UiStyles.SetRole(save, UiStyles.Role.PrimaryButton)
         buttons.Controls.Add(cancel)

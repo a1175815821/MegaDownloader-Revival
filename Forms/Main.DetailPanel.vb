@@ -58,7 +58,7 @@ Partial Public Class Main
             detailRows.Add(New KeyValuePair(Of Label, Label)(cap, val))
         Next
 
-        detailProgressBar = New ProgressBar()
+        detailProgressBar = New SlimProgressBar()
         detailProgressBar.Name = "detailProgressBar"
         detailProgressBar.Minimum = 0
         detailProgressBar.Maximum = 100

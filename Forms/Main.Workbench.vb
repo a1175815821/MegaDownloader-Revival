@@ -8,6 +8,11 @@ Partial Public Class Main
     Private workbenchHeader As Panel
     Private workbenchTitle As Label
     Private workbenchCount As Label
+    Private workbenchSearchFrame As SearchFrame
+    Private workbenchEmpty As Panel
+    Private workbenchEmptyTitle As Label
+    Private workbenchEmptyHint As Label
+    Private workbenchEmptyAction As Button
     Private workbenchSearch As TextBox
     Private workbenchSearchLabel As Label
     Private workbenchClear As Button
@@ -50,7 +55,8 @@ Partial Public Class Main
     Private Sub InitWorkbench()
         Me.DoubleBuffered = True
         Me.KeyPreview = True
-        workbenchSchedule = New Button()
+        btnUpdate.Visible = False
+        workbenchSchedule = New CommandButton()
         AddHandler workbenchSchedule.Click, AddressOf OpenDownloadSchedule
         UiStyles.SetRole(btnAddLink, UiStyles.Role.PrimaryButton)
 
@@ -61,10 +67,10 @@ Partial Public Class Main
             PanelButtonsRight.Visible = False
             Me.Controls.Add(PanelButtonsRight)
             TableLayoutPanel1.ColumnStyles.Clear()
-            TableLayoutPanel1.ColumnCount = 8
-            Dim buttons As Button() = {btnAddLink, btnPlay, btnPause, btnStop, workbenchSchedule, btnUpdate, Nothing, btnConfig}
+            TableLayoutPanel1.ColumnCount = 5
+            Dim buttons As Button() = {btnPlay, btnPause, btnStop, workbenchSchedule, btnUpdate}
             For i As Integer = 0 To buttons.Length - 1
-                TableLayoutPanel1.ColumnStyles.Add(New ColumnStyle(If(i = 6, SizeType.Percent, SizeType.AutoSize), If(i = 6, 100.0F, 0.0F)))
+                TableLayoutPanel1.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
                 If buttons(i) Is Nothing Then Continue For
                 Dim button As Button = buttons(i)
                 button.AutoSize = True
@@ -88,7 +94,7 @@ Partial Public Class Main
         navListBox.DrawMode = DrawMode.OwnerDrawFixed
         navListBox.BorderStyle = BorderStyle.None
         navPanel.AutoScroll = True
-        navListBox.ItemHeight = Math.Max(CInt(34 * GetUiScale()), Font.Height + 14)
+        navListBox.ItemHeight = Math.Max(CInt(40 * GetUiScale()), Font.Height + 14)
         AddHandler navListBox.DrawItem, AddressOf DrawWorkbenchNav
         AddHandler navListBox.MouseMove, Sub(sender, e)
                                              Dim index As Integer = navListBox.IndexFromPoint(e.Location)
@@ -107,22 +113,39 @@ Partial Public Class Main
         workbenchTitle = New Label With {.AutoEllipsis = True, .TextAlign = ContentAlignment.MiddleLeft}
         workbenchCount = New Label With {.AutoEllipsis = True, .TextAlign = ContentAlignment.MiddleLeft}
         workbenchSearchLabel = New Label With {.AutoEllipsis = True, .TextAlign = ContentAlignment.MiddleLeft}
-        workbenchSearch = New TextBox With {.BorderStyle = BorderStyle.FixedSingle}
-        workbenchClear = New Button With {.Text = "×", .TabStop = False}
-        workbenchDetails = New Button With {.AutoEllipsis = True}
-        workbenchHeader.Controls.AddRange(New Control() {workbenchTitle, workbenchCount, workbenchSearchLabel, workbenchSearch, workbenchClear, workbenchDetails})
-        UiStyles.SetFont(workbenchTitle, 3, True, Me.Font)
+        workbenchSearch = New TextBox()
+        workbenchClear = New CommandButton With {.Text = "×", .TabStop = False}
+        workbenchDetails = New CommandButton With {.AutoEllipsis = True}
+        workbenchSearchFrame = New SearchFrame(workbenchSearch, workbenchClear)
+        UiStyles.SetRole(workbenchSearch, UiStyles.Role.InputSurface)
+        AddHandler workbenchSearch.HandleCreated, Sub() UiStyles.SetSearchCue(workbenchSearch)
+        workbenchSearchLabel.Visible = False
+        TableLayoutPanel1.Dock = DockStyle.None
+        TableLayoutPanel1.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        workbenchHeader.Controls.AddRange(New Control() {workbenchTitle, workbenchCount, workbenchSearchLabel, workbenchSearchFrame, workbenchDetails, btnAddLink, TableLayoutPanel1})
+        navPanel.Controls.Add(btnConfig)
+        btnConfig.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        UiStyles.SetRole(btnConfig, UiStyles.Role.QuietButton)
+        AddHandler btnConfig.Disposed, AddressOf DisposeWorkbenchButtonImage
+        AddHandler btnAddLink.Disposed, AddressOf DisposeWorkbenchButtonImage
+        InitWorkbenchEmptyState()
+        UiStyles.SetFont(workbenchTitle, 6, True, Me.Font)
         UiStyles.SetRole(workbenchCount, UiStyles.Role.Muted)
         UiStyles.SetRole(workbenchSearchLabel, UiStyles.Role.Muted)
         UiStyles.SetRole(workbenchClear, UiStyles.Role.QuietButton)
         UiStyles.SetRole(workbenchDetails, UiStyles.Role.QuietButton)
         UiStyles.SetRole(workbenchHeader, UiStyles.Role.Surface)
-        UiStyles.SetRole(navPanel, UiStyles.Role.Surface)
+        UiStyles.SetRole(navPanel, UiStyles.Role.Sidebar)
         UiStyles.SetRole(detailPanel, UiStyles.Role.Surface)
         UiStyles.SetRole(detailGroup, UiStyles.Role.Surface)
         UiStyles.SetRole(TableLayoutPanel1, UiStyles.Role.Surface)
-        UiStyles.SetRole(Me, UiStyles.Role.Canvas)
+        UiStyles.SetRole(Me, UiStyles.Role.Surface)
         Controls.Add(workbenchHeader)
+        AddHandler navPanel.Paint, Sub(sender, e)
+                                       Using pen As New Pen(ThemeManager.GetColor("Border"))
+                                           e.Graphics.DrawLine(pen, navPanel.Width - 1, 0, navPanel.Width - 1, navPanel.Height)
+                                       End Using
+                                   End Sub
         workbenchSearchTimer = New System.Windows.Forms.Timer(components) With {.Interval = 220}
         AddHandler workbenchSearch.TextChanged, Sub()
                                                    Interlocked.Increment(queueSearchGeneration)
@@ -173,6 +196,7 @@ Partial Public Class Main
         Next
         workbenchSearchLabel.Text = Language.GetText("UI_Search")
         workbenchSearch.AccessibleName = workbenchSearchLabel.Text
+        UiStyles.SetSearchCue(workbenchSearch)
         workbenchClear.AccessibleName = Language.GetText("UI_ClearSearch")
         btnAddLink.AccessibleName = Language.GetText("Add links")
         btnPlay.AccessibleName = Language.GetText("Start downloads")
@@ -194,25 +218,54 @@ Partial Public Class Main
     Private Sub LayoutWorkbenchToolbar()
         If Not workbenchReady Then Return
         Dim scale As Single = GetUiScale()
-        Dim compact As Boolean = ClientSize.Width < CInt(900 * scale)
+        Dim compact As Boolean = ClientSize.Width < CInt(1060 * scale)
         btnPlay.Text = If(compact, "", Language.GetText("Start"))
         btnPause.Text = If(compact, "", Language.GetText("Pause"))
-        btnStop.Text = If(compact, "", Language.GetText("Stop"))
-        ' All commands remain available from the menu at very narrow widths.
-        workbenchSchedule.Visible = ClientSize.Width >= CInt(700 * scale)
-        btnConfig.Text = If(compact, "", Language.GetText("Configuration"))
+        btnStop.Text = Language.GetText("Stop")
+        workbenchSchedule.Visible = ClientSize.Width >= CInt(1060 * scale)
+        btnConfig.Text = Language.GetText("Configuration")
         For Each button As Button In New Button() {btnAddLink, btnPlay, btnPause, btnStop, workbenchSchedule, btnUpdate, btnConfig}
-            ' Center the image/text group, including the compact icon-only buttons.
             button.ImageAlign = ContentAlignment.MiddleCenter
-            button.TextAlign = ContentAlignment.MiddleCenter
-            button.TextImageRelation = If(button.Text.Length = 0, TextImageRelation.Overlay, TextImageRelation.ImageBeforeText)
-            button.Padding = New Padding(CInt(10 * scale), CInt(4 * scale), CInt(10 * scale), CInt(4 * scale))
-            button.Margin = New Padding(0, 0, CInt(8 * scale), 0)
+            button.TextImageRelation = TextImageRelation.ImageBeforeText
+            button.Padding = New Padding(CInt(10 * scale), CInt(5 * scale), CInt(10 * scale), CInt(5 * scale))
+            button.Margin = New Padding(0, 0, CInt(4 * scale), 0)
+            button.MinimumSize = New Size(CInt(36 * scale), Math.Max(CInt(36 * scale), Font.Height + CInt(14 * scale)))
         Next
-        TableLayoutPanel1.Height = Math.Max(CInt(54 * scale), Font.Height + CInt(34 * scale))
-        TableLayoutPanel1.Padding = New Padding(CInt(12 * scale), CInt(8 * scale), CInt(4 * scale), CInt(8 * scale))
-        If Me.MainMenuStrip IsNot Nothing Then TableLayoutPanel1.Top = Me.MainMenuStrip.Bottom
+        btnAddLink.AutoSize = False
+        btnConfig.AutoSize = False
+        btnConfig.ImageAlign = ContentAlignment.MiddleLeft
+        btnConfig.TextAlign = ContentAlignment.MiddleLeft
+        TableLayoutPanel1.Padding = New Padding(0)
+        TableLayoutPanel1.Height = Math.Max(CInt(36 * scale), Font.Height + CInt(14 * scale))
         If Not workbenchIconCaptionsCompact.HasValue OrElse workbenchIconCaptionsCompact.Value <> compact Then ApplyWorkbenchIcons()
+    End Sub
+
+    Private Sub InitWorkbenchEmptyState()
+        workbenchEmpty = New Panel With {.Name = "workbenchEmpty", .Visible = False}
+        workbenchEmptyTitle = New Label With {.TextAlign = ContentAlignment.MiddleCenter}
+        workbenchEmptyHint = New Label With {.TextAlign = ContentAlignment.TopCenter}
+        workbenchEmptyAction = New CommandButton With {.AutoSize = False}
+        UiStyles.SetFont(workbenchEmptyTitle, 4, True, Me.Font)
+        UiStyles.SetRole(workbenchEmpty, UiStyles.Role.Surface)
+        UiStyles.SetRole(workbenchEmptyHint, UiStyles.Role.Muted)
+        UiStyles.SetRole(workbenchEmptyAction, UiStyles.Role.SecondaryButton)
+        workbenchEmpty.Controls.AddRange(New Control() {workbenchEmptyTitle, workbenchEmptyHint, workbenchEmptyAction})
+        AddHandler workbenchEmptyAction.Click, Sub() btnAddLink.PerformClick()
+        Controls.Add(workbenchEmpty)
+        EnableLinkDrop(workbenchEmpty)
+    End Sub
+
+    Private Sub LayoutWorkbenchEmptyState()
+        If workbenchEmpty Is Nothing Then Return
+        workbenchEmpty.Bounds = ListaDescargas.Bounds
+        Dim scale As Single = GetUiScale()
+        Dim width As Integer = Math.Min(CInt(400 * scale), Math.Max(100, workbenchEmpty.Width - CInt(32 * scale)))
+        Dim x As Integer = (workbenchEmpty.Width - width) \ 2
+        Dim y As Integer = Math.Max(CInt(16 * scale), (workbenchEmpty.Height - CInt(170 * scale)) \ 2)
+        workbenchEmptyTitle.SetBounds(x, y, width, CInt(38 * scale))
+        workbenchEmptyHint.SetBounds(x, workbenchEmptyTitle.Bottom + CInt(8 * scale), width, CInt(64 * scale))
+        Dim actionWidth As Integer = Math.Min(width, Math.Max(CInt(128 * scale), TextRenderer.MeasureText(workbenchEmptyAction.Text, Font).Width + CInt(32 * scale)))
+        workbenchEmptyAction.SetBounds((workbenchEmpty.Width - actionWidth) \ 2, workbenchEmptyHint.Bottom + CInt(8 * scale), actionWidth, CInt(36 * scale))
     End Sub
 
     Private Sub UpdateWorkbenchHeading()
@@ -225,8 +278,17 @@ Partial Public Class Main
         workbenchClear.Enabled = workbenchSearch.TextLength > 0
         UiStyles.SetText(workbenchDetails, Language.GetText(If(detailsRequested AndAlso workbenchDetails.Enabled, "UI_HideDetails", "UI_ShowDetails")))
         workbenchDetails.AccessibleName = workbenchDetails.Text
-        Dim emptyText As String = Language.GetText(If(queueQuery.Length > 0 OrElse _navScope <> DownloadEstadoFilter.NavScope.All, "UI_EmptyFilter", "OLV_EmptyList"))
-        If ListaDescargas.EmptyListMsg <> emptyText Then ListaDescargas.EmptyListMsg = emptyText
+        If ListaDescargas.EmptyListMsg <> String.Empty Then ListaDescargas.EmptyListMsg = String.Empty
+        If workbenchEmpty IsNot Nothing Then
+            Dim filtered As Boolean = queueQuery.Length > 0 OrElse _navScope <> DownloadEstadoFilter.NavScope.All
+            UiStyles.SetText(workbenchEmptyTitle, Language.GetText(If(filtered, "UI_NoMatches", "UI_EmptyTitle")))
+            UiStyles.SetText(workbenchEmptyHint, Language.GetText(If(filtered, "UI_EmptyFilter", "UI_EmptyHint")))
+            UiStyles.SetText(workbenchEmptyAction, Language.GetText("Add links"))
+            workbenchEmptyAction.Visible = Not filtered
+            Dim isEmpty As Boolean = ListaDescargas.Items.Count = 0
+            workbenchEmpty.Visible = isEmpty
+            If isEmpty AndAlso Controls.GetChildIndex(workbenchEmpty) <> 0 Then workbenchEmpty.BringToFront()
+        End If
     End Sub
 
     Private queueVisibleCount As Integer
@@ -236,39 +298,53 @@ Partial Public Class Main
         workbenchLayoutBusy = True
         SuspendLayout()
         Try
+            LayoutMainMenu()
             LayoutWorkbenchToolbar()
             Dim scale As Single = GetUiScale()
-            Dim gap As Integer = CInt(12 * scale)
-            Dim top As Integer = TableLayoutPanel1.Bottom + gap
+            Dim pad As Integer = CInt(24 * scale)
+            Dim top As Integer = If(MainMenuStrip Is Nothing, 0, MainMenuStrip.Bottom)
             If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then top += quotaBannerPanel.Height
-            Dim bottom As Integer = StatusStrip1.Top - gap
-            Dim navWidth As Integer = CInt(184 * scale)
-            Dim mainLeft As Integer = gap + navWidth + gap
-            Dim headerHeight As Integer = CInt(82 * scale)
-            navPanel.SetBounds(gap, top, navWidth, Math.Max(50, bottom - top))
-            workbenchHeader.SetBounds(mainLeft, top, Math.Max(100, ClientSize.Width - gap - mainLeft), headerHeight)
-            Dim titleHeight As Integer = CInt(36 * scale)
-            Dim detailWidth As Integer = Math.Max(CInt(238 * scale), Font.Height * 14)
-            Dim canShowDetails As Boolean = ClientSize.Width >= mainLeft + detailWidth + CInt(420 * scale) + gap * 2
-            Dim showDetails As Boolean = detailsRequested AndAlso canShowDetails
-            workbenchDetails.Enabled = canShowDetails
-            workbenchDetails.SetBounds(Math.Max(0, workbenchHeader.Width - CInt(130 * scale)), 0, CInt(130 * scale), titleHeight)
-            workbenchTitle.SetBounds(0, 0, Math.Max(60, workbenchDetails.Left - CInt(168 * scale)), titleHeight)
-            workbenchCount.SetBounds(workbenchTitle.Right + gap, 0, Math.Max(35, workbenchDetails.Left - workbenchTitle.Right - gap), titleHeight)
-            Dim searchY As Integer = titleHeight + CInt(8 * scale)
-            Dim labelWidth As Integer = Math.Min(CInt(112 * scale), workbenchHeader.Width \ 3)
-            Dim searchHeight As Integer = Math.Max(Font.Height + CInt(10 * scale), CInt(28 * scale))
-            workbenchSearchLabel.SetBounds(0, searchY, labelWidth, searchHeight)
-            workbenchClear.SetBounds(workbenchHeader.Width - searchHeight, searchY, searchHeight, searchHeight)
-            workbenchSearch.SetBounds(labelWidth, searchY + 2, Math.Max(30, workbenchClear.Left - labelWidth - CInt(6 * scale)), searchHeight)
-            Dim contentTop As Integer = top + headerHeight
+            Dim bottom As Integer = StatusStrip1.Top - pad
+            Dim navWidth As Integer = CInt(192 * scale)
+            Dim mainLeft As Integer = navWidth + pad
+            Dim headerHeight As Integer = CInt(128 * scale)
+            navPanel.SetBounds(0, top, navWidth, Math.Max(50, StatusStrip1.Top - top))
+            workbenchHeader.SetBounds(mainLeft, top + pad, Math.Max(100, ClientSize.Width - pad - mainLeft), headerHeight)
+            Dim commandHeight As Integer = TableLayoutPanel1.Height
+            Dim addWidth As Integer = Math.Max(CInt(124 * scale), TextRenderer.MeasureText(btnAddLink.Text, Font).Width + CInt(52 * scale))
+            btnAddLink.SetBounds(Math.Max(0, workbenchHeader.Width - addWidth), 0, addWidth, commandHeight)
+            Dim hasSelection As Boolean = ListaDescargas.SelectedObject IsNot Nothing
+            workbenchDetails.Visible = hasSelection
+            workbenchDetails.Enabled = bottom - workbenchHeader.Bottom >= CInt(260 * scale)
+            workbenchDetails.SetBounds(Math.Max(0, btnAddLink.Left - CInt(120 * scale)), 0, CInt(112 * scale), commandHeight)
+            Dim titleRight As Integer = If(hasSelection, workbenchDetails.Left, btnAddLink.Left) - CInt(12 * scale)
+            workbenchTitle.SetBounds(0, 0, Math.Max(80, titleRight), CInt(34 * scale))
+            workbenchCount.SetBounds(0, workbenchTitle.Bottom + CInt(2 * scale), workbenchTitle.Width, CInt(24 * scale))
+            Dim searchWidth As Integer = Math.Min(CInt(280 * scale), Math.Max(CInt(176 * scale), workbenchHeader.Width \ 3))
+            Dim searchY As Integer = CInt(72 * scale)
+            workbenchSearchFrame.SetBounds(workbenchHeader.Width - searchWidth, searchY, searchWidth, commandHeight)
+            TableLayoutPanel1.SetBounds(0, searchY, Math.Max(80, workbenchSearchFrame.Left - CInt(12 * scale)), commandHeight)
+            Dim contentTop As Integer = workbenchHeader.Bottom
+            Dim listRight As Integer = ClientSize.Width - pad
+            Dim listBottom As Integer = bottom
+            Dim showDetails As Boolean = hasSelection AndAlso detailsRequested AndAlso workbenchDetails.Enabled
             detailPanel.Visible = showDetails
-            If showDetails Then detailPanel.SetBounds(ClientSize.Width - gap - detailWidth, contentTop, detailWidth, Math.Max(50, bottom - contentTop))
-            Dim listRight As Integer = If(showDetails, detailPanel.Left - gap, ClientSize.Width - gap)
-            ListaDescargas.SetBounds(mainLeft, contentTop, Math.Max(100, listRight - mainLeft), Math.Max(50, bottom - contentTop))
+            If showDetails Then
+                If ClientSize.Width >= CInt(1280 * scale) Then
+                    Dim detailWidth As Integer = CInt(260 * scale)
+                    detailPanel.SetBounds(ClientSize.Width - pad - detailWidth, contentTop, detailWidth, Math.Max(50, bottom - contentTop))
+                    listRight = detailPanel.Left - pad
+                Else
+                    Dim detailHeight As Integer = Math.Min(CInt(220 * scale), (bottom - contentTop) * 2 \ 5)
+                    detailPanel.SetBounds(mainLeft, bottom - detailHeight, Math.Max(100, listRight - mainLeft), detailHeight)
+                    listBottom = detailPanel.Top - CInt(12 * scale)
+                End If
+            End If
+            ListaDescargas.SetBounds(mainLeft, contentTop, Math.Max(100, listRight - mainLeft), Math.Max(50, listBottom - contentTop))
             ListaDescargas.BorderStyle = BorderStyle.None
             LayoutNavRail()
             LayoutDetailContent()
+            LayoutWorkbenchEmptyState()
             UpdateWorkbenchHeading()
         Finally
             ResumeLayout(False)
@@ -284,8 +360,8 @@ Partial Public Class Main
         MyBase.OnDpiChanged(e)
         If Not workbenchReady Then Return
         ClampMainWindowToWorkingArea(Screen.FromControl(Me).WorkingArea)
-        navListBox.ItemHeight = Math.Max(CInt(34 * GetUiScale()), Font.Height + 14)
-        ListaDescargas.RowHeight = Math.Max(CInt(32 * GetUiScale()), Font.Height + 12)
+        navListBox.ItemHeight = Math.Max(CInt(40 * GetUiScale()), Font.Height + 14)
+        ListaDescargas.RowHeight = Math.Max(CInt(40 * GetUiScale()), Font.Height + 16)
         detailLayoutSize = Size.Empty
         ApplyWorkbenchIcons()
         LayoutDownloadArea()
@@ -313,8 +389,10 @@ Partial Public Class Main
         Dim selected As Boolean = (e.State And DrawItemState.Selected) <> 0
         Dim scale As Single = GetUiScale()
         Dim rect As Rectangle = Rectangle.Inflate(e.Bounds, 0, -CInt(2 * scale))
-        Using brush As New SolidBrush(ThemeManager.GetColor(If(selected, "Selection", If(e.Index = navHoverIndex, "ButtonHover", "Back"))))
-            e.Graphics.FillRectangle(brush, rect)
+        Using brush As New SolidBrush(ThemeManager.GetColor(If(selected, "Selection", If(e.Index = navHoverIndex, "ButtonHover", "ControlBack"))))
+            Using shape = CommandButton.Rounded(rect, CInt(6 * scale))
+                e.Graphics.FillPath(brush, shape)
+            End Using
         End Using
         If selected Then
             Using brush As New SolidBrush(ThemeManager.GetColor("Accent"))
@@ -325,10 +403,48 @@ Partial Public Class Main
         Dim countText As String = navTotals(e.Index).ToString()
         Dim countWidth As Integer = TextRenderer.MeasureText(countText, e.Font).Width + CInt(10 * scale)
         Dim countRect As New Rectangle(rect.Right - countWidth - CInt(8 * scale), rect.Top, countWidth, rect.Height)
-        Dim textRect As New Rectangle(rect.Left + CInt(14 * scale), rect.Top, Math.Max(15, countRect.Left - rect.Left - CInt(18 * scale)), rect.Height)
+        DrawNavGlyph(e.Graphics, New Rectangle(rect.Left + CInt(12 * scale), rect.Top + (rect.Height - CInt(18 * scale)) \ 2, CInt(18 * scale), CInt(18 * scale)), e.Index, fore)
+        Dim textRect As New Rectangle(rect.Left + CInt(40 * scale), rect.Top, Math.Max(15, countRect.Left - rect.Left - CInt(44 * scale)), rect.Height)
         TextRenderer.DrawText(e.Graphics, navTitles(e.Index), e.Font, textRect, fore, TextFormatFlags.Left Or TextFormatFlags.VerticalCenter Or TextFormatFlags.EndEllipsis Or TextFormatFlags.SingleLine Or TextFormatFlags.NoPrefix)
         TextRenderer.DrawText(e.Graphics, countText, e.Font, countRect, ThemeManager.GetColor(If(selected, "SelectionFore", "Muted")), TextFormatFlags.Right Or TextFormatFlags.VerticalCenter Or TextFormatFlags.SingleLine)
         If (e.State And DrawItemState.Focus) <> 0 Then e.DrawFocusRectangle()
+    End Sub
+
+    Private Shared Sub DrawNavGlyph(graphics As Graphics, bounds As Rectangle, index As Integer, color As Color)
+        Dim state = graphics.Save()
+        Try
+            graphics.SmoothingMode = SmoothingMode.AntiAlias
+            graphics.TranslateTransform(bounds.X, bounds.Y)
+            graphics.ScaleTransform(bounds.Width / 20.0F, bounds.Height / 20.0F)
+            Using pen As New Pen(color, 1.5F)
+                pen.StartCap = LineCap.Round
+                pen.EndCap = LineCap.Round
+                Select Case index
+                    Case 0
+                        For y As Integer = 2 To 11 Step 9
+                            For x As Integer = 2 To 11 Step 9
+                                graphics.DrawRectangle(pen, x, y, 6, 6)
+                            Next
+                        Next
+                    Case 1
+                        graphics.DrawLine(pen, 10, 2, 10, 13)
+                        graphics.DrawLines(pen, New Point() {New Point(6, 9), New Point(10, 13), New Point(14, 9)})
+                        graphics.DrawLines(pen, New Point() {New Point(3, 13), New Point(3, 17), New Point(17, 17), New Point(17, 13)})
+                    Case 2
+                        graphics.DrawEllipse(pen, 2, 2, 16, 16)
+                        graphics.DrawLines(pen, New Point() {New Point(10, 5), New Point(10, 10), New Point(14, 12)})
+                    Case 3
+                        graphics.DrawEllipse(pen, 2, 2, 16, 16)
+                        graphics.DrawLine(pen, 10, 5, 10, 11)
+                        graphics.DrawLine(pen, 10, 14, 10, 14.5F)
+                    Case 4
+                        graphics.DrawEllipse(pen, 2, 2, 16, 16)
+                        graphics.DrawLines(pen, New Point() {New Point(6, 10), New Point(9, 13), New Point(14, 7)})
+                End Select
+            End Using
+        Finally
+            graphics.Restore(state)
+        End Try
     End Sub
 
     Private Async Sub StartQueueSearch()
@@ -496,7 +612,7 @@ Partial Public Class Main
     End Sub
 
     Private Sub ApplyWorkbenchIcons()
-        Dim buttons As Button() = {btnAddLink, btnPlay, btnPause, btnStop, btnConfig, btnUpdate}
+        Dim buttons As Button() = {btnAddLink, btnPlay, btnPause, btnStop, btnConfig, btnUpdate, workbenchSchedule}
         Dim side As Integer = Math.Max(16, CInt(18 * GetUiScale()))
         For i As Integer = 0 To buttons.Length - 1
             Dim button As Button = buttons(i)
@@ -551,6 +667,10 @@ Partial Public Class Main
                             graphics.DrawLine(pen, 12, 5, 12, 14)
                             graphics.DrawLines(pen, New PointF() {New PointF(8, 10), New PointF(12, 14), New PointF(16, 10)})
                             graphics.DrawLines(pen, New PointF() {New PointF(5, 16), New PointF(5, 19), New PointF(19, 19), New PointF(19, 16)})
+                        Case 6
+                            graphics.DrawEllipse(pen, 4, 4, 16, 16)
+                            graphics.DrawLine(pen, 12, 7, 12, 12)
+                            graphics.DrawLine(pen, 12, 12, 16, 14)
                     End Select
                 End Using
             End Using

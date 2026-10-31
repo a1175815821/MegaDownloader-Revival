@@ -7,21 +7,30 @@ Public Partial Class ELCAccountControl
 	Public Config As Configuracion
 	Private ELCAccountH As ELCAccountHelper
 	Private t As ToolTip
+    Private gridHeaderFont As Font
 	
 	
 	
 	Public Sub New()
 		' The Me.InitializeComponent call is required for Windows Forms designer support.
 		Me.InitializeComponent()
+        AddHandler Disposed, Sub()
+                                 Cerrar()
+                                 If gridHeaderFont IsNot Nothing Then gridHeaderFont.Dispose()
+                                 If t IsNot Nothing Then t.Dispose()
+                             End Sub
 		
 	End Sub
 	
 	Public Sub Cerrar
-		ELCAccountH.Dispose()
+        If ELCAccountH IsNot Nothing Then
+            ELCAccountH.Dispose()
+            ELCAccountH = Nothing
+        End If
 	End Sub
 	
 	Public Sub SaveToConfig(byref Config As Configuracion)
-		ELCAccountH.SaveToConfig(Config)
+        If ELCAccountH IsNot Nothing Then ELCAccountH.SaveToConfig(Config)
 	End Sub
 	
 	
@@ -41,7 +50,8 @@ Public Partial Class ELCAccountControl
 			With dgELCUsers.ColumnHeadersDefaultCellStyle
 				.BackColor = ThemeManager.GetColor("ControlBack")
 				.ForeColor = ThemeManager.GetColor("Fore")
-				.Font = New Font(dgELCUsers.Font, FontStyle.Bold)
+                If gridHeaderFont Is Nothing Then gridHeaderFont = New Font(dgELCUsers.Font, FontStyle.Bold)
+                .Font = gridHeaderFont
 			End With
 			With dgELCUsers.DefaultCellStyle
 				.BackColor = ThemeManager.GetColor("Back")
@@ -138,13 +148,12 @@ Public Partial Class ELCAccountControl
 		
 		If Config IsNot Nothing AndAlso sndr IsNot Nothing AndAlso sndr.Rows.Count = 0 Then
 			' <-- if there are no rows in the DataGridView when it paints, then it will create your message
-					Using grfx As Graphics = e.Graphics
+
 				Using emptyBrush As New SolidBrush(ThemeManager.GetColor("Fore"))
 					Using f As New Font(dgELCUsers.Font.FontFamily, dgELCUsers.Font.Size, FontStyle.Italic)
-						grfx.DrawString(Language.GetText("Account list empty"), f, emptyBrush, New PointF(55, 10))
+                        e.Graphics.DrawString(Language.GetText("Account list empty"), f, emptyBrush, New PointF(55, 10))
 					End Using
 				End Using
-			End Using
 		End If
 	End Sub
 	
