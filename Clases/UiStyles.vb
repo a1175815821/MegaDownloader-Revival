@@ -155,6 +155,22 @@ Friend NotInheritable Class UiStyles
         For index As Integer = controls.Count - 1 To 0 Step -1
             controls(index).ResumeLayout(False)
         Next
+        ' Final review: a single PerformLayout on the root does not reach the
+        ' custom settings containers. SettingsStackPanel.OnLayout sizes each
+        ' child from the current width (long translations / high DPI need a
+        ' re-measure) and does not call MyBase, while SettingsSection.OnLayout
+        ' only calls body.SetBounds. Restrict the extra passes to those few
+        ' containers (bottom-up), not the whole tree, so the 267->62 saving
+        ' is largely kept. Re-layout a section's body after its SetBounds.
+        For index As Integer = controls.Count - 1 To 0 Step -1
+            Dim current As Control = controls(index)
+            If TypeOf current Is SettingsSection Then
+                current.PerformLayout()
+                If current.Controls.Count > 0 Then current.Controls(0).PerformLayout()
+            ElseIf TypeOf current Is SettingsStackPanel OrElse TypeOf current Is SettingsFieldRow Then
+                current.PerformLayout()
+            End If
+        Next
         If controls.Count > 0 Then controls(0).PerformLayout()
     End Sub
 

@@ -185,6 +185,7 @@ public class RegressionTests {
         SpeedLimitParsingCases();
         Batch1BugFixCases(plain,key);
         Batch2PerfCases(plain,key);
+        FinalReviewCases();
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {
@@ -647,6 +648,74 @@ public class RegressionTests {
             s1.Dispose();s2.Dispose();
         }
         Print("batch2_perf","P-01/P-02/P-08/P-15 targeted checks passed");
+    }
+    static void FinalReviewCases() {
+        // Final review: P-01 moved queue serialization outside Mutex.ListaDescargas.
+        // Paquete.GuardarXML must still take a locked snapshot of ListaFicheros;
+        // a bare For Each throws "Collection was modified" when an import adds a
+        // file mid-serialization, which kills the periodic disk-save worker.
+        var emptyNode=new Paquete().GuardarXML(new System.Xml.XmlDocument(),false);
+        Check(emptyNode.SelectSingleNode("ListaFicheros")==null,
+              "final review: a package without a file list keeps the original XML shape");
+
+        var fixedPack=new Paquete();
+        fixedPack.ExtraccionFicheroPassword="";
+        for(int i=0;i<3;i++) fixedPack.AgregarFichero(new Fichero());
+        var fixedNode=fixedPack.GuardarXML(new System.Xml.XmlDocument(),false);
+        Check(fixedNode.SelectNodes("ListaFicheros/Fichero").Count==3,
+              "final review: snapshot serialization preserves every file node");
+
+        var pack=new Paquete();
+        pack.ExtraccionFicheroPassword="";
+        pack.AgregarFichero(new Fichero());
+        Exception failure=null;
+        var gate=new System.Threading.ManualResetEventSlim(false);
+        var writer=new System.Threading.Thread(()=>{
+            gate.Wait();
+            try { for(int i=0;i<250;i++) pack.AgregarFichero(new Fichero()); }
+            catch(Exception ex) { failure=ex; }
+        });
+        writer.IsBackground=true;
+        writer.Start();
+        gate.Set();
+        try {
+            for(int i=0;i<80;i++) pack.GuardarXML(new System.Xml.XmlDocument(),false);
+        } catch(Exception ex) { failure=ex; }
+        writer.Join(10000);
+        Check(failure==null,
+              "final review: concurrent queue mutation never breaks serialization"+
+              (failure==null?"":" ("+failure.GetType().Name+")"));
+
+        // P-01: a multiplicative signature overflows Long after ~13 packages when
+        // VB integer-overflow checks are enabled, which would kill the periodic
+        // disk-save worker on any realistically sized queue.
+        var sigMethod=typeof(Main).GetMethod("QueueStructureSignature",shared);
+        var many=new List<Paquete>();
+        for(int i=0;i<40;i++) many.Add(new Paquete());
+        Exception sigFailure=null;
+        long sigValue=0;
+        try { sigValue=(long)sigMethod.Invoke(null,new object[]{many}); }
+        catch(Exception ex) { sigFailure=ex.InnerException??ex; }
+        Check(sigFailure==null,
+              "final review: queue signature never overflows on a 40-package queue"+
+              (sigFailure==null?"":" ("+sigFailure.GetType().Name+")"));
+        var shapeA=new List<Paquete>();var shapeB=new List<Paquete>();
+        for(int i=0;i<40;i++){shapeA.Add(new Paquete());shapeB.Add(new Paquete());}
+        shapeA[0].AgregarFichero(new Fichero());
+        shapeB[39].AgregarFichero(new Fichero());
+        Check((long)sigMethod.Invoke(null,new object[]{shapeA})!=(long)sigMethod.Invoke(null,new object[]{shapeB}),
+              "final review: signature stays position-sensitive without arithmetic overflow");
+
+        // Final review: account edits are invisible to the de-dup XML snapshot,
+        // so assigning ELCAccounts must invalidate the throttled fingerprint.
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        GC.SuppressFinalize(cfg);
+        var hashField=typeof(Configuracion).GetField("_LastSavedELCAccountsHash",shared);
+        hashField.SetValue(null,"CACHED");
+        cfg.ELCAccounts=null;
+        Check(hashField.GetValue(null)==null,
+              "final review: editing ELC accounts invalidates the cached fingerprint");
+        Print("final_review","locked queue snapshot + concurrent import + large-queue signature + ELC dirty flag passed");
     }
     static void SevenZipCancelCase() {
         Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);

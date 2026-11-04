@@ -436,9 +436,21 @@ Public Class Paquete
         If PendienteNombrePaquete Then NodoPaq.AppendChild(XML.CreateElement("PendienteNombrePaquete")).InnerText = PendienteNombrePaquete.ToString
 
 
-        If Me.ListaFicheros IsNot Nothing Then
+        ' P-01 follow-up: GuardarEnFichero now serializes outside Mutex.ListaDescargas.
+        ' AgregarFichero mutates ListaFicheros under that lock, so a bare For Each here
+        ' could throw "Collection was modified" while a package was being imported,
+        ' killing the periodic disk-save worker for the rest of the session. Take a
+        ' short locked reference snapshot; the (slower) per-file work stays outside.
+        Dim ficherosSnapshot As Generic.List(Of Fichero) = Nothing
+        SyncLock Mutex.ListaDescargas
+            If Me.ListaFicheros IsNot Nothing Then
+                ficherosSnapshot = New Generic.List(Of Fichero)(Me.ListaFicheros)
+            End If
+        End SyncLock
+
+        If ficherosSnapshot IsNot Nothing Then
             Dim nodoListaFic As XmlNode = NodoPaq.AppendChild(XML.CreateElement("ListaFicheros"))
-            For Each Fichero As Fichero In Me.ListaFicheros
+            For Each Fichero As Fichero In ficherosSnapshot
                 nodoListaFic.AppendChild(Fichero.GuardarXML(XML, IncluirDatosCifrados))
             Next
         End If

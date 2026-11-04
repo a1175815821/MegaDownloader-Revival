@@ -436,6 +436,18 @@ Public Class Configuration
 
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
 
+        ' Final review: while a data file is locked, GuardarXML(True) is rejected
+        ' and this dialog stays open. Writing 30+ fields into Config before that
+        ' rejection left an in-memory state that the recovery timer would silently
+        ' roll back when the lock was released (and then persist). Refuse the edit
+        ' up front: the user's values stay in the controls and can be saved again
+        ' once recovery completes, with no silent loss.
+        If Config.LoadTransientError Then
+            MessageBox.Show(Language.GetText("Config_LockedByAnotherProcess"), _
+                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Exit Sub
+        End If
+
         If String.IsNullOrEmpty(Config.Password) And txtPassword.Text = PASSWORDDEFECTO Then
             txtPassword.Text = ""
         End If

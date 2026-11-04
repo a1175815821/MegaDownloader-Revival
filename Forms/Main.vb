@@ -534,17 +534,27 @@ Public Class Main
 
     ''' <summary>B1/B2: 启动降级后每秒尝试一次重载,并在状态栏持续提示。
     ''' 计时器由消息泵驱动、只在未恢复期间运行,不触碰 430ms 下载刷新主循环。</summary>
+    Private Function HayCargaBloqueada() As Boolean
+        Return (Config IsNot Nothing AndAlso Config.LoadTransientError) OrElse
+               Paquete.HasTransientLoadError OrElse
+               StreamingLibraryManager.HasPendingRecovery()
+    End Function
+
     Private Sub IniciarRecuperacionTransitoria()
-        If Not (Config.LoadTransientError OrElse Paquete.HasTransientLoadError OrElse
-                StreamingLibraryManager.HasPendingRecovery()) Then Return
+        ' The streaming library instance is created lazily on first use, so a lock on
+        ' that file can be detected *after* startup. Keep a 1s heartbeat (three cheap
+        ' boolean reads) instead of only arming the timer when startup already saw a
+        ' degraded source; the tick stops it while the form is closing.
         If _recoveryTimer Is Nothing Then
             _recoveryTimer = New System.Windows.Forms.Timer()
             _recoveryTimer.Interval = 1000
             AddHandler _recoveryTimer.Tick, AddressOf RecuperacionTransitoria_Tick
         End If
-        MostrarAvisoCargaBloqueada()
+        If HayCargaBloqueada() Then
+            MostrarAvisoCargaBloqueada()
+            Log.WriteWarning("Startup data is degraded by a transient file lock; automatic recovery is active.")
+        End If
         If Not _recoveryTimer.Enabled Then _recoveryTimer.Start()
-        Log.WriteWarning("Startup data is degraded by a transient file lock; automatic recovery is active.")
     End Sub
 
     Private Sub MostrarAvisoCargaBloqueada()
@@ -569,6 +579,10 @@ Public Class Main
         If _recoveryBusy Then Return
         _recoveryBusy = True
         Try
+            If HayCargaBloqueada() AndAlso _recoveryStatusLabel Is Nothing Then
+                MostrarAvisoCargaBloqueada()
+                Log.WriteWarning("A transient file lock was detected after startup; automatic recovery is active.")
+            End If
             Dim configRecovered As Boolean = False
             Dim queueRecovered As Boolean = False
             Dim libraryRecovered As Boolean = False
@@ -603,18 +617,18 @@ Public Class Main
             End If
 
             If configRecovered OrElse queueRecovered OrElse libraryRecovered Then
-                ToastForm.ShowToast(Me, Language.GetText("Config_LoadRecovered"))
                 Log.WriteInfo("Transient file lock recovered; on-disk data restored.")
             End If
 
-            If Not (Config.LoadTransientError OrElse Paquete.HasTransientLoadError OrElse
-                    StreamingLibraryManager.HasPendingRecovery()) Then
-                _recoveryTimer.Stop()
-                If _recoveryStatusLabel IsNot Nothing Then
-                    StatusStrip1.Items.Remove(_recoveryStatusLabel)
-                    _recoveryStatusLabel.Dispose()
-                    _recoveryStatusLabel = Nothing
-                End If
+            ' Only celebrate once, when every degraded source is healthy again:
+            ' config/queue/library often unlock on different ticks, and showing a
+            ' toast per source produced a stack of identical notifications.
+            ' The banner is a natural one-shot latch (it is removed here).
+            If Not HayCargaBloqueada() AndAlso _recoveryStatusLabel IsNot Nothing Then
+                ToastForm.ShowToast(Me, Language.GetText("Config_LoadRecovered"))
+                StatusStrip1.Items.Remove(_recoveryStatusLabel)
+                _recoveryStatusLabel.Dispose()
+                _recoveryStatusLabel = Nothing
                 Log.WriteInfo("Transient file lock recovery finished; writes are enabled again.")
             End If
         Catch ex As Exception
@@ -2666,7 +2680,20 @@ Public Class Main
                     System.Threading.Thread.Sleep(150)
                 Loop While System.Threading.Interlocked.Exchange(_importSavePending, 0) = 1
             Finally
+                ' Clear the running flag FIRST, then re-read pending without consuming
+                ' it. A request arriving in the tiny window between the loop's last
+                ' check and this point still sees running=0 and starts a new pass;
+                ' re-entering through the public method keeps the invariant intact.
+                ' Reading (CompareExchange with 0,0) instead of consuming the flag
+                ' avoids losing a request that lands after the read.
                 System.Threading.Interlocked.Exchange(_importSaveRunning, 0)
+                If System.Threading.Interlocked.CompareExchange(_importSavePending, 0, 0) = 1 Then
+                    Try
+                        SaveImportedQueueInBackground()
+                    Catch ex As Exception
+                        Log.WriteError("Restarting coalesced import save failed: " & Log.SafeException(ex))
+                    End Try
+                End If
             End Try
         End Sub)
     End Sub
@@ -2698,9 +2725,18 @@ Public Class Main
     ''' stale queue from becoming the persisted state.</summary>
     Private Shared Function QueueStructureSignature(packages As Generic.List(Of Paquete)) As Long
         If packages Is Nothing Then Return 0L
+        ' Final review: sig = sig * 31 + count overflows Long after ~13 packages
+        ' under VB integer-overflow checks. That exception escaped into
+        ' bgwActualizadorDatosDisco and permanently stopped the disk-save worker,
+        ' so no queue or config change was ever persisted again. Use only Xor and
+        ' shifts (bitwise ops are never overflow-checked) while keeping the
+        ' position-sensitive change detection.
         Dim sig As Long = CLng(packages.Count)
+        Dim shift As Integer = 0
         For Each p As Paquete In packages
-            sig = sig * 31L + If(p.ListaFicheros Is Nothing, 0L, CLng(p.ListaFicheros.Count))
+            Dim count As Long = If(p.ListaFicheros Is Nothing, 0L, CLng(p.ListaFicheros.Count))
+            sig = sig Xor (count << shift)
+            shift = (shift + 7) Mod 32
         Next
         Return sig
     End Function
@@ -2865,7 +2901,14 @@ Public Class Main
                        UltimoGuardadoFichero < PeticionGuardadoFichero And _
                        PeticionGuardadoFichero.AddMilliseconds(400) < Now) Then
 
-                        GuardarFicheroDescargas()
+                        ' One failed save must not terminate the worker: its outer
+                        ' Catch ends the While loop, so every later queue/config
+                        ' change would silently stop being persisted until restart.
+                        Try
+                            GuardarFicheroDescargas()
+                        Catch ex As Exception
+                            Log.WriteError("Saving the download list failed (will retry): " & Log.SafeException(ex))
+                        End Try
 
                     End If
 
@@ -2873,8 +2916,13 @@ Public Class Main
                       UltimoGuardadoConfig < PeticionGuardadoConfig And _
                       PeticionGuardadoConfig.AddMilliseconds(400) < Now) Then
 
-                        Me.Config.GuardarXML(False)
-                        UltimoGuardadoConfig = Now
+                        ' Same worker-lifetime guard as the download list above.
+                        Try
+                            Me.Config.GuardarXML(False)
+                            UltimoGuardadoConfig = Now
+                        Catch ex As Exception
+                            Log.WriteError("Saving the configuration failed (will retry): " & Log.SafeException(ex))
+                        End Try
 
                     End If
                     System.Threading.Thread.Sleep(TiempoDormir)
@@ -3214,10 +3262,12 @@ Public Class Main
 
                 Flujo &= "Sleeping" & vbNewLine
 
-                ' P-03: keep the 430ms cadence while anything is downloading, but idle
-                ' queues (no active/creating/verifying tasks) only need a 1s heartbeat.
-                ' User actions still refresh immediately via RefreshListaDescargas(True).
-                System.Threading.Thread.Sleep(If(Me.NumDescargasActivas > 0, 430, 1000))
+                ' Final review: an idle-only 1s heartbeat delayed user-visible
+                ' actions (start/resume, scheduling, UI state) by up to a second,
+                ' because PonerFicherosADescargar runs at the top of this same tick.
+                ' Keep the original 430ms cadence. P-03's real gain (moving package
+                ' aggregation out of Mutex.ListaDescargas) is unaffected.
+                System.Threading.Thread.Sleep(430)
 
                 Flujo &= "Finishing cycle" & vbNewLine
 
@@ -4093,7 +4143,11 @@ Public Class Main
                             fic.ConfirmUnverifiedOutputDeletion = True
                         Next
                     Else
+                        ' "No" cancels the whole remove+delete operation. Otherwise the
+                        ' tasks would disappear from the queue while their unverified
+                        ' output stayed on disk as orphaned files.
                         ToastForm.ShowToast(Me, Language.GetText("Delete_UnverifiedOutputKept"))
+                        Exit Sub
                     End If
                 End If
                 For Each desc As IDescarga In seleccion

@@ -638,9 +638,9 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="UI_EmptyTitle"><![CDATA[Start with a link]]></Text>
   <Text key="UI_EmptyHint"><![CDATA[Drop a MEGA link here, or choose Add links. You can also paste with Ctrl+V.]]></Text>
   <Text key="UI_NoMatches"><![CDATA[No matching tasks]]></Text>
-  <Text key="Config_LoadLockedWarning"><![CDATA[A settings file is in use by another program. Temporary defaults are active; changes are not saved until the file is released.]]></Text>
-  <Text key="Config_LoadRecovered"><![CDATA[Settings were restored automatically after the file lock was released.]]></Text>
+  <Text key="Config_LoadLockedWarning"><![CDATA[A data file is in use by another program. Temporary data is active and saving is suspended. Saved data will be restored automatically when the file is released.]]></Text>
+  <Text key="Config_LoadRecovered"><![CDATA[Saved data was restored after the file lock was released. Settings changed while the file was locked were NOT saved - please check your settings again.]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[The settings file is in use by another program. Nothing was saved, so your existing settings stay intact. The application will restore them automatically when the lock is released; please try again shortly.]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[These {COUNT} downloaded file(s) come from older links without an integrity checksum, so their ownership cannot be verified automatically. Delete them anyway? Files with the same name and size in the task folder will be removed.]]></Text>
-  <Text key="Delete_UnverifiedOutputKept"><![CDATA[Files without an integrity checksum were kept. Delete them manually if needed.]]></Text>
+  <Text key="Delete_UnverifiedOutputKept"><![CDATA[Operation cancelled. No tasks or files were deleted.]]></Text>
 </Language>

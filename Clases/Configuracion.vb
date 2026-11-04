@@ -197,6 +197,13 @@ Public Class Configuracion
 		End Get
 		Set(ByVal value As Generic.List(Of ELCAccountHelper.Account))
 			_ELCAccountList = value
+			' Final review: ELCAccounts is appended to the XmlDocument AFTER the
+			' de-dup snapshot is taken, so account edits are invisible to
+			' _LastSavedXML. P-14's 60s fingerprint throttle therefore made a
+			' non-dialog account change invisible for up to a minute. Invalidate
+			' the cached hash here (the only assignment path is
+			' ELCAccountHelper.SaveToConfig) so the next periodic save recomputes.
+			_LastSavedELCAccountsHash = Nothing
 		End Set
 	End Property
 	
