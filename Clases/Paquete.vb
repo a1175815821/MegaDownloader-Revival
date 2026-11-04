@@ -388,6 +388,9 @@ Public Class Paquete
                 NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = encryptedZipPass
             End If
         End If
+        If Not IncluirDatosCifrados Then
+            NodoPaq.AppendChild(XML.CreateElement("ExtraccionFicheroPasswordHash")).InnerText = Utils.SecretFingerprint(ExtraccionFicheroPassword)
+        End If
         NodoPaq.AppendChild(XML.CreateElement("Prioridad")).InnerText = Prioridad.ToString
         NodoPaq.AppendChild(XML.CreateElement("Porcentaje")).InnerText = Porcentaje.ToString
         NodoPaq.AppendChild(XML.CreateElement("TamanoBytes")).InnerText = TamanoBytes.ToString

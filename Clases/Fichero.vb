@@ -22,6 +22,9 @@ Public Class Fichero
     Public NombreFichero As String ' Solo el nombre del fichero, sin ruta
 
     Public PartialFileName As String = FileDownloader.CreatePartialFileName()
+
+    ' Empty means no delivered output; Nothing identifies an older queue entry.
+    Private completedFileName As String = ""
 	
     Public RutaLocal As String
 
@@ -347,9 +350,10 @@ Public Class Fichero
 				If String.IsNullOrWhiteSpace(Me.RutaLocal) OrElse String.IsNullOrWhiteSpace(Me.NombreFichero) Then
 					Throw New InvalidOperationException("Local path or file name is missing.")
 				End If
-				Ruta = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero)
-				If System.IO.File.Exists(Ruta) Then
-					System.IO.File.Delete(Ruta)
+				Ruta = GetCompletedFileForDeletion()
+				If Not String.IsNullOrEmpty(Ruta) Then
+					If System.IO.File.Exists(Ruta) Then System.IO.File.Delete(Ruta)
+					completedFileName = ""
 				End If
 				Ruta = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
 				If System.IO.File.Exists(Ruta) Then
@@ -363,6 +367,38 @@ Public Class Fichero
 			End SyncLock
 		End If
 	End Sub
+
+    Private Function CompletedOutputPath(fileName As String) As String
+        If String.IsNullOrEmpty(fileName) OrElse System.IO.Path.GetFileName(fileName) <> fileName OrElse
+           fileName.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0 Then
+            Throw New ArgumentException("Invalid completed file name.")
+        End If
+        ' Do not sanitize an actual collision-suffixed name into a different path.
+        Dim result As String = System.IO.Path.GetFullPath(System.IO.Path.Combine(RutaLocal, fileName))
+        PathGuard.EnsurePathUnderRoot(RutaLocal, result, allowRoot:=False)
+        Return result
+    End Function
+
+    Private Function GetCompletedFileForDeletion() As String
+        If Not String.IsNullOrEmpty(completedFileName) Then Return CompletedOutputPath(completedFileName)
+        If completedFileName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
+        ' Older queues have no output marker. Require a real MetaMAC match before
+        ' treating a same-named existing file as their completed output.
+        If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
+           EstadoDescarga <> Estado.ComprobandoMD5 AndAlso (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
+        Try
+            Dim candidate As String = CompletedOutputPath(NombreFichero)
+            If Not System.IO.File.Exists(candidate) OrElse New System.IO.FileInfo(candidate).Length <> TamanoBytes Then Return Nothing
+            Dim key As String = Me.FileKey
+            If key.Contains("=###n=") Then key = key.Substring(0, key.IndexOf("=###n="))
+            If Criptografia.base64urldecodeBytes(key).Length <> 32 OrElse Not Criptografia.VerifyMegaMetaMac(candidate, key) Then Return Nothing
+            completedFileName = NombreFichero
+            Return candidate
+        Catch ex As Exception
+            Log.WriteWarning("Keeping unverified legacy output for " & Me.FileID & ": " & Log.SafeException(ex))
+            Return Nothing
+        End Try
+    End Function
 	
 	Public Function ObtenerNombreSinExtension As String
 		
@@ -405,6 +441,7 @@ Public Class Fichero
 			
 			
 			Dim worker As DownloadWorker = CType(sender, DownloadWorker)
+            CaptureDownloaderProgress()
 			
 			Dim ErrAct As Conexion.TipoError = Conexion.TipoError.SinErrores
 			Me.ActualizarInformacionFichero(worker.Config, ErrAct, True)
@@ -418,23 +455,25 @@ Public Class Fichero
 			' 不得再建下载器(此前必复活)。
 			If Me._StartupCancelled Then
 				Log.WriteWarning("Startup cancelled during file info verification, not starting downloader for " & Me.FileID)
+                Me.EstadoDescarga = Estado.EnCola
 				Exit Sub
 			End If
 
 			Me.NumErroresChunk = 0
-			Me.Downloader = New FileDownloader(True)
-			
-			AddHandler Me.Downloader.Resumed, AddressOf downloader_Started
-			AddHandler Me.Downloader.Started, AddressOf downloader_Started
-			AddHandler Me.Downloader.Paused, AddressOf downloader_Paused
-			AddHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
-			AddHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
-			AddHandler Me.Downloader.Completed, AddressOf downloader_Completed
-			AddHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
-			AddHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
-		AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
-		AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
-		AddHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
+            If Me.Downloader Is Nothing Then
+                Me.Downloader = New FileDownloader(True)
+                AddHandler Me.Downloader.Resumed, AddressOf downloader_Started
+                AddHandler Me.Downloader.Started, AddressOf downloader_Started
+                AddHandler Me.Downloader.Paused, AddressOf downloader_Paused
+                AddHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
+                AddHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
+                AddHandler Me.Downloader.Completed, AddressOf downloader_Completed
+                AddHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
+                AddHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
+                AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
+                AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
+                AddHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
+            End If
 
             Me.Downloader.setBufferAndPackageSize(worker.Config.TamanoBufferKB * 1024, worker.Config.TamanoPaqueteKB * 1024)
 
@@ -458,6 +497,7 @@ Public Class Fichero
 					Log.WriteError("Error disposing cancelled startup downloader: " & Log.SafeException(ex))
 				End Try
 				Me.Downloader = Nothing
+                Me.EstadoDescarga = Estado.EnCola
 				Exit Sub
 			End If
 			If Me.Downloader.CanStart Then
@@ -479,15 +519,16 @@ Public Class Fichero
 					" * Internal info: " & Log.SafeException(e.Error))
 			End If
 		End If
-		bgArranque.Dispose()
-		bgArranque = Nothing
+        Dim worker As DownloadWorker = TryCast(sender, DownloadWorker)
+        If worker IsNot Nothing Then worker.Dispose()
+        If Object.ReferenceEquals(bgArranque, worker) Then bgArranque = Nothing
 	End Sub
 	
 	
 	Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
-		If Estado.Erroneo = Me.DescargaEstado Then Exit Sub
+		If disposedValue OrElse Estado.Erroneo = Me.DescargaEstado Then Exit Sub
 
-		If Me.Downloader Is Nothing And bgArranque Is Nothing Then
+		If bgArranque Is Nothing AndAlso (Me.Downloader Is Nothing OrElse Me.Downloader.CanStart) Then
 			Me.EstadoDescarga = Estado.CreandoLocal
 			Me.DescargaComenzada = True
 			Me._StartupCancelled = False
@@ -495,16 +536,21 @@ Public Class Fichero
 			bgArranque.WorkerSupportsCancellation = False
 			bgArranque.WorkerReportsProgress = False
 			bgArranque.RunWorkerAsync()
-			
-		ElseIf Me.Downloader IsNot Nothing AndAlso Me.Downloader.CanStart Then
-			Me.EstadoDescarga = Estado.CreandoLocal
-			Me.DescargaComenzada = True
-			Me.Downloader.Start()
 		End If
 	End Sub
+
+    Private Sub CaptureDownloaderProgress()
+        SyncLock Mutex.FicheroDownloader
+            If Me.Downloader Is Nothing OrElse Me.Downloader.File Is Nothing Then Return
+            Dim file As FileDownloader.FileInfo = Me.Downloader.File
+            If file.DataPartInitialized AndAlso file.Size > 0 Then Me.DatosPartes = file.GetDataPart
+            Me.PartialFileName = file.PartialFileName
+        End SyncLock
+    End Sub
 	
 	Public Sub [Resume]()
 		If Me.Downloader IsNot Nothing AndAlso Me.Downloader.CanResume Then
+            ThrottledStreamController.GetController.Continuar(Me.FileID)
 			Me.Downloader.Resume()
 		End If
 	End Sub
@@ -524,7 +570,8 @@ Public Class Fichero
 			System.Threading.Thread.Sleep(50)
 			Ciclos += 1
 		End While
-		If Me.Downloader Is Nothing Then
+		If Me.Downloader Is Nothing OrElse Not Me.Downloader.IsBusy Then
+            Me.EstadoDescarga = Estado.EnCola
 			RaiseEvent CancellationComplete(Me, New EventArgs)
 		ElseIf Me.Downloader.CanStop Then
 			Me.Downloader.Stop()
@@ -567,6 +614,8 @@ Public Class Fichero
 	Private Sub downloader_FileRenamed(ByVal sender As System.Object, ByVal e As FileRenamedEventArgs)
 		Try
 			If e Is Nothing OrElse String.IsNullOrEmpty(e.FileName) Then Return
+            CompletedOutputPath(e.FileName)
+            completedFileName = e.FileName
 			If Not String.Equals(Me.NombreFichero, e.FileName, StringComparison.Ordinal) Then
 				Log.WriteInfo("Final file name for " & Me.FileID & ": " & e.FileName)
 				Me.NombreFichero = e.FileName
@@ -643,6 +692,11 @@ Public Class Fichero
 	End Sub
 	
 	Private Sub downloader_FileDownloadSucceeded(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        Dim source As FileDownloader = TryCast(sender, FileDownloader)
+        If source IsNot Nothing AndAlso Not String.IsNullOrEmpty(source.CompletedFilePath) Then
+            PathGuard.EnsurePathUnderRoot(Me.RutaLocal, source.CompletedFilePath, allowRoot:=False)
+            completedFileName = System.IO.Path.GetFileName(source.CompletedFilePath)
+        End If
 		' This event fires as soon as the file is verified and renamed — before the Completed event.
 		' Setting Completado here ensures the UI reflects the true state immediately, even if the
 		' Completed event is delayed or the background worker's RunWorkerCompleted is slow to fire.
@@ -878,6 +932,7 @@ Public Class Fichero
 	''' 避免"超时→删.part→重下→再超时"无限循环;手动重置仍用默认 False 从头来。
 	''' </summary>
 	Public Sub ResetearDescarga(Optional ByVal preserveProgress As Boolean = False)
+        CaptureDownloaderProgress()
 		If preserveProgress Then
 			Me.NumErroresChunk = 0
 			Me.UltimoErrorChunk = Nothing
@@ -1009,6 +1064,22 @@ Public Class Fichero
         End If
         Me.RutaRelativa = LeerNodo(XML, "RutaRelativa", "")
         Me.RutaLocal = LeerNodo(XML, "RutaLocal", "")
+        Dim completedNode As XmlNode = XML.SelectSingleNode("CompletedFileName")
+        completedFileName = If(completedNode Is Nothing, Nothing, completedNode.InnerText)
+        If Not String.IsNullOrEmpty(completedFileName) Then
+            Try
+                CompletedOutputPath(completedFileName)
+            Catch ex As ArgumentException
+                completedFileName = ""
+                Log.WriteWarning("Invalid persisted completed file name; keeping existing files.")
+            Catch ex As UnauthorizedAccessException
+                completedFileName = ""
+                Log.WriteWarning("Completed file path is outside the task directory; keeping existing files.")
+            Catch ex As System.IO.IOException
+                completedFileName = ""
+                Log.WriteWarning("Unreadable persisted completed file path; keeping existing files.")
+            End Try
+        End If
         Long.TryParse(LeerNodo(XML, "TamanoBytes", "0"), TamanoBytes)
         Integer.TryParse(LeerNodo(XML, "NumeroConexionesAbiertas", "0"), NumeroConexionesAbiertas)
         Integer.TryParse(LeerNodo(XML, "NumeroChunksAsignados", "0"), NumeroChunksAsignados)
@@ -1130,6 +1201,7 @@ Public Class Fichero
         End If
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName
+        If completedFileName IsNot Nothing Then NodoFic.AppendChild(XML.CreateElement("CompletedFileName")).InnerText = completedFileName
         NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
         NodoFic.AppendChild(XML.CreateElement("RutaRelativa")).InnerText = RutaRelativa
         NodoFic.AppendChild(XML.CreateElement("TamanoBytes")).InnerText = TamanoBytes.ToString
@@ -1146,6 +1218,9 @@ Public Class Fichero
         ' DPAPI 密文(随机盐,每次不同)只写真盘、不进比对快照,理由同 Paquete.GuardarXML。
         If IncluirDatosCifrados AndAlso Not String.IsNullOrEmpty(ExtraccionFicheroPassword) Then
             NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroPassword")).InnerText = Criptografia.EncryptString_DPAPI(Criptografia.ToSecureString(ExtraccionFicheroPassword))
+        End If
+        If Not IncluirDatosCifrados Then
+            NodoFic.AppendChild(XML.CreateElement("ExtraccionFicheroPasswordHash")).InnerText = Utils.SecretFingerprint(ExtraccionFicheroPassword)
         End If
 
         NodoFic.AppendChild(XML.CreateElement("Prioridad")).InnerText = Prioridad.ToString

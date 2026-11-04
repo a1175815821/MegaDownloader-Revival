@@ -46,8 +46,9 @@ Friend NotInheritable Class AtomicFile
     End Sub
 
     ''' <summary>
-    ''' Loads an XML document, falling back to the ".bak" sibling on failure.
-    ''' transientFailure reports that at least one attempt failed with IOException
+    ''' Loads an XML document, using ".bak" for a missing or corrupt primary.
+    ''' A locked primary is left untouched instead of loading an older backup.
+    ''' transientFailure reports that reading failed with IOException
     ''' (sharing violation: antivirus scan / backup / sync client) rather than a
     ''' corrupt document. Callers must treat that as "keep the on-disk file as-is":
     ''' loading defaults and then saving would replace a perfectly good file with
@@ -77,7 +78,12 @@ Friend NotInheritable Class AtomicFile
                     Exit For
                 End Try
             Next
-            If locked Then transientFailure = True
+            If locked Then
+                ' A locked primary is not corrupt. An older backup must not become
+                ' the writable state that replaces it when the lock is released.
+                transientFailure = True
+                Return False
+            End If
         End If
 
         Dim backupPath As String = fullSource & ".bak"

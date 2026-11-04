@@ -3385,6 +3385,7 @@ Public Class Main
         SyncLock Mutex.ListaDescargas
             If Fichero.DescargaEstado = Estado.Pausado Then
                 Fichero.PausaIndividual = False
+                Fichero.DescargaIndividual = True
                 Fichero.Resume()
             ElseIf Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada Then
                 Fichero.PausaIndividual = False

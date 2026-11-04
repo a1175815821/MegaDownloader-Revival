@@ -794,14 +794,12 @@ Public Class FileDownloader
                 End If
             End If
 
-            ' Disk space precheck (file size + 64 MiB margin)
+            ' Existing partial files already reserve space on disk.
             Try
                 Dim root As String = Path.GetPathRoot(Path.GetFullPath(Me.LocalDirectory))
                 If Not String.IsNullOrEmpty(root) Then
                     Dim di As New DriveInfo(root)
-                    If di.IsReady AndAlso di.AvailableFreeSpace < file.Size + (64L * 1024L * 1024L) Then
-                        Throw New IOException("Insufficient disk space for download.")
-                    End If
+                    If di.IsReady Then EnsureDownloadSpace(FicheroPART, file.Size, di.AvailableFreeSpace)
                 End If
             Catch ex As IOException
                 exc = ex
@@ -1142,6 +1140,15 @@ Public Class FileDownloader
         End Try
     End Sub
 
+    Friend Shared Sub EnsureDownloadSpace(partialPath As String, fileSize As Long, availableSpace As Long)
+        Dim reserved As Long = If(System.IO.File.Exists(partialPath), New System.IO.FileInfo(partialPath).Length, 0L)
+        Dim additional As Long = Math.Max(0L, fileSize - reserved)
+        Const margin As Long = 64L * 1024L * 1024L
+        If additional > 0 AndAlso (availableSpace < additional OrElse availableSpace - additional < margin) Then
+            Throw New IOException("Insufficient disk space for download.")
+        End If
+    End Sub
+
     Private Function TryReuseCompletedFile(ByVal completedPath As String, ByVal file As FileInfo) As Boolean
         If Not System.IO.File.Exists(completedPath) Then Return False
         Try
@@ -1159,6 +1166,7 @@ Public Class FileDownloader
                 m_currentFileProgress = file.Size
                 m_totalProgress = file.Size
             End SyncLock
+            m_completedFilePath = completedPath
             Log.WriteInfo("Reusing verified completed file " & file.Name)
             fireEventFromBgw([Event].FileDownloadSucceeded)
             Return True
@@ -1963,6 +1971,12 @@ Public Class FileDownloader
 #End Region
 
 #Region "Properties"
+    Friend ReadOnly Property CompletedFilePath As String
+        Get
+            Return m_completedFilePath
+        End Get
+    End Property
+
     ''' <summary>Gets or sets the list of files to download</summary>
     Public Property File() As FileInfo
         Get

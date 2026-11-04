@@ -189,23 +189,10 @@ Public Class PropiedadesDescarga
 
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
 
-        ' P1-2 同 Configuration:MB 小数须按 Double 解析,否则 0.5 存不进。
-        Dim LimiteVelocidadMB As Double = 0
-        Double.TryParse(txtLimiteVelocidad.Text, LimiteVelocidadMB)
         Dim LimiteVelocidad As Integer = 0
-        If Not chkLimitarVelocidad.Checked Then
-            LimiteVelocidad = 0
-        ElseIf LimiteVelocidadMB <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidad.Text) Then
+        If chkLimitarVelocidad.Checked AndAlso Not Utils.TryParseSpeedLimit(txtLimiteVelocidad.Text, LimiteVelocidad) Then
             MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
-        Else
-            Dim asLong As Long = CLng(Math.Round(LimiteVelocidadMB * 1024.0))
-            If asLong <= 0 Then
-                MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Exit Sub
-            End If
-            If asLong > Integer.MaxValue Then asLong = Integer.MaxValue
-            LimiteVelocidad = CInt(asLong)
         End If
 
         ' P2-6: 判断"用户是否动过限速",而不是只看复选框勾没勾。

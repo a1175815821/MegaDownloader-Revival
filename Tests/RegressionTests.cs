@@ -29,6 +29,19 @@ public class RegressionTests {
         Interlocked.Increment(ref assertions);
     }
     public static void Main(string[] args) {
+        if(args.Length==3 && args[0]=="--sevenzip-cancel-child") {
+            bin=args[1];
+            AppDomain.CurrentDomain.AssemblyResolve += (s,e) => {
+                string p=Path.Combine(bin,new AssemblyName(e.Name).Name+".dll");
+                if(!File.Exists(p))p=Path.Combine(bin,new AssemblyName(e.Name).Name+".exe");
+                return File.Exists(p)?Assembly.LoadFrom(p):null;
+            };
+            File.WriteAllText(args[2],System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
+            Console.Out.Write(new string('x',65536));Console.Out.Flush();
+            Console.Error.Write(new string('y',65536));Console.Error.Flush();
+            Thread.Sleep(30000);
+            return;
+        }
         if(args.Length==4 && args[0]=="--buffer-mutex-child") {
             bin=args[1];
             AppDomain.CurrentDomain.AssemblyResolve += (s,e) => {
@@ -126,6 +139,7 @@ public class RegressionTests {
         SameNameDownloads(plain,key,encrypted,true);
         ConcurrentFinalNames();
         PartialPersistenceAndCleanup(plain,key);
+        MaintenanceRegressionCases(plain,key,encrypted);
         using(var file=new Fichero()) {
             foreach(var state in new[]{Estado.Descomprimiendo,Estado.ComprobandoMD5}) {
                 file.EstadoDescarga=state;
@@ -159,6 +173,329 @@ public class RegressionTests {
         using(var gate=(System.Threading.Mutex)typeof(ApplicationInstanceManager).GetMethod("AcquireBufferMutex",shared).Invoke(null,new object[]{name})) {
             File.WriteAllText(marker,"acquired");
             gate.ReleaseMutex();
+        }
+    }
+    static void MaintenanceRegressionCases(byte[] plain,string key,byte[] encrypted) {
+        DeletionOwnershipCases(plain,key);
+        LockedPrimaryCases();
+        ResumeSpaceCases();
+        RefreshedRetryCases(plain,key,encrypted);
+        StartupLifecycleCases();
+        SingleTaskResumeCases();
+        SpeedLimitParsingCases();
+        SevenZipCancelCase();
+    }
+    static object InvokePrivate(object target,string method,params object[] args) {
+        return target.GetType().GetMethod(method,hidden).Invoke(target,args);
+    }
+    static Main QueueFixture(Fichero file) {
+        var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));
+        GC.SuppressFinalize(form);
+        var pack=new Paquete();pack.AgregarFichero(file);
+        typeof(Main).GetField("ListaPaquetes",hidden).SetValue(form,new List<Paquete>{pack});
+        return form;
+    }
+    static void DeletionOwnershipCases(byte[] plain,string key) {
+        foreach(string state in new[]{"queued","failed","finished-part"}) {
+            string d=Path.Combine(root,"delete-"+state);Directory.CreateDirectory(d);
+            string real=Path.Combine(d,"same.bin");File.WriteAllText(real,"unrelated original");
+            using(var file=new Fichero()) {
+                file.FileID="DELETE01";file.FileKey=key;file.RutaLocal=d;file.NombreFichero="same.bin";
+                file.DescargaComenzada=state!="queued";file.EstadoDescarga=state=="failed"?Estado.Erroneo:Estado.EnCola;
+                file.DatosPartes=new FileDownloader.DataPart(plain.Length,1);
+                if(state=="finished-part")file.DatosPartes.SetProgress(0,plain.Length);
+                string part=FileDownloader.GetPartialFilePath(d,"same.bin",file.PartialFileName);
+                if(state!="queued")File.WriteAllBytes(part,plain);
+                InvokePrivate(QueueFixture(file),"Eliminar",file,true,false);
+                Check(File.ReadAllText(real)=="unrelated original","remove+delete preserves unrelated final: "+state);
+                Check(!File.Exists(part),"remove+delete removes only owned partial: "+state);
+            }
+        }
+        string dir=Path.Combine(root,"delete-completed");Directory.CreateDirectory(dir);
+        string existing=Path.Combine(dir,"same.bin");File.WriteAllText(existing,"original");
+        using(var file=new Fichero())using(var restored=new Fichero())using(var fd=new FileDownloader(false)) {
+            file.FileID="DELETE02";file.FileKey=key;file.RutaLocal=dir;file.NombreFichero="same.bin";
+            file.DescargaComenzada=true;file.EstadoDescarga=Estado.Erroneo;
+            fd.LocalDirectory=dir;
+            string part=FileDownloader.GetPartialFilePath(dir,"same.bin",file.PartialFileName);File.WriteAllBytes(part,plain);
+            string renamed=(string)InvokePrivate(fd,"RenamePartToReal",part,existing);
+            InvokePrivate(file,"downloader_FileRenamed",fd,new FileRenamedEventArgs(renamed));
+            var xml=new System.Xml.XmlDocument();restored.CargarXML(file.GuardarXML(xml,true));
+            Check(renamed=="same (2).bin","owned output fixture used the actual collision rename");
+            InvokePrivate(QueueFixture(restored),"Eliminar",restored,true,false);
+            Check(!File.Exists(Path.Combine(dir,renamed))&&File.ReadAllText(existing)=="original","persisted collision ownership deletes its own output after a post-processing failure");
+        }
+        foreach(bool valid in new[]{false,true})using(var file=new Fichero())using(var restored=new Fichero()) {
+            string d=Path.Combine(root,"delete-legacy-"+valid);Directory.CreateDirectory(d);
+            byte[] content=(byte[])plain.Clone();if(!valid)content[0]^=0x5a;
+            string path=Path.Combine(d,"legacy.bin");File.WriteAllBytes(path,content);
+            file.FileID="DELETE03";file.FileKey=key;file.RutaLocal=d;file.NombreFichero="legacy.bin";
+            file.TamanoBytes=plain.Length;file.DescargaComenzada=true;file.EstadoDescarga=Estado.Completado;
+            var xml=new System.Xml.XmlDocument();var node=file.GuardarXML(xml,true);
+            node.RemoveChild(node.SelectSingleNode("CompletedFileName"));restored.CargarXML(node);
+            restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+            Check(File.Exists(path)!=valid,"legacy completed output requires a real MetaMAC match before deletion: "+valid);
+        }
+        using(var file=new Fichero())using(var restored=new Fichero()) {
+            string d=Path.Combine(root,"delete-unsafe-marker");Directory.CreateDirectory(d);
+            file.FileID="DELETE04";file.RutaLocal=d;file.NombreFichero="local.bin";
+            var xml=new System.Xml.XmlDocument();var node=file.GuardarXML(xml,true);
+            string outside=Path.Combine(root,"outside-delete.bin");File.WriteAllText(outside,"preserved");
+            node.SelectSingleNode("CompletedFileName").InnerText=@"..\outside-delete.bin";
+            restored.CargarXML(node);restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+            Check(File.ReadAllText(outside)=="preserved","invalid output marker cannot delete outside the task directory");
+        }
+        Print("deletion_ownership","queued/failed/finalizing/collision/legacy cases passed");
+    }
+    static void LockedPrimaryCases() {
+        string path=Path.Combine(root,"locked-primary.xml");
+        File.WriteAllText(path,"<State version='new'/>");File.WriteAllText(path+".bak","<State version='old'/>");
+        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        var load=atomic.GetMethod("TryLoadXml",BindingFlags.Static|BindingFlags.Public);
+        object[] args={path,null,false,false};
+        using(var locked=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
+            Check(!(bool)load.Invoke(null,args),"locked primary is not replaced by an older readable backup");
+            Check((bool)args[3]&&!(bool)args[2]&&args[1]==null,"locked primary reaches existing configuration/queue write-protection branches");
+        }
+        Check((bool)load.Invoke(null,args)&&!((bool)args[3])&&!((bool)args[2]),"unlocked primary can be loaded normally");
+        Check(((System.Xml.XmlDocument)args[1]).DocumentElement.GetAttribute("version")=="new","newer primary state is retained");
+        Check(File.ReadAllText(path+".bak").Contains("old"),"reading a locked primary does not change its backup");
+        File.WriteAllText(path,"broken XML");
+        Check((bool)load.Invoke(null,args)&&(bool)args[2]&&!(bool)args[3],"genuinely corrupt primary still recovers from backup");
+        Check(((System.Xml.XmlDocument)args[1]).DocumentElement.GetAttribute("version")=="old","corruption recovery uses the readable backup");
+        Print("locked_primary","primary preserved; corruption fallback retained");
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll",SetLastError=true)]
+    static extern bool DeviceIoControl(Microsoft.Win32.SafeHandles.SafeFileHandle handle,uint code,IntPtr input,uint inputSize,IntPtr output,uint outputSize,out uint returned,IntPtr overlapped);
+    static void ResumeSpaceCases() {
+        var ensure=typeof(FileDownloader).GetMethod("EnsureDownloadSpace",BindingFlags.Static|BindingFlags.NonPublic);
+        string small=Path.Combine(root,"space-check.part");File.WriteAllBytes(small,new byte[4096]);
+        ensure.Invoke(null,new object[]{small,(long)4096,(long)0});
+        const long margin=64L*1024*1024;
+        ensure.Invoke(null,new object[]{small,(long)8192,margin+4096});
+        bool rejected=false;try{ensure.Invoke(null,new object[]{small,(long)8192,margin+4095});}catch(Exception ex){rejected=Unwrap(ex) is IOException;}
+        Check(rejected,"partial expansion still checks additional space and safety margin");
+        string missing=Path.Combine(root,"missing-space.part");
+        rejected=false;try{ensure.Invoke(null,new object[]{missing,(long)4096,margin+4095});}catch(Exception ex){rejected=Unwrap(ex) is IOException;}
+        Check(rejected,"fresh allocation still rejects insufficient space");
+        var drive=new DriveInfo(Path.GetPathRoot(root));
+        if(drive.DriveFormat!="NTFS"){Print("resume_space","sparse integration skipped on "+drive.DriveFormat);return;}
+        string d=Path.Combine(root,"space-resume");Directory.CreateDirectory(d);
+        long size=(drive.AvailableFreeSpace+(128L<<20)+15)&~15L;
+        var parts=new FileDownloader.DataPart(size,1);parts.SetProgress(0,size);parts.ChunkList[0].SyncedIndex=size;
+        string partialName=FileDownloader.CreatePartialFileName();
+        string part=FileDownloader.GetPartialFilePath(d,"large.bin",partialName),final=Path.Combine(d,"large.bin");
+        try {
+            using(var stream=new FileStream(part,FileMode.CreateNew,FileAccess.Write,FileShare.None)) {
+                uint count;Check(DeviceIoControl(stream.SafeFileHandle,0x900c4,IntPtr.Zero,0,IntPtr.Zero,0,out count,IntPtr.Zero),"sparse space fixture initialized");
+                stream.SetLength(size);stream.Flush(true);
+            }
+            using(var fd=new FileDownloader(false))using(var done=new ManualResetEvent(false))using(var succeeded=new ManualResetEvent(false)) {
+                fd.LocalDirectory=d;fd.DeleteFilesAfterCancel=false;
+                // Legacy 16-byte keys have no embedded MAC; no large-file scan or network is needed.
+                fd.AddFileInfo("SPACE001",new string('A',22),"http://127.0.0.1:1/unused","large.bin",parts,partialName);fd.File.Size=size;
+                string failure="";fd.FileDownloadFailed+=(s,e)=>failure=e.Message;
+                fd.FileDownloadSucceeded+=(s,e)=>succeeded.Set();fd.Completed+=(s,e)=>done.Set();fd.Start();
+                Check(done.WaitOne(5000)&&succeeded.WaitOne(5000)&&failure=="","existing preallocated partial finalizes when its size exceeds remaining free space");
+                Check(File.Exists(final)&&new System.IO.FileInfo(final).Length==size,"space regression reaches real finalization");
+            }
+        }finally{if(File.Exists(part))File.Delete(part);if(File.Exists(final))File.Delete(final);}
+        Print("resume_space","preallocated output completed without a second full-size allocation");
+    }
+    sealed class CallbackPump:SynchronizationContext {
+        readonly Queue<Action> pending=new Queue<Action>();
+        public override void Post(SendOrPostCallback callback,object state){lock(pending)pending.Enqueue(()=>callback(state));}
+        public bool Until(Func<bool> completed,int milliseconds=10000) {
+            var until=DateTime.UtcNow.AddMilliseconds(milliseconds);
+            while(DateTime.UtcNow<until) {
+                Action next=null;lock(pending)if(pending.Count>0)next=pending.Dequeue();
+                if(next!=null)next();
+                if(completed())return true;
+                if(next==null)Thread.Sleep(5);
+            }
+            return false;
+        }
+    }
+    static void RefreshedRetryCases(byte[] plain,string key,byte[] encrypted) {
+        object old=typeof(InternalConfiguration).GetField("XML_CONFIG",shared).GetValue(null);
+        SynchronizationContext previous=SynchronizationContext.Current;
+        var pump=new CallbackPump();SynchronizationContext.SetSynchronizationContext(pump);
+        try {
+            foreach(bool preserve in new[]{false,true})using(var server=new LocalFileServer(encrypted))using(var file=new Fichero()) {
+                string d=Path.Combine(root,"refresh-retry-"+preserve);Directory.CreateDirectory(d);
+                var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();cfg.TamanoBufferKB=750;cfg.TamanoPaqueteKB=50;cfg.ConexionesPorFichero=1;
+                server.ApiResponse="[{\"s\":"+plain.Length+",\"at\":\""+EncryptedName("retry.bin")+"\",\"g\":\""+server.Url+"\"}]";
+                var xml=new System.Xml.XmlDocument();
+                xml.LoadXml("<Config><URL_MEGA_API_DOWN_GET_G>"+server.Url+"</URL_MEGA_API_DOWN_GET_G><URL_MEGA_API_DOWN_GET_EU>"+server.Url+"</URL_MEGA_API_DOWN_GET_EU></Config>");
+                typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,xml);
+                file.FileID="TESTFILE";file.FileKey=key;file.NombreFichero="retry.bin";file.RutaLocal=d;file.DescargaProcesada=true;
+                file.DatosPartes=new FileDownloader.DataPart(plain.Length,1);
+                file.DatosPartes.ChunkList[0].Index=file.DatosPartes.ChunkList[0].SyncedIndex=2048;
+                byte[] partial=new byte[plain.Length];Array.Copy(plain,partial,2048);
+                string part=FileDownloader.GetPartialFilePath(d,"retry.bin",file.PartialFileName);File.WriteAllBytes(part,partial);
+                var fd=new FileDownloader(true);fd.LocalDirectory=d;fd.DeleteFilesAfterCancel=false;
+                fd.AddFileInfo(file.FileID,key,server.Url+"/expired","retry.bin",file.DatosPartes,file.PartialFileName);
+                typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+                fd.FileDownloadFailed+=(s,e)=>InvokePrivate(file,"downloader_FileDownloadFailed",s,e);
+                fd.Completed+=(s,e)=>InvokePrivate(file,"downloader_Completed",s,e);
+                fd.Started+=(s,e)=>InvokePrivate(file,"downloader_Started",s,e);
+                fd.FileRenamed+=(s,e)=>InvokePrivate(file,"downloader_FileRenamed",s,e);
+                fd.FileDownloadSucceeded+=(s,e)=>InvokePrivate(file,"downloader_FileDownloadSucceeded",s,e);
+                using(var stopped=new AutoResetEvent(false)) {
+                    fd.Completed+=(s,e)=>stopped.Set();fd.Start();
+                    Check(pump.Until(()=>stopped.WaitOne(0))&&file.EstadoDescarga==Estado.Erroneo&&fd.File.Size==0,"expired-URL fixture fails during size probing");
+                    file.ResetearDescarga(preserve);file.EstadoDescarga=Estado.EnCola;
+                    file.Start(ref cfg,1);
+                    Check(pump.Until(()=>stopped.WaitOne(0)),"retry completes after refreshing metadata");
+                    Check(pump.Until(()=>typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null),"retry startup worker finished");
+                    Check(file.EstadoDescarga==Estado.Completado&&File.ReadAllBytes(Path.Combine(d,"retry.bin")).SequenceEqual(plain),"refreshed retry delivers exact plaintext");
+                    Check(server.ApiCalls==1&&fd.File.Path==server.Url,"retry gets a fresh API download URL");
+                    Check(server.TakeRanges()==(preserve?"bytes=2048-4095":"bytes=0-4095"),"retry honors progress preservation/reset: "+preserve);
+                    file.MarcadoParaBorrarFicheroLocal=true;file.BorrarFicheroLocal();
+                    Check(!File.Exists(Path.Combine(d,"retry.bin")),"real download output is recorded as owned");
+                }
+            }
+            using(var server=new LocalFileServer(encrypted))using(var entered=new ManualResetEvent(false))using(var release=new ManualResetEvent(false))using(var file=new Fichero()) {
+                var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
+                server.ApiEntered=entered;server.ApiRelease=release;
+                server.ApiResponse="[{\"s\":"+plain.Length+",\"at\":\""+EncryptedName("retry.bin")+"\",\"g\":\""+server.Url+"\"}]";
+                var xml=new System.Xml.XmlDocument();
+                xml.LoadXml("<Config><URL_MEGA_API_DOWN_GET_G>"+server.Url+"</URL_MEGA_API_DOWN_GET_G><URL_MEGA_API_DOWN_GET_EU>"+server.Url+"</URL_MEGA_API_DOWN_GET_EU></Config>");
+                typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,xml);
+                file.FileID="TESTFILE";file.FileKey=key;file.RutaLocal=root;file.NombreFichero="retry.bin";
+                var fd=new FileDownloader(false);fd.LocalDirectory=root;
+                fd.AddFileInfo(file.FileID,key,server.Url+"/expired",file.NombreFichero,null,file.PartialFileName);
+                typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+                int cancelled=0;file.CancellationComplete+=(s,e)=>Interlocked.Increment(ref cancelled);
+                try {
+                    file.Start(ref cfg,1);Check(entered.WaitOne(5000),"retry cancellation fixture entered API verification");
+                    var stop=System.Threading.Tasks.Task.Run(()=>file.Stop());
+                    Check(SpinWait.SpinUntil(()=>(bool)typeof(Fichero).GetField("_StartupCancelled",hidden).GetValue(file),1000),"stop marks the pending retry cancelled");
+                    release.Set();Check(stop.Wait(5000),"stopping a pending retry completes promptly");
+                    Check(pump.Until(()=>typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null),"cancelled retry startup worker completes");
+                    Check(file.EstadoDescarga==Estado.EnCola&&!fd.IsBusy&&cancelled==1,"cancelled retry remains queueable and notifies removal callbacks");
+                }finally{release.Set();}
+            }
+        }finally{typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,old);SynchronizationContext.SetSynchronizationContext(previous);}
+        Print("refreshed_retry","expired URL replaced; preserved and full-reset retries passed");
+    }
+    static void StartupLifecycleCases() {
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        var workerType=typeof(Fichero).GetNestedType("DownloadWorker",BindingFlags.NonPublic);
+        var worker=(System.ComponentModel.BackgroundWorker)Activator.CreateInstance(workerType,new object[]{cfg,1});
+        var file=new Fichero();
+        typeof(Fichero).GetField("_bgArranque",hidden).SetValue(file,worker);
+        file.Dispose();
+        InvokePrivate(file,"bgArranque_RunWorkerCompleted",worker,new System.ComponentModel.RunWorkerCompletedEventArgs(null,null,false));
+        file.Start(ref cfg,1);
+        Check(typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null,"late startup completion and start cannot revive a disposed task");
+    }
+    static void SingleTaskResumeCases() {
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        cfg.DownloadSchedule=new DownloadScheduleSettings();
+        using(var file=new Fichero()) {
+            file.FileID="THROTTLE";file.NombreFichero="throttle.bin";file.EstadoDescarga=Estado.Descargando;
+            var main=QueueFixture(file);main.Config=cfg;
+            typeof(Main).GetField("scheduleController",hidden).SetValue(main,new DownloadScheduleController());
+            typeof(Main).GetField("scheduleActionLock",hidden).SetValue(main,new object());
+            var fd=new FileDownloader(false);typeof(FileDownloader).GetField("m_busy",hidden).SetValue(fd,true);
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+            fd.Paused+=(s,e)=>InvokePrivate(file,"downloader_Paused",s,e);
+            fd.Resumed+=(s,e)=>InvokePrivate(file,"downloader_Started",s,e);
+            var controller=ThrottledStreamController.GetController();controller.SetMaxGlobalSpeed(0);
+            var target=new ThrottledStream(new MemoryStream(new byte[32768]));
+            var other=new ThrottledStream(new MemoryStream(new byte[32768]));
+            controller.SetMaxSpeed(file.FileID,8192);controller.AddStream(ref target,file.FileID);controller.AddStream(ref other,"OTHER");
+            try {
+                byte[] buffer=new byte[8192];target.Read(buffer,0,buffer.Length);
+                InvokePrivate(main,"PonerFicheroEnPausa",file);controller.Abortar("OTHER");
+                InvokePrivate(main,"ForzarDescarga",file);
+                var abort=typeof(ThrottledStream).GetField("_abort",hidden);
+                Check(!(bool)abort.GetValue(target)&&(bool)abort.GetValue(other),"single-task resume restores only its own throttle streams");
+                var timer=System.Diagnostics.Stopwatch.StartNew();target.Read(buffer,0,4096);
+                Check(timer.ElapsedMilliseconds>=350,"single-task resume still enforces the configured speed limit");
+                main.PauseDownload();InvokePrivate(main,"PonerFicherosEnPausa");
+                Check(file.EstadoDescarga==Estado.Pausado,"global pause reached the running task");
+                InvokePrivate(main,"ForzarDescarga",file);InvokePrivate(main,"PonerFicherosEnPausa");
+                Check(file.EstadoDescarga==Estado.Descargando&&file.DescargaIndividual,"forced resume survives the next global-pause refresh");
+                Check(typeof(Main).GetField("EstadoAplicacion",hidden).GetValue(main).ToString()=="Pausa","forcing one task leaves the global queue paused");
+            }finally{controller.RemoveStream(ref target);controller.RemoveStream(ref other);controller.RemoveId(file.FileID);controller.RemoveId("OTHER");target.Dispose();other.Dispose();typeof(FileDownloader).GetField("m_busy",hidden).SetValue(fd,false);controller.Continuar();}
+        }
+        Print("single_task_resume","throttle restored; forced task stays active under global pause");
+    }
+    static void SpeedLimitParsingCases() {
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            foreach(string invalid in new[]{"NaN","Infinity","-Infinity","1e20","1e309","-1","0","0.0001","",null,"invalid"}) {
+                object[] args={invalid,123};Check(!(bool)parse.Invoke(null,args)&&(int)args[1]==0,"invalid speed rejected without overflow: "+invalid);
+            }
+            foreach(var value in new[]{new[]{"0.5","512"},new[]{"1.46484375","1500"},new[]{"2.5e-1","256"},new[]{"0.0005","1"}}) {
+                object[] args={value[0],0};Check((bool)parse.Invoke(null,args)&&(int)args[1]==int.Parse(value[1]),"fractional speed preserves MB-to-KB conversion: "+value[0]);
+            }
+            object[] maximum={(int.MaxValue/1024.0).ToString("R",System.Globalization.CultureInfo.InvariantCulture),0};
+            Check((bool)parse.Invoke(null,maximum)&&(int)maximum[1]==int.MaxValue,"maximum representable limit does not overflow");
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            object[] french={"0,5",0};Check((bool)parse.Invoke(null,french)&&(int)french[1]==512,"localized decimal comma remains supported");
+        }finally{Thread.CurrentThread.CurrentCulture=previous;}
+    }
+    static void SevenZipCancelCase() {
+        Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);
+        object extractor=Activator.CreateInstance(type,new object[]{Path.Combine(root,"cancel.7z"),root,""});
+        string marker=Path.Combine(root,"cancel-child.pid");
+        var run=type.GetMethod("RunSevenZip",hidden);
+        var task=System.Threading.Tasks.Task.Run(()=>{
+            try{run.Invoke(extractor,new object[]{Assembly.GetExecutingAssembly().Location,"--sevenzip-cancel-child \""+bin+"\" \""+marker+"\"",true});return (Exception)null;}
+            catch(Exception ex){return Unwrap(ex);}
+        });
+        int pid=0;
+        try {
+            var until=DateTime.UtcNow.AddSeconds(5);
+            while(pid==0&&DateTime.UtcNow<until){try{if(File.Exists(marker))int.TryParse(File.ReadAllText(marker),out pid);}catch(IOException){}Thread.Sleep(10);}
+            Check(pid>0,"7z cancellation helper started");
+            var timer=System.Diagnostics.Stopwatch.StartNew();type.GetField("CancelRequested").SetValue(extractor,true);
+            Check(task.Wait(5000)&&task.Result is OperationCanceledException,"cancellation interrupts a live CLI with open stdout/stderr");
+            bool stopped;
+            try{using(var child=System.Diagnostics.Process.GetProcessById(pid))stopped=child.HasExited;}catch(ArgumentException){stopped=true;}
+            Check(stopped,"cancelled CLI child has stopped");
+            Print("sevenzip_cancel","cancelMs="+timer.ElapsedMilliseconds);
+        }
+        finally{
+            if(pid>0)try{using(var child=System.Diagnostics.Process.GetProcessById(pid)){if(!child.HasExited)child.Kill();}}catch(ArgumentException){}
+            task.Wait(5000);
+        }
+    }
+    static void PasswordPropertiesCases() {
+        foreach(bool packageMode in new[]{false,true})using(var file=new Fichero()) {
+            file.FileID="PASSWORD";file.NombreFichero="archive.zip";file.RutaLocal=root;
+            file.ExtraccionFicheroAutomatica=true;file.ExtraccionFicheroPassword="old-password";
+            var pack=new Paquete {Nombre="password-fixture",RutaLocal=root,ExtraccionFicheroAutomatica=true,ExtraccionFicheroPassword="old-password"};pack.AgregarFichero(file);
+            var packages=new List<Paquete>{pack};
+            var serialize=typeof(Paquete).GetMethod("GuardarXML",shared,null,new[]{typeof(List<Paquete>),typeof(bool)},null);
+            var before=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false});
+            using(var dialog=new PropiedadesDescarga()) {
+                dialog.Descarga=packageMode?(IDescarga)pack:file;
+                InvokePrivate(dialog,"PropiedadesDescarga_Load",null,EventArgs.Empty);
+                dialog.Controls.Find("txtPassword",true).Single().Text="new-password";
+                InvokePrivate(dialog,"btnGuardar_Click",null,EventArgs.Empty);
+            }
+            var after=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false});
+            Check(before.OuterXml!=after.OuterXml,"password-only properties edit marks queue dirty: package="+packageMode);
+            Check(after.OuterXml==((System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false})).OuterXml,"password fingerprint is stable between unchanged saves");
+            Check(!after.OuterXml.Contains("new-password")&&!after.OuterXml.Contains("old-password"),"comparison snapshot does not store plaintext passwords");
+            var saved=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,true});
+            Check(!saved.OuterXml.Contains("PasswordHash"),"in-memory password fingerprints are not written to disk");
+            string path=Path.Combine(root,"password-"+packageMode+".xml");saved.Save(path);
+            var read=new System.Xml.XmlDocument();read.Load(path);var restored=new Paquete();restored.CargarXML(read.DocumentElement.FirstChild);
+            try{
+                Check(restored.ListaFicheros[0].ExtraccionFicheroPassword=="new-password","edited extraction password survives disk round trip");
+                if(packageMode)Check(restored.ExtraccionFicheroPassword=="new-password","package password survives disk round trip");
+            }finally{foreach(var f in restored.ListaFicheros)f.Dispose();}
+            file.ExtraccionFicheroPassword="";pack.ExtraccionFicheroPassword="";
+            Check(after.OuterXml!=((System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false})).OuterXml,"clearing passwords also marks the queue dirty");
         }
     }
     static void InstanceBufferMutex() {
@@ -562,6 +899,7 @@ public class RegressionTests {
                 foreach(string name in languageFields)typeof(Language).GetField(name,shared).SetValue(null,lang);
                 typeof(Language).GetField("culture",shared).SetValue(null,System.Globalization.CultureInfo.GetCultureInfo("zh-CN"));
                 FirstOpenUiCases();
+                PasswordPropertiesCases();
                 var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
                 WarmInboxUiCases(config);
                 WorkbenchUiCases();
@@ -1319,6 +1657,8 @@ public class RegressionTests {
         public int FragmentNext;
         public ManualResetEvent ReleaseFragment;
         public string ApiResponse;
+        public int ApiCalls;
+        public ManualResetEvent ApiEntered,ApiRelease;
         public LocalFileServer(byte[] content) {
             data=content;
             var probe=new TcpListener(IPAddress.Loopback,0); probe.Start(); int port=((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
@@ -1332,9 +1672,15 @@ public class RegressionTests {
                     var c=l.GetContext();
                     string r=c.Request.Headers["Range"];
                     if(c.Request.HttpMethod=="POST" && ApiResponse!=null) {
+                        Interlocked.Increment(ref ApiCalls);
                         c.Request.InputStream.CopyTo(Stream.Null);
+                        if(ApiEntered!=null)ApiEntered.Set();
+                        if(ApiRelease!=null)ApiRelease.WaitOne(10000);
                         byte[] json=Encoding.UTF8.GetBytes(ApiResponse); c.Response.ContentLength64=json.Length;
                         c.Response.OutputStream.Write(json,0,json.Length); c.Response.Close(); continue;
+                    }
+                    if(c.Request.Url.AbsolutePath.EndsWith("/expired",StringComparison.Ordinal)) {
+                        c.Response.StatusCode=403;c.Response.Close();continue;
                     }
                     if(c.Request.HttpMethod=="HEAD") { c.Response.ContentLength64=data.Length; c.Response.Close(); continue; }
                     long start=0,end=data.Length-1;

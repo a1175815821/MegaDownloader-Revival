@@ -253,6 +253,17 @@ Public Class ThrottledStreamController
         End SyncLock
     End Sub
 
+    Public Sub Continuar(Id As String)
+        If String.IsNullOrEmpty(Id) Then Throw New ArgumentNullException("Id")
+        SyncLock Mutex
+            If _htId.ContainsKey(Id) Then
+                For Each stream As ThrottledStream In _htId(Id)
+                    stream.Continue()
+                Next
+            End If
+        End SyncLock
+    End Sub
+
 #End Region
    
 End Class

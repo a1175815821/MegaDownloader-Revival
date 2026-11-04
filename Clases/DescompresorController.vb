@@ -1200,6 +1200,7 @@ Public Class DescompresorController
         ''' Honors CancelRequested by killing the process.
         ''' </summary>
         Private Function RunSevenZip(ByVal cliPath As String, ByVal arguments As String, ByVal checkCancel As Boolean) As String
+            If checkCancel AndAlso CancelRequested Then Throw New OperationCanceledException("Extraction cancelled.")
             Dim psi As New ProcessStartInfo()
             psi.FileName = cliPath
             psi.Arguments = arguments
@@ -1208,9 +1209,8 @@ Public Class DescompresorController
             psi.RedirectStandardOutput = True
             psi.RedirectStandardError = True
             ' Give the CLI an immediate EOF on stdin. A header-encrypted archive with no
-            ' password configured makes 7-Zip prompt for one; with an inherited (possibly
-            ' still open) stdin it would block forever, and because stdout is drained with
-            ' ReadToEnd before the cancellation loop below, the cancel check would never run.
+            ' password configured makes 7-Zip prompt for one; an inherited open stdin
+            ' would keep it waiting for input that this background job cannot provide.
             psi.RedirectStandardInput = True
             psi.StandardOutputEncoding = System.Text.Encoding.UTF8
             psi.StandardErrorEncoding = System.Text.Encoding.UTF8
@@ -1226,12 +1226,9 @@ Public Class DescompresorController
                 proc.Start()
                 proc.StandardInput.Close()
 
-                ' Read stderr asynchronously to avoid the classic pipe deadlock:
-                ' if 7-Zip fills the stderr buffer while we are still blocked on
-                ' ReadToEnd(stdout), the child stalls and both sides wait forever.
+                ' Drain both pipes while waiting, so output cannot block cancellation.
+                Dim stdoutTask As Threading.Tasks.Task(Of String) = proc.StandardOutput.ReadToEndAsync()
                 Dim stderrTask As Threading.Tasks.Task(Of String) = proc.StandardError.ReadToEndAsync()
-                Dim stdout As String = proc.StandardOutput.ReadToEnd()
-                Dim stderr As String = stderrTask.Result
 
                 ' Cooperative cancellation while waiting for the CLI to finish.
                 While Not proc.WaitForExit(250)
@@ -1241,9 +1238,17 @@ Public Class DescompresorController
                         Catch
                         End Try
                         proc.WaitForExit(5000)
+                        Try
+                            Threading.Tasks.Task.WaitAll(New Threading.Tasks.Task() {stdoutTask, stderrTask}, 5000)
+                        Catch
+                            ' Pipe closure must not hide the cancellation result.
+                        End Try
                         Throw New OperationCanceledException("Extraction cancelled.")
                     End If
                 End While
+
+                Dim stdout As String = stdoutTask.GetAwaiter().GetResult()
+                Dim stderr As String = stderrTask.GetAwaiter().GetResult()
 
                 If proc.ExitCode <> 0 AndAlso proc.ExitCode <> 1 Then
                     Dim tail As String = (stderr & " " & stdout).Trim()

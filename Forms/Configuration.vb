@@ -490,24 +490,10 @@ Public Class Configuration
             Exit Sub
         End If
 
-        ' P1-2:限速框显示的是 MB/s 小数(如 0.5/1.46484375),此前 Integer.TryParse 必失败,
-        ' 0.5MB/s 存不进。改按 Double 解析再 *1024 四舍五入回 KB。
-        Dim LimiteVelocidadMB As Double = 0
-        Double.TryParse(txtLimiteVelocidadKBs.Text, LimiteVelocidadMB)
         Dim LimiteVelocidad As Integer = 0
-        If Not chkLimitarVelocidad.Checked Then
-            LimiteVelocidad = 0
-        ElseIf LimiteVelocidadMB <= 0 Or String.IsNullOrEmpty(txtLimiteVelocidadKBs.Text) Then
+        If chkLimitarVelocidad.Checked AndAlso Not Utils.TryParseSpeedLimit(txtLimiteVelocidadKBs.Text, LimiteVelocidad) Then
             MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
-        Else
-            Dim asLong As Long = CLng(Math.Round(LimiteVelocidadMB * 1024.0))
-            If asLong <= 0 Then
-                MessageBox.Show(Language.GetText("Invalid speed limit"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Exit Sub
-            End If
-            If asLong > Integer.MaxValue Then asLong = Integer.MaxValue
-            LimiteVelocidad = CInt(asLong)
         End If
 
         Dim servidorWebPuerto As Integer = 0
