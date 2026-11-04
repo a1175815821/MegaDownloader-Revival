@@ -133,11 +133,30 @@ Public Class Language
         Dim builtin As Dictionary(Of String, XmlDocument) = builtinPacks.Value
         Dim builtinDirectory As String = Path.Combine(languageDirectory, "Builtin")
         Directory.CreateDirectory(builtinDirectory)
+        ' P-16: the built-in packs only change when the assembly changes. The old
+        ' loop serialised all 10 XmlDocuments and read back all 10 Builtin files on
+        ' EVERY startup. Gate it on the module MVID (changes on every rebuild, so a
+        ' new binary always re-syncs); user-editable packs are still checked each run.
+        Dim stampPath As String = Path.Combine(builtinDirectory, ".resource-stamp")
+        Dim stamp As String = GetType(Language).Assembly.ManifestModule.ModuleVersionId.ToString("N")
+        Dim needBuiltinSync As Boolean = True
+        Try
+            needBuiltinSync = Not File.Exists(stampPath) OrElse File.ReadAllText(stampPath) <> stamp
+        Catch ex As Exception
+            needBuiltinSync = True
+        End Try
         For Each entry As KeyValuePair(Of String, XmlDocument) In builtin
-            SaveBuiltinIfChanged(entry.Value, Path.Combine(builtinDirectory, entry.Key & ".xml"))
+            If needBuiltinSync Then SaveBuiltinIfChanged(entry.Value, Path.Combine(builtinDirectory, entry.Key & ".xml"))
             Dim userFile As String = Path.Combine(languageDirectory, entry.Key & ".xml")
             If Not File.Exists(userFile) Then entry.Value.Save(userFile)
         Next
+        If needBuiltinSync Then
+            Try
+                File.WriteAllText(stampPath, stamp)
+            Catch ex As Exception
+                Log.WriteDebug("Language resource stamp could not be written: " & Log.SafeException(ex))
+            End Try
+        End If
 
         Dim users As Dictionary(Of String, XmlDocument) = LoadUserPacks(languageDirectory)
         Dim selected As String = ResolveLanguageCode(preference, systemLanguage, builtin.Keys.Concat(users.Keys))
@@ -161,6 +180,51 @@ Public Class Language
         End Using
     End Sub
 
+    ''' <summary>P-15: GetText used to build an XPath string and scan the whole
+    ''' XmlDocument three times per call (12-15 calls per 430ms tick). Cache the
+    ''' key/value map per XmlDocument instance instead. Keyed by *reference*, so
+    ''' restoring the original LanguageFile* fields (as the regression harness does)
+    ''' transparently restores the matching cache — no stale global dictionaries.
+    ''' User-edited packs get a fresh XmlDocument on reload, hence a fresh map.</summary>
+    Private NotInheritable Class XmlDocumentReferenceComparer
+        Implements IEqualityComparer(Of XmlDocument)
+
+        Public Overloads Function Equals(x As XmlDocument, y As XmlDocument) As Boolean Implements IEqualityComparer(Of XmlDocument).Equals
+            Return Object.ReferenceEquals(x, y)
+        End Function
+
+        Public Overloads Function GetHashCode(obj As XmlDocument) As Integer Implements IEqualityComparer(Of XmlDocument).GetHashCode
+            Return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj)
+        End Function
+    End Class
+
+    Private Shared ReadOnly textMaps As New System.Collections.Concurrent.ConcurrentDictionary(Of XmlDocument, Dictionary(Of String, String))(New XmlDocumentReferenceComparer())
+
+    Private Shared Function BuildTextMap(pack As XmlDocument) As Dictionary(Of String, String)
+        Dim map As New Dictionary(Of String, String)(StringComparer.Ordinal)
+        If pack Is Nothing OrElse pack.DocumentElement Is Nothing Then Return map
+        For Each node As XmlNode In pack.DocumentElement.SelectNodes("Text")
+            Dim keyAttr As XmlAttribute = node.Attributes("key")
+            If keyAttr Is Nothing OrElse String.IsNullOrEmpty(keyAttr.Value) Then Continue For
+            Dim key As String = keyAttr.Value
+            ' SelectSingleNode returned the first match; empty text was treated as missing.
+            If Not map.ContainsKey(key) AndAlso Not String.IsNullOrEmpty(node.InnerText) Then
+                map(key) = node.InnerText
+            End If
+        Next
+        Return map
+    End Function
+
+    Private Shared Function GetTextMap(pack As XmlDocument) As Dictionary(Of String, String)
+        If pack Is Nothing Then Return Nothing
+        Dim map As Dictionary(Of String, String) = Nothing
+        If Not textMaps.TryGetValue(pack, map) Then
+            map = BuildTextMap(pack)
+            map = textMaps.GetOrAdd(pack, map)
+        End If
+        Return map
+    End Function
+
     Private Shared Function ProcessMsg(ByVal msg As String) As String
 #If MSD Then
         If String.IsNullOrEmpty(msg) Then Return String.Empty
@@ -172,41 +236,67 @@ Public Class Language
 
 
     Public Shared Function GetText(key As String) As String
+        If key Is Nothing Then Return String.Empty
+        Dim text As String = Nothing
         ' 1) Current language on disk (may be user-customized)
-        Dim nodo As XmlNode = Nothing
-        If LanguageFileDisk IsNot Nothing Then
-            nodo = LanguageFileDisk.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
-            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
-        End If
-
-        Log.WriteDebug("Translation not found on disk: " & key)
+        Dim map As Dictionary(Of String, String) = GetTextMap(LanguageFileDisk)
+        If map IsNot Nothing AndAlso map.TryGetValue(key, text) Then Return ProcessMsg(text)
 
         ' 2) Built-in pack for current language
-        If LanguageFileInternal IsNot Nothing Then
-            nodo = LanguageFileInternal.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
-            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
-        End If
+        map = GetTextMap(LanguageFileInternal)
+        If map IsNot Nothing AndAlso map.TryGetValue(key, text) Then Return ProcessMsg(text)
 
         ' 3) Stable fallback to en-US
-        If LanguageFileEnUs IsNot Nothing AndAlso Not Object.ReferenceEquals(LanguageFileEnUs, LanguageFileInternal) Then
-            nodo = LanguageFileEnUs.DocumentElement.SelectSingleNode("Text[@key='" & key & "']")
-            If nodo IsNot Nothing AndAlso Not String.IsNullOrEmpty(nodo.InnerText) Then Return ProcessMsg(nodo.InnerText)
+        If Not Object.ReferenceEquals(LanguageFileEnUs, LanguageFileInternal) Then
+            map = GetTextMap(LanguageFileEnUs)
+            If map IsNot Nothing AndAlso map.TryGetValue(key, text) Then Return ProcessMsg(text)
         End If
 
-        Log.WriteDebug("Translation not found on disk and internal lang file: " & key)
+        Log.WriteDebug("Translation not found: " & key)
         Return ProcessMsg(key)
     End Function
 
+    ' P-16: GetAvailableLanguages used to re-parse every user language XML on each
+    ' settings-window open. Cache the result keyed by file path + write time, so new
+    ' or edited packs are still picked up without any XML parsing on cache hits.
+    Private Shared ReadOnly _availableLanguagesLock As New Object()
+    Private Shared _availableLanguagesCache As Generic.Dictionary(Of String, String) = Nothing
+    Private Shared _availableLanguagesStamp As String = Nothing
+
+    Private Shared Function GetUserPackStamp(directory As String) As String
+        Dim sb As New System.Text.StringBuilder()
+        If Not IO.Directory.Exists(directory) Then Return String.Empty
+        For Each file As String In IO.Directory.GetFiles(directory, "*.xml").OrderBy(Function(value) value, StringComparer.OrdinalIgnoreCase)
+            Try
+                sb.Append(IO.Path.GetFileName(file)).Append(":"c).Append(IO.File.GetLastWriteTimeUtc(file).Ticks).Append(";"c)
+            Catch ex As Exception
+                Return Nothing ' force a full refresh when a file cannot be inspected
+            End Try
+        Next
+        Return sb.ToString()
+    End Function
+
     Public Shared Function GetAvailableLanguages() As Generic.Dictionary(Of String, String)
-        Dim Lista As New Generic.Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
-        For Each entry As KeyValuePair(Of String, XmlDocument) In builtinPacks.Value.OrderBy(Function(value) value.Key, StringComparer.OrdinalIgnoreCase)
-            Lista(entry.Key) = entry.Value.DocumentElement.GetAttribute("name")
-        Next
-        For Each entry As KeyValuePair(Of String, XmlDocument) In LoadUserPacks(GetLanguageDirectory())
-            Dim name As String = entry.Value.DocumentElement.GetAttribute("name")
-            Lista(entry.Key) = If(String.IsNullOrWhiteSpace(name), entry.Key, name)
-        Next
-        Return Lista
+        SyncLock _availableLanguagesLock
+            Dim directory As String = GetLanguageDirectory()
+            Dim stamp As String = GetUserPackStamp(directory)
+            If stamp IsNot Nothing AndAlso _availableLanguagesCache IsNot Nothing AndAlso
+               String.Equals(stamp, _availableLanguagesStamp, StringComparison.Ordinal) Then
+                Return New Generic.Dictionary(Of String, String)(_availableLanguagesCache, StringComparer.OrdinalIgnoreCase)
+            End If
+
+            Dim Lista As New Generic.Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+            For Each entry As KeyValuePair(Of String, XmlDocument) In builtinPacks.Value.OrderBy(Function(value) value.Key, StringComparer.OrdinalIgnoreCase)
+                Lista(entry.Key) = entry.Value.DocumentElement.GetAttribute("name")
+            Next
+            For Each entry As KeyValuePair(Of String, XmlDocument) In LoadUserPacks(directory)
+                Dim name As String = entry.Value.DocumentElement.GetAttribute("name")
+                Lista(entry.Key) = If(String.IsNullOrWhiteSpace(name), entry.Key, name)
+            Next
+            _availableLanguagesCache = New Generic.Dictionary(Of String, String)(Lista, StringComparer.OrdinalIgnoreCase)
+            _availableLanguagesStamp = stamp
+            Return Lista
+        End SyncLock
     End Function
 
 

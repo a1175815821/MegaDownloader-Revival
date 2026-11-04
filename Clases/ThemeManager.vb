@@ -289,11 +289,26 @@ Public NotInheritable Class ThemeManager
         ApplyThemeToToolStrip(cms, CurrentColors())
     End Sub
 
+    ''' <summary>P-12: GetFields() over a whole form type on every theme apply is pure
+    ''' reflection overhead; the field layout of a given Form type never changes.
+    ''' Cache by type; the caller still filters by field type.</summary>
+    Private Shared ReadOnly _formFieldsCache As New System.Collections.Concurrent.ConcurrentDictionary(Of Type, Reflection.FieldInfo())()
+
+    Private Shared Function GetCachedFormFields(form As Form) As Reflection.FieldInfo()
+        Dim t As Type = form.GetType()
+        Dim fields As Reflection.FieldInfo() = Nothing
+        If Not _formFieldsCache.TryGetValue(t, fields) Then
+            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public Or Reflection.BindingFlags.NonPublic
+            fields = t.GetFields(flags)
+            fields = _formFieldsCache.GetOrAdd(t, fields)
+        End If
+        Return fields
+    End Function
+
     Private Shared Sub ApplyThemeToFormContextMenus(form As Form, colors As Dictionary(Of String, Color))
         If form Is Nothing Then Return
         Try
-            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public Or Reflection.BindingFlags.NonPublic
-            For Each fi As Reflection.FieldInfo In form.GetType().GetFields(flags)
+            For Each fi As Reflection.FieldInfo In GetCachedFormFields(form)
                 If GetType(ContextMenuStrip).IsAssignableFrom(fi.FieldType) Then
                     Dim cms = TryCast(fi.GetValue(form), ContextMenuStrip)
                     If cms IsNot Nothing Then
@@ -386,8 +401,7 @@ Public NotInheritable Class ThemeManager
     Private Shared Sub ApplyThemeToFormToolTips(form As Form, colors As Dictionary(Of String, Color))
         If form Is Nothing Then Return
         Try
-            Dim flags = Reflection.BindingFlags.Instance Or Reflection.BindingFlags.Public Or Reflection.BindingFlags.NonPublic
-            For Each fi As Reflection.FieldInfo In form.GetType().GetFields(flags)
+            For Each fi As Reflection.FieldInfo In GetCachedFormFields(form)
                 If GetType(ToolTip).IsAssignableFrom(fi.FieldType) Then
                     ApplyThemeToToolTip(TryCast(fi.GetValue(form), ToolTip), colors)
                 End If

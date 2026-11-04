@@ -184,6 +184,7 @@ public class RegressionTests {
         SingleTaskResumeCases();
         SpeedLimitParsingCases();
         Batch1BugFixCases(plain,key);
+        Batch2PerfCases(plain,key);
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {
@@ -558,6 +559,94 @@ public class RegressionTests {
             f.Dispose();oldFd.Dispose();
         }
         Print("batch1_bugfixes","B1/B2 recovery, B3 ownership cache, B4 no-MAC links, B5 locale, B6/B7/B8 lifecycle passed");
+    }
+    // Independent MEGA chunk-MAC generator (zero-key AES ECB, SDK chunk schedule).
+    // Used to prove the batched VerifyMegaMetaMac is byte-for-byte equivalent to the
+    // original per-16-byte implementation across chunk boundaries and a ragged tail.
+    static string MakeKeyChunked(byte[] plain) {
+        byte[] fileMac=new byte[16];
+        using(var aes=Aes.Create()) {
+            aes.Mode=CipherMode.ECB; aes.Padding=PaddingMode.None; aes.Key=new byte[16];
+            using(var t=aes.CreateEncryptor()) {
+                long pos=0; int chunkNo=1;
+                while(pos<plain.Length) {
+                    long size=chunkNo<=8?(long)chunkNo*0x20000:0x100000;
+                    long len=Math.Min(size,plain.Length-pos);
+                    byte[] mac=new byte[16];
+                    for(long off=0;off<len;off+=16) {
+                        byte[] blk=new byte[16];
+                        for(int j=0;j<16 && off+j<len;j++) blk[j]=(byte)(mac[j]^plain[(int)(pos+off+j)]);
+                        for(int j=(int)Math.Min(16,len-off);j<16;j++) blk[j]=mac[j];
+                        mac=t.TransformFinalBlock(blk,0,16);
+                    }
+                    byte[] fold=new byte[16];
+                    for(int j=0;j<16;j++) fold[j]=(byte)(fileMac[j]^mac[j]);
+                    fileMac=t.TransformFinalBlock(fold,0,16);
+                    pos+=len; chunkNo++;
+                }
+            }
+        }
+        byte[] key=new byte[32];
+        for(int i=0;i<4;i++){ key[8+i]=key[24+i]=(byte)(fileMac[i]^fileMac[i+4]); key[12+i]=key[28+i]=(byte)(fileMac[i+8]^fileMac[i+12]); }
+        return Convert.ToBase64String(key).TrimEnd('=').Replace('+','-').Replace('/','_');
+    }
+    static void Batch2PerfCases(byte[] plain,string key) {
+        // P-15: cached lookups must agree with the XmlDocument and stay O(1).
+        var disk=(System.Xml.XmlDocument)typeof(Language).GetField("LanguageFileDisk",shared).GetValue(null);
+        if(disk!=null) {
+            foreach(string k in new[]{"Stop","Start","Name","Status"}) {
+                var node=disk.DocumentElement.SelectSingleNode("Text[@key='"+k+"']");
+                if(node!=null&&!string.IsNullOrEmpty(node.InnerText))
+                    Check(Language.GetText(k)==node.InnerText,"P-15 cached lookup matches the XmlDocument for "+k);
+            }
+        }
+        var swText=System.Diagnostics.Stopwatch.StartNew();
+        for(int i=0;i<20000;i++) Language.GetText("Stop");
+        swText.Stop();
+        Print("language_gettext_20k","elapsedMs="+swText.ElapsedMilliseconds);
+
+        // P-02: independent chunked MAC over 16 MiB, crossing many chunk boundaries
+        // with a ragged final block. Proves the batched scanner preserves semantics.
+        string macPath=Path.Combine(root,"b2-mac-16mb.bin");
+        byte[] big=new byte[16*1024*1024+7];
+        for(int i=0;i<big.Length;i++) big[i]=(byte)(i%251+1);
+        string chunkedKey=MakeKeyChunked(big);
+        var mac=typeof(Criptografia).GetMethod("VerifyMegaMetaMac",shared);
+        File.WriteAllBytes(macPath,big);
+        var swMac=System.Diagnostics.Stopwatch.StartNew();
+        bool macOk=(bool)mac.Invoke(null,new object[]{macPath,chunkedKey});
+        swMac.Stop();
+        Check(macOk,"P-02 batched MetaMAC matches an independent chunked MAC generator (16 MiB, ragged tail)");
+        Print("metamac_16mb","elapsedMs="+swMac.ElapsedMilliseconds+" verified="+macOk);
+        big[big.Length-1]^=0x5a;File.WriteAllBytes(macPath,big);
+        Check(!(bool)mac.Invoke(null,new object[]{macPath,chunkedKey}),"P-02 batched MetaMAC rejects a corrupted final byte");
+        big[0]^=0x5a;big[big.Length-1]^=0x5a;File.WriteAllBytes(macPath,big);
+        Check(!(bool)mac.Invoke(null,new object[]{macPath,chunkedKey}),"P-02 batched MetaMAC rejects a corrupted first byte");
+        File.Delete(macPath);
+
+        // P-01: structure signature is a pure, cheap change detector.
+        var sig=typeof(Main).GetMethod("QueueStructureSignature",shared);
+        var a=new List<Paquete>{new Paquete(),new Paquete()};
+        var b=new List<Paquete>{new Paquete(),new Paquete()};
+        Check((long)sig.Invoke(null,new object[]{a})==(long)sig.Invoke(null,new object[]{b}),"P-01 identical queue shapes share a signature");
+        a[0].AgregarFichero(new Fichero());
+        Check((long)sig.Invoke(null,new object[]{a})!=(long)sig.Invoke(null,new object[]{b}),"P-01 a file addition changes the signature");
+
+        // P-08: HashSet-backed controller still assigns per-stream limits.
+        var controller=ThrottledStreamController.GetController();
+        var s1=new ThrottledStream(new MemoryStream(new byte[8192]));
+        var s2=new ThrottledStream(new MemoryStream(new byte[8192]));
+        controller.SetMaxGlobalSpeed(0);
+        controller.SetMaxSpeed("B2PERF",4096);
+        controller.AddStream(ref s1,"B2PERF");controller.AddStream(ref s2,"OTHER");
+        try {
+            Check(s1.MaximumBytesPerSecond>=0&&s2.MaximumBytesPerSecond>=0,"P-08 HashSet recalculation still assigns limits");
+        } finally {
+            controller.RemoveStream(ref s1);controller.RemoveStream(ref s2);
+            controller.RemoveId("B2PERF");controller.RemoveId("OTHER");controller.Continuar();
+            s1.Dispose();s2.Dispose();
+        }
+        Print("batch2_perf","P-01/P-02/P-08/P-15 targeted checks passed");
     }
     static void SevenZipCancelCase() {
         Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);

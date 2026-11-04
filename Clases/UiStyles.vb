@@ -147,12 +147,15 @@ Friend NotInheritable Class UiStyles
     End Sub
 
     Friend Shared Sub ResumeLayouts(controls As List(Of Control))
+        ' P-19: ResumeLayout(False) already restores layout state bottom-up.
+        ' The old second pass called PerformLayout() on EVERY control in the tree
+        ' (267 layout calls when the settings window opens), each of which walks
+        ' that control's children again. One forced layout on the root is enough
+        ' to materialise the final geometry.
         For index As Integer = controls.Count - 1 To 0 Step -1
             controls(index).ResumeLayout(False)
         Next
-        For index As Integer = controls.Count - 1 To 0 Step -1
-            controls(index).PerformLayout()
-        Next
+        If controls.Count > 0 Then controls(0).PerformLayout()
     End Sub
 
     ' Keep the designer geometry in logical pixels. Font selection is completed

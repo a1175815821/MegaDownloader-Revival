@@ -327,23 +327,26 @@ Public Class Paquete
             Exit Sub
         End If
 
-        Dim XML As XmlDocument = GuardarXML(ListaPaquetes, False)
+        ' P-01: one comparison snapshot + one encrypted write document instead of
+        ' three full serializations. The old third pass re-serialized after a
+        ' successful write; state mutated during the write is now caught by
+        ' Main.GuardarFicheroDescargas' structure signature, which schedules the
+        ' next save. No queue state can be lost either way (worst case one extra write).
+        Dim compareXml As XmlDocument = GuardarXML(ListaPaquetes, False)
+        Dim snapshotXml As String = compareXml.DocumentElement.OuterXml
 
-        If _LastSavedXML Is Nothing OrElse _LastSavedXML <> XML.DocumentElement.OuterXml Then
+        If _LastSavedXML Is Nothing OrElse _LastSavedXML <> snapshotXml Then
 
             Dim previousSaved As String = _LastSavedXML
 
             ' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
-            XML = GuardarXML(ListaPaquetes, True)
+            Dim XML As XmlDocument = GuardarXML(ListaPaquetes, True)
             Log.WriteDebug("Saving download list")
 
             SyncLock Mutex.GuardarDownloadList
             Try
                 AtomicFile.SaveXml(XML, Fichero)
-                _LastSavedXML = previousSaved
-                ' Update cache only after successful save (compare against unencrypted snapshot next time)
-                Dim compareXml As XmlDocument = GuardarXML(ListaPaquetes, False)
-                _LastSavedXML = compareXml.DocumentElement.OuterXml
+                _LastSavedXML = snapshotXml
             Catch ex As Exception
                 Log.WriteError("Error saving download list XML: " & Log.SafeException(ex))
                 _LastSavedXML = previousSaved

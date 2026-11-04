@@ -17,7 +17,9 @@ Public Class ThrottledStreamController
 
 #Region "Región privada"
     ' Streams activas
-    Private _StreamList As Generic.List(Of ThrottledStream)
+    ' P-08: Contains() is O(1) here. With List it made every recalculation O(N_streams^2),
+    ' and AddStream/RemoveStream fire once per chunk on reconnects.
+    Private _StreamList As Generic.HashSet(Of ThrottledStream)
     Private _htId As Generic.Dictionary(Of String, Generic.List(Of ThrottledStream))
 
     ' Velocidad máxima
@@ -26,7 +28,7 @@ Public Class ThrottledStreamController
 
     Private Sub New()
         SyncLock Mutex
-            _StreamList = New Generic.List(Of ThrottledStream)
+            _StreamList = New Generic.HashSet(Of ThrottledStream)
             _htId = New Generic.Dictionary(Of String, Generic.List(Of ThrottledStream))
             _htMaxSpeed = New Generic.Dictionary(Of String, Long)
             _globalMaxSpeed = 0
@@ -71,7 +73,7 @@ Public Class ThrottledStreamController
 
 
             Dim SpeedAsignada As Long = 0
-            Dim StreamsConLimiteIndividual As New Generic.List(Of ThrottledStream)
+            Dim StreamsConLimiteIndividual As New Generic.HashSet(Of ThrottledStream)
             For Each Id As String In _htMaxSpeed.Keys
                 MaxSpeed = _htMaxSpeed(Id)
                 If MaxSpeed > 0 And _htId.ContainsKey(Id) Then

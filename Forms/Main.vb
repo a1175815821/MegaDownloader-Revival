@@ -2644,14 +2644,31 @@ Public Class Main
         End SyncLock
     End Function
 
+    ' P-13: batch imports used to fire one Task (and one full-queue serialization)
+    ' per package. Coalesce bursts into a single background save; a request that
+    ' arrives while a save is running schedules exactly one more pass.
+    Private _importSavePending As Integer = 0
+    Private _importSaveRunning As Integer = 0
+
     Friend Sub SaveImportedQueueInBackground()
+        System.Threading.Interlocked.Exchange(_importSavePending, 1)
+        If System.Threading.Interlocked.CompareExchange(_importSaveRunning, 1, 0) <> 0 Then Return
         System.Threading.Tasks.Task.Run(Sub()
-                                            Try
-                                                GuardarFicheroDescargas()
-                                            Catch ex As Exception
-                                                Log.WriteError("Saving imported package failed: " & Log.SafeException(ex))
-                                            End Try
-                                        End Sub)
+            Try
+                Do
+                    System.Threading.Interlocked.Exchange(_importSavePending, 0)
+                    Try
+                        GuardarFicheroDescargas()
+                    Catch ex As Exception
+                        Log.WriteError("Saving imported package failed: " & Log.SafeException(ex))
+                    End Try
+                    ' Small coalescing window so consecutive imports share one pass.
+                    System.Threading.Thread.Sleep(150)
+                Loop While System.Threading.Interlocked.Exchange(_importSavePending, 0) = 1
+            Finally
+                System.Threading.Interlocked.Exchange(_importSaveRunning, 0)
+            End Try
+        End Sub)
     End Sub
 
     ''' <summary>在 UI 线程展开指定包(Web 推送走后台线程,必须编组;关闭中直接跳过)。</summary>
@@ -2673,12 +2690,37 @@ Public Class Main
     ''' Guarda en disco el listado de paquetes y descargas
     ''' </summary>
     ''' <remarks></remarks>
-    Private Sub GuardarFicheroDescargas()
-        SyncLock Mutex.ListaDescargas
-            Paquete.GuardarEnFichero(Me.ListaPaquetes)
-        End SyncLock
+    ''' <summary>P-01: only a shallow reference copy happens under the global queue
+    ''' lock. All serialization, DPAPI/AES work and disk IO now run outside it, so a
+    ''' 5000-file save no longer blocks the 430ms refresh loop and download workers.
+    ''' A structure signature taken before/after the write detects additions or
+    ''' removals during the write and schedules a corrective save, preventing a
+    ''' stale queue from becoming the persisted state.</summary>
+    Private Shared Function QueueStructureSignature(packages As Generic.List(Of Paquete)) As Long
+        If packages Is Nothing Then Return 0L
+        Dim sig As Long = CLng(packages.Count)
+        For Each p As Paquete In packages
+            sig = sig * 31L + If(p.ListaFicheros Is Nothing, 0L, CLng(p.ListaFicheros.Count))
+        Next
+        Return sig
+    End Function
 
+    Private Sub GuardarFicheroDescargas()
+        Dim snapshot As Generic.List(Of Paquete)
+        SyncLock Mutex.ListaDescargas
+            If Me.ListaPaquetes Is Nothing Then Return
+            snapshot = New Generic.List(Of Paquete)(Me.ListaPaquetes)
+        End SyncLock
+        Dim before As Long = QueueStructureSignature(snapshot)
+
+        Paquete.GuardarEnFichero(snapshot)
         UltimoGuardadoFichero = Now
+
+        Dim after As Long
+        SyncLock Mutex.ListaDescargas
+            after = QueueStructureSignature(Me.ListaPaquetes)
+        End SyncLock
+        If after <> before Then PeticionGuardadoFichero = Now
     End Sub
 
 
@@ -3066,6 +3108,11 @@ Public Class Main
                     For Each fic As Fichero In kv.Value
                         fic.ActualizarDatosDescarga()
                     Next
+                    ' P-03/P-18: package aggregation only walks its own files and reads
+                    ' plain fields; it does not need Mutex.ListaDescargas. Moving it out
+                    ' removes one full-table pass from inside the global lock.
+                    kv.Key.ActualizarDatosDescarga()
+                    VelocidadGlobal += kv.Key.DescargaVelocidadKBs()
                 Next
                 SyncLock Mutex.ListaDescargas
                     Me.NumDescargasActivas = 0
@@ -3073,7 +3120,6 @@ Public Class Main
                     Me.NumDescargasErroneas = 0
                     Me.NumDescargasCompletadas = 0
                     For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
-                        Dim paq As Paquete = kv.Key
                         For Each fic As Fichero In kv.Value
                             If fic.EstadoDescarga = Estado.Descargando Or _
                                fic.EstadoDescarga = Estado.CreandoLocal Or _
@@ -3091,8 +3137,6 @@ Public Class Main
 
                             End If
                         Next
-                        paq.ActualizarDatosDescarga()
-                        VelocidadGlobal += paq.DescargaVelocidadKBs()
                     Next
                 End SyncLock
 
@@ -3170,7 +3214,10 @@ Public Class Main
 
                 Flujo &= "Sleeping" & vbNewLine
 
-                System.Threading.Thread.Sleep(430)
+                ' P-03: keep the 430ms cadence while anything is downloading, but idle
+                ' queues (no active/creating/verifying tasks) only need a 1s heartbeat.
+                ' User actions still refresh immediately via RefreshListaDescargas(True).
+                System.Threading.Thread.Sleep(If(Me.NumDescargasActivas > 0, 430, 1000))
 
                 Flujo &= "Finishing cycle" & vbNewLine
 

@@ -156,7 +156,7 @@ Public Class ThrottledStream
         _start = New System.Diagnostics.Stopwatch
         _start.Start()
         _byteCount = 0
-        _abort = False
+        System.Threading.Volatile.Write(_abort, False)
     End Sub
 #End Region
 
@@ -245,11 +245,11 @@ Public Class ThrottledStream
     End Function
 
     Public Sub Abort()
-        Me._abort = True
+        System.Threading.Volatile.Write(Me._abort, True)
     End Sub
 
     Public Sub [Continue]()
-        Me._abort = False
+        System.Threading.Volatile.Write(Me._abort, False)
     End Sub
 #End Region
 
@@ -310,10 +310,10 @@ Public Class ThrottledStream
                         ' cannot jump, matching the monotonic _start used above.
                         Dim swSleep As System.Diagnostics.Stopwatch = System.Diagnostics.Stopwatch.StartNew()
                         While toSleep - swSleep.ElapsedMilliseconds > 150
-                            Thread.Sleep(100)
-                            If _abort Then Exit While
+                            Thread.Sleep(20)
+                            If System.Threading.Volatile.Read(_abort) Then Exit While
                         End While
-                        If Not _abort Then
+                        If Not System.Threading.Volatile.Read(_abort) Then
                             Dim remaining As Integer = CInt(toSleep - swSleep.ElapsedMilliseconds)
                             If remaining > 0 Then Thread.Sleep(remaining)
                         End If

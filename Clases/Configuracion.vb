@@ -50,7 +50,11 @@ Public Class Configuracion
 	''' 此时磁盘上的配置可能完好,内存里只能跑默认值——所有写盘必须跳过并保留
 	''' 旧文件,否则 GuardarXML 会把默认值落盘并把完好文件挤进 .bak 直至彻底覆盖。</summary>
 	Public LoadTransientError As Boolean
-	
+
+	''' <summary>P-21: 仅 CargaXMLInterno 期间有效。启动时 60+ 次 SelectSingleNode
+	''' 全文档查找改为一次遍历建字典后 O(1) 取值;方法结束即释放。</summary>
+	Private _loadedNodes As Generic.Dictionary(Of String, String) = Nothing
+
 	Public RutaDefecto As String
 	
 	Public ExtraerAutomaticamente As Boolean
@@ -209,6 +213,8 @@ Public Class Configuracion
 	' 之后才追加到 XML 的,所以账号增删改对周期性 GuardarXML(False) 完全不可见 —— P0-1 只能在
 	' 两处导入调用点补 GuardarXML(True) 兜底,陷阱本身还在。此字段让周期保存也能感知账号变更。
 	Private Shared _LastSavedELCAccountsHash As String = Nothing
+	' P-14: 上次真正重算账号指纹的时刻(节流用,不参与去重比较)。
+	Private Shared _lastELCHashUtc As Date = Date.MinValue
 	' P0-3 补充:GuardarXML 每 5s 被调用一次,瞬时锁状态下若每次都写 Warning,一小时 700+ 条。
 	' 只在首次真正拦截时记一条,状态本身仍由 LoadTransientError 决定(不影响行为)。
 	Private Shared _TransientSkipLogged As Boolean = False
@@ -350,7 +356,19 @@ Public Class Configuracion
 		Dim curWebPasswordPlain As String = If(ServidorWebPassword, "")
 		Dim curProxyPasswordPlain As String = If(ProxyPassword, "")
 		Dim curStreamingPasswordPlain As String = If(ServidorStreamingPassword, "")
-		Dim curELCAccountsHash As String = ELCAccountsHash()
+		' P-14: periodic saves (ForzarGuardado=False) used to walk every account,
+		' DPAPI-decrypt two SecureStrings and hash them every 5 seconds even when
+		' nothing changed. Reuse the fingerprint that was actually persisted, but
+		' force a real recomputation on explicit saves and at most once per minute,
+		' so a mutation that bypasses the settings dialog is still detected.
+		Dim curELCAccountsHash As String
+		If Not ForzarGuardado AndAlso _LastSavedELCAccountsHash IsNot Nothing AndAlso
+		   _LastSavedXML IsNot Nothing AndAlso (Now - _lastELCHashUtc).TotalSeconds < 60 Then
+			curELCAccountsHash = _LastSavedELCAccountsHash
+		Else
+			curELCAccountsHash = ELCAccountsHash()
+			_lastELCHashUtc = Now
+		End If
 		If _LastSavedXML Is Nothing OrElse _LastSavedXML <> Xml.DocumentElement.OuterXml OrElse _LastSavedWebPasswordPlain Is Nothing OrElse _LastSavedWebPasswordPlain <> curWebPasswordPlain OrElse _LastSavedProxyPasswordPlain Is Nothing OrElse _LastSavedProxyPasswordPlain <> curProxyPasswordPlain OrElse _LastSavedStreamingPasswordPlain Is Nothing OrElse _LastSavedStreamingPasswordPlain <> curStreamingPasswordPlain OrElse _LastSavedELCAccountsHash Is Nothing OrElse _LastSavedELCAccountsHash <> curELCAccountsHash Or ForzarGuardado Then
 
 			_LastSavedXML = Xml.DocumentElement.OuterXml
@@ -488,6 +506,15 @@ Public Class Configuracion
 			End If
 		End SyncLock
 		End If
+
+		' P-21: 一次遍历代替 60+ 次 XPath 全文档查找。只缓存顶层元素的
+		' 名称→InnerText;带路径/谓词的查询仍走原 SelectSingleNode。
+		_loadedNodes = New Generic.Dictionary(Of String, String)(StringComparer.Ordinal)
+		For Each node As XmlNode In Xml.DocumentElement.ChildNodes
+			If node.NodeType = XmlNodeType.Element AndAlso Not _loadedNodes.ContainsKey(node.Name) Then
+				_loadedNodes(node.Name) = node.InnerText
+			End If
+		Next
 
 		Idioma = Language.NormalizeLanguagePreference(LeerNodo(Xml, "Language", ""))
 		
@@ -661,6 +688,7 @@ Public Class Configuracion
 			_LastSavedELCAccountsHash = Nothing
 			Log.WriteInfo("Configuration recovered after the on-disk file was unlocked.")
 		End If
+		_loadedNodes = Nothing
 
 	End Sub
 
@@ -850,6 +878,12 @@ Public Class Configuracion
 	
 	
 	Private Function LeerNodo(ByRef DocumentoXML As XmlDocument, ByRef Path As String, ByVal ValorDefecto As String) As String
+		' P-21: simple top-level names come from the map built once per load.
+		If _loadedNodes IsNot Nothing AndAlso Path.IndexOf("/"c) < 0 AndAlso Path.IndexOf("["c) < 0 Then
+			Dim cached As String = Nothing
+			If _loadedNodes.TryGetValue(Path, cached) Then Return cached
+			Return ValorDefecto
+		End If
 		Dim nodo As XmlNode = DocumentoXML.DocumentElement.SelectSingleNode(Path)
 		If nodo Is Nothing Then
 			Return ValorDefecto

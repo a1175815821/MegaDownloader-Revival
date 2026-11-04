@@ -919,25 +919,28 @@ Public Class DescompresorController
 
                             Dim c As DescompresorController = DescompresorController.GetController
                             Try
+                                ' P-09: archive.Entries can be a lazy enumerator that re-parses
+                                ' the whole archive on every pass. Materialize it once and reuse.
+                                Dim entries As New Generic.List(Of IArchiveEntry)(archive.Entries)
                                 SyncLock Mutex
                                     c._TamanoTotal = 0
                                     c._FicActTamanoTotal = 0
                                     c._TamanoTotalExtraido = 0
                                     c._FicActExtraido = 0
                                     c._FicActNombre = ""
-                                    For Each entry As IArchiveEntry In archive.Entries
+                                    For Each entry As IArchiveEntry In entries
                                         c._TamanoTotal += entry.Size
                                     Next
-                                    EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), archive.Entries.Count())
+                                    EnsureExtractWithinQuota(c._TamanoTotal.GetValueOrDefault(), entries.Count)
                                 End SyncLock
 
-                                Dim entryKeys As New Generic.List(Of String)
-                                For Each entry As IArchiveEntry In archive.Entries
+                                Dim entryKeys As New Generic.List(Of String)(entries.Count)
+                                For Each entry As IArchiveEntry In entries
                                     entryKeys.Add(entry.Key)
                                 Next
                                 PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
 
-                                For Each entry As IArchiveEntry In archive.Entries
+                                For Each entry As IArchiveEntry In entries
                                     If CancelRequested Then
                                         Throw New OperationCanceledException("Extraction cancelled.")
                                     End If
