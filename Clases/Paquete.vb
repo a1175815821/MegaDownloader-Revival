@@ -212,7 +212,10 @@ Public Class Paquete
 
 
     Public Shared Function CargarDesdeFichero() As Generic.List(Of Paquete)
-        Dim Fichero As String = ObtenerRutaFicheroDescargas()
+        Return CargarDesdeRuta(ObtenerRutaFicheroDescargas())
+    End Function
+
+    Friend Shared Function CargarDesdeRuta(ByVal Fichero As String) As Generic.List(Of Paquete)
 
         Log.WriteDebug("Loading download list XML")
 
@@ -220,7 +223,7 @@ Public Class Paquete
         Dim recoveredFromBackup As Boolean = False
         Dim transientFailure As Boolean = False
         SyncLock Mutex.GuardarDownloadList
-            If Not AtomicFile.TryLoadXmlWithRetries(Fichero, XML, recoveredFromBackup, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
+            If Not AtomicFile.TryLoadXmlWithRecoveryInfo(Fichero, XML, recoveredFromBackup, transientFailure, _TransientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
                 ' P0-3:被瞬时占用 ≠ 损坏:置标记让 GuardarEnFichero 拒写,否则周期性
                 ' 落盘会把"空队列"写盘、把完好队列文件挤进 .bak 直至彻底覆盖。
                 _LoadTransientError = transientFailure
@@ -277,6 +280,7 @@ Public Class Paquete
     ''' <summary>P0-3:见 CargarDesdeFichero——加载因文件被瞬时占用而失败时,磁盘上的
     ''' 队列可能完好,写盘必须全部跳过(空列表落盘=用户队列被清空)。</summary>
     Private Shared _LoadTransientError As Boolean = False
+    Private Shared _TransientBlockedSource As String
     ' 同 Configuracion._TransientSkipLogged:GuardarEnFichero 每 5s 一次,只在首次拦截时记日志。
     Private Shared _TransientSkipLogged As Boolean = False
 
@@ -287,14 +291,18 @@ Public Class Paquete
         End Get
     End Property
 
-    ''' <summary>B2: 占用解除后重读主文件(不读 .bak),返回磁盘上的真实队列。
+    ''' <summary>Retries the locked source and returns the persisted queue.
     ''' 写保护在调用方把列表合并进活动队列之后由 CommitTransientRecovery 解除;
     ''' 仍被占用时返回 Nothing 且状态不变。</summary>
     Public Shared Function TryReloadAfterTransientLock() As Generic.List(Of Paquete)
         If Not _LoadTransientError Then Return Nothing
-        Dim Fichero As String = ObtenerRutaFicheroDescargas()
+        Return TryReloadFromPath(ObtenerRutaFicheroDescargas())
+    End Function
+
+    Friend Shared Function TryReloadFromPath(ByVal Fichero As String) As Generic.List(Of Paquete)
+        If Not _LoadTransientError Then Return Nothing
         Dim XML As XmlDocument = Nothing
-        If Not AtomicFile.TryReloadPrimary(Fichero, XML) Then Return Nothing
+        If Not AtomicFile.TryReloadAfterTransientFailure(Fichero, _TransientBlockedSource, XML) Then Return Nothing
         Dim l As New Generic.List(Of Paquete)
         Try
             For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
@@ -315,6 +323,7 @@ Public Class Paquete
     ''' 空队列被写盘、把刚恢复的真实队列挤进 .bak"的窗口。</summary>
     Public Shared Sub CommitTransientRecovery()
         _LoadTransientError = False
+        _TransientBlockedSource = Nothing
         _TransientSkipLogged = False
         _LastSavedXML = Nothing
         Log.WriteInfo("Download list recovered after the on-disk file was unlocked.")

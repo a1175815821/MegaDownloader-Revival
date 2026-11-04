@@ -453,13 +453,7 @@ Public Class Main
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
-        ' Final fix: a transient lock leaves the in-memory config at defaults
-        ' (CondicionesAceptadas=False, LoadErrorConfig=Fichero_No_Valido), so this
-        ' "needs attention" branch used to fire on every -silent degraded startup
-        ' and skipped CompleteStartup() entirely: no recovery timer, no banner and
-        ' no download/disk workers until the user manually opened the window.
-        ' A lock is not a real first-run / corrupted-config state, so keep the
-        ' normal startup path; the recovery timer restores the persisted values.
+        ' A locked configuration is handled by CompleteStartup's recovery timer.
         If IsSilent() AndAlso Not Config.LoadTransientError AndAlso
            (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
             _startupNeedsAttention = True
@@ -472,6 +466,11 @@ Public Class Main
 
     Private Sub CompleteStartup()
         If _startupReady OrElse Cerrando OrElse IsDisposed Then Return
+        If Config Is Nothing Then Return
+        IniciarRecuperacionTransitoria()
+        ' Defaults do not represent the user's start, proxy, speed or schedule
+        ' preferences. Keep the UI/recovery timer alive without starting workers.
+        If Config.LoadTransientError Then Return
         _startupNeedsAttention = False
         If Not CheckMEGAConditions() Then Exit Sub
         CheckVersionStatistics()
@@ -496,6 +495,7 @@ Public Class Main
             End Using
         End If
 
+        ApplyRuntimeDownloadSettings()
         If Config.ComenzarDescargando AndAlso Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then
             Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
         End If
@@ -518,6 +518,25 @@ Public Class Main
         bgwActualizadorDatosDisco.RunWorkerAsync()
         bgwDescompresor.RunWorkerAsync()
 
+        StartConfiguredWebServers()
+
+        ProcessArgs(Environment.GetCommandLineArgs)
+
+        ' Resource statistics must not hold up the first window. Sampling starts on the
+        ' existing refresh worker after the Shown handler has finished preparing the UI.
+        System.Threading.Volatile.Write(_resourceMonitoringEnabled, 1)
+        Log.WriteInfo("Start process finished")
+        LogStartupStage("startup ready")
+    End Sub
+
+    Private Sub ApplyRuntimeDownloadSettings()
+        SyncLock Mutex.NumeroConexionesMaxima
+            NumeroConexionesMaxima = Config.MaxConexionesGuardadas
+        End SyncLock
+        DescompresionThrottle.DecompressionPriority = Config.PrioridadDescompresion
+    End Sub
+
+    Private Sub StartConfiguredWebServers()
         Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Me, Me.Config)
         If Not String.IsNullOrEmpty(strErrServidorWeb) Then
             Log.WriteError("Error starting web server: " & strErrServidorWeb)
@@ -527,17 +546,24 @@ Public Class Main
                 MessageBox.Show("Error starting web server: " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             End If
         End If
+    End Sub
 
-
-        ProcessArgs(Environment.GetCommandLineArgs)
-
-        ' Resource statistics must not hold up the first window. Sampling starts on the
-        ' existing refresh worker after the Shown handler has finished preparing the UI.
-        System.Threading.Volatile.Write(_resourceMonitoringEnabled, 1)
-        Log.WriteInfo("Start process finished")
-        LogStartupStage("startup ready")
-        IniciarRecuperacionTransitoria()
-
+    Private Sub ResumeAfterConfigurationRecovery()
+        If Not _startupReady Then
+            If IsSilent() AndAlso WindowState = FormWindowState.Minimized AndAlso
+               (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
+                _startupNeedsAttention = True
+                IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Startup requires attention. Open the main window to continue."), ToolTipIcon.Warning)
+                Return
+            End If
+            CompleteStartup()
+            Return
+        End If
+        ApplyRuntimeDownloadSettings()
+        ServidorWebController.StopWebServer()
+        StartConfiguredWebServers()
+        scheduleController.Reset()
+        ScheduleTick(Nothing, EventArgs.Empty)
     End Sub
 
     ''' <summary>B1/B2: 启动降级后每秒尝试一次重载,并在状态栏持续提示。
@@ -639,6 +665,8 @@ Public Class Main
             If StreamingLibraryManager.HasPendingRecovery() Then
                 libraryRecovered = StreamingLibraryManager.TryRecoverPending()
             End If
+
+            If configRecovered Then ResumeAfterConfigurationRecovery()
 
             If configRecovered OrElse queueRecovered OrElse libraryRecovered Then
                 Log.WriteInfo("Transient file lock recovered; on-disk data restored.")

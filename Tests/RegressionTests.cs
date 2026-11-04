@@ -13,7 +13,7 @@ using MegaDownloader;
 
 // Runs against the built .NET Framework application, with isolated files and
 // loopback HTTP fixtures. No real MEGA account or user configuration is loaded.
-public class RegressionTests {
+public partial class RegressionTests {
     static string root;
     static string projectRoot;
     static string bin;
@@ -187,6 +187,7 @@ public class RegressionTests {
         Batch2PerfCases(plain,key);
         FinalReviewCases();
         FinalFixCases();
+        DeliveryAuditFixCases(plain,key,encrypted);
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {
@@ -1994,6 +1995,7 @@ public class RegressionTests {
         public string ApiResponse;
         public int ApiCalls;
         public ManualResetEvent ApiEntered,ApiRelease;
+        public ManualResetEvent HeadEntered,HeadRelease;
         public LocalFileServer(byte[] content) {
             data=content;
             var probe=new TcpListener(IPAddress.Loopback,0); probe.Start(); int port=((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
@@ -2017,7 +2019,11 @@ public class RegressionTests {
                     if(c.Request.Url.AbsolutePath.EndsWith("/expired",StringComparison.Ordinal)) {
                         c.Response.StatusCode=403;c.Response.Close();continue;
                     }
-                    if(c.Request.HttpMethod=="HEAD") { c.Response.ContentLength64=data.Length; c.Response.Close(); continue; }
+                    if(c.Request.HttpMethod=="HEAD") {
+                        if(HeadEntered!=null)HeadEntered.Set();
+                        if(HeadRelease!=null)HeadRelease.WaitOne(10000);
+                        c.Response.ContentLength64=data.Length;c.Response.Close();continue;
+                    }
                     long start=0,end=data.Length-1;
                     if(r!=null) { string[] p=r.Substring(6).Split('-'); start=long.Parse(p[0]); if(p[1]!="") end=Math.Min(end,long.Parse(p[1])); c.Response.StatusCode=206; c.Response.Headers.Add("Content-Range","bytes "+start+"-"+end+"/"+data.Length); }
                     lock(ranges) ranges.Add(r??"no-range");

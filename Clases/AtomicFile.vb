@@ -67,8 +67,14 @@ Friend NotInheritable Class AtomicFile
     Public Const StartupRetryDelayMs As Integer = 150
 
     Friend Shared Function TryLoadXmlWithRetries(ByVal sourcePath As String, ByRef document As XmlDocument, ByRef recoveredFromBackup As Boolean, ByRef transientFailure As Boolean, ByVal attempts As Integer, ByVal retryDelayMs As Integer) As Boolean
+        Dim blockedSource As String = Nothing
+        Return TryLoadXmlWithRecoveryInfo(sourcePath, document, recoveredFromBackup, transientFailure, blockedSource, attempts, retryDelayMs)
+    End Function
+
+    Friend Shared Function TryLoadXmlWithRecoveryInfo(ByVal sourcePath As String, ByRef document As XmlDocument, ByRef recoveredFromBackup As Boolean, ByRef transientFailure As Boolean, ByRef blockedSource As String, ByVal attempts As Integer, ByVal retryDelayMs As Integer) As Boolean
         recoveredFromBackup = False
         transientFailure = False
+        blockedSource = Nothing
         document = Nothing
         Dim fullSource As String = Path.GetFullPath(sourcePath)
         If attempts < 1 Then attempts = 1
@@ -96,6 +102,7 @@ Friend NotInheritable Class AtomicFile
                 ' A locked primary is not corrupt. An older backup must not become
                 ' the writable state that replaces it when the lock is released.
                 transientFailure = True
+                blockedSource = fullSource
                 Return False
             End If
         End If
@@ -118,10 +125,25 @@ Friend NotInheritable Class AtomicFile
                     Exit For
                 End Try
             Next
-            If locked Then transientFailure = True
+            If locked Then
+                transientFailure = True
+                blockedSource = backupPath
+            End If
         End If
 
         Return False
+    End Function
+
+    Friend Shared Function TryReloadAfterTransientFailure(ByVal sourcePath As String, ByVal blockedSource As String, ByRef document As XmlDocument) As Boolean
+        Dim fullSource As String = Path.GetFullPath(sourcePath)
+        If String.Equals(blockedSource, fullSource & ".bak", StringComparison.OrdinalIgnoreCase) Then
+            ' A backup lock was reached only after a missing/corrupt primary. Retry
+            ' the normal preference order, still refusing fallback from a locked primary.
+            Dim recovered As Boolean = False
+            Dim transientFailure As Boolean = False
+            Return TryLoadXmlWithRetries(fullSource, document, recovered, transientFailure, 1, 0)
+        End If
+        Return TryReloadPrimary(fullSource, document)
     End Function
 
     ''' <summary>True when the file can be opened with an exclusive read share, i.e. the

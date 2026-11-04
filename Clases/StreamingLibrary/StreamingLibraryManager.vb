@@ -70,8 +70,7 @@ Public Class StreamingLibraryManager
 			e.Link = New SecureString
 		End If
 		
-		e.ID = StreamingLibrary.GetIDandIncrement.ToString
-		StreamingLibrary.AddElement(e)
+		StreamingLibrary.AddNewElement(e)
 		StreamingLibrary.SaveXML()
 		Return e
 	End Function
@@ -177,9 +176,8 @@ Public Class StreamingLibraryManager
 						Continue For ' Already exists
 					End If
 					
-					ele.ID = StreamingLibrary.GetIDandIncrement.ToString()
 					ele.LastModification = Now
-					StreamingLibrary.AddElement(ele)
+					StreamingLibrary.AddNewElement(ele)
 					Imported += 1
 				Next
 				StreamingLibrary.SaveXML()

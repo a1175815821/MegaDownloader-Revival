@@ -6,6 +6,10 @@ Public Class StreamingLibrary
     Private _LibraryElementList As List(Of LibraryElement)
     Private _NextID As Integer
     Private ReadOnly _sync As New Object
+    Private ReadOnly _loadSync As New Object
+    Private ReadOnly _saveSync As New Object
+    Private ReadOnly _sourcePath As String
+    Private _transientBlockedSource As String
     ''' <summary>加载时文件被瞬时占用(杀软/备份/同步盘)而不是真的损坏。磁盘上的库可能
     ''' 完好,此时内存里却是空库 —— 任何写盘都会用"空库+新增一条"覆盖掉用户的整库,
     ''' 原件还会被 File.Replace 挤进 .bak,下次保存连 .bak 一起毁掉。
@@ -14,6 +18,11 @@ Public Class StreamingLibrary
 
 
     Public Sub New()
+        Me.New(Nothing)
+    End Sub
+
+    Friend Sub New(ByVal sourcePath As String)
+        _sourcePath = If(sourcePath Is Nothing, Nothing, Path.GetFullPath(sourcePath))
         Init()
     End Sub
 
@@ -38,6 +47,14 @@ Public Class StreamingLibrary
         End SyncLock
     End Sub
 
+    Public Sub AddNewElement(ByVal element As LibraryElement)
+        SyncLock _sync
+            element.ID = _NextID.ToString()
+            _NextID += 1
+            _LibraryElementList.Add(element)
+        End SyncLock
+    End Sub
+
     Public Function RemoveElement(ByVal element As LibraryElement) As Boolean
         SyncLock _sync
             Return _LibraryElementList.Remove(element)
@@ -52,127 +69,119 @@ Public Class StreamingLibrary
         End SyncLock
     End Function
 
-    ''' <summary>公开的无参入口保持不变。</summary>
     Public Sub LoadXML()
-        LoadXMLInterno(False)
-    End Sub
-
-    ''' <summary>soloRecuperar=True 时只从主文件重载(B2 自动恢复),不读 .bak。</summary>
-    Private Sub LoadXMLInterno(ByVal soloRecuperar As Boolean)
-        Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
-
-        Dim Xml As XmlDocument = Nothing
-        Dim recovered As Boolean = False
-        Dim transientFailure As Boolean = False
-
-        If soloRecuperar Then
-            If Not _LoadTransientError Then Return
-            If Not AtomicFile.TryReloadPrimary(Fichero, Xml) Then Return
-        End If
-
-        If Not soloRecuperar Then
-        SyncLock Mutex.GuardarConfig
-            If Not AtomicFile.TryLoadXmlWithRetries(Fichero, Xml, recovered, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
-                ' 瞬时占用≠损坏:磁盘上的库可能完好,内存却是空库。禁写,别让一次"加片"
-                ' 用空库覆盖掉整库(见 _LoadTransientError 声明处)。
-                If transientFailure Then
-                    _LoadTransientError = True
-                    Log.WriteError("Streaming library is locked by another process (transient). Running with an empty library; writes are suspended to preserve the on-disk file: " & Fichero)
+        SyncLock _loadSync
+            Dim filePath As String = If(_sourcePath, ObtenerRutaFicheroConfiguracion())
+            Dim document As XmlDocument = Nothing
+            Dim recovered As Boolean = False
+            Dim transientFailure As Boolean = False
+            SyncLock Mutex.GuardarConfig
+                If Not AtomicFile.TryLoadXmlWithRecoveryInfo(filePath, document, recovered, transientFailure, _transientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
+                    SyncLock _sync
+                        System.Threading.Volatile.Write(_LoadTransientError, transientFailure)
+                    End SyncLock
+                    If transientFailure Then Log.WriteError("Streaming library is locked; writes are suspended: " & filePath)
+                    Return
                 End If
-                Exit Sub
-            End If
+            End SyncLock
             If recovered Then
                 Log.WriteWarning("Streaming library restored from backup.")
             End If
+            Dim nextID As Integer
+            Dim elements As List(Of LibraryElement) = ParseLibrary(document, nextID)
+            SyncLock _sync
+                _LibraryElementList = elements
+                _NextID = nextID
+                System.Threading.Volatile.Write(_LoadTransientError, False)
+            End SyncLock
         End SyncLock
-        End If
-
-        SyncLock _sync
-            _LibraryElementList = New List(Of LibraryElement)
-            _NextID = 1
-
-            If Xml.DocumentElement.SelectSingleNode("Elements") IsNot Nothing AndAlso _
-               Xml.DocumentElement.SelectSingleNode("Elements").Attributes("nextID") IsNot Nothing AndAlso _
-               IsNumeric(Xml.DocumentElement.SelectSingleNode("Elements").Attributes("nextID").Value) Then
-                Me._NextID = CInt(Xml.DocumentElement.SelectSingleNode("Elements").Attributes("nextID").Value)
-            End If
-
-            For Each eleNode As XmlNode In Xml.DocumentElement.SelectNodes("Elements/Element")
-                Dim Ele As New LibraryElement
-                Ele.LoadXML(eleNode, False)
-                Me._LibraryElementList.Add(Ele)
-            Next
-        End SyncLock
-
-        If soloRecuperar Then
-            _LoadTransientError = False
-            Log.WriteInfo("Streaming library recovered after the on-disk file was unlocked.")
-        End If
-
     End Sub
+
+    Private Shared Function ParseLibrary(document As XmlDocument, ByRef nextID As Integer) As List(Of LibraryElement)
+        Dim elements As New List(Of LibraryElement)
+        nextID = 1
+        Dim idAttribute As XmlNode = document.DocumentElement.SelectSingleNode("Elements/@nextID")
+        If idAttribute IsNot Nothing AndAlso IsNumeric(idAttribute.Value) Then nextID = CInt(idAttribute.Value)
+        For Each node As XmlNode In document.DocumentElement.SelectNodes("Elements/Element")
+            Dim element As New LibraryElement
+            element.LoadXML(node, False)
+            elements.Add(element)
+        Next
+        Return elements
+    End Function
 
     ''' <summary>B2: 主窗体恢复计时器用来判断媒体库是否仍处于加载降级状态。</summary>
     Public ReadOnly Property LoadTransientError As Boolean
         Get
-            Return _LoadTransientError
+            Return System.Threading.Volatile.Read(_LoadTransientError)
         End Get
     End Property
 
-    ''' <summary>B2: 占用解除后重读主文件并解除写保护。降级期间用户新增的条目会
-    ''' 重新分配 ID 后合并回来并立即落盘,不会被恢复动作静默丢弃。</summary>
     Public Function TryRecoverFromTransientLock() As Boolean
-        If Not _LoadTransientError Then Return False
-        Dim pending As List(Of LibraryElement) = Elements()
-        Try
-            LoadXMLInterno(True)
-        Catch ex As Exception
-            Log.WriteError("Streaming library recovery failed: " & Log.SafeException(ex))
-            Return False
-        End Try
-        If _LoadTransientError Then Return False
-        If pending.Count > 0 Then
-            SyncLock _sync
-                For Each ele As LibraryElement In pending
-                    ele.ID = _NextID.ToString()
-                    _NextID += 1
-                    _LibraryElementList.Add(ele)
-                Next
-            End SyncLock
-            SaveXML()
-        End If
-        Return True
+        Return RecoverUsing(Function()
+                                Dim document As XmlDocument = Nothing
+                                Dim filePath As String = If(_sourcePath, ObtenerRutaFicheroConfiguracion())
+                                AtomicFile.TryReloadAfterTransientFailure(filePath, _transientBlockedSource, document)
+                                Return document
+                            End Function)
     End Function
 
+    Friend Function RecoverUsing(loadDocument As Func(Of XmlDocument)) As Boolean
+        SyncLock _loadSync
+            If Not LoadTransientError Then Return False
+            Try
+                Dim document As XmlDocument = loadDocument()
+                If document Is Nothing Then Return False
+                Dim nextID As Integer
+                Dim elements As List(Of LibraryElement) = ParseLibrary(document, nextID)
+                ' Merge the current live list at commit time. HTTP requests can add
+                ' entries while the persisted document is being read and parsed.
+                SyncLock _sync
+                    For Each element As LibraryElement In _LibraryElementList
+                        element.ID = nextID.ToString()
+                        nextID += 1
+                        elements.Add(element)
+                    Next
+                    _LibraryElementList = elements
+                    _NextID = nextID
+                    _transientBlockedSource = Nothing
+                    System.Threading.Volatile.Write(_LoadTransientError, False)
+                End SyncLock
+            Catch ex As Exception
+                Log.WriteError("Streaming library recovery failed: " & Log.SafeException(ex))
+                Return False
+            End Try
+            SaveXML()
+            Log.WriteInfo("Streaming library recovered after the on-disk file was unlocked.")
+            Return True
+        End SyncLock
+    End Function
 
     Public Sub SaveXML()
-        Dim Xml As New XmlDocument
-        Dim Root As XmlNode = Xml.AppendChild(Xml.CreateElement("XML"))
-
-        Dim ElementList As XmlNode = Root.AppendChild(Xml.CreateElement("Elements"))
-        SyncLock _sync
-            ElementList.Attributes.Append(Xml.CreateAttribute("nextID")).Value = _NextID.ToString
-            For Each element As LibraryElement In _LibraryElementList
-                element.SaveXML(ElementList, False)
-            Next
+        ' Serialize writers before taking a snapshot. A save prepared during
+        ' recovery must never overwrite the merged collection with an older view.
+        SyncLock _saveSync
+            Dim document As New XmlDocument
+            Dim root As XmlNode = document.AppendChild(document.CreateElement("XML"))
+            Dim elementList As XmlNode = root.AppendChild(document.CreateElement("Elements"))
+            SyncLock _sync
+                If _LoadTransientError Then
+                    Log.WriteWarning("Skipping streaming library save: the persisted library is still locked.")
+                    Return
+                End If
+                elementList.Attributes.Append(document.CreateAttribute("nextID")).Value = _NextID.ToString()
+                For Each element As LibraryElement In _LibraryElementList
+                    element.SaveXML(elementList, False)
+                Next
+            End SyncLock
+            SyncLock Mutex.GuardarConfig
+                Try
+                    AtomicFile.SaveXml(document, If(_sourcePath, ObtenerRutaFicheroConfiguracion()))
+                Catch ex As Exception
+                    Log.WriteError("Error saving streaming library: " & Log.SafeException(ex))
+                End Try
+            End SyncLock
         End SyncLock
-
-        Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
-
-        ' B2: 加载期被瞬时占用 → 内存是空库,写盘会清空用户整库。
-        ' 不再依赖 File.Exists,文件被移走时保护仍须生效。
-        If _LoadTransientError Then
-            Log.WriteWarning("Skipping streaming library save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
-            Exit Sub
-        End If
-
-        SyncLock Mutex.GuardarConfig
-        Try
-            AtomicFile.SaveXml(Xml, Fichero)
-        Catch ex As Exception
-            Log.WriteError("Error saving streaming library: " & Log.SafeException(ex))
-        End Try
-        End SyncLock
-
     End Sub
 
     Private Shared Function ObtenerRutaFicheroConfiguracion() As String

@@ -677,7 +677,7 @@ Public Class Fichero
 			System.Threading.Thread.Sleep(50)
 			Ciclos += 1
 		End While
-		If Me.Downloader Is Nothing OrElse Not Me.Downloader.IsBusy Then
+		If Me.Downloader Is Nothing OrElse Me.Downloader.CanStart Then
             Me.EstadoDescarga = Estado.EnCola
 			NotifyCancellationComplete()
 		ElseIf Me.Downloader.CanStop Then
@@ -685,9 +685,7 @@ Public Class Fichero
 		End If
 	End Sub
 
-	''' <summary>B7: Stop() 放宽为 "Downloader Is Nothing OrElse Not IsBusy" 之后,
-	''' 它和随后到达的 downloader_Canceled 会各抛一次 CancellationComplete。
-	''' Main.DisposeFichero 从不 RemoveHandler,重复通知会把删盘/Dispose 执行两遍。</summary>
+	''' <summary>Deliver at most one completion notification per cancellation cycle.</summary>
 	Private Sub NotifyCancellationComplete()
 		If System.Threading.Interlocked.Exchange(_cancellationNotified, 1) = 0 Then
 			RaiseEvent CancellationComplete(Me, New EventArgs)
@@ -882,19 +880,11 @@ Public Class Fichero
 	Private Sub downloader_Canceled(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		' B8: 上一轮取消的迟到事件不能把新一轮刚装配好的 downloader 清成 Nothing,
 		' 也不能把正在进行的下载状态改回 EnCola。
-		Dim stale As Boolean = False
 		SyncLock Mutex.FicheroDownloader
-			If Me.Downloader IsNot Nothing AndAlso sender IsNot Nothing AndAlso
-			   Not Object.ReferenceEquals(Me.Downloader, sender) Then stale = True
-		End SyncLock
-		If stale Then
-			Log.WriteWarning("Ignored a late cancellation from a replaced downloader for " & Me.FileID)
-			Return
-		End If
-
-		Me.EstadoDescarga = Estado.EnCola
-
-		SyncLock Mutex.FicheroDownloader
+			If Not Object.ReferenceEquals(Me.Downloader, sender) Then
+				Log.WriteWarning("Ignored a late cancellation from a replaced downloader for " & Me.FileID)
+				Return
+			End If
 			If Me.Downloader IsNot Nothing Then
 				
 				RemoveHandler Me.Downloader.Resumed, AddressOf downloader_Started
@@ -929,6 +919,10 @@ Public Class Fichero
 				" * Internal info: " & Me.UltimoErrorChunk.ToString
 			Me.EstablecerError(descError, False, lastIsQuota)
 			Log.WriteError(descError)
+		Else
+			' Publish the queueable state only after the old instance is detached
+			' and disposed; a new startup must not reassemble that same instance.
+			Me.EstadoDescarga = Estado.EnCola
 		End If
 		
 		NotifyCancellationComplete()

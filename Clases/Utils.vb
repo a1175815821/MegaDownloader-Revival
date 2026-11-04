@@ -3,6 +3,10 @@ Imports System.Globalization
 
 Public Class Utils
 
+    Friend Shared Function FormatSpeedLimit(kilobytesPerSecond As Integer) As String
+        Return (kilobytesPerSecond / 1024.0R).ToString("0.####", CultureInfo.CurrentCulture)
+    End Function
+
     Friend Shared Function TryParseSpeedLimit(value As String, ByRef kilobytesPerSecond As Integer) As Boolean
         kilobytesPerSecond = 0
         Dim megabytesPerSecond As Double
@@ -10,7 +14,7 @@ Public Class Utils
         ' In de-DE/es-ES "1.5" becomes 15 (a silent 10x speed limit), while in fr-FR
         ' the same input fails outright. Parse with an explicit style that never accepts
         ' thousands separators, first in the UI culture (keeps the local decimal comma)
-        ' and then in the invariant culture (matches the fixed "0.####" dot echo).
+        ' and then in the invariant culture for unambiguous typed dot decimals.
         Dim styles As NumberStyles = NumberStyles.Float
         Dim culture As CultureInfo = CultureInfo.CurrentCulture
         If Not Double.TryParse(value, styles, culture, megabytesPerSecond) Then

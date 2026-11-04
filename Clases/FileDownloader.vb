@@ -457,6 +457,7 @@ Public Class FileDownloader
     ' State
     Private m_disposed As Boolean = False
     Private m_busy, m_paused, m_canceled As Boolean
+    Private m_stopCompletionPending As Boolean
     ' 第10项:停滞看门狗/停止路径统一取消 chunk worker 后禁止复活的标记。
     ' 旧代码这些路径只 CancelAsync 不改 m_canceled(该字段只在 IsBusy setter 赋值),
     ' 于是 ChunkDownloader_RunWorkerCompleted 的 HasBeenCanceled 恒 False →
@@ -585,7 +586,7 @@ Public Class FileDownloader
 
     ''' <summary>Start the downloads</summary>
     Public Sub Start()
-        Me.IsBusy = True
+        If CanStart Then Me.IsBusy = True
     End Sub
 
     ''' <summary>pause the downloads</summary>
@@ -1243,11 +1244,15 @@ Public Class FileDownloader
         Me.IsPaused = False
         m_busy = False
 
-        If Me.HasBeenCanceled Then
-            RaiseEvent Canceled(Me, New EventArgs)
-        Else
-            RaiseEvent Completed(Me, New EventArgs)
-        End If
+        Try
+            If Me.HasBeenCanceled Then
+                RaiseEvent Canceled(Me, New EventArgs)
+            Else
+                RaiseEvent Completed(Me, New EventArgs)
+            End If
+        Finally
+            System.Threading.Volatile.Write(m_stopCompletionPending, False)
+        End Try
 
         RaiseEvent Stopped(Me, New EventArgs)
         RaiseEvent IsBusyChanged(Me, New EventArgs)
@@ -2150,6 +2155,7 @@ Public Class FileDownloader
         End Get
         Set(ByVal value As Boolean)
             If Me.IsBusy <> value Then
+                If Not value Then System.Threading.Volatile.Write(m_stopCompletionPending, True)
                 m_busy = value
                 m_canceled = Not value
                 If Me.IsBusy Then
@@ -2205,7 +2211,10 @@ Public Class FileDownloader
     ''' <summary>Gets if the FileDownloader can start</summary>
     Public ReadOnly Property CanStart() As Boolean
         Get
-            Return Not Me.IsBusy
+            ' Stop clears m_busy when cancellation is requested; the worker can
+            ' still be blocked in HTTP or draining its connections at that point.
+            Return Not m_disposed AndAlso Not Me.IsBusy AndAlso Not bgwDownloader.IsBusy AndAlso
+                   Not System.Threading.Volatile.Read(m_stopCompletionPending)
         End Get
     End Property
 

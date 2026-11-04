@@ -17,6 +17,11 @@ Public Class Configuracion
 	#Region "Métodos públicos"
 	
 	Public Sub New()
+		Me.New(Nothing)
+	End Sub
+
+	Friend Sub New(ByVal configurationPath As String)
+		_configurationPath = If(configurationPath Is Nothing, Nothing, Path.GetFullPath(configurationPath))
 		' Cargamos del XML
 		ErrorConfig = ErrorConfigClass.SinErrores
 		Me.ConfigUI = New ConfiguracionUI
@@ -50,6 +55,8 @@ Public Class Configuracion
 	''' 此时磁盘上的配置可能完好,内存里只能跑默认值——所有写盘必须跳过并保留
 	''' 旧文件,否则 GuardarXML 会把默认值落盘并把完好文件挤进 .bak 直至彻底覆盖。</summary>
 	Public LoadTransientError As Boolean
+	Private ReadOnly _configurationPath As String
+	Private _transientBlockedSource As String
 
 	''' <summary>P-21: 仅 CargaXMLInterno 期间有效。启动时 60+ 次 SelectSingleNode
 	''' 全文档查找改为一次遍历建字典后 O(1) 取值;方法结束即释放。</summary>
@@ -345,7 +352,7 @@ Public Class Configuracion
 		
 		Dim Fichero As String
 		
-		Fichero = ObtenerRutaFicheroConfiguracion()
+		Fichero = If(_configurationPath, ObtenerRutaFicheroConfiguracion())
 
 		' B1/B2:加载降级期间一律拒写,不再依赖 File.Exists —— 文件被杀软隔离/移走时
 		' 旧条件会失效,默认值就能落盘并毁掉用户配置。真正的恢复由主窗体的
@@ -466,12 +473,12 @@ Public Class Configuracion
 		CargaXMLInterno(False)
 	End Sub
 
-	''' <summary>soloRecuperar=True 时只从主文件重载(B1/B2 自动恢复),不读 .bak、不重置为默认值。</summary>
+	''' <summary>Recovery retries the source that was locked without resetting the current configuration.</summary>
 	Private Sub CargaXMLInterno(ByVal soloRecuperar As Boolean)
 
 		Dim Fichero As String
 		
-		Fichero = ObtenerRutaFicheroConfiguracion()
+		Fichero = If(_configurationPath, ObtenerRutaFicheroConfiguracion())
 		
 		Log.WriteDebug("Loading configuration XML")
 		
@@ -480,15 +487,13 @@ Public Class Configuracion
 		Dim transientFailure As Boolean = False
 
 		If soloRecuperar Then
-			' B2: 占用解除后自动把磁盘上的真实配置读回内存,并解除会话级写保护。
-			' 只读主文件,绝不拿 .bak 当恢复结果;仍被占用时直接返回,状态不变。
 			If Not LoadTransientError Then Return
-			If Not AtomicFile.TryReloadPrimary(Fichero, Xml) Then Return
+			If Not AtomicFile.TryReloadAfterTransientFailure(Fichero, _transientBlockedSource, Xml) Then Return
 		End If
 
 		If Not soloRecuperar Then
 		SyncLock Mutex.GuardarConfig
-			If Not AtomicFile.TryLoadXmlWithRetries(Fichero, Xml, recoveredFromBackup, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
+			If Not AtomicFile.TryLoadXmlWithRecoveryInfo(Fichero, Xml, recoveredFromBackup, transientFailure, _transientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
 					ErrorConfig = ErrorConfigClass.Fichero_No_Existe
@@ -685,6 +690,7 @@ Public Class Configuracion
 			' B2: 恢复完成后解除所有"加载降级"标记,之后的保存回到正常路径。
 			' 去重快照必须作废,否则恢复后的第一次真实写盘会被误判为"无变化"。
 			LoadTransientError = False
+			_transientBlockedSource = Nothing
 			LoadErrorConfig = ErrorConfigClass.SinErrores
 			ErrorConfig = ErrorConfigClass.SinErrores
 			_TransientSkipLogged = False
