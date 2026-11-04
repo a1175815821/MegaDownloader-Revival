@@ -572,4 +572,9 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="UI_EmptyHint"><![CDATA[拖入 MEGA 連結，或按一下「新增連結」。
 也可以使用 Ctrl + V。]]></Text>
   <Text key="UI_NoMatches"><![CDATA[沒有符合的工作]]></Text>
+  <Text key="Config_LoadLockedWarning"><![CDATA[設定檔正被其它程式佔用，目前使用暫存預設值；佔用解除前變更不會儲存。]]></Text>
+  <Text key="Config_LoadRecovered"><![CDATA[檔案佔用已解除，設定已自動從磁碟復原。]]></Text>
+  <Text key="Config_LockedByAnotherProcess"><![CDATA[設定檔正被其它程式佔用。為保護既有設定，本次未儲存任何內容；佔用解除後程式會自動復原，請稍後重試。]]></Text>
+  <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 個已下載檔案來自不含完整性校驗資訊的舊連結，無法自動確認歸屬。仍要刪除嗎？任務目錄中同名且大小一致的檔案將被移除。]]></Text>
+  <Text key="Delete_UnverifiedOutputKept"><![CDATA[未校驗歸屬的檔案已保留，如需刪除請手動處理。]]></Text>
 </Language>

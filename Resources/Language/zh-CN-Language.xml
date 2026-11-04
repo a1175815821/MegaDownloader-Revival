@@ -577,4 +577,9 @@ B 是同行下载数。]]></Text>
   <Text key="UI_EmptyHint"><![CDATA[拖入 MEGA 链接，或点击“添加链接”。
 也可以使用 Ctrl + V。]]></Text>
   <Text key="UI_NoMatches"><![CDATA[没有匹配的任务]]></Text>
+  <Text key="Config_LoadLockedWarning"><![CDATA[配置文件被其它程序占用，当前使用临时默认设置；占用解除前更改不会被保存。]]></Text>
+  <Text key="Config_LoadRecovered"><![CDATA[文件占用已解除，设置已自动从磁盘恢复。]]></Text>
+  <Text key="Config_LockedByAnotherProcess"><![CDATA[配置文件正被其它程序占用。为保护已有设置，本次未保存任何内容；占用解除后程序会自动恢复，请稍后重试。]]></Text>
+  <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 个已下载文件来自不含完整性校验信息的旧链接，无法自动确认归属。仍要删除吗？任务目录中同名且大小一致的文件将被移除。]]></Text>
+  <Text key="Delete_UnverifiedOutputKept"><![CDATA[未校验归属的文件已保留，如需删除请手动处理。]]></Text>
 </Language>

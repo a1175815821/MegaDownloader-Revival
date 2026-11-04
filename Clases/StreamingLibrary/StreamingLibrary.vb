@@ -52,17 +52,30 @@ Public Class StreamingLibrary
         End SyncLock
     End Function
 
+    ''' <summary>公开的无参入口保持不变。</summary>
     Public Sub LoadXML()
+        LoadXMLInterno(False)
+    End Sub
+
+    ''' <summary>soloRecuperar=True 时只从主文件重载(B2 自动恢复),不读 .bak。</summary>
+    Private Sub LoadXMLInterno(ByVal soloRecuperar As Boolean)
         Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
 
         Dim Xml As XmlDocument = Nothing
         Dim recovered As Boolean = False
         Dim transientFailure As Boolean = False
+
+        If soloRecuperar Then
+            If Not _LoadTransientError Then Return
+            If Not AtomicFile.TryReloadPrimary(Fichero, Xml) Then Return
+        End If
+
+        If Not soloRecuperar Then
         SyncLock Mutex.GuardarConfig
-            If Not AtomicFile.TryLoadXml(Fichero, Xml, recovered, transientFailure) Then
+            If Not AtomicFile.TryLoadXmlWithRetries(Fichero, Xml, recovered, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
                 ' 瞬时占用≠损坏:磁盘上的库可能完好,内存却是空库。禁写,别让一次"加片"
                 ' 用空库覆盖掉整库(见 _LoadTransientError 声明处)。
-                If transientFailure AndAlso File.Exists(Fichero) Then
+                If transientFailure Then
                     _LoadTransientError = True
                     Log.WriteError("Streaming library is locked by another process (transient). Running with an empty library; writes are suspended to preserve the on-disk file: " & Fichero)
                 End If
@@ -72,6 +85,7 @@ Public Class StreamingLibrary
                 Log.WriteWarning("Streaming library restored from backup.")
             End If
         End SyncLock
+        End If
 
         SyncLock _sync
             _LibraryElementList = New List(Of LibraryElement)
@@ -90,7 +104,44 @@ Public Class StreamingLibrary
             Next
         End SyncLock
 
+        If soloRecuperar Then
+            _LoadTransientError = False
+            Log.WriteInfo("Streaming library recovered after the on-disk file was unlocked.")
+        End If
+
     End Sub
+
+    ''' <summary>B2: 主窗体恢复计时器用来判断媒体库是否仍处于加载降级状态。</summary>
+    Public ReadOnly Property LoadTransientError As Boolean
+        Get
+            Return _LoadTransientError
+        End Get
+    End Property
+
+    ''' <summary>B2: 占用解除后重读主文件并解除写保护。降级期间用户新增的条目会
+    ''' 重新分配 ID 后合并回来并立即落盘,不会被恢复动作静默丢弃。</summary>
+    Public Function TryRecoverFromTransientLock() As Boolean
+        If Not _LoadTransientError Then Return False
+        Dim pending As List(Of LibraryElement) = Elements()
+        Try
+            LoadXMLInterno(True)
+        Catch ex As Exception
+            Log.WriteError("Streaming library recovery failed: " & Log.SafeException(ex))
+            Return False
+        End Try
+        If _LoadTransientError Then Return False
+        If pending.Count > 0 Then
+            SyncLock _sync
+                For Each ele As LibraryElement In pending
+                    ele.ID = _NextID.ToString()
+                    _NextID += 1
+                    _LibraryElementList.Add(ele)
+                Next
+            End SyncLock
+            SaveXML()
+        End If
+        Return True
+    End Function
 
 
     Public Sub SaveXML()
@@ -107,8 +158,9 @@ Public Class StreamingLibrary
 
         Dim Fichero As String = ObtenerRutaFicheroConfiguracion()
 
-        ' 加载期被瞬时占用 → 内存是空库,写盘会清空用户整库。宁可本次会话不保存。
-        If _LoadTransientError AndAlso File.Exists(Fichero) Then
+        ' B2: 加载期被瞬时占用 → 内存是空库,写盘会清空用户整库。
+        ' 不再依赖 File.Exists,文件被移走时保护仍须生效。
+        If _LoadTransientError Then
             Log.WriteWarning("Skipping streaming library save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
             Exit Sub
         End If

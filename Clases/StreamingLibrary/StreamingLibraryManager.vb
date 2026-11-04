@@ -25,11 +25,26 @@ Public Class StreamingLibraryManager
 		Return _StreamingLibrary
 	End Function
 	
-	Public Shared Sub SaveLibrary()
+    Public Shared Sub SaveLibrary()
 		If _StreamingLibrary IsNot Nothing Then
 			_StreamingLibrary.SaveXML()
 		End If
     End Sub
+
+	''' <summary>B2: 只在实例已被真正使用过时报告降级状态,避免恢复计时器为了检查
+	''' 状态反而创建出一个从未被用户打开的媒体库实例。</summary>
+	Public Shared Function HasPendingRecovery() As Boolean
+		SyncLock _StreamingLibraryLock
+			Return _StreamingLibrary IsNot Nothing AndAlso _StreamingLibrary.LoadTransientError
+		End SyncLock
+	End Function
+
+	Public Shared Function TryRecoverPending() As Boolean
+		SyncLock _StreamingLibraryLock
+			If _StreamingLibrary Is Nothing Then Return False
+			Return _StreamingLibrary.TryRecoverFromTransientLock()
+		End SyncLock
+	End Function
 
     Public Shared Function ProcessByNameAndAddElement(Name As String, Description As String, Comments As String, Poster As String, Link As String, LinkVisible As Boolean, IMDB As String, Allocine As String, Filmaffinity As String) As LibraryElement
         ' Movie info services (IMDB/Allocine/Filmaffinity) have been removed because of API changes.

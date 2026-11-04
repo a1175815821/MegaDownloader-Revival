@@ -183,6 +183,7 @@ public class RegressionTests {
         StartupLifecycleCases();
         SingleTaskResumeCases();
         SpeedLimitParsingCases();
+        Batch1BugFixCases(plain,key);
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {
@@ -441,6 +442,122 @@ public class RegressionTests {
             Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
             object[] french={"0,5",0};Check((bool)parse.Invoke(null,french)&&(int)french[1]==512,"localized decimal comma remains supported");
         }finally{Thread.CurrentThread.CurrentCulture=previous;}
+    }
+    static void Batch1BugFixCases(byte[] plain,string key) {
+        // B5: no group separators, invariant-culture fallback.
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            foreach(var culture in new[]{"de-DE","es-ES","fr-FR","zh-CN"}) {
+                Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo(culture);
+                object[] dot={"1.5",0};
+                Check((bool)parse.Invoke(null,dot)&&(int)dot[1]==1536,"B5 dot decimal is not amplified in "+culture);
+            }
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+            object[] comma={"1,5",0};
+            Check((bool)parse.Invoke(null,comma)&&(int)comma[1]==1536,"B5 localized decimal comma is still parsed");
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            object[] grouped={"1,5",0};
+            Check(!(bool)parse.Invoke(null,grouped),"B5 group separators are never accepted");
+            object[] exponent={"1,5e2",0};
+            Check(!(bool)parse.Invoke(null,exponent),"B5 grouped exponent input is rejected");
+        }finally{Thread.CurrentThread.CurrentCulture=previous;}
+
+        // B1/B2: recovery primitives used by the startup recovery timer.
+        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        var reload=atomic.GetMethod("TryReloadPrimary",BindingFlags.Static|BindingFlags.Public);
+        var canRead=atomic.GetMethod("CanReadExclusive",BindingFlags.Static|BindingFlags.Public);
+        string primary=Path.Combine(root,"b1-primary.xml");
+        File.WriteAllText(primary,"<State version='new'/>");
+        File.WriteAllText(primary+".bak","<State version='old'/>");
+        using(var locked=new FileStream(primary,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
+            Check(!(bool)canRead.Invoke(null,new object[]{primary}),"B2 exclusive read detects an active lock");
+            object[] blocked={primary,null};
+            Check(!(bool)reload.Invoke(null,blocked)&&blocked[1]==null,"B2 reload refuses a locked primary");
+        }
+        Check((bool)canRead.Invoke(null,new object[]{primary}),"B2 exclusive read succeeds after unlock");
+        object[] recovered={primary,null};
+        Check((bool)reload.Invoke(null,recovered),"B2 reload succeeds after unlock");
+        Check(((System.Xml.XmlDocument)recovered[1]).DocumentElement.GetAttribute("version")=="new","B2 recovery never substitutes the stale backup");
+        Check(System.Convert.ToInt32(Enum.Parse(typeof(Configuracion.ErrorConfigClass),"Fichero_Bloqueado"))==5,"B1 locked-file error is distinct from disk/permission failures");
+        Check(!Paquete.HasTransientLoadError,"B2 normal startup does not degrade the queue");
+
+        // B3: in-session verified output and background precheck.
+        {
+            string d=Path.Combine(root,"b1-verified");Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"verified.bin");File.WriteAllBytes(output,plain);
+            using(var f=new Fichero()) {
+                f.FileID="VERIFIED1";f.RutaLocal=d;f.NombreFichero="verified.bin";f.DescargaComenzada=true;
+                f.RecordVerifiedOutput(output);
+                f.MarcadoParaBorrarFicheroLocal=true;f.BorrarFicheroLocal();
+                Check(!File.Exists(output),"B3 verified output is deleted without a second full-file MAC");
+            }
+        }
+        {
+            string d=Path.Combine(root,"b1-prewarm");Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"warm.bin");File.WriteAllBytes(output,plain);
+            using(var source=new Fichero())using(var restored=new Fichero()) {
+                source.FileID="WARM01";source.FileKey=key;source.RutaLocal=d;source.NombreFichero="warm.bin";
+                source.TamanoBytes=plain.Length;source.DescargaComenzada=true;source.EstadoDescarga=Estado.Completado;
+                var xml=new System.Xml.XmlDocument();var node=source.GuardarXML(xml,true);
+                node.RemoveChild(node.SelectSingleNode("CompletedFileName"));
+                restored.CargarXML(node);
+                restored.PrepareOutputOwnership();
+                Check((string)typeof(Fichero).GetField("completedFileName",hidden).GetValue(restored)=="warm.bin","B3 background precheck caches legacy ownership");
+                restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+                Check(!File.Exists(output),"B3 prewarmed ownership deletes the real completed file");
+            }
+        }
+
+        // B4: 16-byte keys have no MetaMAC and must not be silently kept.
+        string shortKey=new string('A',22);
+        foreach(bool confirm in new[]{false,true}) {
+            string d=Path.Combine(root,"b1-nomac-"+confirm);Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"legacy.bin");File.WriteAllBytes(output,plain);
+            using(var source=new Fichero())using(var restored=new Fichero()) {
+                source.FileID="NOMAC";source.FileKey=shortKey;source.RutaLocal=d;source.NombreFichero="legacy.bin";
+                source.TamanoBytes=plain.Length;source.DescargaComenzada=true;source.EstadoDescarga=Estado.Completado;
+                var xml=new System.Xml.XmlDocument();var node=source.GuardarXML(xml,true);
+                node.RemoveChild(node.SelectSingleNode("CompletedFileName"));
+                restored.CargarXML(node);
+                restored.ConfirmUnverifiedOutputDeletion=confirm;
+                restored.PrepareOutputOwnership();
+                if(!confirm) Check(restored.OutputNeedsConfirmation,"B4 unverifiable output is surfaced instead of silently kept");
+                restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+                Check(File.Exists(output)!=confirm,"B4 explicit confirmation controls legacy output deletion: "+confirm);
+            }
+        }
+
+        // B6: the success handler must contain path-validation exceptions.
+        {
+            string d=Path.Combine(root,"b1-success");Directory.CreateDirectory(d);
+            using(var f=new Fichero())using(var fd=new FileDownloader(false)) {
+                f.FileID="B6SUCCESS";f.RutaLocal=d;f.NombreFichero="done.bin";f.EstadoDescarga=Estado.Descargando;
+                typeof(FileDownloader).GetField("m_completedFilePath",hidden).SetValue(fd,Path.Combine(root,"b1-outside","done.bin"));
+                InvokePrivate(f,"downloader_FileDownloadSucceeded",fd,EventArgs.Empty);
+                Check(f.EstadoDescarga==Estado.Completado,"B6 path validation failure cannot skip the completed state");
+                Check((string)typeof(Fichero).GetField("completedFileName",hidden).GetValue(f)=="","B6 an unverified path is never recorded as owned");
+            }
+        }
+
+        // B7/B8: one-shot cancellation gate and late-cancel isolation.
+        using(var f=new Fichero()) {
+            int notifications=0;
+            f.CancellationComplete+=(s,e)=>Interlocked.Increment(ref notifications);
+            InvokePrivate(f,"NotifyCancellationComplete");
+            InvokePrivate(f,"NotifyCancellationComplete");
+            Check(notifications==1,"B7 cancellation is delivered at most once per cycle");
+        }
+        {
+            var f=new Fichero();
+            var oldFd=new FileDownloader(false);
+            var newFd=new FileDownloader(false);
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(f,newFd);
+            InvokePrivate(f,"downloader_Canceled",oldFd,EventArgs.Empty);
+            Check(ReferenceEquals(typeof(Fichero).GetField("_Downloader",hidden).GetValue(f),newFd),"B8 a late cancel cannot clear a replacement downloader");
+            f.Dispose();oldFd.Dispose();
+        }
+        Print("batch1_bugfixes","B1/B2 recovery, B3 ownership cache, B4 no-MAC links, B5 locale, B6/B7/B8 lifecycle passed");
     }
     static void SevenZipCancelCase() {
         Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);

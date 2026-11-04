@@ -657,9 +657,22 @@ Public Class Configuration
 
         Config.GuardarXML(True)
         If Config.ErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
-            MessageBox.Show(Language.GetText("Configuration could not be saved. Check disk space and permissions.") & _
-                vbNewLine & " * " & Config.ErrorConfig.ToString(), _
-                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            If Config.ErrorConfig = Configuracion.ErrorConfigClass.Fichero_Bloqueado Then
+                ' B1: 真因是文件被其它进程占用,不是磁盘空间/权限不足。
+                MessageBox.Show(Language.GetText("Config_LockedByAnotherProcess"), _
+                    Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Else
+                MessageBox.Show(Language.GetText("Configuration could not be saved. Check disk space and permissions.") & _
+                    vbNewLine & " * " & Config.ErrorConfig.ToString(), _
+                    Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+            ' B1: 保存失败时不能让 StartupConfigurationSaved 保持 False ——
+            ' CompleteStartup 会据此 _ForzarCierre 直接退出程序。降级状态下
+            ' 配置会在占用解除后由主窗体计时器自动恢复,向导到此结束即可。
+            If Config.LoadTransientError Then
+                StartupConfigurationSaved = True
+                Me.Close()
+            End If
             Exit Sub
         End If
 

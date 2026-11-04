@@ -6,7 +6,15 @@ Public Class Utils
     Friend Shared Function TryParseSpeedLimit(value As String, ByRef kilobytesPerSecond As Integer) As Boolean
         kilobytesPerSecond = 0
         Dim megabytesPerSecond As Double
-        If Not Double.TryParse(value, megabytesPerSecond) OrElse Double.IsNaN(megabytesPerSecond) OrElse
+        ' B5: the parameterless Double.TryParse implicitly allows group separators.
+        ' In de-DE/es-ES "1.5" becomes 15 (a silent 10x speed limit), while in fr-FR
+        ' the same input fails outright. Parse with an explicit style that never accepts
+        ' thousands separators, first in the UI culture (matches the "0.####" echo) and
+        ' then in the invariant culture (accepts the dot form regardless of locale).
+        Dim styles As NumberStyles = NumberStyles.Float
+        If Not Double.TryParse(value, styles, CultureInfo.CurrentCulture, megabytesPerSecond) AndAlso
+           Not Double.TryParse(value, styles, CultureInfo.InvariantCulture, megabytesPerSecond) Then Return False
+        If Double.IsNaN(megabytesPerSecond) OrElse
            Double.IsInfinity(megabytesPerSecond) OrElse megabytesPerSecond <= 0 OrElse
            megabytesPerSecond > Integer.MaxValue / 1024.0R Then Return False
         Dim rounded As Double = Math.Round(megabytesPerSecond * 1024.0R)

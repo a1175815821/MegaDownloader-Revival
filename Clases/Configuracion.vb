@@ -10,6 +10,7 @@ Public Class Configuracion
 		Fichero_No_Valido = 2 ' El fichero existe pero no es un XML vallido
 		Usuario_Password_Incorrecto = 3 ' El fichero existe pero el usuario y password está mal grabado
 		Fichero_No_Creado = 4 ' Ha habido algún error creando el directorio o el fichero (permisos?)
+		Fichero_Bloqueado = 5 ' B1: el fichero está bloqueado por otro proceso; no es un error de disco/permisos
 	End Enum
 	
 	
@@ -333,14 +334,16 @@ Public Class Configuracion
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
 
-		' P0-3:加载时文件被瞬时占用、内存是默认值——拒绝写盘保住磁盘上的完好配置。
-		' 必须挡在去重比对之前,否则 _LastSaved* 被更新后,占用解除时反而跳过真正的补写。
-		If LoadTransientError AndAlso System.IO.File.Exists(Fichero) Then
+		' B1/B2:加载降级期间一律拒写,不再依赖 File.Exists —— 文件被杀软隔离/移走时
+		' 旧条件会失效,默认值就能落盘并毁掉用户配置。真正的恢复由主窗体的
+		' 计时器完成(TryRecoverFromTransientLock),保存路径不擅自重载,以免把用户
+		' 当前正在编辑的字段覆盖回磁盘旧值还弹出"保存成功"。
+		If LoadTransientError Then
 			If Not _TransientSkipLogged Then
 				_TransientSkipLogged = True
 				Log.WriteWarning("Skipping configuration save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
 			End If
-			ErrorConfig = ErrorConfigClass.Fichero_No_Creado
+			ErrorConfig = ErrorConfigClass.Fichero_Bloqueado
 			Exit Sub
 		End If
 
@@ -433,8 +436,14 @@ Public Class Configuracion
 		Return list
 	End Function
 	
+	''' <summary>公开的无参入口保持不变,避免改变既有调用方/反射可见的方法签名。</summary>
 	Public Sub CargaXML()
-		
+		CargaXMLInterno(False)
+	End Sub
+
+	''' <summary>soloRecuperar=True 时只从主文件重载(B1/B2 自动恢复),不读 .bak、不重置为默认值。</summary>
+	Private Sub CargaXMLInterno(ByVal soloRecuperar As Boolean)
+
 		Dim Fichero As String
 		
 		Fichero = ObtenerRutaFicheroConfiguracion()
@@ -444,8 +453,17 @@ Public Class Configuracion
 		Dim Xml As XmlDocument = Nothing
 		Dim recoveredFromBackup As Boolean = False
 		Dim transientFailure As Boolean = False
+
+		If soloRecuperar Then
+			' B2: 占用解除后自动把磁盘上的真实配置读回内存,并解除会话级写保护。
+			' 只读主文件,绝不拿 .bak 当恢复结果;仍被占用时直接返回,状态不变。
+			If Not LoadTransientError Then Return
+			If Not AtomicFile.TryReloadPrimary(Fichero, Xml) Then Return
+		End If
+
+		If Not soloRecuperar Then
 		SyncLock Mutex.GuardarConfig
-			If Not AtomicFile.TryLoadXml(Fichero, Xml, recoveredFromBackup, transientFailure) Then
+			If Not AtomicFile.TryLoadXmlWithRetries(Fichero, Xml, recoveredFromBackup, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
 					ErrorConfig = ErrorConfigClass.Fichero_No_Existe
@@ -469,7 +487,8 @@ Public Class Configuracion
 				Log.WriteWarning("Configuration restored from backup file.")
 			End If
 		End SyncLock
-		
+		End If
+
 		Idioma = Language.NormalizeLanguagePreference(LeerNodo(Xml, "Language", ""))
 		
 		
@@ -627,9 +646,45 @@ Public Class Configuracion
 		
 		' UI
 		Me.ConfigUI.CargarXML(Xml)
-		
+
+		If soloRecuperar Then
+			' B2: 恢复完成后解除所有"加载降级"标记,之后的保存回到正常路径。
+			' 去重快照必须作废,否则恢复后的第一次真实写盘会被误判为"无变化"。
+			LoadTransientError = False
+			LoadErrorConfig = ErrorConfigClass.SinErrores
+			ErrorConfig = ErrorConfigClass.SinErrores
+			_TransientSkipLogged = False
+			_LastSavedXML = Nothing
+			_LastSavedWebPasswordPlain = Nothing
+			_LastSavedProxyPasswordPlain = Nothing
+			_LastSavedStreamingPasswordPlain = Nothing
+			_LastSavedELCAccountsHash = Nothing
+			Log.WriteInfo("Configuration recovered after the on-disk file was unlocked.")
+		End If
+
 	End Sub
-	
+
+	''' <summary>B1/B2: 文件被瞬时占用后,由主窗体的恢复计时器周期调用。
+	''' 成功重载真实配置时返回 True 并解除写保护;仍被占用返回 False,不改动内存状态。</summary>
+	Public Function TryRecoverFromTransientLock() As Boolean
+		If Not LoadTransientError Then Return False
+		Try
+			CargaXMLInterno(True)
+		Catch ex As Exception
+			Log.WriteError("Configuration recovery failed: " & Log.SafeException(ex))
+			Return False
+		End Try
+		If LoadTransientError Then Return False
+		Try
+			Conexion.SetProxy(Me)
+			MegaQuotaManager.SetBreakthroughMode(Me.QuotaBreakthroughMode)
+			ThrottledStreamController.GetController.SetMaxGlobalSpeed(CLng(Me.LimiteVelocidadKBs) * 1024L)
+		Catch ex As Exception
+			Log.WriteError("Re-applying runtime settings after recovery failed: " & Log.SafeException(ex))
+		End Try
+		Return True
+	End Function
+
 	Public Sub ConfiguracionDefectoVacia()
 		Me.RutaDefecto = ""
 		Me.ResetearErrores = True

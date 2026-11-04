@@ -25,6 +25,22 @@ Public Class Fichero
 
     ' Empty means no delivered output; Nothing identifies an older queue entry.
     Private completedFileName As String = ""
+
+    ''' <summary>B3: 本会话内已由下载器校验并交付的成品。删除时按"路径+大小+写入时间"
+    ''' 复核未被外部替换即可复用,不必对 GB 级文件重算一次全文件 MetaMAC。</summary>
+    Private _verifiedOutputPath As String = Nothing
+    Private _verifiedOutputLength As Long = -1
+    Private _verifiedOutputWriteUtc As Long = 0
+
+    ''' <summary>B4: 16 字节(4 词)公链 key 没有内嵌 MetaMAC。预热时标记出来,
+    ''' 由界面一次性请求用户显式确认,而不是静默把成品留在磁盘上。</summary>
+    Public OutputNeedsConfirmation As Boolean = False
+    Public OutputConfirmationPath As String = Nothing
+    Public ConfirmUnverifiedOutputDeletion As Boolean = False
+
+    ''' <summary>B7: CancellationComplete 的一次性门闩,以及 Main.DisposeFichero 的幂等标记。</summary>
+    Private _cancellationNotified As Integer = 0
+    Public DisposalHandled As Integer = 0
 	
     Public RutaLocal As String
 
@@ -343,29 +359,41 @@ Public Class Fichero
 	End Function
 	
 	Public Sub BorrarFicheroLocal()
-		If Me.MarcadoParaBorrarFicheroLocal Then
+		If Not Me.MarcadoParaBorrarFicheroLocal Then Return
+		Dim Ruta As String = String.Empty
+		Dim errorException As Exception = Nothing
+		Try
+			If String.IsNullOrWhiteSpace(Me.RutaLocal) OrElse String.IsNullOrWhiteSpace(Me.NombreFichero) Then
+				Throw New InvalidOperationException("Local path or file name is missing.")
+			End If
+			' B3: 归属判定可能要读整个文件算 MetaMAC(GB 级可达数十秒),必须放在
+			' Mutex.DeletingFiles 之外,否则一次删除会阻塞所有其它删除。
+			' 界面入口会先在后台线程 PrepareOutputOwnership() 预热,这里通常命中缓存。
+			Dim completado As String = GetCompletedFileForDeletion()
+			Ruta = If(completado, String.Empty)
+			Dim parcial As String = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
 			SyncLock Mutex.DeletingFiles
-			Dim Ruta As String = String.Empty
-			Try
-				If String.IsNullOrWhiteSpace(Me.RutaLocal) OrElse String.IsNullOrWhiteSpace(Me.NombreFichero) Then
-					Throw New InvalidOperationException("Local path or file name is missing.")
-				End If
-				Ruta = GetCompletedFileForDeletion()
-				If Not String.IsNullOrEmpty(Ruta) Then
-					If System.IO.File.Exists(Ruta) Then System.IO.File.Delete(Ruta)
-					completedFileName = ""
-				End If
-				Ruta = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
-				If System.IO.File.Exists(Ruta) Then
-					System.IO.File.Delete(Ruta)
-				End If
-			Catch e As Exception
-				Log.WriteError("Error deleting local files - Path: " & Ruta & " - Error: " & e.ToString)
-                MessageBox.Show(Language.GetText("Error deleting local files - Path: %PATH% - Error: %ERROR%").Replace("%PATH%", Ruta).Replace("%ERROR%", e.Message), _
-                    Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-			End Try
+				Try
+					If Not String.IsNullOrEmpty(completado) Then
+						If System.IO.File.Exists(completado) Then System.IO.File.Delete(completado)
+						completedFileName = ""
+					End If
+					If System.IO.File.Exists(parcial) Then
+						Ruta = parcial
+						System.IO.File.Delete(parcial)
+					End If
+				Catch e As Exception
+					errorException = e
+				End Try
 			End SyncLock
-		End If
+			If errorException IsNot Nothing Then
+				Log.WriteError("Error deleting local files - Path: " & Ruta & " - Error: " & errorException.ToString)
+				MessageBox.Show(Language.GetText("Error deleting local files - Path: %PATH% - Error: %ERROR%").Replace("%PATH%", Ruta).Replace("%ERROR%", errorException.Message), _
+					Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+			End If
+		Catch e As Exception
+			Log.WriteError("Error deleting local files - Path: " & Ruta & " - Error: " & e.ToString)
+		End Try
 	End Sub
 
     Private Function CompletedOutputPath(fileName As String) As String
@@ -381,17 +409,54 @@ Public Class Fichero
 
     Private Function GetCompletedFileForDeletion() As String
         If Not String.IsNullOrEmpty(completedFileName) Then Return CompletedOutputPath(completedFileName)
+
+        ' B3: 本会话内下载器已完成校验的成品,只要路径/大小/写入时间未变就直接复用,
+        ' 不再对同一个 GB 级文件重算一次全文件 MetaMAC。必须放在旧队列守卫之前:
+        ' 新建任务的 completedFileName 是 ""(非 Nothing),否则会被提前拦掉。
+        If Not String.IsNullOrEmpty(_verifiedOutputPath) Then
+            Try
+                Dim verifiedPath As String = CompletedOutputPath(System.IO.Path.GetFileName(_verifiedOutputPath))
+                If String.Equals(verifiedPath, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) AndAlso
+                   System.IO.File.Exists(verifiedPath) Then
+                    Dim verifiedInfo As New System.IO.FileInfo(verifiedPath)
+                    If verifiedInfo.Length = _verifiedOutputLength AndAlso
+                       verifiedInfo.LastWriteTimeUtc.Ticks = _verifiedOutputWriteUtc Then
+                        completedFileName = System.IO.Path.GetFileName(verifiedPath)
+                        Return verifiedPath
+                    End If
+                End If
+            Catch ex As Exception
+                Log.WriteWarning("Verified output can no longer be reused for " & Me.FileID & ": " & Log.SafeException(ex))
+            End Try
+        End If
+
         If completedFileName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
         ' Older queues have no output marker. Require a real MetaMAC match before
         ' treating a same-named existing file as their completed output.
         If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
            EstadoDescarga <> Estado.ComprobandoMD5 AndAlso (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
+
+        OutputNeedsConfirmation = False
+        OutputConfirmationPath = Nothing
         Try
             Dim candidate As String = CompletedOutputPath(NombreFichero)
             If Not System.IO.File.Exists(candidate) OrElse New System.IO.FileInfo(candidate).Length <> TamanoBytes Then Return Nothing
             Dim key As String = Me.FileKey
             If key.Contains("=###n=") Then key = key.Substring(0, key.IndexOf("=###n="))
-            If Criptografia.base64urldecodeBytes(key).Length <> 32 OrElse Not Criptografia.VerifyMegaMetaMac(candidate, key) Then Return Nothing
+            If Criptografia.base64urldecodeBytes(key).Length <> 32 Then
+                ' B4: 4 词公链 key(16 字节)没有内嵌 MetaMAC,原实现在此静默返回 Nothing,
+                ' 用户以为删掉了成品,文件却一直留在磁盘上。前置条件已经限定
+                ' "任务确实完成 + 同名 + 大小精确一致 + 下载已开始",交由用户显式确认。
+                If Not Me.ConfirmUnverifiedOutputDeletion Then
+                    OutputNeedsConfirmation = True
+                    OutputConfirmationPath = candidate
+                    Log.WriteWarning("Legacy link has no MetaMAC; keeping output pending explicit confirmation: " & candidate)
+                    Return Nothing
+                End If
+                completedFileName = NombreFichero
+                Return candidate
+            End If
+            If Not Criptografia.VerifyMegaMetaMac(candidate, key) Then Return Nothing
             completedFileName = NombreFichero
             Return candidate
         Catch ex As Exception
@@ -399,6 +464,31 @@ Public Class Fichero
             Return Nothing
         End Try
     End Function
+
+    ''' <summary>B3: 界面在执行删除前,先在后台线程预热归属判定(可能整文件读),
+    ''' 校验结果写入 completedFileName 缓存,随后 UI 线程的删除就是 O(1)。</summary>
+    Public Sub PrepareOutputOwnership()
+        Try
+            GetCompletedFileForDeletion()
+        Catch ex As Exception
+            Log.WriteWarning("Output ownership precheck failed for " & Me.FileID & ": " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    ''' <summary>B3/B6: 记录下载器已验证并交付的成品元数据,供删除时复用。</summary>
+    Public Sub RecordVerifiedOutput(ByVal path As String)
+        Try
+            If String.IsNullOrEmpty(path) Then Return
+            Dim full As String = System.IO.Path.GetFullPath(path)
+            Dim info As New System.IO.FileInfo(full)
+            _verifiedOutputPath = full
+            _verifiedOutputLength = info.Length
+            _verifiedOutputWriteUtc = info.LastWriteTimeUtc.Ticks
+        Catch ex As Exception
+            _verifiedOutputPath = Nothing
+            Log.WriteWarning("Could not cache verified output: " & Log.SafeException(ex))
+        End Try
+    End Sub
 	
 	Public Function ObtenerNombreSinExtension As String
 		
@@ -460,48 +550,60 @@ Public Class Fichero
 			End If
 
 			Me.NumErroresChunk = 0
-            If Me.Downloader Is Nothing Then
-                Me.Downloader = New FileDownloader(True)
-                AddHandler Me.Downloader.Resumed, AddressOf downloader_Started
-                AddHandler Me.Downloader.Started, AddressOf downloader_Started
-                AddHandler Me.Downloader.Paused, AddressOf downloader_Paused
-                AddHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
-                AddHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
-                AddHandler Me.Downloader.Completed, AddressOf downloader_Completed
-                AddHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
-                AddHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
-                AddHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
-                AddHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
-                AddHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
-            End If
+            ' B8: "清空 + 装配"必须在同一把锁下完成,后续全程使用局部引用 dl。
+            ' downloader_Canceled 会在 Mutex.FicheroDownloader 内把 Me.Downloader 置 Nothing;
+            ' 若上一轮 Canceled 恰好落在本轮 ActualizarInformacionFichero(最长 60s)之后、
+            ' 装配之前,旧代码从 :478 起就会 NullReferenceException 并被引擎转成 Erroneo。
+            Dim dl As FileDownloader = Nothing
+            SyncLock Mutex.FicheroDownloader
+                dl = Me.Downloader
+                If dl Is Nothing Then
+                    dl = New FileDownloader(True)
+                    AddHandler dl.Resumed, AddressOf downloader_Started
+                    AddHandler dl.Started, AddressOf downloader_Started
+                    AddHandler dl.Paused, AddressOf downloader_Paused
+                    AddHandler dl.CancelRequested, AddressOf downloader_CancelRequested
+                    AddHandler dl.Canceled, AddressOf downloader_Canceled
+                    AddHandler dl.Completed, AddressOf downloader_Completed
+                    AddHandler dl.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
+                    AddHandler dl.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
+                    AddHandler dl.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
+                    AddHandler dl.FileLocalCreated, AddressOf downloader_FileLocalCreated
+                    AddHandler dl.FileRenamed, AddressOf downloader_FileRenamed
+                    Me.Downloader = dl
+                End If
+            End SyncLock
 
-            Me.Downloader.setBufferAndPackageSize(worker.Config.TamanoBufferKB * 1024, worker.Config.TamanoPaqueteKB * 1024)
+            dl.setBufferAndPackageSize(worker.Config.TamanoBufferKB * 1024, worker.Config.TamanoPaqueteKB * 1024)
 
-            'Me.Downloader.PackageSize = worker.Config.TamanoPaqueteKB * 1024
-            'Me.Downloader.BufferSize = worker.Config.TamanoBufferKB * 1024
-            Me.Downloader.StopWatchCyclesAmount = 30
-			Me.Downloader.LocalDirectory = Me.RutaLocal
-			Me.Downloader.DeleteFilesAfterCancel = False
-			Me.Downloader.DeleteCompletedFilesAfterCancel = False
-			Me.Downloader.PartsPerFile = worker.Config.ConexionesPorFichero
-			Me.Downloader.NumConnections = If(worker.Config.ConexionesPorFichero < worker.NumConexionesDisponibles, worker.Config.ConexionesPorFichero, worker.NumConexionesDisponibles)
-			Me.Downloader.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes, Me.PartialFileName)
-			Me.PartialFileName = Me.Downloader.File.PartialFileName
+            'dl.PackageSize = worker.Config.TamanoPaqueteKB * 1024
+            'dl.BufferSize = worker.Config.TamanoBufferKB * 1024
+            dl.StopWatchCyclesAmount = 30
+			dl.LocalDirectory = Me.RutaLocal
+			dl.DeleteFilesAfterCancel = False
+			dl.DeleteCompletedFilesAfterCancel = False
+			dl.PartsPerFile = worker.Config.ConexionesPorFichero
+			dl.NumConnections = If(worker.Config.ConexionesPorFichero < worker.NumConexionesDisponibles, worker.Config.ConexionesPorFichero, worker.NumConexionesDisponibles)
+			dl.AddFileInfo(Me.FileID, Me.FileKey, Me.URLFichero, Me.DescargaNombre, Me.DatosPartes, Me.PartialFileName)
+			Me.PartialFileName = dl.File.PartialFileName
 
 			' B1-④:装配完成到 Start 之间的取消窗口同样要拦,否则建完即启动,前功尽弃。
 			If Me._StartupCancelled Then
 				Log.WriteWarning("Startup cancelled just before downloader start, disposing it for " & Me.FileID)
 				Try
-					Me.Downloader.Dispose()
+					dl.Dispose()
 				Catch ex As Exception
 					Log.WriteError("Error disposing cancelled startup downloader: " & Log.SafeException(ex))
 				End Try
-				Me.Downloader = Nothing
+				' B8: 只清自己装配的实例,别把取消窗口里刚换上的新 downloader 抹掉。
+				SyncLock Mutex.FicheroDownloader
+					If Object.ReferenceEquals(Me.Downloader, dl) Then Me.Downloader = Nothing
+				End SyncLock
                 Me.EstadoDescarga = Estado.EnCola
 				Exit Sub
 			End If
-			If Me.Downloader.CanStart Then
-				Me.Downloader.Start()
+			If dl.CanStart Then
+				dl.Start()
 			End If
 		Catch ex As Exception
 			Log.WriteError("Error on bgArranque_DoWork: " & Log.SafeException(ex))
@@ -532,6 +634,8 @@ Public Class Fichero
 			Me.EstadoDescarga = Estado.CreandoLocal
 			Me.DescargaComenzada = True
 			Me._StartupCancelled = False
+			' B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
+			System.Threading.Interlocked.Exchange(_cancellationNotified, 0)
 			bgArranque = New DownloadWorker(Config, NumConexionesDisponibles)
 			bgArranque.WorkerSupportsCancellation = False
 			bgArranque.WorkerReportsProgress = False
@@ -564,6 +668,9 @@ Public Class Fichero
 	Public Sub [Stop]()
 		' B1-④:先置验证取消标志,再等。bgArranque 不可 CancelAsync,只能靠标志自停。
 		Me._StartupCancelled = True
+		' B7: 每次显式 Stop 都开启一个新的通知周期。同一次取消里随后到达的
+		' downloader_Canceled 会被门闩挡住,但下一次 Stop(例如删除任务)仍能通知到。
+		System.Threading.Interlocked.Exchange(_cancellationNotified, 0)
 		Dim CiclosMax As Integer = 100 ' 100*50 = 5 segundos
 		Dim Ciclos As Integer = 0
 		While Me._Actualizando And Ciclos < CiclosMax
@@ -572,9 +679,18 @@ Public Class Fichero
 		End While
 		If Me.Downloader Is Nothing OrElse Not Me.Downloader.IsBusy Then
             Me.EstadoDescarga = Estado.EnCola
-			RaiseEvent CancellationComplete(Me, New EventArgs)
+			NotifyCancellationComplete()
 		ElseIf Me.Downloader.CanStop Then
 			Me.Downloader.Stop()
+		End If
+	End Sub
+
+	''' <summary>B7: Stop() 放宽为 "Downloader Is Nothing OrElse Not IsBusy" 之后,
+	''' 它和随后到达的 downloader_Canceled 会各抛一次 CancellationComplete。
+	''' Main.DisposeFichero 从不 RemoveHandler,重复通知会把删盘/Dispose 执行两遍。</summary>
+	Private Sub NotifyCancellationComplete()
+		If System.Threading.Interlocked.Exchange(_cancellationNotified, 1) = 0 Then
+			RaiseEvent CancellationComplete(Me, New EventArgs)
 		End If
 	End Sub
 	
@@ -692,11 +808,20 @@ Public Class Fichero
 	End Sub
 	
 	Private Sub downloader_FileDownloadSucceeded(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        Dim source As FileDownloader = TryCast(sender, FileDownloader)
-        If source IsNot Nothing AndAlso Not String.IsNullOrEmpty(source.CompletedFilePath) Then
-            PathGuard.EnsurePathUnderRoot(Me.RutaLocal, source.CompletedFilePath, allowRoot:=False)
-            completedFileName = System.IO.Path.GetFileName(source.CompletedFilePath)
-        End If
+		' B6: EnsurePathUnderRoot 会抛 UnauthorizedAccessException,GetFullPath 会抛
+		' ArgumentException。原实现整个方法无 Catch,而 RaiseEvent 侧也没有,异常一旦
+		' 逸出就会连下面的"完成态赋值"一起跳过 —— 真正下载完成却状态错乱、成品归属丢失。
+		' 与兄弟处理器 downloader_FileRenamed 保持一致,在处理器内兜住并只记录日志。
+        Try
+            Dim source As FileDownloader = TryCast(sender, FileDownloader)
+            If source IsNot Nothing AndAlso Not String.IsNullOrEmpty(source.CompletedFilePath) Then
+                PathGuard.EnsurePathUnderRoot(Me.RutaLocal, source.CompletedFilePath, allowRoot:=False)
+                completedFileName = System.IO.Path.GetFileName(source.CompletedFilePath)
+                RecordVerifiedOutput(source.CompletedFilePath)
+            End If
+        Catch ex As Exception
+            Log.WriteError("Completed output path could not be verified for " & Me.FileID & ": " & Log.SafeException(ex))
+        End Try
 		' This event fires as soon as the file is verified and renamed — before the Completed event.
 		' Setting Completado here ensures the UI reflects the true state immediately, even if the
 		' Completed event is delayed or the background worker's RunWorkerCompleted is slow to fire.
@@ -755,8 +880,20 @@ Public Class Fichero
 	
 	
 	Private Sub downloader_Canceled(ByVal sender As System.Object, ByVal e As System.EventArgs)
+		' B8: 上一轮取消的迟到事件不能把新一轮刚装配好的 downloader 清成 Nothing,
+		' 也不能把正在进行的下载状态改回 EnCola。
+		Dim stale As Boolean = False
+		SyncLock Mutex.FicheroDownloader
+			If Me.Downloader IsNot Nothing AndAlso sender IsNot Nothing AndAlso
+			   Not Object.ReferenceEquals(Me.Downloader, sender) Then stale = True
+		End SyncLock
+		If stale Then
+			Log.WriteWarning("Ignored a late cancellation from a replaced downloader for " & Me.FileID)
+			Return
+		End If
+
 		Me.EstadoDescarga = Estado.EnCola
-		
+
 		SyncLock Mutex.FicheroDownloader
 			If Me.Downloader IsNot Nothing Then
 				
@@ -794,7 +931,7 @@ Public Class Fichero
 			Log.WriteError(descError)
 		End If
 		
-		RaiseEvent CancellationComplete(Me, New EventArgs)
+		NotifyCancellationComplete()
 	End Sub
 	
 	

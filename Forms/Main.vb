@@ -20,6 +20,11 @@ Public Class Main
     ''' <remarks>Es pública para que se pueda modificar desde la pantalla "Configuration".</remarks>
     Public Config As Configuracion
 
+    ''' <summary>B1/B2: 启动期文件被瞬时占用时,驱动"锁释放后自动重载"的计时器与状态提示。</summary>
+    Private _recoveryTimer As System.Windows.Forms.Timer = Nothing
+    Private _recoveryBusy As Boolean = False
+    Private _recoveryStatusLabel As System.Windows.Forms.ToolStripStatusLabel = Nothing
+
     ''' <summary>
     ''' Indica si ha fallado el usuario y password. Se usa para evitar peticiones innecesarias 
     ''' (si falla la identificacion no tiene sentido seguir intentandolo).
@@ -462,14 +467,19 @@ Public Class Main
         _startupNeedsAttention = False
         If Not CheckMEGAConditions() Then Exit Sub
         CheckVersionStatistics()
-        If Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores Then
+        ' B1: 瞬时占用不是"配置损坏"。磁盘文件可能完全完好,此时不得强制弹首次配置
+        ' 向导(否则用户保存必失败、关窗即强退);恢复计时器会在锁释放后自动重载。
+        If Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores AndAlso
+           Not Config.LoadTransientError Then
             Log.WriteWarning("Invalid configuration, opening configuration form.")
             Using frmName As New Configuration
                 frmName.MainForm = Me
                 frmName.Config = Config
                 frmName.RequiereConfiguracion = True
                 frmName.ShowDialog(Me)
-                If Not frmName.StartupConfigurationSaved Then
+                ' B1: 降级保存失败已在 Configuration.btnGuardar_Click 里置位并结束向导,
+                ' 这里再兜一层,任何情况下都不因"文件被占用"把整个程序关掉。
+                If Not frmName.StartupConfigurationSaved AndAlso Not Config.LoadTransientError Then
                     Log.WriteWarning("Startup cancelled before configuration was saved.")
                     _ForzarCierre = True
                     Me.Close()
@@ -518,7 +528,100 @@ Public Class Main
         System.Threading.Volatile.Write(_resourceMonitoringEnabled, 1)
         Log.WriteInfo("Start process finished")
         LogStartupStage("startup ready")
+        IniciarRecuperacionTransitoria()
 
+    End Sub
+
+    ''' <summary>B1/B2: 启动降级后每秒尝试一次重载,并在状态栏持续提示。
+    ''' 计时器由消息泵驱动、只在未恢复期间运行,不触碰 430ms 下载刷新主循环。</summary>
+    Private Sub IniciarRecuperacionTransitoria()
+        If Not (Config.LoadTransientError OrElse Paquete.HasTransientLoadError OrElse
+                StreamingLibraryManager.HasPendingRecovery()) Then Return
+        If _recoveryTimer Is Nothing Then
+            _recoveryTimer = New System.Windows.Forms.Timer()
+            _recoveryTimer.Interval = 1000
+            AddHandler _recoveryTimer.Tick, AddressOf RecuperacionTransitoria_Tick
+        End If
+        MostrarAvisoCargaBloqueada()
+        If Not _recoveryTimer.Enabled Then _recoveryTimer.Start()
+        Log.WriteWarning("Startup data is degraded by a transient file lock; automatic recovery is active.")
+    End Sub
+
+    Private Sub MostrarAvisoCargaBloqueada()
+        Try
+            If _recoveryStatusLabel Is Nothing Then
+                _recoveryStatusLabel = New System.Windows.Forms.ToolStripStatusLabel()
+                _recoveryStatusLabel.Name = "RecoveryStatusLabel"
+                _recoveryStatusLabel.ForeColor = Drawing.Color.OrangeRed
+                StatusStrip1.Items.Add(_recoveryStatusLabel)
+            End If
+            _recoveryStatusLabel.Text = Language.GetText("Config_LoadLockedWarning")
+        Catch ex As Exception
+            Log.WriteError("Showing transient-lock banner failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub RecuperacionTransitoria_Tick(sender As Object, e As EventArgs)
+        If Cerrando OrElse IsDisposed Then
+            If _recoveryTimer IsNot Nothing Then _recoveryTimer.Stop()
+            Return
+        End If
+        If _recoveryBusy Then Return
+        _recoveryBusy = True
+        Try
+            Dim configRecovered As Boolean = False
+            Dim queueRecovered As Boolean = False
+            Dim libraryRecovered As Boolean = False
+
+            If Config IsNot Nothing AndAlso Config.LoadTransientError Then
+                configRecovered = Config.TryRecoverFromTransientLock()
+                If configRecovered Then
+                    Try
+                        ApplyCurrentTheme()
+                    Catch ex As Exception
+                        Log.WriteError("Theme refresh after config recovery failed: " & Log.SafeException(ex))
+                    End Try
+                End If
+            End If
+
+            If Paquete.HasTransientLoadError Then
+                Dim real As Generic.List(Of Paquete) = Paquete.TryReloadAfterTransientLock()
+                If real IsNot Nothing Then
+                    SyncLock Mutex.ListaDescargas
+                        ' 降级期间队列从空开始,当前列表里的都是用户新建的任务;
+                        ' 追加到真实队列之后,避免恢复动作把新任务静默丢掉。
+                        If ListaPaquetes IsNot Nothing Then real.AddRange(ListaPaquetes)
+                        ListaPaquetes = real
+                    End SyncLock
+                    RefreshListaDescargas(True)
+                    queueRecovered = True
+                End If
+            End If
+
+            If StreamingLibraryManager.HasPendingRecovery() Then
+                libraryRecovered = StreamingLibraryManager.TryRecoverPending()
+            End If
+
+            If configRecovered OrElse queueRecovered OrElse libraryRecovered Then
+                ToastForm.ShowToast(Me, Language.GetText("Config_LoadRecovered"))
+                Log.WriteInfo("Transient file lock recovered; on-disk data restored.")
+            End If
+
+            If Not (Config.LoadTransientError OrElse Paquete.HasTransientLoadError OrElse
+                    StreamingLibraryManager.HasPendingRecovery()) Then
+                _recoveryTimer.Stop()
+                If _recoveryStatusLabel IsNot Nothing Then
+                    StatusStrip1.Items.Remove(_recoveryStatusLabel)
+                    _recoveryStatusLabel.Dispose()
+                    _recoveryStatusLabel = Nothing
+                End If
+                Log.WriteInfo("Transient file lock recovery finished; writes are enabled again.")
+            End If
+        Catch ex As Exception
+            Log.WriteError("Transient load recovery tick failed: " & Log.SafeException(ex))
+        Finally
+            _recoveryBusy = False
+        End Try
     End Sub
 
     Private Sub Main_FirstPaint(sender As Object, e As PaintEventArgs) Handles Me.Paint
@@ -3898,13 +4001,61 @@ Public Class Main
             Exit Sub
         End If
 
+        Dim seleccion As New Generic.List(Of IDescarga)()
+        Dim candidatos As New Generic.List(Of Fichero)()
         For Each selobject As Object In ListaDescargas.SelectedObjects
             If TypeOf (selobject) Is IDescarga Then
-                Log.WriteError("Deleting from list and disk " & CType(selobject, IDescarga).DescargaNombre)
-                Eliminar(CType(selobject, IDescarga), True, False)
+                Dim desc As IDescarga = CType(selobject, IDescarga)
+                seleccion.Add(desc)
+                If TypeOf desc Is Fichero Then
+                    candidatos.Add(CType(desc, Fichero))
+                ElseIf TypeOf desc Is Paquete Then
+                    candidatos.AddRange(CType(desc, Paquete).ListaFicheros)
+                End If
             End If
         Next
-        RefreshListaDescargas(True)
+        If seleccion.Count = 0 Then Exit Sub
+
+        ' B3: 旧队列条目的归属校验要整文件算 MetaMAC(1GB 约 36~48s),原实现在 UI
+        ' 线程、且持 Mutex.DeletingFiles 全局锁同步执行,大文件一次删除就卡死界面。
+        ' 先在后台线程预热出缓存,再回 UI 线程执行删除(此时归属判定已是 O(1))。
+        Dim preparador As New System.ComponentModel.BackgroundWorker()
+        AddHandler preparador.DoWork,
+            Sub(s As Object, ev As System.ComponentModel.DoWorkEventArgs)
+                For Each fic As Fichero In candidatos
+                    fic.PrepareOutputOwnership()
+                Next
+            End Sub
+        AddHandler preparador.RunWorkerCompleted,
+            Sub(s As Object, ev As System.ComponentModel.RunWorkerCompletedEventArgs)
+                If ev.Error IsNot Nothing Then
+                    Log.WriteError("Output ownership precheck failed: " & Log.SafeException(ev.Error))
+                End If
+                ' B4: 4 词公链 key 没有 MetaMAC,无法自动确认归属。批量只询问一次,
+                ' 不再像原实现那样静默把成品留在磁盘上、用户却毫不知情。
+                Dim sinConfirmar As New Generic.List(Of Fichero)()
+                For Each fic As Fichero In candidatos
+                    If fic.OutputNeedsConfirmation AndAlso Not String.IsNullOrEmpty(fic.OutputConfirmationPath) Then
+                        sinConfirmar.Add(fic)
+                    End If
+                Next
+                If sinConfirmar.Count > 0 Then
+                    Dim texto As String = Language.GetText("Delete_UnverifiedOutputConfirm").Replace("{COUNT}", sinConfirmar.Count.ToString())
+                    If MessageBox.Show(Me, texto, Language.GetText("Confirmation"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
+                        For Each fic As Fichero In sinConfirmar
+                            fic.ConfirmUnverifiedOutputDeletion = True
+                        Next
+                    Else
+                        ToastForm.ShowToast(Me, Language.GetText("Delete_UnverifiedOutputKept"))
+                    End If
+                End If
+                For Each desc As IDescarga In seleccion
+                    Log.WriteError("Deleting from list and disk " & desc.DescargaNombre)
+                    Eliminar(desc, True, False)
+                Next
+                RefreshListaDescargas(True)
+            End Sub
+        preparador.RunWorkerAsync()
     End Sub
 
     Private Sub Eliminar(Objeto As IDescarga, ByVal BorrarFicheros As Boolean, ByVal RefrescarFicheros As Boolean)
@@ -4055,6 +4206,10 @@ Public Class Main
         If TypeOf (sender) Is Fichero Then
             Dim fic As Fichero = CType(sender, Fichero)
             If fic IsNot Nothing Then
+                ' B7: 回调可能在同一轮取消里到达两次。先摘钩,再用每实例门闩保证
+                ' BorrarFicheroLocal / Dispose 只执行一次(原代码会执行两遍)。
+                RemoveHandler fic.CancellationComplete, AddressOf DisposeFichero
+                If System.Threading.Interlocked.Exchange(fic.DisposalHandled, 1) <> 0 Then Return
                 Log.WriteDebug("Download file stopped " & fic.NombreFichero & ", pending delete")
                 If fic.MarcadoParaBorrarFicheroLocal Then
                     fic.BorrarFicheroLocal()

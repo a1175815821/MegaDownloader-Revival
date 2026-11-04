@@ -220,7 +220,7 @@ Public Class Paquete
         Dim recoveredFromBackup As Boolean = False
         Dim transientFailure As Boolean = False
         SyncLock Mutex.GuardarDownloadList
-            If Not AtomicFile.TryLoadXml(Fichero, XML, recoveredFromBackup, transientFailure) Then
+            If Not AtomicFile.TryLoadXmlWithRetries(Fichero, XML, recoveredFromBackup, transientFailure, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
                 ' P0-3:被瞬时占用 ≠ 损坏:置标记让 GuardarEnFichero 拒写,否则周期性
                 ' 落盘会把"空队列"写盘、把完好队列文件挤进 .bak 直至彻底覆盖。
                 _LoadTransientError = transientFailure
@@ -279,11 +279,47 @@ Public Class Paquete
     Private Shared _LoadTransientError As Boolean = False
     ' 同 Configuracion._TransientSkipLogged:GuardarEnFichero 每 5s 一次,只在首次拦截时记日志。
     Private Shared _TransientSkipLogged As Boolean = False
+
+    ''' <summary>B2: 主窗体恢复计时器用来判断队列是否仍处于"加载降级"状态。</summary>
+    Public Shared ReadOnly Property HasTransientLoadError As Boolean
+        Get
+            Return _LoadTransientError
+        End Get
+    End Property
+
+    ''' <summary>B2: 占用解除后重读主文件(不读 .bak),返回磁盘上的真实队列并解除写保护。
+    ''' 调用方负责把它与降级期间用户新建的任务合并;仍被占用时返回 Nothing 且状态不变。</summary>
+    Public Shared Function TryReloadAfterTransientLock() As Generic.List(Of Paquete)
+        If Not _LoadTransientError Then Return Nothing
+        Dim Fichero As String = ObtenerRutaFicheroDescargas()
+        Dim XML As XmlDocument = Nothing
+        If Not AtomicFile.TryReloadPrimary(Fichero, XML) Then Return Nothing
+        Dim l As New Generic.List(Of Paquete)
+        Try
+            For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
+                Dim p As New Paquete
+                p.CargarXML(NodoPaq)
+                l.Add(p)
+            Next
+            MarcarFicherosComoParados(l)
+        Catch ex As Exception
+            Log.WriteError("Download list recovery failed: " & Log.SafeException(ex))
+            Return Nothing
+        End Try
+        _LoadTransientError = False
+        _TransientSkipLogged = False
+        _LastSavedXML = Nothing
+        Log.WriteInfo("Download list recovered after the on-disk file was unlocked.")
+        Return l
+    End Function
+
     Public Shared Sub GuardarEnFichero(ByVal ListaPaquetes As Generic.List(Of Paquete))
 
         Dim Fichero As String = ObtenerRutaFicheroDescargas()
 
-        If _LoadTransientError AndAlso System.IO.File.Exists(Fichero) Then
+        ' B2: 不再依赖 File.Exists,文件被杀软移走时保护仍须生效;
+        ' 解除由 Main 的恢复计时器调用 TryReloadAfterTransientLock 完成。
+        If _LoadTransientError Then
             If Not _TransientSkipLogged Then
                 _TransientSkipLogged = True
                 Log.WriteWarning("Skipping download list save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
