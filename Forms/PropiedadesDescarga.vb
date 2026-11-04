@@ -41,7 +41,7 @@ Public Class PropiedadesDescarga
             chkLimitarVelocidad.Checked = (f.LimiteVelocidad > 0)
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
             If chkLimitarVelocidad.Checked Then
-                txtLimiteVelocidad.Text = (f.LimiteVelocidad / 1024).ToString("0.####")
+                txtLimiteVelocidad.Text = (f.LimiteVelocidad / 1024).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)
                 limiteInicialKB = f.LimiteVelocidad
             End If
         Else
@@ -64,7 +64,7 @@ Public Class PropiedadesDescarga
                 Next
                 If commonLimit > 0 Then
                     chkLimitarVelocidad.Checked = True
-                    txtLimiteVelocidad.Text = (commonLimit / 1024).ToString("0.####")
+                    txtLimiteVelocidad.Text = (commonLimit / 1024).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)
                     limiteInicialKB = commonLimit
                 Else
                     chkLimitarVelocidad.Checked = False

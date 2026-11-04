@@ -236,7 +236,10 @@ Public Class Configuration
             txtLimiteVelocidadKBs.Enabled = chkLimitarVelocidad.Checked
             If (Config.LimiteVelocidadKBs > 0) Then
                 ' ⑪:限长小数(1500KB→1.46484375)。4 位小数约 0.1KB 精度,回乘 Round 后误差 <1KB。
-                txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString("0.####")
+                ' Final fix: the echo must use the same fixed format as the parser's
+                ' invariant fallback, otherwise a locale echo ("1,5" in de-DE) trained
+                ' users to type group separators that the parser then misreads.
+                txtLimiteVelocidadKBs.Text = (Config.LimiteVelocidadKBs / 1024).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)
             End If
 
             chkProxy.Checked = Config.UsarProxy

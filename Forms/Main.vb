@@ -453,7 +453,15 @@ Public Class Main
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
-        If IsSilent() AndAlso (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
+        ' Final fix: a transient lock leaves the in-memory config at defaults
+        ' (CondicionesAceptadas=False, LoadErrorConfig=Fichero_No_Valido), so this
+        ' "needs attention" branch used to fire on every -silent degraded startup
+        ' and skipped CompleteStartup() entirely: no recovery timer, no banner and
+        ' no download/disk workers until the user manually opened the window.
+        ' A lock is not a real first-run / corrupted-config state, so keep the
+        ' normal startup path; the recovery timer restores the persisted values.
+        If IsSilent() AndAlso Not Config.LoadTransientError AndAlso
+           (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
             _startupNeedsAttention = True
             Log.WriteWarning("Silent startup paused: terms or configuration require attention. Open the main window to continue.")
             IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Startup requires attention. Open the main window to continue."), ToolTipIcon.Warning)
@@ -590,6 +598,17 @@ Public Class Main
             If Config IsNot Nothing AndAlso Config.LoadTransientError Then
                 configRecovered = Config.TryRecoverFromTransientLock()
                 If configRecovered Then
+                    ' Final fix: the startup language was picked from the default
+                    ' config (Idioma="auto"). CargaXMLInterno(True) restores the
+                    ' persisted Idioma, but the static language packs and every
+                    ' translated label were still the degraded ones. Re-initialise
+                    ' and re-translate once, so the settings dialog and the UI agree.
+                    Try
+                        Language.InitLanguage(Config.Idioma)
+                        Me.Translate()
+                    Catch ex As Exception
+                        Log.WriteError("Language refresh after config recovery failed: " & Log.SafeException(ex))
+                    End Try
                     Try
                         ApplyCurrentTheme()
                     Catch ex As Exception
@@ -606,6 +625,11 @@ Public Class Main
                         ' 追加到真实队列之后,避免恢复动作把新任务静默丢掉。
                         If ListaPaquetes IsNot Nothing Then real.AddRange(ListaPaquetes)
                         ListaPaquetes = real
+                        ' Final fix: keep write protection armed until the merged list
+                        ' is the live queue. Releasing it inside TryReload... let the
+                        ' 250ms disk worker persist the incomplete degraded queue and
+                        ' rotate the freshly recovered queue into .bak.
+                        Paquete.CommitTransientRecovery()
                     End SyncLock
                     RefreshListaDescargas(True)
                     queueRecovered = True
@@ -894,7 +918,10 @@ Public Class Main
     End Sub
 
     Private Function CheckMEGAConditions() As Boolean
-        If Not Config.CondicionesAceptadas Then
+        ' Final fix: on a transient lock the on-disk terms state is simply unknown.
+        ' Asking again (and forcing a close on "No") would replace a perfectly good
+        ' config with defaults; the recovery timer reloads the persisted value.
+        If Not Config.CondicionesAceptadas AndAlso Not Config.LoadTransientError Then
             If MessageBox.Show(
                 Language.GetText("Accept terms of use"),
                 Language.GetText("Terms of use"),

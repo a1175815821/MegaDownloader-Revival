@@ -287,8 +287,9 @@ Public Class Paquete
         End Get
     End Property
 
-    ''' <summary>B2: 占用解除后重读主文件(不读 .bak),返回磁盘上的真实队列并解除写保护。
-    ''' 调用方负责把它与降级期间用户新建的任务合并;仍被占用时返回 Nothing 且状态不变。</summary>
+    ''' <summary>B2: 占用解除后重读主文件(不读 .bak),返回磁盘上的真实队列。
+    ''' 写保护在调用方把列表合并进活动队列之后由 CommitTransientRecovery 解除;
+    ''' 仍被占用时返回 Nothing 且状态不变。</summary>
     Public Shared Function TryReloadAfterTransientLock() As Generic.List(Of Paquete)
         If Not _LoadTransientError Then Return Nothing
         Dim Fichero As String = ObtenerRutaFicheroDescargas()
@@ -306,19 +307,25 @@ Public Class Paquete
             Log.WriteError("Download list recovery failed: " & Log.SafeException(ex))
             Return Nothing
         End Try
+        Return l
+    End Function
+
+    ''' <summary>B2 final fix: 由主窗体在 Mutex.ListaDescargas 内完成合并后调用。
+    ''' 在此之前 _LoadTransientError 仍为 True,周期落盘一律拒写,不会出现"恢复中的
+    ''' 空队列被写盘、把刚恢复的真实队列挤进 .bak"的窗口。</summary>
+    Public Shared Sub CommitTransientRecovery()
         _LoadTransientError = False
         _TransientSkipLogged = False
         _LastSavedXML = Nothing
         Log.WriteInfo("Download list recovered after the on-disk file was unlocked.")
-        Return l
-    End Function
+    End Sub
 
     Public Shared Sub GuardarEnFichero(ByVal ListaPaquetes As Generic.List(Of Paquete))
 
         Dim Fichero As String = ObtenerRutaFicheroDescargas()
 
         ' B2: 不再依赖 File.Exists,文件被杀软移走时保护仍须生效;
-        ' 解除由 Main 的恢复计时器调用 TryReloadAfterTransientLock 完成。
+        ' 解除由 Main 的恢复计时器合并真实队列后调用 CommitTransientRecovery 完成。
         If _LoadTransientError Then
             If Not _TransientSkipLogged Then
                 _TransientSkipLogged = True

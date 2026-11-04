@@ -186,6 +186,7 @@ public class RegressionTests {
         Batch1BugFixCases(plain,key);
         Batch2PerfCases(plain,key);
         FinalReviewCases();
+        FinalFixCases();
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {
@@ -716,6 +717,65 @@ public class RegressionTests {
         Check(hashField.GetValue(null)==null,
               "final review: editing ELC accounts invalidates the cached fingerprint");
         Print("final_review","locked queue snapshot + concurrent import + large-queue signature + ELC dirty flag passed");
+    }
+    static void FinalFixCases() {
+        // Final fix: the invariant fallback must not silently shrink a
+        // locale-grouped number (de-DE "1.500" meant 1500 MB/s before B5, 1.5 after).
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            foreach(var culture in new[]{"de-DE","es-ES","en-US"}) {
+                Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo(culture);
+                string grouped=culture=="en-US"?"1,500":"1.500";
+                object[] groupArgs={grouped,0};
+                Check(!(bool)parse.Invoke(null,groupArgs)&&(int)groupArgs[1]==0,
+                      "final fix: grouped number is rejected, not silently scaled in "+culture);
+                object[] dot={"1.5",0};
+                Check((bool)parse.Invoke(null,dot)&&(int)dot[1]==1536,
+                      "final fix: plain dot decimal still round-trips in "+culture);
+                object[] plain={"1500",0};
+                Check((bool)parse.Invoke(null,plain)&&(int)plain[1]==1536000,
+                      "final fix: ungrouped large limit keeps its value in "+culture);
+            }
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            object[] frComma={"0,5",0};
+            Check((bool)parse.Invoke(null,frComma)&&(int)frComma[1]==512,
+                  "final fix: localized decimal comma still parses");
+            object[] frDot={"1.5",0};
+            Check((bool)parse.Invoke(null,frDot)&&(int)frDot[1]==1536,
+                  "final fix: fr-FR dot decimal still parses");
+            object[] deComma={"1,5",0};
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+            Check((bool)parse.Invoke(null,deComma)&&(int)deComma[1]==1536,
+                  "final fix: de-DE decimal comma still parses");
+        } finally { Thread.CurrentThread.CurrentCulture=previous; }
+
+        // Final fix: write protection must stay armed until the recovered queue
+        // has actually been merged by the caller.
+        var flag=typeof(Paquete).GetField("_LoadTransientError",shared);
+        var snapshot=typeof(Paquete).GetField("_LastSavedXML",shared);
+        var logged=typeof(Paquete).GetField("_TransientSkipLogged",shared);
+        var commit=typeof(Paquete).GetMethod("CommitTransientRecovery",shared|BindingFlags.Public);
+        Check(flag!=null&&snapshot!=null&&logged!=null&&commit!=null,
+              "final fix: recovery commit primitives are available");
+        bool originalFlag=Paquete.HasTransientLoadError;
+        object originalSnapshot=snapshot.GetValue(null);
+        object originalLogged=logged.GetValue(null);
+        try {
+            flag.SetValue(null,true);
+            Check(Paquete.HasTransientLoadError,
+                  "final fix: a reload alone must not release write protection");
+            commit.Invoke(null,null);
+            Check(!Paquete.HasTransientLoadError,
+                  "final fix: the explicit commit releases write protection");
+            Check(snapshot.GetValue(null)==null,
+                  "final fix: the commit invalidates the de-dup snapshot");
+        } finally {
+            flag.SetValue(null,originalFlag);
+            snapshot.SetValue(null,originalSnapshot);
+            logged.SetValue(null,originalLogged);
+        }
+        Print("final_fix","grouped speed rejected; recovery commit defers write protection");
     }
     static void SevenZipCancelCase() {
         Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);
