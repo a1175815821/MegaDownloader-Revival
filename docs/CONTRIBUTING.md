@@ -237,7 +237,7 @@ This project maintains **two independent multilingual systems** — one for docu
 
 Documentation is translated by hand — there is no automatic translation pipeline:
 
-- README is hand-maintained in five languages (`README.md`, `docs/README.*.md`); CONTRIBUTING in English and Simplified Chinese only. **CHANGELOG is maintained in Simplified Chinese only** (`docs/CHANGELOG.md`) — do not create translated copies; non-Chinese readers can use machine translation
+- README is hand-maintained in three languages (`README.md`, `docs/README.*.md`); CONTRIBUTING in English and Simplified Chinese only. **CHANGELOG is maintained in Simplified Chinese only** (`docs/CHANGELOG.md`) — do not create translated copies; non-Chinese readers can use machine translation
 - When you update README or CONTRIBUTING, please update all maintained language versions to keep them in sync
 - To improve wording, edit the file of the corresponding language directly, or open a PR
 - To add a language, copy the English (or Chinese) document to the new language file, then update the language navigation links at the top of each document and the language table
@@ -259,7 +259,8 @@ To improve a translation:
 3. Register the embedded resource in `MegaDownloader.vbproj`:
 
 ```xml
-<EmbeddedResource Include="Resources\Languageu-RU-Language.xml" />
+<EmbeddedResource Include="Resources\Language
+u-RU-Language.xml" />
 ```
 
 4. Rebuild and run the app, then select the new language under **Settings → Language**
@@ -283,7 +284,7 @@ When filing a bug, please include the following in the Issue:
 
 1. Confirm both `Debug` and `Release` build, and run `.\Tests\Run-RegressionTests.ps1`
 2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
-3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all five READMEs (root English plus four translations)
+3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all three READMEs (root English, Simplified Chinese, Russian)
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
 6. Prepare the release notes using the structure below. CI generates initial notes; edit them on the GitHub Release page after publishing

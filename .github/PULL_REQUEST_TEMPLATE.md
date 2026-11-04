@@ -29,7 +29,7 @@ If something was not tested, say so — that is more useful than silence.
 ## Checklist
 
 - [ ] No new warnings in the build output
-- [ ] New UI strings added to all 10 language packs under `Resources/Language/` (or reused an existing key)
+- [ ] New UI strings added to all 11 language packs under `Resources/Language/` (or reused an existing key)
 - [ ] `docs/CHANGELOG.md` updated for user-visible changes
 - [ ] READMEs updated if behaviour, requirements or version numbers changed
 - [ ] No unrelated reformatting or whitespace noise in the diff
