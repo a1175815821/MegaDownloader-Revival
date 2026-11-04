@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <sub>单文件 EXE 或 ZIP · 免安装 · 免管理员 · .NET Framework 4.8 · 10 种界面语言</sub><br>
-  <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja-JP.md">日本語</a> · <a href="README.ko-KR.md">한국어</a></sub>
+  <sub>单文件 EXE 或 ZIP · 免安装 · 免管理员 · .NET Framework 4.8 · 11 种界面语言</sub><br>
+  <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub>
 </p>
 
 > **v2.6.1：界面更清晰，设置更快，语言跟随系统。** 统一深浅色视觉层次，修复菜单首次显示，新增根据 Windows 显示语言自动选择界面语言，没有对应翻译就用英文。[看看新在哪 ↓](#-261-新在哪)
@@ -173,7 +173,7 @@
 - **定时下载** —— 每日时段或一次性预约（v2.6）
 - **详情栏可收起** —— 队列统计、任务列表、详情三段式，窄窗口自动让出空间
 - **深 / 浅色主题** —— 跟随系统，也可手动指定
-- **10 种界面语言** —— English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
+- **11 种界面语言** —— English · Español · 简体中文 · 繁體中文 · Русский · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
 - **Web 界面** —— 内置 HTTP 服务，浏览器远程添加任务、查看进度；可开启局域网访问，用手机推送下载
 
 **附加能力**
@@ -317,7 +317,7 @@ MegaDownloader/
 ├── Stegano/                # 隐写术窗体
 ├── Resources/
 │   ├── DLLs/               # 第三方 DLL 依赖
-│   ├── Language/           # 多语言 XML（10 种）
+│   ├── Language/           # 多语言 XML（11 种）
 │   └── Installer MSD/      # WiX 安装包工程
 ├── docs/                   # 文档、截图
 ├── Tests/                  # 下载、解压与流媒体回归验证
@@ -340,15 +340,13 @@ MegaDownloader/
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
 | [2.6.1 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | v2.6.1 的更新亮点与下载 |
 
-README 为五种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
+README 为三种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 
 | 语言 | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
 | English | `README.md`（根目录） | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | 简体中文 | `docs/README.zh-CN.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.zh-CN.md` |
-| 繁體中文 | `docs/README.zh-TW.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
-| 日本語 | `docs/README.ja-JP.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
-| 한국어 | `docs/README.ko-KR.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| Русский | `docs/README.ru-RU.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 
 ---
 
@@ -358,7 +356,7 @@ README 为五种语言手动维护；CONTRIBUTING 有英文与简体中文两个
 
 - ⭐ **点个 Star** —— 这是让项目被更多人看到的最直接信号
 - 🐛 [提 Issue](../../../issues) —— 近期的多个修复都来自用户报告
-- 🌍 帮忙改进 [翻译](CONTRIBUTING.zh-CN.md) —— 已有 10 种语言，缺母语校对
+- 🌍 帮忙改进 [翻译](CONTRIBUTING.zh-CN.md) —— 已有 11 种语言，缺母语校对
 - 🔗 分享给还在找 MEGA 下载工具的朋友
 
 <a href="https://star-history.com/#a1175815821/MegaDownloader-Revival&Date">

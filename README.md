@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <sub>Portable EXE or ZIP · no installer · no admin rights · .NET Framework 4.8 · 10 languages</sub><br>
-  <sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.zh-TW.md">繁體中文</a> · <a href="docs/README.ja-JP.md">日本語</a> · <a href="docs/README.ko-KR.md">한국어</a></sub>
+  <sub>Portable EXE or ZIP · no installer · no admin rights · .NET Framework 4.8 · 11 languages</sub><br>
+  <sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub>
 </p>
 
 > **v2.6.1 — a cleaner workbench, faster settings, automatic language selection.** Refined light and dark themes, reliable first-open menus, and a language option that follows Windows with English as the fallback. [See what's new ↓](#-whats-new-in-261)
@@ -173,7 +173,7 @@ That's all. Other ways in: drag a link onto the window · **Add Link** on the to
 - **Scheduled downloads** — daily window or one-off appointment (v2.6)
 - **Collapsible details** — queue stats, task list and details that yield space on narrow windows
 - **Dark / light themes** — follows the system, or set manually
-- **10 UI languages** — English · Español · 简体中文 · 繁體中文 · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
+- **11 UI languages** — English · Español · 简体中文 · 繁體中文 · Русский · Français · Deutsch · Italiano · Português (BR) · Magyar · Română
 - **Web interface** — built-in HTTP server; add tasks and watch progress from a browser, enable LAN access to push downloads from your phone
 
 **Extras**
@@ -317,7 +317,7 @@ MegaDownloader/
 ├── Stegano/                # Steganography forms
 ├── Resources/
 │   ├── DLLs/               # Third-party DLL dependencies
-│   ├── Language/           # Localization XML (10 languages)
+│   ├── Language/           # Localization XML (11 languages)
 │   └── Installer MSD/      # WiX installer project
 ├── docs/                   # Docs and screenshots
 ├── Tests/                  # Download, extraction and streaming regression checks
@@ -340,15 +340,13 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
 | [Release notes 2.6.1](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | Highlights and downloads for v2.6.1 |
 
-The README is maintained in five languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
+The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 
 | Language | README | CHANGELOG | CONTRIBUTING |
 | --- | --- | --- | --- |
 | English | `README.md` (repo root) | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 | Simplified Chinese | `docs/README.zh-CN.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.zh-CN.md` |
-| Traditional Chinese | `docs/README.zh-TW.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
-| Japanese | `docs/README.ja-JP.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
-| Korean | `docs/README.ko-KR.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
+| Russian | `docs/README.ru-RU.md` | `docs/CHANGELOG.md` | `docs/CONTRIBUTING.md` |
 
 ---
 
@@ -358,7 +356,7 @@ If MegaDownloader Revival helps you, here are the highest-impact ways to help ba
 
 - ⭐ **Star this repo** — it's the main signal that keeps the project visible
 - 🐛 [Report issues](../../issues) — many recent fixes came straight from user reports
-- 🌍 Improve the [translations](docs/CONTRIBUTING.md) — 10 languages exist, native speakers wanted
+- 🌍 Improve the [translations](docs/CONTRIBUTING.md) — 11 languages exist, native speakers wanted
 - 🔗 Share it with someone still hunting for a working MEGA downloader
 
 <a href="https://star-history.com/#a1175815821/MegaDownloader-Revival&Date">

@@ -60,7 +60,7 @@ MegaDownloader/
 │   └── SteganoWizardSave.vb
 ├── Resources/
 │   ├── DLLs/                       # Third-party DLL dependencies
-│   ├── Language/                   # Multi-language XML (10 languages)
+│   ├── Language/                   # Multi-language XML (11 languages)
 │   └── Installer MSD/              # WiX installer project
 ├── My Project/                     # VS project metadata
 ├── Forms/                          # WinForms forms (12)
@@ -255,11 +255,11 @@ To improve a translation:
 ### Adding a new UI language
 
 1. Copy `Resources/Language/en-US-Language.xml` to `<locale>-Language.xml`
-2. Set the root `id` to a valid culture code (e.g. `ja-JP`) and `name` to the language display name; then translate the CDATA content of every `<Text>` node
+2. Set the root `id` to a valid culture code (e.g. `ru-RU`) and `name` to the language display name; then translate the CDATA content of every `<Text>` node
 3. Register the embedded resource in `MegaDownloader.vbproj`:
 
 ```xml
-<EmbeddedResource Include="Resources\Language\ja-JP-Language.xml" />
+<EmbeddedResource Include="Resources\Languageu-RU-Language.xml" />
 ```
 
 4. Rebuild and run the app, then select the new language under **Settings → Language**

@@ -1,0 +1,652 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Language id="ru-RU" name="Russian" app="MegaDownloader">
+  <Text key="Loading..."><![CDATA[Загрузка...]]></Text>
+  <Text key="Loading please wait"><![CDATA[Загрузка, пожалуйста, подождите...]]></Text>
+  <Text key="Closing please wait"><![CDATA[Закрытие, пожалуйста, подождите...]]></Text>
+  <Text key="Name"><![CDATA[Имя]]></Text>
+  <Text key="Downloaded"><![CDATA[Скачано]]></Text>
+  <Text key="Size"><![CDATA[Размер]]></Text>
+  <Text key="Status"><![CDATA[Статус]]></Text>
+  <Text key="Progress"><![CDATA[Прогресс]]></Text>
+  <Text key="Progress %"><![CDATA[Прогресс %]]></Text>
+  <Text key="Speed"><![CDATA[Скорость]]></Text>
+  <Text key="Estimated"><![CDATA[Оценка]]></Text>
+  <Text key="Remaining"><![CDATA[Осталось]]></Text>
+  <Text key="Open directory"><![CDATA[Открыть папку]]></Text>
+  <Text key="Increase priority"><![CDATA[Повысить приоритет]]></Text>
+  <Text key="Decrease priority"><![CDATA[Понизить приоритет]]></Text>
+  <Text key="Close"><![CDATA[Закрыть]]></Text>
+  <Text key="Pause"><![CDATA[Пауза]]></Text>
+  <Text key="Start"><![CDATA[Запустить]]></Text>
+  <Text key="Stop"><![CDATA[Остановить]]></Text>
+  <Text key="Add"><![CDATA[Добавить]]></Text>
+  <Text key="Update"><![CDATA[Обновить]]></Text>
+  <Text key="Toast_PackageAdded"><![CDATA[Пакет добавлен: %N%]]></Text>
+  <Text key="OLV_EmptyList"><![CDATA[Перетащите MEGA-ссылки сюда или скопируйте одну — монитор буфера обмена её подхватит]]></Text>
+  <Text key="Config_SearchHint"><![CDATA[Поиск по настройкам (прокси, тема, VLC...)]]></Text>
+  <Text key="Nav_All"><![CDATA[Все]]></Text>
+  <Text key="Nav_Downloading"><![CDATA[Скачиваются]]></Text>
+  <Text key="Nav_Waiting"><![CDATA[В очереди]]></Text>
+  <Text key="Nav_Failed"><![CDATA[Ошибки]]></Text>
+  <Text key="Nav_Completed"><![CDATA[Завершены]]></Text>
+  <Text key="Detail_Title"><![CDATA[Детали]]></Text>
+  <Text key="Detail_Empty"><![CDATA[Выберите задачу, чтобы увидеть детали]]></Text>
+  <Text key="Detail_EmptyHint"><![CDATA[или перетащите ссылки сюда / нажмите Ctrl+V]]></Text>
+  <Text key="Overview_Title"><![CDATA[Сводка задач]]></Text>
+  <Text key="Overview_Speed"><![CDATA[Общая скорость]]></Text>
+  <Text key="Overview_Active"><![CDATA[Активные]]></Text>
+  <Text key="Overview_Queued"><![CDATA[В очереди]]></Text>
+  <Text key="Overview_Failed"><![CDATA[С ошибками]]></Text>
+  <Text key="Overview_Progress"><![CDATA[Прогресс очереди]]></Text>
+  <Text key="Overview_Remaining"><![CDATA[Осталось времени]]></Text>
+  <Text key="Quick_Title"><![CDATA[Быстрые действия]]></Text>
+  <Text key="Quick_ExtractQueue"><![CDATA[Очередь распаковки]]></Text>
+  <Text key="Quick_StreamingLibrary"><![CDATA[Медиатека стриминга]]></Text>
+  <Text key="Quick_Logs"><![CDATA[Журналы]]></Text>
+  <Text key="Detail_Path"><![CDATA[Путь]]></Text>
+  <Text key="AddLinks_LinkCount"><![CDATA[Ссылок: %N%]]></Text>
+  <Text key="AddLinks_CueBanner"><![CDATA[Вставьте MEGA-ссылки сюда, по одной в строке...]]></Text>
+  <Text key="Delete from list"><![CDATA[Удалить из списка]]></Text>
+  <Text key="Delete from list and disk"><![CDATA[Удалить из списка и с диска]]></Text>
+  <Text key="Add link"><![CDATA[Добавить ссылку]]></Text>
+  <Text key="Add links"><![CDATA[Добавить ссылки]]></Text>
+  <Text key="Open"><![CDATA[Открыть]]></Text>
+  <Text key="Configuration"><![CDATA[Конфигурация]]></Text>
+  <Text key="See error"><![CDATA[Показать ошибку]]></Text>
+  <Text key="See links"><![CDATA[Показать ссылки]]></Text>
+  <Text key="See links + desc"><![CDATA[Ссылки + описание]]></Text>
+  <Text key="Reset"><![CDATA[Сбросить]]></Text>
+  <Text key="Properties"><![CDATA[Свойства]]></Text>
+  <Text key="Clean completed"><![CDATA[Очистить завершённые]]></Text>
+  <Text key="Start downloads"><![CDATA[Запустить загрузку]]></Text>
+  <Text key="Start download"><![CDATA[Запустить загрузку]]></Text>
+  <Text key="Pause downloads"><![CDATA[Приостановить загрузку]]></Text>
+  <Text key="Stop downloads"><![CDATA[Остановить загрузку]]></Text>
+  <Text key="Status: -"><![CDATA[Статус: -]]></Text>
+  <Text key="RAM Proc Empty"><![CDATA[ОЗУ: - / Проц: -]]></Text>
+  <Text key="RAM"><![CDATA[ОЗУ]]></Text>
+  <Text key="Proc"><![CDATA[Проц]]></Text>
+  <Text key="Links"><![CDATA[Ссылки]]></Text>
+  <Text key="Hour"><![CDATA[Час]]></Text>
+  <Text key="Queued, error, completed"><![CDATA[В очереди, с ошибками и завершённые]]></Text>
+  <Text key="active downloads"><![CDATA[активных загрузок]]></Text>
+  <Text key="Error information"><![CDATA[Информация об ошибке]]></Text>
+  <Text key="New version available"><![CDATA[Доступна новая версия]]></Text>
+  <Text key="New version do you want to download it? Recommended!">
+    <![CDATA[Вышла новая версия MegaDownloader.
+
+Рекомендуется обновиться.
+
+Скачать её?]]>
+  </Text>
+  <Text key="Update prompt hint"><![CDATA[Да = обновить сейчас / Нет = напомнить позже / Отмена = больше не напоминать для этой версии]]></Text>
+  <Text key="New version do you want to download it?"><![CDATA[Вышла новая версия MegaDownloader. Нажмите здесь, чтобы скачать её.]]></Text>
+  <Text key="Do you want to exit?"><![CDATA[Вы действительно хотите выйти?]]></Text>
+  <Text key="Files extracting, corruption danger">
+    <![CDATA[Сейчас идёт распаковка файлов.
+Если выйти сейчас, распакованные файлы могут повредиться, и их придётся распаковывать вручную.]]>
+  </Text>
+  <Text key="Package"><![CDATA[Пакет]]></Text>
+  <Text key="Turning off in 60 seconds"><![CDATA[Автоматическое выключение через 60 секунд]]></Text>
+  <Text key="Confirmation"><![CDATA[Подтверждение]]></Text>
+  <Text key="Do you want to delete the element(s)?"><![CDATA[Удалить выбранные элементы?]]></Text>
+  <Text key="Note: files will NOT be deleted"><![CDATA[Примечание: файлы НЕ будут удалены.]]></Text>
+  <Text key="Note: files will BE deleted"><![CDATA[Примечание: файлы БУДУТ удалены.]]></Text>
+  <Text key="No valid URLs have been inserted"><![CDATA[Не вставлено ни одной корректной ссылки]]></Text>
+  <Text key="Can not add remote links without a default path"><![CDATA[Нельзя добавлять ссылки удалённо без пути по умолчанию]]></Text>
+  <Text key="New package"><![CDATA[Новый пакет]]></Text>
+  <Text key="Connection conf"><![CDATA[Параметры соединения]]></Text>
+  <Text key="See decompression progress"><![CDATA[Показать прогресс распаковки]]></Text>
+
+
+  <Text key="&amp;File"><![CDATA[&Файл]]></Text>
+  <Text key="E&amp;xit"><![CDATA[В&ыход]]></Text>
+  <Text key="&amp;Options"><![CDATA[&Опции]]></Text>
+  <Text key="&amp;Configuration"><![CDATA[&Конфигурация]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[Очередь &распаковки]]></Text>
+  <Text key="&amp;Help"><![CDATA[&Справка]]></Text>
+  <Text key="FA&amp;Q"><![CDATA[&FAQ]]></Text>
+  <Text key="&amp;Collaborate"><![CDATA[&Помощь проекту]]></Text>
+  <Text key="See lo&amp;gs"><![CDATA[Показать &журналы]]></Text>
+  <Text key="&amp;About"><![CDATA[&О программе MegaDownloader]]></Text>
+  <Text key="Manage Streaming &amp;Library"><![CDATA[Управление &медиатекой]]></Text>
+  <Text key="See Streaming &amp;Library"><![CDATA[Открыть м&едиатеку]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[&Стриминг]]></Text>
+  <Text key="Watch &amp;Online"><![CDATA[Смотреть &онлайн]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[Кодировать &ссылки]]></Text>
+
+  <Text key="Collaborate"><![CDATA[Помощь проекту]]></Text>
+  <Text key="Creating files"><![CDATA[Создание файлов]]></Text>
+  <Text key="In queue"><![CDATA[В очереди]]></Text>
+  <Text key="Verifying"><![CDATA[Проверка]]></Text>
+  <Text key="Paused"><![CDATA[Пауза]]></Text>
+  <Text key="Stopped"><![CDATA[Остановлено]]></Text>
+  <Text key="Error capital leters"><![CDATA[ОШИБКА]]></Text>
+  <Text key="Error"><![CDATA[Ошибка]]></Text>
+  <Text key="Warning"><![CDATA[Внимание]]></Text>
+  <Text key="See extraction queue"><![CDATA[Показать очередь распаковки]]></Text>
+  <Text key="Manage Streaming Library"><![CDATA[Управление медиатекой стриминга]]></Text>
+  <Text key="Extracting"><![CDATA[Распаковка]]></Text>
+  <Text key="Downloading"><![CDATA[Скачивание]]></Text>
+  <Text key="Completed"><![CDATA[Завершено]]></Text>
+  <Text key="Hashing MD5"><![CDATA[Вычисление MD5]]></Text>
+
+  <Text key="Current"><![CDATA[Текущий]]></Text>
+  <Text key="File"><![CDATA[Файл]]></Text>
+  <Text key="Extraction queue"><![CDATA[Очередь распаковки]]></Text>
+  <Text key="This screen lets you see the status of the files pending of extraction"><![CDATA[Этот экран показывает состояние файлов, ожидающих распаковки]]></Text>
+  <Text key="if automatic extraction option is enabled"><![CDATA[если включена опция автоматической распаковки]]></Text>
+
+  <Text key="Pre-Shared Keys Manager"><![CDATA[Менеджер общих ключей (Pre-Shared Keys)]]></Text>
+  <Text key="Pre-Shared Key list"><![CDATA[Список общих ключей]]></Text>
+  <Text key="Pre-Shared Keys"><![CDATA[Общие ключи (Pre-Shared Keys)]]></Text>
+  <Text key="Pre-Shared Key Manager Description">
+    <![CDATA[Введите общие ключи (Pre-Shared Keys) для скачивания файлов, загруженных с этой опцией.
+Если ключ действителен, вы сможете скачивать файлы даже без приватного ключа..
+Вводите по одному ключу в строке и следите, чтобы не было лишних пробелов!]]>
+  </Text>
+  <Text key="Options"><![CDATA[Опции]]></Text>
+  <Text key="Path"><![CDATA[Путь]]></Text>
+  <Text key="Browse"><![CDATA[Обзор]]></Text>
+  <Text key="Create directory"><![CDATA[Создавать папку]]></Text>
+  <Text key="Select directory"><![CDATA[Выбрать папку]]></Text>
+  <Text key="Automatic extraction"><![CDATA[Автоматическая распаковка]]></Text>
+  <Text key="Links not valid"><![CDATA[Не вставлено ни одной корректной ссылки]]></Text>
+  <Text key="Invalid directory"><![CDATA[Некорректная папка]]></Text>
+  <Text key="Directory %D% does not exist"><![CDATA[Папка %D% не существует.]]></Text>
+  <Text key="Invalid package name"><![CDATA[Некорректное имя пакета: если выбрано «Создавать папку», папка с этим именем будет создана, поэтому имя необходимо указать.]]></Text>
+  <Text key="File properties"><![CDATA[Свойства файла]]></Text>
+  <Text key="Package properties"><![CDATA[Свойства пакета]]></Text>
+  <Text key="Download properties"><![CDATA[Свойства загрузки]]></Text>
+  <Text key="Not available"><![CDATA[Недоступно]]></Text>
+  <Text key="Not applied"><![CDATA[Не применено]]></Text>
+  <Text key="Total"><![CDATA[Всего]]></Text>
+  <Text key="URL"><![CDATA[URL]]></Text>
+  <Text key="MD5"><![CDATA[MD5]]></Text>
+  <Text key="Note"><![CDATA[Примечание]]></Text>
+  <Text key="Save"><![CDATA[Сохранить]]></Text>
+  <Text key="Cancel"><![CDATA[Отмена]]></Text>
+  <Text key="Limit speed to"><![CDATA[Ограничить скорость до]]></Text>
+  <Text key="Invalid speed limit"><![CDATA[Некорректный лимит скорости.]]></Text>
+  <Text key="Note about the options"><![CDATA[Примечание к опциям]]></Text>
+  <Text key="Can change file path if not downloaded"><![CDATA[Путь файла можно изменить, пока загрузка не началась. После старта изменить его нельзя.]]></Text>
+  <Text key="Message change package path">
+    <![CDATA[Если изменить путь пакета, изменится путь загрузки всех ожидающих файлов.
+Путь файлов, которые уже скачиваются, не изменится.
+Опция «Автоматическая распаковка» применится ко всем файлам пакета.]]>
+  </Text>
+  <Text key="User"><![CDATA[Пользователь]]></Text>
+  <Text key="E-mail"><![CDATA[Эл. почта]]></Text>
+  <Text key="Password"><![CDATA[Пароль]]></Text>
+  <Text key="Show password"><![CDATA[Показать пароль]]></Text>
+  <Text key="User data"><![CDATA[Данные пользователя (необязательно)]]></Text>
+  <Text key="See logs"><![CDATA[Показать журналы]]></Text>
+  <Text key="Decompressor"><![CDATA[Распаковщик]]></Text>
+  <Text key="minutes"><![CDATA[мин]]></Text>
+  <Text key="Capture links from clipboard"><![CDATA[Перехватывать ссылки из буфера обмена]]></Text>
+  <Text key="Turn off computer when finished"><![CDATA[Выключить компьютер по завершении]]></Text>
+  <Text key="Start downloading when application starts"><![CDATA[Начинать загрузку при запуске приложения]]></Text>
+  <Text key="In case of error, retry the download each"><![CDATA[При ошибке повторять загрузку каждые]]></Text>
+  <Text key="Quota breakthrough mode (legacy persistent retry)"><![CDATA[Режим пробива квоты (прежний режим постоянных повторов)]]></Text>
+  <Text key="Important note about connections"><![CDATA[Важное примечание о соединениях]]></Text>
+  <Text key="Number of parallel downloads"><![CDATA[Число параллельных загрузок]]></Text>
+  <Text key="Number of connections per file"><![CDATA[Число соединений на файл]]></Text>
+  <Text key="Priority"><![CDATA[Приоритет]]></Text>
+  <Text key="Create folder per package"><![CDATA[Создавать папку для каждого пакета]]></Text>
+  <Text key="Download path"><![CDATA[Путь загрузки]]></Text>
+  <Text key="Advanced options"><![CDATA[Расширенные опции]]></Text>
+  <Text key="General options"><![CDATA[Общие опции]]></Text>
+  <Text key="General"><![CDATA[Общие]]></Text>
+  <Text key="Advanced"><![CDATA[Расширенные]]></Text>
+  <Text key="Log level"><![CDATA[Уровень журнала]]></Text>
+  <Text key="Language"><![CDATA[Язык]]></Text>
+  <Text key="Theme"><![CDATA[Тема]]></Text>
+  <Text key="Theme_Auto"><![CDATA[Авто (как в системе)]]></Text>
+  <Text key="Theme_Light"><![CDATA[Светлая]]></Text>
+  <Text key="Theme_Dark"><![CDATA[Тёмная]]></Text>
+  <Text key="Note: for advanced users only. Dont touch anything if you arent sure"><![CDATA[Примечание: только для опытных пользователей. Если не уверены — ничего не меняйте.]]></Text>
+  <Text key="Disk buffer size"><![CDATA[Размер дискового буфера]]></Text>
+  <Text key="Package size"><![CDATA[Размер пакета]]></Text>
+  <Text key="Port"><![CDATA[Порт]]></Text>
+  <Text key="Connection"><![CDATA[Соединение]]></Text>
+  <Text key="Use proxy"><![CDATA[Использовать прокси]]></Text>
+  <Text key="Proxy"><![CDATA[Прокси]]></Text>
+  <Text key="Proxy address/IP"><![CDATA[Адрес / IP прокси]]></Text>
+  <Text key="Save / use last used configuration"><![CDATA[Сохранять / использовать последнюю конфигурацию]]></Text>
+  <Text key="Start with Windows"><![CDATA[Запускать вместе с Windows]]></Text>
+  <Text key="Web server"><![CDATA[Веб-сервер]]></Text>
+  <Text key="Use web server"><![CDATA[Использовать веб-сервер]]></Text>
+  <Text key="Allow LAN access"><![CDATA[Разрешить доступ по LAN]]></Text>
+  <Text key="Bind IP (empty = all)"><![CDATA[Привязать IP (пусто = все)]]></Text>
+  <Text key="Invalid IP address format"><![CDATA[Некорректный формат IP-адреса]]></Text>
+  <Text key="A web server password is required to allow LAN access"><![CDATA[Для доступа по LAN требуется пароль веб-сервера.]]></Text>
+  <Text key="Interrupt session"><![CDATA[Тайм-аут сессии]]></Text>
+  <Text key="Name (optional)"><![CDATA[Имя (необязательно)]]></Text>
+  <Text key="User (optional)"><![CDATA[Пользователь (необязательно)]]></Text>
+  <Text key="Password (optional)"><![CDATA[Пароль (необязательно)]]></Text>
+  <Text key="Template path"><![CDATA[Путь к шаблону]]></Text>
+  <Text key="Templates"><![CDATA[Шаблоны]]></Text>
+  <Text key="Data saved successfully"><![CDATA[Данные сохранены успешно]]></Text>
+  <Text key="You must configure user and password"><![CDATA[Нужно задать пользователя и пароль]]></Text>
+  <Text key="File decompressor"><![CDATA[Распаковщик файлов]]></Text>
+  <Text key="Information"><![CDATA[Информация]]></Text>
+
+  <Text key="Log_Minimum"><![CDATA[Минимальный]]></Text>
+  <Text key="Log_Normal"><![CDATA[Обычный]]></Text>
+  <Text key="Log_Informative"><![CDATA[Информационный]]></Text>
+  <Text key="Log_Debug"><![CDATA[Отладочный]]></Text>
+  <Text key="Priority_Low"><![CDATA[Низкий]]></Text>
+  <Text key="Priority_Normal"><![CDATA[Обычный]]></Text>
+  <Text key="Priority_VeryLow"><![CDATA[Очень низкий]]></Text>
+
+  <Text key="Streaming"><![CDATA[Стриминг]]></Text>
+  <Text key="Watch Online"><![CDATA[Смотреть онлайн]]></Text>
+  <Text key="Watch Online help link"><![CDATA[Примечание к опции "Смотреть онлайн"]]></Text>
+  <Text key="Watch Online Note">
+    <![CDATA[Опция «Смотреть онлайн» позволяет смотреть видео онлайн.
+
+Если ссылка ведёт на корректный видеофайл (avi, mkv, flv, mp4 и т. п.), можно открыть его через VLC Player.
+
+Должен быть активирован сервер стриминга и указан путь к VLC Player.
+Включить это можно на экране «Конфигурация», вкладка «Стриминг».
+
+После настройки нажмите кнопку «Смотреть онлайн», чтобы смотреть поток на своём ПК.]]>
+  </Text>
+  <Text key="Streaming server not activated"><![CDATA[Сервер стриминга не активирован. Включить его можно на экране «Конфигурация», вкладка «Стриминг».]]></Text>
+  <Text key="Missing VLC Path"><![CDATA[Путь к VLC не задан. Указать его можно на экране «Конфигурация», вкладка «Стриминг».]]></Text>
+  <Text key="MEGA Url"><![CDATA[MEGA-ссылка]]></Text>
+  <Text key="Streaming Url"><![CDATA[Ссылка стриминга]]></Text>
+  <Text key="Start VLC"><![CDATA[Запустить VLC]]></Text>
+  <Text key="Streaming Info">
+    <![CDATA[Введите адрес видео в поле «MEGA-ссылка».
+
+В поле «Ссылка стриминга» сформируется адрес. Его можно использовать в любом плеере с поддержкой потокового воспроизведения, чтобы начать просмотр.
+
+Если установлен VLC Player и его путь указан в конфигурации MegaDownloader, нажмите «Запустить VLC», чтобы начать просмотр видео.
+
+Учтите: перед началом стриминга может понадобиться подождать несколько секунд.]]>
+  </Text>
+  <Text key="Web server and streaming server ports must be different"><![CDATA[Порт сервера стриминга и порт веб-сервера не могут совпадать.]]></Text>
+  <Text key="Streaming configuration"><![CDATA[Конфигурация стриминга]]></Text>
+  <Text key="Use streaming server"><![CDATA[Использовать сервер стриминга]]></Text>
+  <Text key="VLC Configuration"><![CDATA[Конфигурация VLC]]></Text>
+  <Text key="VLC Path"><![CDATA[Путь к VLC]]></Text>
+  <Text key="Download VLC"><![CDATA[Скачать VLC]]></Text>
+  <Text key="Streaming configuration text">
+    <![CDATA[Сервер стриминга позволяет смотреть онлайн-видео с MEGA.CO.NZ.
+
+Чтобы воспользоваться сервером стриминга, включите опцию «Использовать сервер стриминга» и выберите порт.
+Значение должно быть от 1024 до 65535 (рекомендуется от 49152 до 65535).
+Порт не должен использоваться другими программами. По умолчанию используется порт 54321.
+
+После активации сервера стриминга откройте меню и выберите «Стриминг» / «Смотреть онлайн».
+Введите MEGA-ссылку — сформируется новая ссылка стриминга. Вставьте её в мультимедийный плеер, чтобы смотреть видео.
+
+Учтите: MegaDownloader — не мультимедийный плеер. Эта опция лишь передаёт поток данных с MEGA; для просмотра видео и звука нужен плеер, например VLC Player.
+Чтобы запускать VLC легко, укажите путь установки VLC в опции «Путь к VLC» на этом экране.]]>
+  </Text>
+
+
+  <Text key="Do you want to leave the default path empty?"><![CDATA[Оставить путь по умолчанию пустым?]]></Text>
+  <Text key="Disk buffer or package size values are not correct"><![CDATA[Значения дискового буфера или размера пакета некорректны.]]></Text>
+  <Text key="Disk buffer size must be greater than package size"><![CDATA[Размер дискового буфера должен быть больше размера пакета.]]></Text>
+  <Text key="Connection number values are incorrect or too high"><![CDATA[Значения числа соединений некорректны или слишком велики.]]></Text>
+  <Text key="Must specify the retry period, and this value must be between %A and %B"><![CDATA[Период повторов должен быть задан, его значение — от %A до %B.]]></Text>
+  <Text key="Invalid proxy configuration"><![CDATA[Некорректная конфигурация прокси.]]></Text>
+  <Text key="Invalid server port"><![CDATA[Некорректный порт сервера. Значение должно быть от 1024 до 65535 (рекомендуется от 49152 до 65535).]]></Text>
+  <Text key="The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted"><![CDATA[Значение тайм-аута сессии должно быть от 0 до %A. Значение 0 означает, что сессия не прерывается.]]></Text>
+  <Text key="The template path is not valid"><![CDATA[Некорректный путь к шаблону.]]></Text>
+  <Text key="Error starting web server"><![CDATA[Ошибка запуска веб-сервера]]></Text>
+  <Text key="The web server password must have at least %A characters"><![CDATA[Пароль веб-сервера должен содержать не менее %A символов.]]></Text>
+  <Text key="Error deleting local files - Path: %PATH% - Error: %ERROR%">
+    <![CDATA[Ошибка удаления локального файла «%PATH%». Если файл занят другим процессом, возможно, его придётся удалить вручную.
+Подробности ошибки:
+%ERROR%]]>
+  </Text>
+  <Text key="Invalid password"><![CDATA[Неверный пароль]]></Text>
+  <Text key="Download started"><![CDATA[Загрузка успешно запущена]]></Text>
+  <Text key="Download stopped"><![CDATA[Загрузка успешно остановлена]]></Text>
+  <Text key="Invalid links"><![CDATA[Некорректные ссылки]]></Text>
+  <Text key="Links added successfully"><![CDATA[Ссылки успешно добавлены]]></Text>
+  <Text key="If no user and password is specified, downloads will be made as an anonymous user"><![CDATA[Если не указаны пользователь и пароль, загрузки выполняются как анонимный пользователь.]]></Text>
+  <Text key="User and password is not used yet"><![CDATA[В настоящий момент пользователь и пароль не используются (можно оставить пустыми). Все загрузки выполняются как анонимный пользователь. В будущем эти поля могут понадобиться.]]></Text>
+  <Text key="Number of connection explanation">
+    <![CDATA[Указанные значения — максимально допустимые.
+Например, при 3 соединениях на файл и 5 параллельных загрузках будет максимум 15 соединений.
+Эти значения показываются на главном экране в виде A/B, где:
+ A — число соединений на файл,
+ B — число параллельных загрузок.]]>
+  </Text>
+  <Text key="Turn off PC explanation">
+    <![CDATA[С этой опцией компьютер выключится, когда загрузки успешно завершатся.
+При ошибках загрузки компьютер выключится в зависимости от опции «При ошибке повторять загрузку каждые».
+Если она включена, компьютер не выключится — программа будет пытаться переподключиться.
+
+ПРИМЕЧАНИЕ: эта опция не сохраняется, её нужно включать при каждом запуске приложения. Так компьютер не выключится случайно по завершении загрузки.]]>
+  </Text>
+  <Text key="Save and use last conf explanation">
+    <![CDATA[При включении этой опции экран добавления ссылок запоминает последнюю использованную конфигурацию с момента запуска приложения, вместо того чтобы показывать конфигурацию по умолчанию.
+Пример: путь по умолчанию — Рабочий стол. Нужно скачать 8 пакетов, каждый в свою папку.
+Вместо того чтобы менять путь 8 раз, вы меняете его один раз, а остальные 7 добавлений запомнят последнюю конфигурацию.
+Учтите: имя пакета не запоминается. При закрытии приложения эта конфигурация также теряется.]]>
+  </Text>
+  <Text key="You have to restart the application for the language change to take effect"><![CDATA[Чтобы изменение языка вступило в силу, перезапустите приложение.]]></Text>
+  <Text key="Please take into consideration the following"><![CDATA[Учтите следующее]]></Text>
+
+  <Text key="Error, session expired"><![CDATA[Ошибка, нужно подключиться заново: сессия истекла.]]></Text>
+  <Text key="Encode Url"><![CDATA[Кодирование ссылок]]></Text>
+  <Text key="Encoded Url"><![CDATA[Кодированная ссылка]]></Text>
+  <Text key="Paste your MEGA Url(s) and the encoded Url(s) will appear under the Encoded Url box."><![CDATA[Введите MEGA-ссылки — кодированные ссылки появятся в поле «Кодированная ссылка».]]></Text>
+
+  <Text key="Terms of use"><![CDATA[Условия использования]]></Text>
+  <Text key="Accept terms of use">
+    <![CDATA[Добро пожаловать в MegaDownloader.
+
+Это неофициальное приложение, созданное, чтобы помочь вам скачивать файлы с MEGA.
+
+Принимаете ли вы условия использования MEGA?
+Нажмите «Справка», чтобы прочитать их.]]>
+  </Text>
+
+
+  <Text key="Accounts"><![CDATA[Аккаунты]]></Text>
+  <Text key="Account"><![CDATA[Аккаунт]]></Text>
+  <Text key="Main account"><![CDATA[Аккаунт по умолчанию]]></Text>
+  <Text key="Must configure at least one account"><![CDATA[Нужно настроить хотя бы один аккаунт.]]></Text>
+  <Text key="Add new"><![CDATA[Добавить новый]]></Text>
+  <Text key="Account list empty"><![CDATA[Список аккаунтов пуст]]></Text>
+  <Text key="Account already exists"><![CDATA[Псевдоним или эл. почта уже существуют]]></Text>
+  <Text key="Account modified correctly">
+    <![CDATA[Аккаунт успешно изменён.
+Не забудьте сохранить конфигурацию, иначе изменения будут потеряны.]]>
+  </Text>
+  <Text key="Account created correctly">
+    <![CDATA[Аккаунт успешно добавлен.
+Не забудьте сохранить конфигурацию, иначе изменения будут потеряны.]]>
+  </Text>
+  <Text key="Account deleted correctly">
+    <![CDATA[Аккаунт успешно удалён.
+Не забудьте сохранить конфигурацию, иначе изменения будут потеряны.]]>
+  </Text>
+  <Text key="Do you want to delete this account?"><![CDATA[Вы действительно хотите удалить этот аккаунт?]]></Text>
+  <Text key="Account could not be deleted"><![CDATA[Не удалось удалить аккаунт.]]></Text>
+  <Text key="Account not found"><![CDATA[Аккаунт не найден]]></Text>
+  <Text key="ELC discard new account confirm"><![CDATA[Вы вводили новый аккаунт, и он ещё не сохранён. Отменить его и загрузить выбранный аккаунт?]]></Text>
+  <Text key="Delete"><![CDATA[Удалить]]></Text>
+  <Text key="Modify"><![CDATA[Изменить]]></Text>
+  <Text key="Alias"><![CDATA[Псевдоним]]></Text>
+  <Text key="Go to Accounts tab"><![CDATA[Данные аккаунтов управляются на вкладке «Аккаунты».]]></Text>
+  <Text key="Show password explanation">
+    <![CDATA[Если включить эту опцию, пароль будет виден при вводе — чтобы избежать опечаток. Однако после сохранения пароль в целях безопасности не отображается, даже если опция включена.]]>
+  </Text>
+
+  <Text key="DLC"><![CDATA[DLC]]></Text>
+  <Text key="Open &amp;DLC"><![CDATA[Открыть &DLC/ELC]]></Text>
+  <Text key="There is a DLC being processed, please wait"><![CDATA[Обрабатывается DLC/ELC, пожалуйста, подождите]]></Text>
+  <Text key="The DLC could not be loaded. Reason: %REASON"><![CDATA[Не удалось загрузить DLC/ELC: %REASON]]></Text>
+  <Text key="The DLC has no valid Mega links"><![CDATA[В DLC/ELC нет ни одной корректной MEGA-ссылки.]]></Text>
+  <Text key="Force download"><![CDATA[Принудительная загрузка]]></Text>
+
+  <Text key="About"><![CDATA[О программе MegaDownloader]]></Text>
+  <Text key="Thanks for using this app"><![CDATA[Спасибо за использование этого неофициального приложения для скачивания с MEGA.CO.NZ]]></Text>
+  <Text key="Thanks to"><![CDATA[Благодарности]]></Text>
+  <Text key="Legal text"><![CDATA[MegaDownloader не связан с Mega.co.nz — все торговые марки принадлежат их владельцам.]]></Text>
+
+  <Text key="Created and designed by %NAME"><![CDATA[Создано и разработано: %NAME]]></Text>
+  <Text key="%NAME for helping with MEGA criptographic system"><![CDATA[%NAME — за помощь с криптографической системой MEGA.]]></Text>
+  <Text key="All users that have collaborated"><![CDATA[Всем пользователям, участвовавшим в тестировании приложения.]]></Text>
+  <Text key="Translator credits" comment="The credits for your translation, something like 'John Doe for translating this program to Klingon'"><![CDATA[Русский перевод: MegaDownloader Revival Project]]></Text>
+
+
+
+  <Text key="ELC"><![CDATA[ELC]]></Text>
+  <Text key="ELC Accounts"><![CDATA[Аккаунты ELC]]></Text>
+  <Text key="ELC Account Info"><![CDATA[Данные аккаунта ELC]]></Text>
+  <Text key="ELC Desc Info">
+    <![CDATA[Контейнер «ELC» (Encoded Link Container) защищает ссылки от копирования и репортов, позволяя делиться MEGA-ссылками в сообществе с проверкой по пользователю и ключу.
+Для скачивания ссылок из ELC нужен действующий аккаунт в сообществе.
+
+Примечание: сообщество должно предоставить данные аккаунта ELC (URL, пользователь, API-ключ).]]>
+  </Text>
+  <Text key="API-Key"><![CDATA[API-ключ]]></Text>
+  <Text key="Generate ELC"><![CDATA[Сгенерировать ELC]]></Text>
+  <Text key="Generat&amp;e ELC"><![CDATA[Сгенерировать &ELC]]></Text>
+  <Text key="ELC generator"><![CDATA[Генератор ELC]]></Text>
+  <Text key="Paste your MEGA Url(s), select your ELC account, and click on Generate ELC"><![CDATA[Вставьте MEGA-ссылки, выберите аккаунт ELC и нажмите «Сгенерировать ELC».]]></Text>
+  <Text key="This is your ELC link. You can also create an ELC file clicking on Save file"><![CDATA[Это ваша ELC-ссылка. Файл ELC также можно создать, нажав «Сохранить файл».]]></Text>
+  <Text key="Please select a valid ELC account"><![CDATA[Выберите корректный аккаунт ELC.]]></Text>
+  <Text key="There is an ELC being processed, please wait"><![CDATA[Обрабатывается ELC, пожалуйста, подождите.]]></Text>
+  <Text key="No ELC accounts configured. Go to Configuration in order to add an ELC account"><![CDATA[Аккаунты ELC не настроены. Откройте «Конфигурацию», чтобы добавить аккаунт ELC.]]></Text>
+  <Text key="Save file"><![CDATA[Сохранить файл]]></Text>
+  <Text key="ELC file"><![CDATA[Файл ELC]]></Text>
+  <Text key="The ELC path is not valid"><![CDATA[Некорректный путь к ELC.]]></Text>
+  <Text key="The path is not valid"><![CDATA[Некорректный путь.]]></Text>
+  <Text key="Error generating ELC"><![CDATA[Ошибка генерации ELC]]></Text>
+  <Text key="URL ELC account explanation"><![CDATA[Эти данные предоставляет сообщество; они указывают URL проверки.]]></Text>
+  <Text key="Alias ELC account explanation"><![CDATA[Псевдоним — отображаемое имя: оно показывается в списке слева и на экране «Генератор ELC». Можно указать что угодно (или оставить пустым) и в любой момент изменить. Главное — оно не должно повторяться.]]></Text>
+  <Text key="Default ELC account explanation">
+    <![CDATA[Один аккаунт можно пометить как «по умолчанию» — в списке слева он отмечен «[*]».
+На экране «Генератор ELC» он будет выбираться по умолчанию.
+Если пометить другой аккаунт как «по умолчанию», отметка с прежнего снимется.]]>
+  </Text>
+  <Text key="ELC Account not found. You need a valid ELC Account configured for this ELC.">
+    <![CDATA[Аккаунт ELC не найден. Для этого ELC нужен настроенный действующий аккаунт ELC.]]>
+  </Text>
+  <Text key="The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library.">
+    <![CDATA[Ссылка — папка с %NUM файлами. Сейчас будет использован только первый; чтобы использовать все, импортируйте ссылку в медиатеку стриминга.]]>
+  </Text>
+  <Text key="The ELC contains %NUM files. Now only the first will be used, if you want to use all, import the ELC into the streaming library.">
+    <![CDATA[ELC содержит %NUM файлов. Сейчас будет использован только первый; чтобы использовать все, импортируйте ELC в медиатеку стриминга.]]>
+  </Text>
+  <Text key="Do you want to import the configuration for the following ELC accounts?"><![CDATA[Импортировать конфигурацию для следующих аккаунтов ELC?]]></Text>
+  <Text key="optional"><![CDATA[необязательно]]></Text>
+  <Text key="Multiple ELC"><![CDATA[Несколько ELC]]></Text>
+  <Text key="MsgPasswordZip"><![CDATA[Если архив защищён паролем, введите его здесь — он будет использован при распаковке. Если пароля нет, оставьте поле пустым.
+Поддерживаются ZIP, RAR (включая многотомные) и 7z.]]></Text>
+  <Text key="Chec&amp;k for updates"><![CDATA[Про&верить обновления]]></Text>
+  <Text key="Check for updates"><![CDATA[Проверить обновления]]></Text>
+
+  <Text key="Steganograph&amp;y"><![CDATA[Стеганогра&фия]]></Text>
+  <Text key="&amp;Hide links inside an image"><![CDATA[&Скрыть ссылки в изображении]]></Text>
+  <Text key="&amp;Retrieve links from an image"><![CDATA[&Извлечь ссылки из изображения]]></Text>
+  <Text key="Retrieve links from an image"><![CDATA[Извлечь ссылки из изображения]]></Text>
+  <Text key="Hide links inside an image"><![CDATA[Скрыть ссылки в изображении]]></Text>
+  <Text key="Steganography Wizard"><![CDATA[Мастер стеганографии]]></Text>
+  <Text key="Input image not specified"><![CDATA[Не указано входное изображение]]></Text>
+  <Text key="Output image not specified"><![CDATA[Не указано выходное изображение]]></Text>
+  <Text key="Input image does not exist"><![CDATA[Входное изображение не существует]]></Text>
+  <Text key="Invalid JPEG quality"><![CDATA[Некорректное качество JPEG]]></Text>
+  <Text key="The image was created successfully in {0} ms"><![CDATA[Изображение успешно создано за {0} мс]]></Text>
+  <Text key="No hidden links were found. Please check the image and the password"><![CDATA[Скрытые ссылки не найдены. Проверьте изображение и пароль.]]></Text>
+  <Text key="Images"><![CDATA[Изображения]]></Text>
+  <Text key="Introduction"><![CDATA[Введение]]></Text>
+  <Text key="Image to load"><![CDATA[Изображение для загрузки]]></Text>
+  <Text key="Other options"><![CDATA[Другие опции]]></Text>
+  <Text key="Load"><![CDATA[Загрузить]]></Text>
+  <Text key="JPEG Quality"><![CDATA[Качество JPEG]]></Text>
+  <Text key="Steganography is the art and science ... SAVE">
+    <![CDATA[Стеганография — искусство и наука сокрытия информации внутри другого сообщения.
+С её помощью MegaDownloader позволяет спрятать одну или несколько ссылок внутри JPEG-изображения.
+
+Для этого достаточно трёх простых шагов:
+
+1) Введите ссылки, которые нужно скрыть.
+2) Выберите входное изображение, которое хотите использовать, и выходное изображение, которое нужно сгенерировать.
+3) При желании задайте пароль для дополнительной защиты ссылок.
+]]>
+  </Text>
+  <Text key="Steganography is the art and science ... LOAD">
+    <![CDATA[Стеганография — искусство и наука сокрытия информации внутри другого сообщения.
+С её помощью MegaDownloader позволяет спрятать одну или несколько ссылок внутри JPEG-изображения.
+
+Эта опция позволяет извлечь ссылки из JPEG-изображения, которое уже содержит одну или несколько ссылок.
+Учтите: изображения со ссылками создаются опцией «Стеганография» в меню «Опции».
+
+Чтобы извлечь ссылки, достаточно двух простых шагов:
+
+1) Выберите изображение со скрытыми ссылками на диске или введите URL.
+2) Укажите пароль, которым скрывались ссылки (если пароля нет, оставьте поле пустым).
+]]>
+  </Text>
+  <Text key="Enter one or more MEGA links to be hidden"><![CDATA[Введите одну или несколько MEGA-ссылок для скрытия.]]></Text>
+  <Text key="Select an existing image as Input image ...">
+<![CDATA[Выберите существующее изображение как «Входное изображение», затем выберите или создайте новое JPEG-изображение как «Выходное изображение».
+Входным может быть существующий файл или URL изображения.]]>
+  </Text>
+  <Text key="Input image"><![CDATA[Входное изображение]]></Text>
+  <Text key="Output image"><![CDATA[Выходное изображение]]></Text>
+  <Text key="Optionally, you can specify the JPEG quality and a password. If not, just leave it empty"><![CDATA[При желании укажите качество JPEG и пароль. Если они не нужны, оставьте поля пустыми.]]></Text>
+  <Text key="Visible links"><![CDATA[Видимые ссылки]]></Text>
+  <Text key="Visible links HELP"><![CDATA[Если включить эту опцию, ссылки будут видны тому, кто их извлечёт.
+Иначе он сможет скачать их, но не увидеть.]]></Text>
+  <Text key="For more information about stegano click here"><![CDATA[Подробнее — нажмите здесь]]></Text>
+  <Text key="Select an existing image as Input image, or enter the image URL"><![CDATA[Выберите существующее изображение как «Входное изображение» или введите URL изображения.]]></Text>
+  <Text key="If the image has a password, enter it. If not, just leave it empty"><![CDATA[Если у изображения есть пароль, введите его. Если нет — оставьте поле пустым.]]></Text>
+  <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Внимание: изображение слишком маленькое, возможно, данные повреждены.]]></Text>
+  <Text key="Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image"><![CDATA[Внимание: выходное изображение создано, но проверка данных не прошла. Это может случиться, если изображение слишком маленькое, — попробуйте изображение побольше.]]></Text>
+  <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Внимание: проверка данных не прошла. Выходной файл не создан. Это может случиться, если изображение слишком маленькое, — попробуйте изображение побольше.]]></Text>
+  <Text key="Only ELC and DLC files are supported by drag and drop"><![CDATA[Перетаскиванием поддерживаются только файлы .elc и .dlc.]]></Text>
+  <Text key="ELC file is empty"><![CDATA[Файл ELC пуст.]]></Text>
+  <Text key="DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."><![CDATA[Формат DLC больше не поддерживается (сервис dcrypt.it закрыт). Используйте вместо него файлы .elc.]]></Text>
+  <Text key="Invalid input data"><![CDATA[Некорректные входные данные.]]></Text>
+  <Text key="VLC could not be started"><![CDATA[Не удалось запустить VLC. Проверьте, что VLC установлен и его путь настроен.]]></Text>
+  <Text key="Archive is incomplete: one or more volumes are missing"><![CDATA[Архив неполный: отсутствует один или несколько томов.]]></Text>
+  <Text key="Too many login attempts, please try again later"><![CDATA[Слишком много попыток входа, попробуйте позже.]]></Text>
+  <Text key="ELC created successfully"><![CDATA[ELC успешно создан.]]></Text>
+  <Text key="URL is mandatory"><![CDATA[URL обязателен.]]></Text>
+  <Text key="VLC path is not valid"><![CDATA[Некорректный путь к VLC.]]></Text>
+  <Text key="Open &amp;ELC"><![CDATA[Открыть &ELC]]></Text>
+  <Text key="Configuration could not be saved. Check disk space and permissions."><![CDATA[Не удалось сохранить конфигурацию. Проверьте место на диске и права доступа.]]></Text>
+  <Text key="Quota_Banner"><![CDATA[Квота передачи MEGA исчерпана (точное время восстановления неизвестно). Загрузка приостановлена, автоматический повтор через %T%.]]></Text>
+  <Text key="Quota_Status"><![CDATA[Квота: повтор через %T%]]></Text>
+  <Text key="Quota_RetryNow"><![CDATA[Повторить сейчас]]></Text>
+  <Text key="Quota_Recovered"><![CDATA[Квота MEGA восстановлена, загрузки возобновлены автоматически.]]></Text>
+  <Text key="Quota_Error"><![CDATA[Квота передачи MEGA исчерпана. Загрузки приостановлены и возобновятся автоматически. Если вы уже сменили IP или прокси, нажмите «Повторить сейчас».]]></Text>
+  <Text key="Quota_Error_Breakthrough"><![CDATA[Квота передачи MEGA исчерпана при чтении общей папки (HTTP 509 / -17). Режим пробива включён: очередь не приостанавливается автоматически — смените IP или прокси и попробуйте снова.]]></Text>
+  <Text key="Retry all failed"><![CDATA[Повторить все неудавшиеся]]></Text>
+  <Text key="Remove all failed"><![CDATA[Удалить все неудавшиеся]]></Text>
+  <Text key="Remove all failed confirm"><![CDATA[Удалить из списка неудавшиеся элементы (%N%)?]]></Text>
+  <Text key="Remove all failed delete part"><![CDATA[Также удалить локальные .part-файлы этих неудавшихся элементов?]]></Text>
+  <Text key="Folder_Reading"><![CDATA[Чтение папки, пожалуйста, подождите...]]></Text>
+  <Text key="Folder_Reading_Count"><![CDATA[Чтение папки... разобрано элементов: %N%]]></Text>
+  <Text key="Reset column widths"><![CDATA[Сбросить ширину колонок]]></Text>
+  <Text key="Notify_PackageDone_Title"><![CDATA[Загрузка завершена]]></Text>
+  <Text key="Notify_PackageDone_Body"><![CDATA[Пакет «%N%» скачан. Нажмите, чтобы посмотреть.]]></Text>
+  <Text key="Notify_Failed_Title"><![CDATA[Загрузка не удалась]]></Text>
+  <Text key="Notify_FailedMany_Body"><![CDATA[Недавно появились неудачные задачи: %N%. Нажмите, чтобы просмотреть.]]></Text>
+  <Text key="Notify_UnknownError"><![CDATA[Неизвестная ошибка. Подробности в журнале.]]></Text>
+  <Text key="Advice_Quota"><![CDATA[Квота передачи MEGA исчерпана. Загрузки возобновятся автоматически; смените IP или прокси и нажмите «Повторить сейчас», чтобы продолжить сразу.]]></Text>
+  <Text key="Advice_Permanent"><![CDATA[Ссылка мертва или доступ запрещён. Повторы не помогут — удалите задачу.]]></Text>
+  <Text key="Advice_Connection"><![CDATA[Ошибки соединения. Идёт автоматический повтор — действий не требуется.]]></Text>
+  <Text key="Folder_NetworkError"><![CDATA[Не удалось подключиться к MEGA для чтения общей папки (сетевая ошибка). Проверьте интернет-соединение, файрвол/VPN/прокси и попробуйте снова. Если mega.nz ограничен в вашем регионе, настройте прокси в «Конфигурации» или используйте VPN и убедитесь, что https://mega.nz открывается в браузере. Технические подробности: %DETAIL%]]></Text>
+  <Text key="Folder_InvalidResponse"><![CDATA[MEGA вернула неожиданный ответ при чтении общей папки. Ссылка могла быть удалена, быть приватной, либо ключ неверен. Проверьте, открывается ли ссылка в браузере. Технические подробности: %DETAIL%]]></Text>
+  <Text key="Network_Error"><![CDATA[Не удалось подключиться к серверу (сетевая ошибка). Проверьте интернет-соединение, файрвол/VPN/прокси и попробуйте снова. Если сервис ограничен в вашем регионе, настройте прокси в «Конфигурации» или используйте VPN. Технические подробности: %DETAIL%]]></Text>
+  <Text key="ShortLink_Unresolved"><![CDATA[Не удалось разрешить сокращённую ссылку. Возможно, она мертва, либо сеть недоступна.]]></Text>
+  <Text key="This file is not the first volume of a multipart RAR archive, so there is nothing to extract from it alone. Add the first volume (part1.rar) instead."><![CDATA[Этот файл — не первый том многотомного RAR-архива, поэтому из него одного извлекать нечего. Добавьте вместо него первый том (part1.rar).]]></Text>
+  <Text key="The extraction password contains a double quote, which the built-in 7-Zip extractor cannot pass on its command line. Extract this archive with the full 7-Zip application, or use an archive whose password has no double quotes."><![CDATA[Пароль распаковки содержит двойную кавычку — встроенный распаковщик 7-Zip не может передать её в командной строке. Распакуйте архив полноценным приложением 7-Zip или используйте архив с паролем без двойных кавычек.]]></Text>
+  <Text key="The ELC link could not be decoded: the server did not return any data. The link may be corrupted or the account may be invalid."><![CDATA[Не удалось декодировать ELC-ссылку: сервер не вернул данных. Ссылка могла повредиться, либо аккаунт недействителен.]]></Text>
+  <Text key="The ELC link could not be decoded: no links were found inside. The link may be corrupted."><![CDATA[Не удалось декодировать ELC-ссылку: внутри не найдено ссылок. Возможно, ссылка повреждена.]]></Text>
+  <Text key="The mega:// protocol could not be registered, so links opened from the browser will not start MegaDownloader. Run the application once as administrator to register it."><![CDATA[Не удалось зарегистрировать протокол mega:// — ссылки, открытые из браузера, не запустят MegaDownloader. Запустите приложение один раз от имени администратора, чтобы зарегистрировать его.]]></Text>
+  <Text key="Do not show this message again?"><![CDATA[Больше не показывать это сообщение?]]></Text>
+  <Text key="Active downloads"><![CDATA[Активные загрузки]]></Text>
+  <Text key="Streaming link could not be resolved"><![CDATA[Не удалось разрешить MEGA-ссылку. Проверьте ссылку и убедитесь, что сервер стриминга запущен.]]></Text>
+  <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Не удалось распаковать RAR-архив. Проверьте, что все тома на месте и пароль верен.]]></Text>
+  <!-- v2.6: batch preview and local download schedule -->
+  <Text key="Schedule_Title"><![CDATA[Загрузки по расписанию]]></Text>
+  <Text key="Schedule_Enable"><![CDATA[Включить расписание загрузок]]></Text>
+  <Text key="Schedule_Daily"><![CDATA[Каждый день]]></Text>
+  <Text key="Schedule_Once"><![CDATA[Один раз]]></Text>
+  <Text key="Schedule_Start"><![CDATA[Начать загрузку]]></Text>
+  <Text key="Schedule_End"><![CDATA[Приостановить загрузку]]></Text>
+  <Text key="Schedule_Note"><![CDATA[Приложение должно оставаться запущенным; компьютер оно не будит. Загрузки выполняются только в пределах включённого окна (в том числе через полночь). Индивидуальные паузы сохраняются; пауза всей очереди действует до следующего окна.]]></Text>
+  <Text key="Schedule_Invalid"><![CDATA[Время старта и паузы ежедневного расписания должны различаться. Разовая пауза должна быть позже её старта.]]></Text>
+  <Text key="Schedule_Outside"><![CDATA[Вне окна загрузок по расписанию. Измените или отключите расписание в «Опции → Загрузки по расписанию», чтобы начать сейчас.]]></Text>
+  <Text key="Schedule_SaveFailed"><![CDATA[Расписание активно для текущего сеанса, но настройки сохранить не удалось.]]></Text>
+  <Text key="Schedule_Waiting"><![CDATA[Ожидание окна расписания]]></Text>
+  <Text key="Preflight_Title"><![CDATA[Массовый предпросмотр ссылок]]></Text>
+  <Text key="Preflight_Checking"><![CDATA[Проверка ссылок в фоне… Можно отменить, ничего не добавляя.]]></Text>
+  <Text key="Preflight_Checked"><![CDATA[Проверка ссылок… обработано записей: %N%]]></Text>
+  <Text key="Preflight_Search"><![CDATA[Поиск файлов]]></Text>
+  <Text key="Preflight_All"><![CDATA[Все типы]]></Text>
+  <Text key="Preflight_Video"><![CDATA[Видео]]></Text>
+  <Text key="Preflight_Audio"><![CDATA[Аудио]]></Text>
+  <Text key="Preflight_Archives"><![CDATA[Архивы]]></Text>
+  <Text key="Preflight_Documents"><![CDATA[Документы]]></Text>
+  <Text key="Preflight_Other"><![CDATA[Другое]]></Text>
+  <Text key="Preflight_SelectVisible"><![CDATA[Выбрать видимые]]></Text>
+  <Text key="Preflight_ClearVisible"><![CDATA[Снять видимые]]></Text>
+  <Text key="Preflight_Retry"><![CDATA[Проверить снова]]></Text>
+  <Text key="Preflight_Summary"><![CDATA[Файлов: %N% · выбрано: %S% · дубликатов: %D% · некорректных: %E% · не проверено: %U%]]></Text>
+  <Text key="Preflight_Total"><![CDATA[Выбрано: %SIZE% · свободно на целевом диске: %FREE%]]></Text>
+  <Text key="Preflight_UnknownSizes"><![CDATA[Для %N% выбранных файлов размер неизвестен]]></Text>
+  <Text key="Preflight_NoSpace"><![CDATA[Недостаточно свободного места]]></Text>
+  <Text key="Preflight_AddSelected"><![CDATA[Добавить выбранные: %N%]]></Text>
+  <Text key="Preflight_AllQueued"><![CDATA[Выбранные ссылки уже в очереди. Дубликаты не добавлялись.]]></Text>
+  <Text key="Preflight_State_Ready"><![CDATA[Готов к добавлению]]></Text>
+  <Text key="Preflight_State_AlreadyQueued"><![CDATA[Уже в очереди]]></Text>
+  <Text key="Preflight_State_Duplicate"><![CDATA[Дубликат в партии]]></Text>
+  <Text key="Preflight_State_Invalid"><![CDATA[Некорректная / недоступна навсегда]]></Text>
+  <Text key="Preflight_State_Unavailable"><![CDATA[Не удалось проверить]]></Text>
+  <Text key="Preflight_SelectAll"><![CDATA[Выбрать все файлы]]></Text>
+  <Text key="Preflight_ClearAll"><![CDATA[Снять все файлы]]></Text>
+  <Text key="Preflight_InvertVisible"><![CDATA[Инвертировать видимые]]></Text>
+  <Text key="Preflight_MultiSelectHint"><![CDATA[Ctrl/Shift: выбор строк · Пробел: переключить выбранные строки · Ctrl+I: инвертировать результат]]></Text>
+  <Text key="Preflight_CheckHighlighted"><![CDATA[Отметить выбранные строки]]></Text>
+  <Text key="Preflight_UncheckHighlighted"><![CDATA[Снять выбранные строки]]></Text>
+  <Text key="Preflight_InvertHighlighted"><![CDATA[Инвертировать выбранные строки]]></Text>
+  <Text key="Preflight_Warming"><![CDATA[Ссылок: %N% · идёт проверка в фоне…]]></Text>
+  <Text key="Preflight_Warmed"><![CDATA[Ссылок: %N% · проверено файлов: %F%]]></Text>
+  <Text key="Preflight_Waiting"><![CDATA[Подготовка фоновой проверки…]]></Text>
+  <Text key="Preflight_ProgressParsing"><![CDATA[Извлечение ссылок…]]></Text>
+  <Text key="Preflight_ProgressWaiting"><![CDATA[Фоновая предпроверка в очереди…]]></Text>
+  <Text key="Preflight_ProgressReading"><![CDATA[Чтение ссылки / папки… разобрано элементов: %N%]]></Text>
+  <Text key="Preflight_ProgressChecking"><![CDATA[Проверка файлов… %N% / %F%]]></Text>
+  <Text key="Preflight_ProgressFailed"><![CDATA[Фоновая предпроверка не удалась. Попробуйте добавить ссылки или проверить снова.]]></Text>
+  <Text key="Preflight_ProgressLinks"><![CDATA[Обработано ссылок: %D% / %T%]]></Text>
+  <Text key="Preflight_BuildingTree"><![CDATA[Подготовка списка папок…]]></Text>
+  <Text key="Preflight_ExpandAll"><![CDATA[Развернуть все]]></Text>
+  <Text key="Preflight_CollapseAll"><![CDATA[Свернуть все]]></Text>
+  <Text key="Preflight_FolderSelection"><![CDATA[Выбрано: %S% / файлов: %N%]]></Text>
+  <Text key="Preflight_FolderHint"><![CDATA[Нажмите +/− или дважды кликните папку, чтобы развернуть её. Отметка папки включает её содержимое; фильтры ограничивают действие подходящими файлами.]]></Text>
+  <Text key="UI_Search"><![CDATA[Поиск задач]]></Text>
+  <Text key="UI_SearchHint"><![CDATA[Поиск по именам пакетов, файлов или относительным путям · Ctrl+F]]></Text>
+  <Text key="UI_ClearSearch"><![CDATA[Очистить поиск]]></Text>
+  <Text key="UI_Schedule"><![CDATA[Расписание]]></Text>
+  <Text key="UI_PackageCount"><![CDATA[Пакетов: %N%]]></Text>
+  <Text key="UI_HideDetails"><![CDATA[Скрыть детали]]></Text>
+  <Text key="UI_ShowDetails"><![CDATA[Показать детали]]></Text>
+  <Text key="UI_EmptyFilter"><![CDATA[Нет подходящих задач. Очистите поиск или выберите другую группу.]]></Text>
+  <Text key="UI_CurrentResults"><![CDATA[Текущие результаты]]></Text>
+  <Text key="AddLinks_SelectFiles"><![CDATA[Выбрать файлы →]]></Text>
+  <Text key="AddLinks_StepInput"><![CDATA[1. Введите ссылки  →  2. Выберите файлы]]></Text>
+  <Text key="AddLinks_StepSelection"><![CDATA[1. Ссылки введены  →  2. Выберите файлы]]></Text>
+  <Text key="AddLinks_InputHint"><![CDATA[Вставьте ссылки, чтобы начать фоновую проверку, затем выберите файлы для скачивания.]]></Text>
+  <Text key="AddLinks_Back"><![CDATA[← Назад к ссылкам]]></Text>
+  <Text key="AddLinks_Target"><![CDATA[Куда скачивать: %PATH%]]></Text>
+  <Text key="AddLinks_StopCheck"><![CDATA[Остановить проверку]]></Text>
+  <Text key="AddLinks_StoppingCheck"><![CDATA[Остановка проверки…]]></Text>
+  <Text key="AddLinks_CheckStopped"><![CDATA[Проверка остановлена. Нажмите «Проверить снова», чтобы продолжить; задачи не добавлялись.]]></Text>
+  <Text key="AddLinks_CancelImport"><![CDATA[Отменить добавление]]></Text>
+  <Text key="AddLinks_StoppingImport"><![CDATA[Отмена… Задачи не будут добавлены.]]></Text>
+  <Text key="AddLinks_Committing"><![CDATA[Добавление подготовленных задач в очередь…]]></Text>
+  <Text key="AddLinks_ImportProgress"><![CDATA[Подготовка задач загрузки… %N% / %T%]]></Text>
+  <Text key="AddLinks_PathRequired"><![CDATA[Прежде чем продолжить, выберите папку для загрузки.]]></Text>
+  <Text key="AddLinks_Deferred"><![CDATA[Новые ссылки сохранены на потом. Вернитесь назад, чтобы объединить их, или сначала завершите добавление текущего набора.]]></Text>
+  <Text key="AddLinks_DeferredMerged"><![CDATA[Новые ссылки объединены. Выберите файлы заново, чтобы просмотреть обновлённый набор.]]></Text>
+  <Text key="AddLinks_ImportCancelled"><![CDATA[Добавление отменено. Задачи не добавлены; ваш выбор файлов сохранён.]]></Text>
+  <Text key="AddLinks_AddedMore"><![CDATA[Добавлено файлов: %N%. Новые ссылки готовы для следующей партии.]]></Text>
+  <Text key="Preflight_Elapsed"><![CDATA[Прошло: %T% с]]></Text>
+  <Text key="Preflight_ProgressCancelled"><![CDATA[Фоновая проверка остановлена.]]></Text>
+  <Text key="UI_AllFiles"><![CDATA[Все файлы]]></Text>
+  <Text key="AddLinks_CheckFailed"><![CDATA[Проверка не удалась. Вернитесь назад, чтобы исправить ссылки, или проверьте снова.]]></Text>
+  <Text key="AddLinks_AddedPaused"><![CDATA[Задачи добавлены, но автоматически запустить их не удалось. Запустите их из главного окна.]]></Text>
+  <Text key="UI_EmptyTitle"><![CDATA[Начните со ссылки]]></Text>
+  <Text key="UI_EmptyHint"><![CDATA[Перетащите MEGA-ссылку сюда или выберите «Добавить ссылки». Можно также вставить через Ctrl+V.]]></Text>
+  <Text key="UI_NoMatches"><![CDATA[Нет подходящих задач]]></Text>
+  <Text key="Config_LoadLockedWarning"><![CDATA[Файл данных занят другой программой. Активны временные данные, сохранение приостановлено. Сохранённые данные восстановятся автоматически, когда файл освободится.]]></Text>
+  <Text key="Config_LoadRecovered"><![CDATA[Сохранённые данные восстановлены после снятия блокировки файла. Настройки, изменённые во время блокировки, НЕ сохранены — проверьте их ещё раз.]]></Text>
+  <Text key="Config_LockedByAnotherProcess"><![CDATA[Файл настроек занят другой программой. Ничего не сохранено, ваши текущие настройки не тронуты. Приложение восстановит их автоматически, когда блокировка снимется; попробуйте чуть позже.]]></Text>
+  <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[Эти скачанные файлы ({COUNT}) получены по старым ссылкам без контрольной суммы целостности, поэтому их принадлежность нельзя проверить автоматически. Всё равно удалить? Файлы с тем же именем и размером в папке задачи будут удалены.]]></Text>
+  <Text key="Delete_UnverifiedOutputKept"><![CDATA[Операция отменена. Задачи и файлы не удалены.]]></Text>
+  <Text key="Startup requires attention. Open the main window to continue."><![CDATA[Требуется внимание при запуске. Откройте главное окно, чтобы продолжить.]]></Text>
+</Language>

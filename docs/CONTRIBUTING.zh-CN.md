@@ -60,7 +60,7 @@ MegaDownloader/
 │   └── SteganoWizardSave.vb
 ├── Resources/
 │   ├── DLLs/                       # 第三方 DLL 依赖
-│   ├── Language/                   # 多语言 XML (10 种)
+│   ├── Language/                   # 多语言 XML (11 种)
 │   └── Installer MSD/              # WiX 安装包工程
 ├── My Project/                     # VS 项目元数据
 ├── Forms/                          # WinForms 窗体 (12 个)
@@ -236,7 +236,7 @@ git push origin feature/你的功能名称
 
 文档采用手动翻译模式，无自动翻译流程：
 
-- README 维护五个语言版本（`README.md`、`docs/README.*.md`），CONTRIBUTING 只维护英文与简体中文。**CHANGELOG 只维护简体中文版**（`docs/CHANGELOG.md`），不要再建翻译副本；非中文读者可自行机翻
+- README 维护三个语言版本（`README.md`、`docs/README.*.md`），CONTRIBUTING 只维护英文与简体中文。**CHANGELOG 只维护简体中文版**（`docs/CHANGELOG.md`），不要再建翻译副本；非中文读者可自行机翻
 - 改 README 或 CONTRIBUTING 时请同步更新所维护的语言版本，保持内容一致
 - 想改进文档措辞 → 直接改对应语言的文件，或提 PR
 - 想新增一门语言 → 复制英文（或中文）文档为新语言文件，并更新各文档顶部的语言导航链接与语言对照表
@@ -254,11 +254,11 @@ git push origin feature/你的功能名称
 ### 新增界面语言
 
 1. 复制 `Resources/Language/en-US-Language.xml` 为 `<locale>-Language.xml`
-2. 修改根节点的 `id` 为有效的语言区域代码（如 `ja-JP`），将 `name` 改为语言显示名，再翻译所有 `<Text>` 节点的 CDATA 内容
+2. 修改根节点的 `id` 为有效的语言区域代码（如 `ru-RU`），将 `name` 改为语言显示名，再翻译所有 `<Text>` 节点的 CDATA 内容
 3. 在 `MegaDownloader.vbproj` 中添加嵌入资源：
 
 ```xml
-<EmbeddedResource Include="Resources\Language\ja-JP-Language.xml" />
+<EmbeddedResource Include="Resources\Languageu-RU-Language.xml" />
 ```
 
 4. 重新构建并运行程序，在 **设置 → 语言** 中选择新语言
@@ -282,7 +282,7 @@ git push origin feature/你的功能名称
 
 1. 确认 `Debug` 与 `Release` 配置都能构建，并运行 `.\Tests\Run-RegressionTests.ps1`
 2. 更新 `docs/CHANGELOG.md`（仅简体中文），追加新版本章节
-3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步五种语言 README 的当前版本亮点（根目录英文 + 四份翻译）
+3. 更新 `My Project/AssemblyInfo.vb` 中的 `AssemblyVersion` 与 `AssemblyFileVersion`，以及 `MegaDownloader.vbproj` 中的 `ApplicationVersion`；同步三种语言 README 的当前版本亮点（根目录英文、简体中文、俄语）
 4. 在 `Resources/InternalConfig.xml`（Base64 编码）中更新 `VERSION_MEGADOWNLOADER` 与 `VERSION_UPDATE`
 5. 更新 `docs/version.xml` 中的 `<Version>`
 6. 按下方结构准备发行说明；CI 会先自动生成，发布后可在 GitHub Release 页面编辑

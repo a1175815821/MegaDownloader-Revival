@@ -554,6 +554,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Language\ro-RO-Language.xml" />
     <EmbeddedResource Include="Resources\Language\zh-CN-Language.xml" />
+    <EmbeddedResource Include="Resources\Language\ru-RU-Language.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>
