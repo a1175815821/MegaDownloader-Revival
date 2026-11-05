@@ -28,6 +28,7 @@ try {
         '/r:System.Drawing.dll',
         (Join-Path $PSScriptRoot 'RegressionTests.cs')
         (Join-Path $PSScriptRoot 'DeliveryAuditRegressionTests.cs')
+        (Join-Path $PSScriptRoot 'StartupPerformanceRegressionTests.cs')
     )
     & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" @compilerArgs
     if ($LASTEXITCODE -ne 0) { throw 'Regression test compilation failed.' }

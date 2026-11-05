@@ -290,9 +290,9 @@ git push origin feature/你的功能名称
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
-git tag -a v2.6.1 -m "Release v2.6.1"
+git tag -a v2.6.2 -m "Release v2.6.2"
 git push origin main
-git push origin v2.6.1
+git push origin v2.6.2
 ```
 
 CI 在 tag `v*` 上会自动：

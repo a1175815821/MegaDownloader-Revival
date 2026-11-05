@@ -292,9 +292,9 @@ When filing a bug, please include the following in the Issue:
 7. Create and push a Git tag — CI builds the artifacts and creates the GitHub Release automatically:
 
 ```bash
-git tag -a v2.6.1 -m "Release v2.6.1"
+git tag -a v2.6.2 -m "Release v2.6.2"
 git push origin main
-git push origin v2.6.1
+git push origin v2.6.2
 ```
 
 On a `v*` tag, CI automatically:

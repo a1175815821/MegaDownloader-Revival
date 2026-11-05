@@ -282,7 +282,9 @@ Public Class Main
 
         Log.WriteError("Version: " & InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER"))
 
-        Config = New Configuracion
+        PrepareStartupQueue()
+        ' A locked config is write-protected and recovered without sleeping on the UI.
+        Config = New Configuracion(Nothing, 1)
         LogStartupStage("configuration loaded")
         Log.SetLogLevel = Config.NivelLog
         Language.InitLanguage(Config.Idioma)
@@ -325,8 +327,7 @@ Public Class Main
             Me.IconoMinimizado.Visible = False
         End If
 
-        ListaPaquetes = Paquete.CargarDesdeFichero
-        LogStartupStage("queue loaded")
+        ' The initial empty view is replaced atomically after background recovery.
 
         ' Usamos esta librería para pintar la lista de descargas:
         ' http://objectlistview.sourceforge.net/cs/index.html
@@ -453,19 +454,15 @@ Public Class Main
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
-        ' A locked configuration is handled by CompleteStartup's recovery timer.
-        If IsSilent() AndAlso Not Config.LoadTransientError AndAlso
-           (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
-            _startupNeedsAttention = True
-            Log.WriteWarning("Silent startup paused: terms or configuration require attention. Open the main window to continue.")
-            IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Startup requires attention. Open the main window to continue."), ToolTipIcon.Warning)
-            Return
+        If _startupQueueLoading Then
+            BeginStartupQueueLoad()
+        Else
+            ContinueStartupAfterQueueLoad()
         End If
-        CompleteStartup()
     End Sub
 
     Private Sub CompleteStartup()
-        If _startupReady OrElse Cerrando OrElse IsDisposed Then Return
+        If _startupReady OrElse Cerrando OrElse IsDisposed OrElse System.Threading.Volatile.Read(_startupQueueLoading) Then Return
         If Config Is Nothing Then Return
         IniciarRecuperacionTransitoria()
         ' Defaults do not represent the user's start, proxy, speed or schedule
@@ -521,12 +518,14 @@ Public Class Main
         StartConfiguredWebServers()
 
         ProcessArgs(Environment.GetCommandLineArgs)
+        ProcessDeferredStartupArguments()
 
         ' Resource statistics must not hold up the first window. Sampling starts on the
         ' existing refresh worker after the Shown handler has finished preparing the UI.
         System.Threading.Volatile.Write(_resourceMonitoringEnabled, 1)
         Log.WriteInfo("Start process finished")
         LogStartupStage("startup ready")
+        If _startupQueueCompletion IsNot Nothing Then _startupQueueCompletion.TrySetResult(True)
     End Sub
 
     Private Sub ApplyRuntimeDownloadSettings()
@@ -549,6 +548,7 @@ Public Class Main
     End Sub
 
     Private Sub ResumeAfterConfigurationRecovery()
+        UpdateStartupActionAvailability()
         If Not _startupReady Then
             If IsSilent() AndAlso WindowState = FormWindowState.Minimized AndAlso
                (Not Config.CondicionesAceptadas OrElse Config.LoadErrorConfig <> Configuracion.ErrorConfigClass.SinErrores) Then
@@ -605,7 +605,7 @@ Public Class Main
         End Try
     End Sub
 
-    Private Sub RecuperacionTransitoria_Tick(sender As Object, e As EventArgs)
+    Private Async Sub RecuperacionTransitoria_Tick(sender As Object, e As EventArgs)
         If Cerrando OrElse IsDisposed Then
             If _recoveryTimer IsNot Nothing Then _recoveryTimer.Stop()
             Return
@@ -622,7 +622,8 @@ Public Class Main
             Dim libraryRecovered As Boolean = False
 
             If Config IsNot Nothing AndAlso Config.LoadTransientError Then
-                configRecovered = Config.TryRecoverFromTransientLock()
+                configRecovered = Await System.Threading.Tasks.Task.Run(Function() Config.TryRecoverFromTransientLock())
+                If Cerrando OrElse IsDisposed Then Return
                 If configRecovered Then
                     ' Final fix: the startup language was picked from the default
                     ' config (Idioma="auto"). CargaXMLInterno(True) restores the
@@ -643,8 +644,12 @@ Public Class Main
                 End If
             End If
 
-            If Paquete.HasTransientLoadError Then
-                Dim real As Generic.List(Of Paquete) = Paquete.TryReloadAfterTransientLock()
+            If Not System.Threading.Volatile.Read(_startupQueueLoading) AndAlso Paquete.HasTransientLoadError Then
+                Dim real As Generic.List(Of Paquete) = Await System.Threading.Tasks.Task.Run(Function() Paquete.TryReloadAfterTransientLock())
+                If Cerrando OrElse IsDisposed Then
+                    Paquete.DisposeLoadedQueue(real)
+                    Return
+                End If
                 If real IsNot Nothing Then
                     SyncLock Mutex.ListaDescargas
                         ' 降级期间队列从空开始,当前列表里的都是用户新建的任务;
@@ -663,7 +668,8 @@ Public Class Main
             End If
 
             If StreamingLibraryManager.HasPendingRecovery() Then
-                libraryRecovered = StreamingLibraryManager.TryRecoverPending()
+                libraryRecovered = Await System.Threading.Tasks.Task.Run(Function() StreamingLibraryManager.TryRecoverPending())
+                If Cerrando OrElse IsDisposed Then Return
             End If
 
             If configRecovered Then ResumeAfterConfigurationRecovery()
@@ -980,6 +986,7 @@ Public Class Main
         'SkinEngine.Dispose()
         ' 第19项:置位必须在 DoEvents 之前,否则泵出的托盘点击会复活窗口
         Cerrando = True
+        CancelStartupQueueLoad()
         Application.DoEvents()
 
         Dim Crono As Date = Now
@@ -1062,6 +1069,7 @@ Public Class Main
             ' 关闭等待循环里的 DoEvents 会派发托盘点击/Resize,把窗口重新显示出来;
             ' 先置位后,RestaurarVentana/Resize 的守卫就能拦住"关机期复活"。
             Cerrando = True
+            CancelStartupQueueLoad()
             Me.Visible = False
             Dim ventanaCerrando As New Cerrando
             ventanaCerrando.lblMensaje.Text = Language.GetText("Closing please wait")
@@ -2797,6 +2805,7 @@ Public Class Main
     End Function
 
     Private Sub GuardarFicheroDescargas()
+        If System.Threading.Volatile.Read(_startupQueueLoading) Then Return
         Dim snapshot As Generic.List(Of Paquete)
         SyncLock Mutex.ListaDescargas
             If Me.ListaPaquetes Is Nothing Then Return
@@ -4422,6 +4431,7 @@ Public Class Main
     End Sub
 
     Public Function ControlRemotoAgregarLinks(ByVal Links As String, ByVal NombrePaquete As String, ByVal CrearDirectorio As Boolean) As String Implements IDownloaderService.ControlRemotoAgregarLinks
+        If System.Threading.Volatile.Read(_startupQueueLoading) Then Return Language.GetText("Loading please wait")
         Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(Links)
         If URLs.Count = 0 Then
             Return Language.GetText("No valid URLs have been inserted")
@@ -4655,13 +4665,37 @@ Public Class Main
     ' Permite refrescar el listado de descargas
     ' This delegate enables asynchronous calls for refreshing ListaDescargas
     Delegate Sub RefreshListaDescargasCallback(ByVal SetObjects As Boolean)
+    Private _periodicListRefreshPending As Integer
+
+    Private Sub QueuePeriodicListRefresh()
+        If System.Threading.Interlocked.CompareExchange(_periodicListRefreshPending, 1, 0) <> 0 Then Return
+        Try
+            Me.BeginInvoke(New Action(Sub()
+                Try
+                    If Not Cerrando AndAlso Not IsDisposed AndAlso Me.Visible AndAlso WindowState <> FormWindowState.Minimized Then
+                        RefreshListaDescargas(False)
+                    End If
+                Finally
+                    System.Threading.Interlocked.Exchange(_periodicListRefreshPending, 0)
+                End Try
+            End Sub))
+        Catch ex As InvalidOperationException
+            System.Threading.Interlocked.Exchange(_periodicListRefreshPending, 0)
+        End Try
+    End Sub
+
     Private Sub RefreshListaDescargas(ByVal SetObjects As Boolean)
+        If Cerrando OrElse IsDisposed OrElse ListaDescargas.IsDisposed Then Return
         ' InvokeRequired required compares the thread ID of the
         ' calling thread to the thread ID of the creating thread.
         ' If these threads are different, it returns true.
         If Me.ListaDescargas.InvokeRequired Then
-            Dim d As New RefreshListaDescargasCallback(AddressOf RefreshListaDescargas)
-            Me.Invoke(d, New Object() {SetObjects})
+            If SetObjects Then
+                Dim d As New RefreshListaDescargasCallback(AddressOf RefreshListaDescargas)
+                Me.Invoke(d, New Object() {True})
+            Else
+                QueuePeriodicListRefresh()
+            End If
         Else
             Dim overview As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
             Dim scopeChanged As Boolean = overview IsNot Nothing AndAlso overview.ScopeVersion <> appliedScopeVersion
@@ -5151,6 +5185,7 @@ Public Class Main
         End SyncLock
     End Sub
     Public Sub PauseDownload()
+        If System.Threading.Volatile.Read(_startupQueueLoading) Then Return
         SyncLock scheduleActionLock
             scheduleController.MarkManualPause(Config.DownloadSchedule, DateTime.Now)
             QuitarDescargasIndividuales()
@@ -5159,6 +5194,7 @@ Public Class Main
         End SyncLock
     End Sub
     Public Sub StopDownload()
+        If System.Threading.Volatile.Read(_startupQueueLoading) Then Return
         SyncLock scheduleActionLock
             scheduleController.MarkManualPause(Config.DownloadSchedule, DateTime.Now)
             QuitarDescargasIndividuales()
@@ -5457,6 +5493,7 @@ Public Class Main
             ' Capture the copy-time focus before background parsing can yield to another app.
             Dim inbox As AddLinks = TryCast(IsFormAlreadyOpen(GetType(AddLinks)), AddLinks)
             If clipboardInput AndAlso inbox IsNot Nothing AndAlso inbox.ContainsFocus Then Return
+            If Not Await WaitForStartupQueueAsync() Then Return
             Dim parsed = Await System.Threading.Tasks.Task.Run(Function() Tuple.Create(URLExtractor.ExtraerConfiguracionELC(Texto), URLExtractor.ExtraerURLs(Texto)))
             If Me.IsDisposed OrElse Cerrando Then Return
 
@@ -5521,7 +5558,8 @@ Public Class Main
         AgregarLink(String.Empty, String.Empty, True, False)
     End Sub
 
-    Private Sub AgregarLink(Url As String, ByVal NombrePaquete As String, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean, Optional parsed As Generic.List(Of String) = Nothing)
+    Private Async Sub AgregarLink(Url As String, ByVal NombrePaquete As String, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean, Optional parsed As Generic.List(Of String) = Nothing)
+        If Not Await WaitForStartupQueueAsync() Then Return
         Dim frmName As New AddLinks
         frmName.Main = Me
 
@@ -5551,6 +5589,7 @@ Public Class Main
     ' Append params
     Public Sub ProcessArgs(args As String())
         If args Is Nothing OrElse args.Length = 0 Then Exit Sub
+        If DeferStartupArguments(args) Then Return
 
         Dim assemblyName As String = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name
         If args(0).ToUpper.Contains(assemblyName.ToUpper) Then

@@ -1,5 +1,7 @@
 Imports System.Xml
 Imports System.IO
+Imports System.Threading
+Imports System.Threading.Tasks
 
 Public Class Paquete
     Implements IDescarga
@@ -215,7 +217,15 @@ Public Class Paquete
         Return CargarDesdeRuta(ObtenerRutaFicheroDescargas())
     End Function
 
+    Friend Shared Function CargarStartupQueue(cancellationToken As CancellationToken) As Generic.List(Of Paquete)
+        Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
+    End Function
+
     Friend Shared Function CargarDesdeRuta(ByVal Fichero As String) As Generic.List(Of Paquete)
+        Return CargarDesdeRutaCancelable(Fichero, CancellationToken.None)
+    End Function
+
+    Friend Shared Function CargarDesdeRutaCancelable(ByVal Fichero As String, cancellationToken As CancellationToken) As Generic.List(Of Paquete)
 
         Log.WriteDebug("Loading download list XML")
 
@@ -223,7 +233,7 @@ Public Class Paquete
         Dim recoveredFromBackup As Boolean = False
         Dim transientFailure As Boolean = False
         SyncLock Mutex.GuardarDownloadList
-            If Not AtomicFile.TryLoadXmlWithRecoveryInfo(Fichero, XML, recoveredFromBackup, transientFailure, _TransientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
+            If Not AtomicFile.TryLoadXmlCancelable(Fichero, XML, recoveredFromBackup, transientFailure, _TransientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs, cancellationToken) Then
                 ' P0-3:被瞬时占用 ≠ 损坏:置标记让 GuardarEnFichero 拒写,否则周期性
                 ' 落盘会把"空队列"写盘、把完好队列文件挤进 .bak 直至彻底覆盖。
                 _LoadTransientError = transientFailure
@@ -239,13 +249,19 @@ Public Class Paquete
 
         Dim l As New Generic.List(Of Paquete)
 
-        For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
-            Dim p As New Paquete
-            p.CargarXML(NodoPaq)
-            l.Add(p)
-        Next
-
-        MarcarFicherosComoParados(l)
+        Try
+            For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
+                cancellationToken.ThrowIfCancellationRequested()
+                Dim p As New Paquete
+                p.CargarXMLCancelable(NodoPaq, cancellationToken, 4)
+                l.Add(p)
+            Next
+            cancellationToken.ThrowIfCancellationRequested()
+            MarcarFicherosComoParados(l)
+        Catch
+            DisposeLoadedQueue(l)
+            Throw
+        End Try
         Return l
     End Function
 
@@ -401,7 +417,11 @@ Public Class Paquete
 
 
     Public Sub CargarXML(ByVal XML As XmlNode)
+        CargarXMLCancelable(XML, CancellationToken.None, 4)
+    End Sub
 
+    Friend Sub CargarXMLCancelable(ByVal XML As XmlNode, cancellationToken As CancellationToken, maxConcurrency As Integer)
+        cancellationToken.ThrowIfCancellationRequested()
         Me.Nombre = LeerNodo(XML, "Nombre", "")
         Me.RutaLocal = LeerNodo(XML, "RutaLocal", "")
         Boolean.TryParse(LeerNodo(XML, "CrearSubdirectorio", "false"), CrearSubdirectorio)
@@ -417,14 +437,61 @@ Public Class Paquete
         Decimal.TryParse(LeerNodo(XML, "Porcentaje", "0"), Porcentaje)
         Long.TryParse(LeerNodo(XML, "TamanoBytes", "0"), TamanoBytes)
 
-        Me.ListaFicheros = New Generic.List(Of Fichero)
-        For Each NodoFichero As XmlNode In XML.SelectNodes("ListaFicheros/Fichero")
-            Dim fic As New Fichero
-            fic.cargarxml(NodoFichero)
-            Me.ListaFicheros.Add(fic)
+        Dim nodes As XmlNodeList = XML.SelectNodes("ListaFicheros/Fichero")
+        Dim loaded(nodes.Count - 1) As Fichero
+        Dim concurrency As Integer = Math.Max(1, Math.Min(4, Math.Min(Environment.ProcessorCount, maxConcurrency)))
+        Try
+            If nodes.Count < 128 OrElse concurrency = 1 Then
+                For index As Integer = 0 To nodes.Count - 1
+                    cancellationToken.ThrowIfCancellationRequested()
+                    loaded(index) = New Fichero()
+                    loaded(index).CargarXML(nodes(index))
+                Next
+            Else
+                ' Each worker owns its DOM and secure buffers; preserve the original
+                ' file order and publish the list only after every worker has finished.
+                Dim isolated(nodes.Count - 1) As XmlNode
+                For index As Integer = 0 To nodes.Count - 1
+                    cancellationToken.ThrowIfCancellationRequested()
+                    Dim owner As New XmlDocument()
+                    owner.AppendChild(owner.ImportNode(nodes(index), True))
+                    isolated(index) = owner.DocumentElement
+                Next
+                Parallel.For(0, nodes.Count, New ParallelOptions With {.MaxDegreeOfParallelism = concurrency, .CancellationToken = cancellationToken},
+                    Sub(index)
+                        loaded(index) = New Fichero()
+                        loaded(index).CargarXML(isolated(index))
+                    End Sub)
+            End If
+            cancellationToken.ThrowIfCancellationRequested()
+            Me.ListaFicheros = New Generic.List(Of Fichero)(loaded)
+        Catch
+            For Each file As Fichero In loaded
+                DisposeLoadedFile(file)
+            Next
+            Throw
+        End Try
+
+
+    End Sub
+
+    Friend Shared Sub DisposeLoadedQueue(packages As Generic.IEnumerable(Of Paquete))
+        If packages Is Nothing Then Return
+        For Each package As Paquete In packages
+            If package.ListaFicheros Is Nothing Then Continue For
+            For Each file As Fichero In package.ListaFicheros
+                DisposeLoadedFile(file)
+            Next
         Next
+    End Sub
 
-
+    Private Shared Sub DisposeLoadedFile(file As Fichero)
+        If file Is Nothing Then Return
+        file.Dispose()
+        If file._FileID IsNot Nothing Then file._FileID.Dispose()
+        If file._FileKey IsNot Nothing Then file._FileKey.Dispose()
+        If file._URL IsNot Nothing Then file._URL.Dispose()
+        If file._URLFichero IsNot Nothing Then file._URLFichero.Dispose()
     End Sub
 
     Public Function GuardarXML(ByVal XML As XmlDocument, IncluirDatosCifrados As Boolean) As XmlNode

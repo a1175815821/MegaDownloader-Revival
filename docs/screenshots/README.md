@@ -1,11 +1,11 @@
-# 2.6.1 界面截图
+# 2.6.2 界面截图
 
-以下图片来自 2.6.1 编译产物的原生 WinForms 控件，通过隔离界面夹具与 `PrintWindow` 截取。任务、元数据和下载路径均为示例；不加载真实账号或队列，也不启动 MEGA 下载。界面语言为简体中文。`banner.png` 与 `social-preview.png` 为项目宣传图。
+以下图片来自 2.6.2 Release 编译产物的原生 WinForms 控件，通过隔离界面夹具与 `PrintWindow` 截取。任务、元数据和下载路径均为示例；不加载真实账号或队列，也不启动 MEGA 下载。界面语言为简体中文。`banner.png` 与 `social-preview.png` 为沿用的项目宣传图。
 
 在仓库根目录运行：
 
 ```powershell
-.\Tests\Run-RegressionTests.ps1 -OutputDirectory bin\Release-2.6.1 -UiOnly
+.\Tests\Run-RegressionTests.ps1 -OutputDirectory bin\Release-2.6.2 -UiOnly
 ```
 
 终端最后会输出截图所在的临时目录。按清单复制图片，不提交整个临时目录：

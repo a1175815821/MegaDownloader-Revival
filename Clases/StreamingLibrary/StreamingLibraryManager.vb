@@ -9,6 +9,8 @@ Public Class StreamingLibraryManager
 	Private Shared ReadOnly _StreamingLibraryLock As New Object
 	
 	Public Shared Function StreamingLibrary() As StreamingLibrary
+        Dim existing As StreamingLibrary = System.Threading.Volatile.Read(_StreamingLibrary)
+        If existing IsNot Nothing Then Return existing
 		If _StreamingLibrary Is Nothing Then
 			' First touch can come from concurrent HTTP threads; without this two instances
 			' get built and one is discarded, splitting a single operation across both.
@@ -18,32 +20,28 @@ Public Class StreamingLibraryManager
 					instance.LoadXML()
 					' Publish only once fully loaded, so no other thread can observe a
 					' half-initialised instance.
-					_StreamingLibrary = instance
+					System.Threading.Volatile.Write(_StreamingLibrary, instance)
 				End If
 			End SyncLock
 		End If
-		Return _StreamingLibrary
+		Return System.Threading.Volatile.Read(_StreamingLibrary)
 	End Function
 	
     Public Shared Sub SaveLibrary()
-		If _StreamingLibrary IsNot Nothing Then
-			_StreamingLibrary.SaveXML()
-		End If
+        Dim existing As StreamingLibrary = System.Threading.Volatile.Read(_StreamingLibrary)
+        If existing IsNot Nothing Then existing.SaveXML()
     End Sub
 
 	''' <summary>B2: 只在实例已被真正使用过时报告降级状态,避免恢复计时器为了检查
 	''' 状态反而创建出一个从未被用户打开的媒体库实例。</summary>
 	Public Shared Function HasPendingRecovery() As Boolean
-		SyncLock _StreamingLibraryLock
-			Return _StreamingLibrary IsNot Nothing AndAlso _StreamingLibrary.LoadTransientError
-		End SyncLock
+        Dim existing As StreamingLibrary = System.Threading.Volatile.Read(_StreamingLibrary)
+        Return existing IsNot Nothing AndAlso existing.LoadTransientError
 	End Function
 
 	Public Shared Function TryRecoverPending() As Boolean
-		SyncLock _StreamingLibraryLock
-			If _StreamingLibrary Is Nothing Then Return False
-			Return _StreamingLibrary.TryRecoverFromTransientLock()
-		End SyncLock
+        Dim existing As StreamingLibrary = System.Threading.Volatile.Read(_StreamingLibrary)
+        Return existing IsNot Nothing AndAlso existing.TryRecoverFromTransientLock()
 	End Function
 
     Public Shared Function ProcessByNameAndAddElement(Name As String, Description As String, Comments As String, Poster As String, Link As String, LinkVisible As Boolean, IMDB As String, Allocine As String, Filmaffinity As String) As LibraryElement

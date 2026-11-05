@@ -72,6 +72,11 @@ Friend NotInheritable Class AtomicFile
     End Function
 
     Friend Shared Function TryLoadXmlWithRecoveryInfo(ByVal sourcePath As String, ByRef document As XmlDocument, ByRef recoveredFromBackup As Boolean, ByRef transientFailure As Boolean, ByRef blockedSource As String, ByVal attempts As Integer, ByVal retryDelayMs As Integer) As Boolean
+        Return TryLoadXmlCancelable(sourcePath, document, recoveredFromBackup, transientFailure, blockedSource, attempts, retryDelayMs, Threading.CancellationToken.None)
+    End Function
+
+    Friend Shared Function TryLoadXmlCancelable(ByVal sourcePath As String, ByRef document As XmlDocument, ByRef recoveredFromBackup As Boolean, ByRef transientFailure As Boolean, ByRef blockedSource As String, ByVal attempts As Integer, ByVal retryDelayMs As Integer, cancellationToken As Threading.CancellationToken) As Boolean
+        cancellationToken.ThrowIfCancellationRequested()
         recoveredFromBackup = False
         transientFailure = False
         blockedSource = Nothing
@@ -83,6 +88,7 @@ Friend NotInheritable Class AtomicFile
         If File.Exists(fullSource) Then
             Dim locked As Boolean = False
             For attempt As Integer = 1 To attempts
+                cancellationToken.ThrowIfCancellationRequested()
                 Try
                     Dim primary As New XmlDocument
                     primary.Load(fullSource)
@@ -91,7 +97,7 @@ Friend NotInheritable Class AtomicFile
                 Catch ex As IOException
                     ' 瞬时占用 ≠ 文件损坏:重试窗口内吃掉杀软/同步盘扫描。
                     locked = True
-                    If attempt < attempts AndAlso retryDelayMs > 0 Then System.Threading.Thread.Sleep(retryDelayMs)
+                    If attempt < attempts AndAlso retryDelayMs > 0 Then WaitForRetry(retryDelayMs, cancellationToken)
                 Catch
                     ' 真正的 XML 损坏等:与占用无关,走 .bak 恢复。
                     locked = False
@@ -111,6 +117,7 @@ Friend NotInheritable Class AtomicFile
         If File.Exists(backupPath) Then
             Dim locked As Boolean = False
             For attempt As Integer = 1 To attempts
+                cancellationToken.ThrowIfCancellationRequested()
                 Try
                     Dim backup As New XmlDocument
                     backup.Load(backupPath)
@@ -119,7 +126,7 @@ Friend NotInheritable Class AtomicFile
                     Return True
                 Catch ex As IOException
                     locked = True
-                    If attempt < attempts AndAlso retryDelayMs > 0 Then System.Threading.Thread.Sleep(retryDelayMs)
+                    If attempt < attempts AndAlso retryDelayMs > 0 Then WaitForRetry(retryDelayMs, cancellationToken)
                 Catch
                     locked = False
                     Exit For
@@ -133,6 +140,14 @@ Friend NotInheritable Class AtomicFile
 
         Return False
     End Function
+
+    Private Shared Sub WaitForRetry(delayMs As Integer, cancellationToken As Threading.CancellationToken)
+        If cancellationToken.CanBeCanceled Then
+            If cancellationToken.WaitHandle.WaitOne(delayMs) Then cancellationToken.ThrowIfCancellationRequested()
+        Else
+            Threading.Thread.Sleep(delayMs)
+        End If
+    End Sub
 
     Friend Shared Function TryReloadAfterTransientFailure(ByVal sourcePath As String, ByVal blockedSource As String, ByRef document As XmlDocument) As Boolean
         Dim fullSource As String = Path.GetFullPath(sourcePath)

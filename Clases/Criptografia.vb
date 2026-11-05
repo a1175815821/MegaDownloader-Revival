@@ -60,6 +60,12 @@ Public Class Criptografia
     End Function
 
     Public Shared Function DecryptString_DPAPI(encryptedData As String) As SecureString
+        Dim currentCiphertext As String = Nothing
+        Return DecryptStringWithCacheInfo(encryptedData, currentCiphertext)
+    End Function
+
+    Friend Shared Function DecryptStringWithCacheInfo(encryptedData As String, ByRef currentCiphertext As String) As SecureString
+        currentCiphertext = Nothing
         ' Empty is the most common input by far (unset account/password fields), so
         ' short-circuit it instead of walking the whole entropy chain.
         If String.IsNullOrEmpty(encryptedData) Then Return New SecureString()
@@ -74,15 +80,20 @@ Public Class Criptografia
         End Try
 
         For i As Integer = 0 To decryptionEntropies.Length - 1
+            Dim decryptedData As Byte() = Nothing
             Try
-                Dim decryptedData As Byte() = System.Security.Cryptography.ProtectedData.Unprotect(blob, decryptionEntropies(i), System.Security.Cryptography.DataProtectionScope.CurrentUser)
+                decryptedData = System.Security.Cryptography.ProtectedData.Unprotect(blob, decryptionEntropies(i), System.Security.Cryptography.DataProtectionScope.CurrentUser)
                 If i > 0 Then
                     Log.WriteDebug("DecryptString_DPAPI: value was written by an older release (entropy #" & i & "); it is re-encrypted with the current entropy on the next save.")
                 End If
-                Return ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
+                Dim secure As SecureString = ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData))
+                If i = 0 Then currentCiphertext = encryptedData
+                Return secure
             Catch
                 ' Not this entropy; keep walking the chain. The catch must stay broad —
                 ' callers rely on this function never throwing.
+            Finally
+                If decryptedData IsNot Nothing Then Array.Clear(decryptedData, 0, decryptedData.Length)
             End Try
         Next
 
@@ -94,12 +105,9 @@ Public Class Criptografia
     End Function
 
     Public Shared Function ToSecureString(input As String) As SecureString
-        Dim secure As New SecureString()
-        If input IsNot Nothing Then
-            For Each c As Char In input
-                secure.AppendChar(c)
-            Next
-        End If
+        ' The framework converts the whole value without the per-character cost
+        ' of AppendChar. Keep the same read-only result and empty/null semantics.
+        Dim secure As SecureString = New System.Net.NetworkCredential(String.Empty, If(input, String.Empty)).SecurePassword
         secure.MakeReadOnly()
         Return secure
     End Function

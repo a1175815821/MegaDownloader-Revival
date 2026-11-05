@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.2-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>If MegaDownloader helps you, <a href="https://github.com/a1175815821/MegaDownloader-Revival">give the project a ⭐</a> so more people can find it.</sub></p>
@@ -29,7 +29,7 @@
   <sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub>
 </p>
 
-> **v2.6.1 — a cleaner workbench, faster settings, automatic language selection.** Refined light and dark themes, reliable first-open menus, and a language option that follows Windows with English as the fallback. [See what's new ↓](#-whats-new-in-261)
+> **v2.6.2 — safer downloads, responsive startup, Russian support.** Recover locked queues automatically, protect existing files when deleting tasks, and restore large queues in the background. [See what's new ↓](#-whats-new-in-262)
 >
 > Unofficial project, not affiliated with MEGA (MEGA Ltd.).
 
@@ -37,26 +37,27 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-light.png">
-    <img alt="MegaDownloader v2.6.1 workbench" src="docs/screenshots/main-light.png" width="100%">
+    <img alt="MegaDownloader v2.6.2 workbench" src="docs/screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6.1 workbench · The screenshot follows your GitHub theme. Interface shown in Simplified Chinese.</sub></p>
+<p align="center"><sub>v2.6.2 workbench · The screenshot follows your GitHub theme. Interface shown in Simplified Chinese.</sub></p>
 
 ---
 
-## ✨ What's new in 2.6.1
+## ✨ What's new in 2.6.2
 
-- **Clearer visual hierarchy** — a quieter sidebar, consistent typography and spacing, one progress column, and details that adapt to the window width. Stop keeps its caption; scheduled downloads gains a clock icon.
-- **Menus work on first open** — all four top-level menus appear without resizing the window. The Settings button stays aligned with the sidebar.
-- **Settings opens faster** — the layout avoids repeated sizing passes and the ELC account editor loads when its tab is opened. An isolated first-open measurement fell from about 8.2 s to about 1.1 s; results vary by machine.
-- **Follow the Windows display language** — new configurations default to automatic selection, with regional and Simplified/Traditional Chinese matching; unsupported languages use English. Existing manual choices are kept. Change the language in Settings → General, save, then restart.
-- **Updated screenshots and regression coverage** — the images below show the 2.6.1 native interface with demonstration data. See the [changelog](docs/CHANGELOG.md) for the full fixes and the one-time six-column layout migration.
+- **The window stays responsive while restoring your queue** — queue loading and file-lock retries run in the background; saving and scheduling wait until recovery is ready. In an isolated 679-task benchmark, median queue recovery and UI preparation fell from 3.69 s to 1.33 s; this is not full process cold-start time. [Measurement details](docs/PERFORMANCE_ANALYSIS_2026-11-05.zh-CN.md).
+- **Locked files recover automatically** — temporary access conflicts no longer masquerade as first-run setup or disk errors. Settings, queues and the streaming library keep write protection until recovery completes, and edits made during recovery are merged.
+- **Safer deletion and reliable retries** — deleting a task protects unrelated existing files; expired download URLs refresh without losing valid resume data. Resuming preallocated files checks only the extra disk space needed.
+- **Faster verification and less repeated work** — batched MetaMAC verification, reusable encrypted queue fields, shorter save locks and merged list refreshes reduce overhead. Settings also avoids repeated layout work.
+- **Correct speed limits and cancellation** — decimal limits round-trip across regional formats; per-task resume restores throttling, and download / 7z cancellation waits for active work to finish before restarting.
+- **Russian joins the built-in languages** — 11 UI languages; documentation is maintained in English, Simplified Chinese and Russian. Updated native screenshots and 924 assertions in each Debug / Release regression run accompany this release. [Full changelog](docs/CHANGELOG.md).
 
 ## Workbench features introduced in 2.6
 
 > **One window. Two steps. Zero guesswork.**
 >
-> ⚡ **5–7 s → 150–200 ms** cold start in a test setup · 500+ files imported without freezing
+> ⚡ **Background queue recovery** · 500+ files imported without freezing
 >
 > Startup times vary by hardware and environment.
 
@@ -103,9 +104,9 @@ A one-off appointment or a daily window, including ranges that cross midnight. T
 </td>
 <td valign="top">
 
-<b>⚡ 200 ms startup</b>
+<b>⚡ Responsive startup</b>
 
-Cold start fell from 5–7 s to 150–200 ms: the first paint no longer queries performance counters or WMI. Parsing, package building and metadata checks moved off the UI thread, and the pre-flight list is virtualised.
+The first paint avoids synchronous performance-counter and WMI queries. Since 2.6.2, the window paints before the queue is restored in the background. Parsing, package building and metadata checks also run off the UI thread, and the pre-flight list is virtualised.
 
 </td>
 </tr>
@@ -168,7 +169,7 @@ That's all. Other ways in: drag a link onto the window · **Add Link** on the to
 
 **Workbench**
 
-- **Instant startup** — 150–200 ms cold start, no blocking WMI or performance-counter queries (v2.6)
+- **Responsive startup** — background queue recovery and file-lock retries; no blocking WMI or performance-counter queries (v2.6.2)
 - **Task search** — package, file and path with `Ctrl+F` (v2.6)
 - **Scheduled downloads** — daily window or one-off appointment (v2.6)
 - **Collapsible details** — queue stats, task list and details that yield space on narrow windows
@@ -219,10 +220,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.1 settings" src="docs/screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.2 settings" src="docs/screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>Settings in 2.6.1 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+<p align="center"><sub>Settings in 2.6.2 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
 
 ---
 
@@ -232,7 +233,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.1** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.2** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -240,7 +241,7 @@ This repository brings it back: v1.8 was decompiled to recover the source, and f
 | Adding a big share | paste and hope | ✅ batch pre-flight with folder tree (v2.6) |
 | Finding a task | scroll the whole queue | ✅ search by package, file or path (v2.6) |
 | Unattended downloads | — | ✅ daily window or one-off schedule (v2.6) |
-| Startup | blocking first paint | ✅ 150–200 ms cold start — was 5–7 s (v2.6) |
+| Startup | blocking first paint | ✅ window paints before background queue recovery (v2.6.2) |
 | UI theme | system grey only | ✅ dark / light, follows system (v2.0) |
 | Stability | — | ✅ 200+ crash / data-loss / security fixes |
 | Maintenance | abandoned | ✅ active, Issues answered |
@@ -338,7 +339,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.1](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | Highlights and downloads for v2.6.1 |
+| [Release notes 2.6.2](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.2) | Highlights and downloads for v2.6.2 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

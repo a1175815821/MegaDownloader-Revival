@@ -28,6 +28,7 @@ public partial class RegressionTests {
         if(!condition) throw new Exception("FAIL: " + name);
         Interlocked.Increment(ref assertions);
     }
+    [STAThread]
     public static void Main(string[] args) {
         if(args.Length==3 && args[0]=="--sevenzip-cancel-child") {
             bin=args[1];
@@ -63,12 +64,21 @@ public partial class RegressionTests {
         Directory.CreateDirectory(root);
         Directory.SetCurrentDirectory(root);
         try {
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetUnhandledExceptionMode(System.Windows.Forms.UnhandledExceptionMode.ThrowException);
             if(args.Length>2 && args[2]=="--ui-only") {
                 RunUiOnly();
+            } else if(args.Length>2 && args[2]=="--startup-only") {
+                RunStartupOnly();
             } else Run();
             Console.WriteLine("PASS: " + assertions + " assertions. Temporary files: " + root);
         }
         catch(Exception ex) { Console.WriteLine(ex); Environment.ExitCode=1; }
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void RunStartupOnly() {
+        typeof(Log).GetField("_LogLevel",shared).SetValue(null,Enum.ToObject(typeof(Log.LevelLogType),-1));
+        StartupPerformanceCases();
     }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     static void RunUiOnly() {
@@ -188,6 +198,7 @@ public partial class RegressionTests {
         FinalReviewCases();
         FinalFixCases();
         DeliveryAuditFixCases(plain,key,encrypted);
+        StartupPerformanceCases();
         SevenZipCancelCase();
     }
     static object InvokePrivate(object target,string method,params object[] args) {

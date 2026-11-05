@@ -21,6 +21,11 @@ Public Class Configuracion
 	End Sub
 
 	Friend Sub New(ByVal configurationPath As String)
+		Me.New(configurationPath, AtomicFile.StartupAttempts)
+	End Sub
+
+	Friend Sub New(ByVal configurationPath As String, initialReadAttempts As Integer)
+		_initialReadAttempts = Math.Max(1, initialReadAttempts)
 		_configurationPath = If(configurationPath Is Nothing, Nothing, Path.GetFullPath(configurationPath))
 		' Cargamos del XML
 		ErrorConfig = ErrorConfigClass.SinErrores
@@ -56,6 +61,7 @@ Public Class Configuracion
 	''' 旧文件,否则 GuardarXML 会把默认值落盘并把完好文件挤进 .bak 直至彻底覆盖。</summary>
 	Public LoadTransientError As Boolean
 	Private ReadOnly _configurationPath As String
+	Private ReadOnly _initialReadAttempts As Integer
 	Private _transientBlockedSource As String
 
 	''' <summary>P-21: 仅 CargaXMLInterno 期间有效。启动时 60+ 次 SelectSingleNode
@@ -493,7 +499,7 @@ Public Class Configuracion
 
 		If Not soloRecuperar Then
 		SyncLock Mutex.GuardarConfig
-			If Not AtomicFile.TryLoadXmlWithRecoveryInfo(Fichero, Xml, recoveredFromBackup, transientFailure, _transientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs) Then
+			If Not AtomicFile.TryLoadXmlWithRecoveryInfo(Fichero, Xml, recoveredFromBackup, transientFailure, _transientBlockedSource, _initialReadAttempts, AtomicFile.StartupRetryDelayMs) Then
 				If Not System.IO.File.Exists(Fichero) AndAlso Not System.IO.File.Exists(Fichero & ".bak") Then
 					Log.WriteWarning("Configuration file does not exist")
 					ErrorConfig = ErrorConfigClass.Fichero_No_Existe

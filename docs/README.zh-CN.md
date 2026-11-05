@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.1-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.2-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub>如果这个项目帮到了你，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>，让更多人发现它。</sub></p>
@@ -29,7 +29,7 @@
   <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub>
 </p>
 
-> **v2.6.1：界面更清晰，设置更快，语言跟随系统。** 统一深浅色视觉层次，修复菜单首次显示，新增根据 Windows 显示语言自动选择界面语言，没有对应翻译就用英文。[看看新在哪 ↓](#-261-新在哪)
+> **v2.6.2：下载更安全，启动可响应，新增俄语。** 文件占用解除后自动恢复配置与队列，删除任务保护已有文件，大队列在后台加载。[看看新在哪 ↓](#-262-新在哪)
 >
 > 非官方项目，与 MEGA（MEGA Ltd.）无关联。
 
@@ -37,26 +37,27 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
-    <img alt="MegaDownloader v2.6.1 workbench" src="screenshots/main-light.png" width="100%">
+    <img alt="MegaDownloader v2.6.2 workbench" src="screenshots/main-light.png" width="100%">
   </picture>
 </p>
-<p align="center"><sub>v2.6.1 工作台 · 截图随 GitHub 主题切换。</sub></p>
+<p align="center"><sub>v2.6.2 工作台 · 截图随 GitHub 主题切换。</sub></p>
 
 ---
 
-## ✨ 2.6.1 新在哪
+## ✨ 2.6.2 新在哪
 
-- **更清晰的视觉层次**：侧栏、字体、间距和按钮统一整理，进度条与百分比合并，详情随窗口宽度调整；停止保留文字，定时下载补上时钟图标。
-- **首次打开就能看到完整菜单**：文件、选项、流媒体、说明均正常显示，不必放大再缩小；设置按钮与侧栏左侧对齐。
-- **设置打开更快**：减少重复布局计算，ELC 账号页按需加载。隔离环境下首次打开从约 8.2 秒降至约 1.1 秒，实际耗时取决于设备。
-- **界面语言跟随 Windows**：新配置默认自动识别，支持地区变体及简繁中文区分，未支持的语言回退英文；已有手动选择保留。在设置 → 一般中切换，保存并重启生效。
-- **截图与回归同步更新**：下方图片均为 2.6.1 原生界面与示例数据。完整修复及首次升级的六列布局迁移见 [CHANGELOG](CHANGELOG.md)。
+- **恢复队列时界面保持响应**：先显示主窗口，再后台加载队列及重试文件锁；恢复就绪前暂停保存和调度。同一份 679 项任务的隔离基准，队列恢复与界面准备的中位数由 3.69 秒降至 1.33 秒；这不是完整进程冷启动时间。[测量范围与详情](PERFORMANCE_ANALYSIS_2026-11-05.zh-CN.md)。
+- **文件占用后自动恢复**：临时占用不再误报首次运行或磁盘错误；配置、队列和媒体库在恢复完成前保持写保护，恢复时合并期间的增删，避免覆盖已有数据。
+- **删除与续传更安全**：删除任务保护无关的同名已有文件；失效下载直链重新获取并保留有效断点；预分配文件续传只检查还需增加的磁盘空间。
+- **校验更快，减少重复工作**：批量 MetaMAC 校验、有效密文复用、缩短保存锁、合并列表刷新，并进一步减少设置页重复布局。
+- **限速和取消行为修复**：不同地区格式下的小数限速正确回显和保存；单任务恢复保留限速，下载与 7z 取消等待旧工作退出后再重启。
+- **新增俄语界面**：内置共 11 种语言，文档维护英文、简体中文和俄语；同步原生截图，Debug / Release 完整回归各通过 924 项断言。[完整变更](CHANGELOG.md)。
 
 ## 2.6 引入的工作台功能
 
 > **一个窗口，两步操作，不用猜。**
 >
-> ⚡ **冷启动实测 5–7 秒 → 150–200 毫秒** · 500+ 个文件导入不卡界面
+> ⚡ **队列后台恢复** · 500+ 个文件导入不卡界面
 >
 > 启动时间因硬件和运行环境而异。
 
@@ -103,9 +104,9 @@
 </td>
 <td valign="top">
 
-<b>⚡ 启动 200 毫秒</b>
+<b>⚡ 启动保持响应</b>
 
-冷启动从 5–7 秒降到 150–200 毫秒：首屏不再同步读性能计数器与 WMI。链接解析、建包与元数据检查也移出了界面线程，预检改为虚拟列表。
+首屏不再同步读性能计数器与 WMI；2.6.2 起先显示主窗口，再后台恢复队列。链接解析、建包与元数据检查也移出了界面线程，预检采用虚拟列表。
 
 </td>
 </tr>
@@ -168,7 +169,7 @@
 
 **工作台**
 
-- **秒开** —— 冷启动 150–200 毫秒，不再阻塞读 WMI 与性能计数器（v2.6）
+- **启动保持响应** —— 队列恢复与文件锁重试放到后台，不再阻塞读 WMI 与性能计数器（v2.6.2）
 - **任务搜索** —— 包名、文件名、路径，`Ctrl+F` 直达（v2.6）
 - **定时下载** —— 每日时段或一次性预约（v2.6）
 - **详情栏可收起** —— 队列统计、任务列表、详情三段式，窄窗口自动让出空间
@@ -219,10 +220,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.1 settings" src="screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.2 settings" src="screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>2.6.1 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
+<p align="center"><sub>2.6.2 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
 
 ---
 
@@ -232,7 +233,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.1** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.2** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
@@ -240,7 +241,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 | 添加大型分享 | 粘完就下，全凭运气 | ✅ 批量预检 + 文件夹树（v2.6） |
 | 找任务 | 整队翻找 | ✅ 按包名 / 文件 / 路径搜索（v2.6） |
 | 无人值守下载 | — | ✅ 每日时段或一次性预约（v2.6） |
-| 启动速度 | 首屏同步阻塞 | ✅ 冷启动 150–200 毫秒，此前 5–7 秒（v2.6） |
+| 启动体验 | 首屏同步阻塞 | ✅ 先显示窗口，再后台恢复队列（v2.6.2） |
 | 界面主题 | 仅系统灰 | ✅ 深 / 浅色，跟随系统（v2.0） |
 | 稳定性 | — | ✅ 200+ 项崩溃 / 丢数据 / 安全修复 |
 | 维护状态 | 已停更 | ✅ 活跃维护，Issue 有响应 |
@@ -338,7 +339,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6.1 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.1) | v2.6.1 的更新亮点与下载 |
+| [2.6.2 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.2) | v2.6.2 的更新亮点与下载 |
 
 README 为三种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 

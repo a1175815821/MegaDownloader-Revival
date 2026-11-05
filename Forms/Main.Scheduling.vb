@@ -16,7 +16,7 @@ Partial Public Class Main
 
     Private Sub ScheduleTick(sender As Object, e As EventArgs)
         SyncLock scheduleActionLock
-            If Cerrando OrElse Config Is Nothing OrElse Config.LoadTransientError Then Return
+            If Cerrando OrElse Config Is Nothing OrElse Config.LoadTransientError OrElse System.Threading.Volatile.Read(_startupQueueLoading) Then Return
             If scheduleMenuItem IsNot Nothing Then scheduleMenuItem.Checked = Config.DownloadSchedule.Enabled
             Select Case scheduleController.Evaluate(Config.DownloadSchedule, DateTime.Now, EstadoAplicacion = TipoEstadoAplicacion.Descargando)
                 Case DownloadScheduleController.ScheduleAction.Pause
@@ -35,7 +35,7 @@ Partial Public Class Main
     End Sub
 
     Private Function ScheduleAllowsStart(Optional showMessage As Boolean = False) As Boolean
-        If Config Is Nothing OrElse Config.LoadTransientError Then Return False
+        If Config Is Nothing OrElse Config.LoadTransientError OrElse System.Threading.Volatile.Read(_startupQueueLoading) Then Return False
         Dim allowed As Boolean = Config.DownloadSchedule.AllowsDownload(DateTime.Now)
         If Not allowed AndAlso showMessage Then ToastForm.ShowToast(Me, Language.GetText("Schedule_Outside"))
         Return allowed

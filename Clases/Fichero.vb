@@ -230,14 +230,38 @@ Public Class Fichero
         Public FileID As String
         Public URLFichero As String
         Public URL As String
+        Public FileIDSource As SecureString
+        Public FileKeySource As SecureString
+        Public URLSource As SecureString
+        Public URLFicheroSource As SecureString
+        Public LinkVisible As Boolean
+
+        Public Function Matches(file As Fichero) As Boolean
+            Return Object.ReferenceEquals(FileIDSource, file._FileID) AndAlso
+                   Object.ReferenceEquals(FileKeySource, file._FileKey) AndAlso
+                   Object.ReferenceEquals(URLSource, file._URL) AndAlso
+                   Object.ReferenceEquals(URLFicheroSource, file._URLFichero) AndAlso
+                   LinkVisible = file.LinkVisible
+        End Function
     End Class
     Private CacheSecureData As Cache = Nothing
+
+    Private Sub CaptureCacheSources(cache As Cache)
+        cache.FileIDSource = _FileID
+        cache.FileKeySource = _FileKey
+        cache.URLSource = _URL
+        cache.URLFicheroSource = _URLFichero
+        cache.LinkVisible = LinkVisible
+    End Sub
     Private Sub RegenerateCacheSecureData()
         Dim c As New Cache
         c.FileID = Criptografia.EncryptString_DPAPI(_FileID)
         c.FileKey = Criptografia.EncryptString_DPAPI(_FileKey)
-        c.URL = Criptografia.EncryptString_DPAPI(Criptografia.ToSecureString(If(LinkVisible, "", HIDDEN_LINK) & Criptografia.ToInsecureString(Me._URL)))
+        Using secureUrl As SecureString = Criptografia.ToSecureString(If(LinkVisible, "", HIDDEN_LINK) & Criptografia.ToInsecureString(Me._URL))
+            c.URL = Criptografia.EncryptString_DPAPI(secureUrl)
+        End Using
         c.URLFichero = Criptografia.EncryptString_DPAPI(_URLFichero)
+        CaptureCacheSources(c)
         CacheSecureData = c
     End Sub
 
@@ -1170,16 +1194,26 @@ Public Class Fichero
             Version = 1
         End If
 
-        Me._FileID = Criptografia.DecryptString_DPAPI(LeerNodo(XML, "FileID", ""))
-        Me._FileKey = Criptografia.DecryptString_DPAPI(LeerNodo(XML, "FileKey", ""))
-        Me._URL = Criptografia.DecryptString_DPAPI(LeerNodo(XML, "URL", ""))
-        Me._URLFichero = Criptografia.DecryptString_DPAPI(LeerNodo(XML, "URLFichero", ""))
+        CacheSecureData = Nothing
+        Dim loadedCache As New Cache()
+        Me._FileID = Criptografia.DecryptStringWithCacheInfo(LeerNodo(XML, "FileID", ""), loadedCache.FileID)
+        Me._FileKey = Criptografia.DecryptStringWithCacheInfo(LeerNodo(XML, "FileKey", ""), loadedCache.FileKey)
+        Me._URL = Criptografia.DecryptStringWithCacheInfo(LeerNodo(XML, "URL", ""), loadedCache.URL)
+        Me._URLFichero = Criptografia.DecryptStringWithCacheInfo(LeerNodo(XML, "URLFichero", ""), loadedCache.URLFichero)
 
         ' Hacemos el link no visible
         Dim UrlPlain As String = Criptografia.ToInsecureString(Me._URL)
-        If UrlPlain.StartsWith(HIDDEN_LINK) Then
+        Me.LinkVisible = Not UrlPlain.StartsWith(HIDDEN_LINK, StringComparison.Ordinal)
+        If Not Me.LinkVisible Then
+            Me._URL.Dispose()
             Me._URL = Criptografia.ToSecureString(UrlPlain.Replace(HIDDEN_LINK, ""))
-            Me.LinkVisible = False
+        End If
+        ' Reuse only successfully decrypted current-format ciphertext. Historical
+        ' entropy values and failed/missing fields must still be migrated on save.
+        If loadedCache.FileID IsNot Nothing AndAlso loadedCache.FileKey IsNot Nothing AndAlso
+           loadedCache.URL IsNot Nothing AndAlso loadedCache.URLFichero IsNot Nothing Then
+            CaptureCacheSources(loadedCache)
+            CacheSecureData = loadedCache
         End If
 
 
@@ -1321,7 +1355,7 @@ Public Class Fichero
         NodoFic.Attributes.Append(XML.CreateAttribute("v")).Value = Me.Version.ToString
 
         If IncluirDatosCifrados Then
-            If CacheSecureData Is Nothing Then RegenerateCacheSecureData()
+            If CacheSecureData Is Nothing OrElse Not CacheSecureData.Matches(Me) Then RegenerateCacheSecureData()
 
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = CacheSecureData.FileID
             NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = CacheSecureData.FileKey
