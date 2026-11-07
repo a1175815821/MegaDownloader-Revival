@@ -24,8 +24,9 @@
 | `settings-loaded-connection.png` | `settings-connection.png` |
 | `download-schedule.png` | `download-schedule.png` |
 
-首页按 GitHub 主题选择主窗口与设置的深浅色图片。其他视图可直接查看：
+首页按 GitHub 主题选择主窗口的深浅色图片。其他视图可直接查看：
 
+- [设置（浅色）](settings-general.png) / [设置（深色）](settings-dark.png)
 - [空队列](main-empty.png)
 - [窄窗口的底部详情](details-bottom.png)
 - [连接设置](settings-connection.png)

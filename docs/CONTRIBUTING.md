@@ -80,7 +80,7 @@ MegaDownloader/
 │   ├── README.*.md                  #   Translated readmes (root README.md is English)
 │   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
 │   ├── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
-│   └── screenshots/                 #   Banner and interface images used by the READMEs
+│   └── screenshots/                 #   Interface screenshots and project artwork
 ├── Tests/                          # Executable regression checks and runner
 ├── MegaDownloader.sln              # VS solution
 ├── MegaDownloader.vbproj           # VS project
@@ -284,7 +284,7 @@ When filing a bug, please include the following in the Issue:
 
 1. Confirm both `Debug` and `Release` build, and run `.\Tests\Run-RegressionTests.ps1`
 2. Update `docs/CHANGELOG.md` (Simplified Chinese only) with the new version section
-3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all three READMEs (root English, Simplified Chinese, Russian)
+3. Update `AssemblyVersion` and `AssemblyFileVersion` in `My Project/AssemblyInfo.vb`, plus `ApplicationVersion` in `MegaDownloader.vbproj`; synchronize the current-version highlights in all three READMEs (root English, Simplified Chinese, Russian). Check the download links, requirements, language count and screenshot labels
 4. Update `VERSION_MEGADOWNLOADER` and `VERSION_UPDATE` in `Resources/InternalConfig.xml` (Base64-encoded)
 5. Update `<Version>` in `docs/version.xml`
 6. Prepare the release notes using the structure below. CI generates initial notes; edit them on the GitHub Release page after publishing
