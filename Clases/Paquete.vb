@@ -250,6 +250,13 @@ Public Class Paquete
         Dim l As New Generic.List(Of Paquete)
 
         Try
+            If XML.DocumentElement Is Nothing Then
+                ' An empty-but-well-formed file (no root element) passes XmlDocument.Load
+                ' with a null DocumentElement. Treat it as a corrupt primary and fall
+                ' back to the .bak rather than throwing an NRE which permanently disables
+                ' the queue. The caller (recovery) re-reads primary-or-bak next tick.
+                Throw New ApplicationException("Download list XML has no root element.")
+            End If
             For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
                 cancellationToken.ThrowIfCancellationRequested()
                 Dim p As New Paquete
@@ -321,6 +328,9 @@ Public Class Paquete
         If Not AtomicFile.TryReloadAfterTransientFailure(Fichero, _TransientBlockedSource, XML) Then Return Nothing
         Dim l As New Generic.List(Of Paquete)
         Try
+            If XML.DocumentElement Is Nothing Then
+                Throw New ApplicationException("Download list XML has no root element.")
+            End If
             For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
                 Dim p As New Paquete
                 p.CargarXML(NodoPaq)
@@ -333,6 +343,24 @@ Public Class Paquete
         End Try
         Return l
     End Function
+
+    ''' <summary>B7: 队列加载(启动或恢复)遇到非瞬态失败(损坏/空根/解析异常)时,由调用方
+    ''' 调用本方法。与瞬态锁共用 `_LoadTransientError` 写保护:只要磁盘上的队伍没能读出来,
+    ''' 周期落盘就不得把空列表写盘、把用户队列挤进 .bak。恢复计时器每 tick 会复用
+    ''' CommitTransientRecovery 解除保护并重读。</summary>
+    Public Shared Sub ArmWriteProtection()
+        SyncLock Mutex.GuardarDownloadList
+            If Not _LoadTransientError Then
+                _LoadTransientError = True
+                _TransientSkipLogged = False
+                Log.WriteWarning("Download list could not be parsed; write protection armed to preserve the on-disk file until recovery succeeds.")
+            End If
+        End SyncLock
+        ' Keep TryReloadAfterTransientLock gated on _LoadTransientError: it re-reads
+        ' primary, falling back to .bak only when the primary is genuinely corrupt
+        ' (TryReloadAfterTransientFailure handles the .bak-lock case separately).
+        _TransientBlockedSource = ObtenerRutaFicheroDescargas()
+    End Sub
 
     ''' <summary>B2 final fix: 由主窗体在 Mutex.ListaDescargas 内完成合并后调用。
     ''' 在此之前 _LoadTransientError 仍为 True,周期落盘一律拒写,不会出现"恢复中的

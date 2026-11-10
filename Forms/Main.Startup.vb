@@ -25,6 +25,20 @@ Partial Public Class Main
         btnStop.Enabled = ready
     End Sub
 
+    ''' <summary>Removes the "Downloads could not be loaded" banner when the queue becomes
+    ''' healthy again (initial load success or later recovery). Must run on the UI thread.</summary>
+    Private Sub ClearStartupQueueBanner()
+        If _startupQueueStatus Is Nothing Then Return
+        Try
+            StatusStrip1.Items.Remove(_startupQueueStatus)
+            _startupQueueStatus.Dispose()
+        Catch ex As Exception
+            Log.WriteError("Clearing startup queue banner failed: " & Log.SafeException(ex))
+        Finally
+            _startupQueueStatus = Nothing
+        End Try
+    End Sub
+
     Private Sub BeginStartupQueueLoad()
         If _startupQueueStarted OrElse Cerrando OrElse IsDisposed Then Return
         _startupQueueStatus = New ToolStripStatusLabel(Language.GetText("Loading please wait")) With {.Name = "StartupQueueStatus"}
@@ -62,25 +76,31 @@ Partial Public Class Main
             ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
             RefreshListaDescargas(True)
             UpdateNavRailOverview()
-            If _startupQueueStatus IsNot Nothing Then
-                StatusStrip1.Items.Remove(_startupQueueStatus)
-                _startupQueueStatus.Dispose()
-                _startupQueueStatus = Nothing
-            End If
+            ClearStartupQueueBanner()
             UpdateStartupActionAvailability()
             queueReady = True
         Catch ex As OperationCanceledException
             _startupQueueCompletion.TrySetResult(False)
         Catch ex As Exception
-            Volatile.Write(_startupQueueLoading, True)
+            ' Do NOT leave _startupQueueLoading True here. A permanent True would keep
+            ' Play/Pause/Stop disabled and — worse — gate the recovery timer out
+            ' (Main.RecuperacionTransitoria_Tick checks Not _startupQueueLoading), so a
+            ' transiently-unreadable-but-not-corrupt file could never self-heal. Clear
+            ' the flag and arm write protection instead: the recovery timer re-reads the
+            ' queue every tick and, once the on-disk file parses, re-publishes it and
+            ' clears the degraded state. Startup hangs only until that succeeds.
+            Volatile.Write(_startupQueueLoading, False)
+            Try
+                ' Failures here (empty root, corrupt node, transient disk error) all mean
+                ' the disk queue must be preserved untouched, exactly like a transient lock.
+                Paquete.ArmWriteProtection()
+            Catch logEx As Exception
+                Log.WriteError("Failed to arm queue write protection: " & Log.SafeException(logEx))
+            End Try
             _startupQueueCompletion.TrySetResult(False)
-            Log.WriteError("Startup queue load failed; saving remains suspended: " & Log.SafeException(ex))
+            Log.WriteError("Startup queue load failed; writes are suspended until recovery: " & Log.SafeException(ex))
             If Not Cerrando AndAlso Not IsDisposed Then
-                If _startupQueueStatus Is Nothing Then
-                    _startupQueueStatus = New ToolStripStatusLabel() With {.Name = "StartupQueueStatus"}
-                    StatusStrip1.Items.Add(_startupQueueStatus)
-                End If
-                _startupQueueStatus.Text = Language.GetText("Downloads could not be loaded. Restart the application to try again.")
+                UpdateStartupActionAvailability()
             End If
         Finally
             If Not published Then Paquete.DisposeLoadedQueue(loaded)

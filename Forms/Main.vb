@@ -663,7 +663,17 @@ Public Class Main
                         Paquete.CommitTransientRecovery()
                     End SyncLock
                     RefreshListaDescargas(True)
+                    ClearStartupQueueBanner()
+                    UpdateStartupActionAvailability()
                     queueRecovered = True
+                    ' B7: the queue failed during startup, so CompleteStartup — which starts
+                    ' the business workers — was never reached (StartDownload resumes the
+                    ' UI but not those workers). Healing the queue must now drive startup
+                    ' to completion, exactly like config recovery does. Idempotent when
+                    ' startup already ran (guarded by _startupReady inside CompleteStartup).
+                    If Not _startupReady AndAlso Not System.Threading.Volatile.Read(_startupQueueLoading) Then
+                        CompleteStartup()
+                    End If
                 End If
             End If
 
@@ -5560,29 +5570,39 @@ Public Class Main
 
     Private Async Sub AgregarLink(Url As String, ByVal NombrePaquete As String, ByVal ExtraerURLs As Boolean, EsconderLinks As Boolean, Optional parsed As Generic.List(Of String) = Nothing)
         If Not Await WaitForStartupQueueAsync() Then Return
-        Dim frmName As New AddLinks
-        frmName.Main = Me
+        ' This method is Async Sub: when the startup-completion task is not yet set
+        ' (for example command-line URLs processed during CompleteStartup, before
+        ' _startupQueueCompletion is signalled), the Await above yields and the rest of
+        ' this body runs later on the UI thread, OUTSIDE the caller's Try/Catch. Any
+        ' exception here would then escape the Async Sub as an unhandled async-void
+        ' exception (logged, but destabilising the message loop). Keep it contained.
+        Try
+            Dim frmName As New AddLinks
+            frmName.Main = Me
 
-        frmName.Config = Me.Config
-        If Not String.IsNullOrEmpty(Url) Then
-            frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks, parsed)
-        End If
-        If Not String.IsNullOrEmpty(NombrePaquete) Then
-            frmName.txtNombre.Text = NombrePaquete
-        End If
+            frmName.Config = Me.Config
+            If Not String.IsNullOrEmpty(Url) Then
+                frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks, parsed)
+            End If
+            If Not String.IsNullOrEmpty(NombrePaquete) Then
+                frmName.txtNombre.Text = NombrePaquete
+            End If
 
-        frmName.ShowDialog(Me)
+            frmName.ShowDialog(Me)
 
-        Dim importedPackage As Paquete = frmName.LastImportedPackage
-        Dim openStegano As Boolean =   frmName.OpenSteganoLoadOnExit
-        ' Hasta que no se cierre la ventana no continuamos la ejecución
-        frmName.Dispose()
+            Dim importedPackage As Paquete = frmName.LastImportedPackage
+            Dim openStegano As Boolean =   frmName.OpenSteganoLoadOnExit
+            ' Hasta que no se cierre la ventana no continuamos la ejecución
+            frmName.Dispose()
 
-        If importedPackage IsNot Nothing Then RevealImportedPackage(importedPackage)
+            If importedPackage IsNot Nothing Then RevealImportedPackage(importedPackage)
 
 
-        ' Ñapa para abrir el cuadro de carga esteganografica... necesario porque AddLinks contiene un botón a ese cuadro :/
-        If openStegano Then OpenSteganoWizard()
+            ' Ñapa para abrir el cuadro de carga esteganografica... necesario porque AddLinks contiene un botón a ese cuadro :/
+            If openStegano Then OpenSteganoWizard()
+        Catch ex As Exception
+            Log.WriteError("Adding links failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
 

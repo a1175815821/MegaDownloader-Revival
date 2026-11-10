@@ -183,7 +183,8 @@ public partial class RegressionTests {
                         Check(PumpStartupUntil(()=>workers.All(w=>w.Starts==1)),"queue readiness starts each worker once");InvokeMain(main,"CompleteStartup");
                         Check(workers.All(w=>w.Starts==1)&&!(bool)typeof(Main).GetField("_startupQueueLoading",hidden).GetValue(main),"completed startup is idempotent");
                         Check(((List<string[]>)typeof(Main).GetField("_pendingStartupArguments",hidden).GetValue(main)).Count==0,"deferred arguments are drained after the real queue is ready");
-                    }else Check(workers.All(w=>w.Starts==0)&&live.SequenceEqual(new[]{pending})&&(bool)typeof(Main).GetField("_startupQueueLoading",hidden).GetValue(main),"canceled/failed startup cannot publish data, save or start workers: "+mode);
+                    }else if(mode=="cancel") Check(workers.All(w=>w.Starts==0)&&live.SequenceEqual(new[]{pending})&&(bool)typeof(Main).GetField("_startupQueueLoading",hidden).GetValue(main),"canceled startup cannot publish data, save or start workers: "+mode);
+                    else Check(workers.All(w=>w.Starts==0)&&live.SequenceEqual(new[]{pending})&&!(bool)typeof(Main).GetField("_startupQueueLoading",hidden).GetValue(main)&&(bool)typeof(Paquete).GetField("_LoadTransientError",shared).GetValue(null),"failed startup releases the loading gate, arms write protection and cannot publish data, save or start workers: "+mode);
                 }finally {
                     release.Set();InvokeMain(main,"CancelStartupQueueLoad");PumpStartupUntil(()=>task.IsCompleted);
                     var timer=typeof(Main).GetField("_recoveryTimer",hidden).GetValue(main) as System.Windows.Forms.Timer;if(timer!=null)timer.Dispose();
