@@ -6,41 +6,32 @@
 
 <p align="center">
   <b>The classic MEGA downloader for Windows — rebuilt for today's links.</b><br>
-  Multi-threaded transfers · true resume · automatic quota recovery · batch pre-flight
+  Paste a <code>mega.nz/file</code> or <code>mega.nz/folder</code> link, choose files, then download; resume and automatic quota recovery are built in.<br>
+  Portable single-file EXE · Unofficial project, not affiliated with MEGA Ltd.
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.2-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Free%20download-Latest-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
 </p>
 
-<p align="center"><sub>If MegaDownloader helps you, <a href="https://github.com/a1175815821/MegaDownloader-Revival">give the project a ⭐</a> so more people can find it.</sub></p>
+<p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
 
-<p align="center">
-  <a href="../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
-  <a href="../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
-  <a href="../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
-</p>
+## Get started in 30 seconds
 
-<p align="center">
-  <sub>Portable EXE or ZIP · no installer · no admin rights · .NET Framework 4.8 · 11 languages</sub><br>
-  <sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub>
-</p>
+1. Download `MegaDownloader.exe` and double-click it; no installer or admin rights needed.
+2. Copy a MEGA link — the app detects it automatically.
+3. Confirm the link → choose files → start the download.
 
-> **v2.6.2 — safer downloads, responsive startup, Russian support.** Recover locked queues automatically, protect existing files when deleting tasks, and restore large queues in the background. [See what's new ↓](#-whats-new-in-262)
->
-> Unofficial project, not affiliated with MEGA (MEGA Ltd.).
+> v2.6.2: large queues load in the background, and settings and queues recover automatically after temporary file locks.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-light.png">
-    <img alt="MegaDownloader v2.6.2 workbench" src="docs/screenshots/main-light.png" width="100%">
-  </picture>
-</p>
-<p align="center"><sub>v2.6.2 workbench · The screenshot follows your GitHub theme. Interface shown in Simplified Chinese.</sub></p>
+<table>
+<tr>
+  <td align="center" width="50%"><b>1. Paste links</b><br><img src="docs/screenshots/add-links.png" alt="Add links window" width="100%"></td>
+  <td align="center" width="50%"><b>2. Preview and choose files</b><br><img src="docs/screenshots/preflight.png" alt="File pre-flight and selection window" width="100%"></td>
+</tr>
+</table>
+
+<p align="center"><sub>Screenshots use sample data to show the flow. If this helps, <a href="https://github.com/a1175815821/MegaDownloader-Revival">give the project a ⭐</a>; see “What it does” below for more.</sub></p>
 
 ---
 
@@ -130,21 +121,18 @@ The first paint avoids synchronous performance-counter and WMI queries. Since 2.
 
 ---
 
-## ⚡ Up and running in 30 seconds
+## 📦 Download options and requirements
 
-1. **Download** one of the two files from [Releases](../../releases/latest):
+Choose either file from [Releases](../../releases/latest):
 
-   | File | Choose it when… |
-   | --- | --- |
-   | **`MegaDownloader.exe`** (single file) | You want the simplest path: download and double-click — all 15 dependency DLLs are embedded |
-   | **`MegaDownloader-Revival-win-x86.zip`** (portable) | You prefer an archive: extract it and run the executable |
+| File | Choose it when… |
+| --- | --- |
+| **`MegaDownloader.exe`** (single file) | You want the simplest path: download and double-click — all 15 dependency DLLs are embedded |
+| **`MegaDownloader-Revival-win-x86.zip`** (portable) | You prefer an archive: extract it and run the executable |
 
-2. **Run it** — no installer, no admin rights
-   > Windows 7 SP1 or later · .NET Framework 4.8 (built into Windows 10 1903+, installer offered on older systems)
+Requires Windows 7 SP1 or later and .NET Framework 4.8 (built into Windows 10 1903+; older systems are offered the installer). No installer or admin rights are needed.
 
-3. **Copy a MEGA link** — the clipboard monitor picks it up and adds it once you confirm
-
-That's all. Other ways in: drag a link onto the window · **Add Link** on the toolbar · click a `mega://` protocol link in your browser.
+Besides clipboard detection, links can be added by dragging them onto the window, using **Add Link** on the toolbar, or clicking a `mega://` protocol link in your browser.
 
 ---
 

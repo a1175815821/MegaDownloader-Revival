@@ -6,41 +6,32 @@
 
 <p align="center">
   <b>经典 MEGA 下载器，为今天的链接重建。</b><br>
-  多线程加速 · 真断点续传 · 配额自动恢复 · 下载前批量预检
+  粘贴 <code>mega.nz/file</code> 或 <code>mega.nz/folder</code> 链接，先选文件，再下载；支持续传和配额自动恢复。<br>
+  Windows 免安装单文件 · 非官方项目，与 MEGA Ltd. 无关联。
 </p>
 
 <p align="center">
-  <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.2-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/%E5%85%8D%E8%B4%B9%E4%B8%8B%E8%BD%BD-%E6%9C%80%E6%96%B0%E7%89%88-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
 </p>
 
-<p align="center"><sub>如果这个项目帮到了你，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>，让更多人发现它。</sub></p>
+<p align="center"><sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub></p>
 
-<p align="center">
-  <a href="../../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
-  <a href="../../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
-  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
-  <a href="../../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
-</p>
+## 30 秒开始下载
 
-<p align="center">
-  <sub>单文件 EXE 或 ZIP · 免安装 · 免管理员 · .NET Framework 4.8 · 11 种界面语言</sub><br>
-  <sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub>
-</p>
+1. 下载 `MegaDownloader.exe`，双击运行；免安装、无需管理员权限。
+2. 复制一个 MEGA 链接，程序会自动识别。
+3. 确认链接 → 勾选要的文件 → 开始下载。
 
-> **v2.6.2：下载更安全，启动可响应，新增俄语。** 文件占用解除后自动恢复配置与队列，删除任务保护已有文件，大队列在后台加载。[看看新在哪 ↓](#-262-新在哪)
->
-> 非官方项目，与 MEGA（MEGA Ltd.）无关联。
+> v2.6.2 重点修复：大队列在后台加载，文件占用解除后自动恢复配置与队列。
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
-    <img alt="MegaDownloader v2.6.2 workbench" src="screenshots/main-light.png" width="100%">
-  </picture>
-</p>
-<p align="center"><sub>v2.6.2 工作台 · 截图随 GitHub 主题切换。</sub></p>
+<table>
+<tr>
+  <td align="center" width="50%"><b>1. 粘贴链接</b><br><img src="screenshots/add-links.png" alt="添加链接窗口" width="100%"></td>
+  <td align="center" width="50%"><b>2. 预检并选择文件</b><br><img src="screenshots/preflight.png" alt="文件预检与选择窗口" width="100%"></td>
+</tr>
+</table>
+
+<p align="center"><sub>界面示例数据，用于说明操作流程。用得上，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>；更多功能见下方「它能做什么」。</sub></p>
 
 ---
 
@@ -130,21 +121,18 @@
 
 ---
 
-## ⚡ 30 秒上手
+## 📦 下载选项与系统要求
 
-1. 从 [Releases](../../../releases/latest) 下载，二选一：
+从 [Releases](../../../releases/latest) 下载，二选一：
 
-   | 文件 | 适合你，如果…… |
-   | --- | --- |
-   | **`MegaDownloader.exe`**（单文件） | 想要最省事：下载后直接双击运行，15 个依赖 DLL 已内嵌 |
-   | **`MegaDownloader-Revival-win-x86.zip`**（免安装包） | 喜欢压缩包：解压后运行程序 |
+| 文件 | 适合你，如果…… |
+| --- | --- |
+| **`MegaDownloader.exe`**（单文件） | 想要最省事：下载后直接双击运行，15 个依赖 DLL 已内嵌 |
+| **`MegaDownloader-Revival-win-x86.zip`**（免安装包） | 喜欢压缩包：解压后运行程序 |
 
-2. **双击运行** —— 免安装、无需管理员权限
-   > Windows 7 SP1 及以上 · .NET Framework 4.8（Windows 10 1903+ 已内置，旧系统按提示安装）
+需要 Windows 7 SP1 及以上、.NET Framework 4.8（Windows 10 1903+ 已内置，旧系统按提示安装）；免安装、无需管理员权限。
 
-3. **复制一个 MEGA 链接** —— 剪贴板监控会自动识别，确认后即加入下载队列
-
-到这一步就能正常下载了。其他加链接的方式：把链接拖进窗口 · 工具栏「添加链接」 · 浏览器中点击 `mega://` 协议链接。
+除剪贴板自动识别外，还可把链接拖进窗口、使用工具栏「添加链接」，或在浏览器中点击 `mega://` 协议链接。
 
 ---
 

@@ -6,41 +6,32 @@
 
 <p align="center">
   <b>Классический MEGA-загрузчик для Windows — воссозданный под современные ссылки.</b><br>
-  Многопоточная загрузка · настоящее докачивание · автовосстановление после квоты · массовая предпроверка
+  Вставьте ссылку <code>mega.nz/file</code> или <code>mega.nz/folder</code>, выберите файлы и начните загрузку; доступны докачивание и автовосстановление после квоты.<br>
+  Портативный однофайловый EXE · Неофициальный проект, не связан с MEGA Ltd.
 </p>
 
 <p align="center">
-  <a href="../../../releases/latest"><img alt="Скачать последний выпуск" src="https://img.shields.io/badge/Download-Latest%20Release-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="Список изменений" src="https://img.shields.io/badge/Changelog-2.6.2-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="../../../releases/latest"><img alt="Скачать последний выпуск" src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-%D0%9F%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8F%D1%8F%20%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
 </p>
 
-<p align="center"><sub>Если MegaDownloader вам полезен, поставьте проекту <a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a>, чтобы его нашло больше людей.</sub></p>
+<p align="center"><sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>Русский</b></sub></p>
 
-<p align="center">
-  <a href="../../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
-  <a href="../../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
-  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
-  <a href="../../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
-</p>
+## Начать за 30 секунд
 
-<p align="center">
-  <sub>Однофайловый EXE или ZIP · без установки · без прав администратора · .NET Framework 4.8 · 11 языков интерфейса</sub><br>
-  <sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>Русский</b></sub>
-</p>
+1. Скачайте `MegaDownloader.exe` и запустите его двойным щелчком; установка и права администратора не нужны.
+2. Скопируйте ссылку MEGA — программа распознает её автоматически.
+3. Подтвердите ссылку → выберите файлы → начните загрузку.
 
-> **v2.6.2 — безопаснее загрузки, отзывчивый запуск, русский интерфейс.** Автоматическое восстановление заблокированных файлов, защита существующих файлов при удалении задач и фоновое восстановление больших очередей. [Что нового ↓](#-что-нового-в-262)
->
-> Неофициальный проект, не связан с MEGA (MEGA Ltd.).
+> v2.6.2: большие очереди загружаются в фоне, а настройки и очереди автоматически восстанавливаются после временной блокировки файлов.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="screenshots/main-light.png">
-    <img alt="MegaDownloader v2.6.2 workbench" src="screenshots/main-light.png" width="100%">
-  </picture>
-</p>
-<p align="center"><sub>Рабочий стол v2.6.2 · Скриншот следует за темой GitHub. Интерфейс показан на упрощённом китайском.</sub></p>
+<table>
+<tr>
+  <td align="center" width="50%"><b>1. Вставьте ссылки</b><br><img src="screenshots/add-links.png" alt="Окно добавления ссылок" width="100%"></td>
+  <td align="center" width="50%"><b>2. Проверьте и выберите файлы</b><br><img src="screenshots/preflight.png" alt="Окно проверки и выбора файлов" width="100%"></td>
+</tr>
+</table>
+
+<p align="center"><sub>На скриншотах показаны примеры данных для демонстрации порядка действий. Если проект полезен, поставьте ему <a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a>; подробнее — в разделе «Что она умеет» ниже.</sub></p>
 
 ---
 
@@ -130,21 +121,18 @@
 
 ---
 
-## ⚡ Запуск за 30 секунд
+## 📦 Варианты загрузки и требования
 
-1. **Скачайте** один из двух файлов со страницы [Releases](../../../releases/latest):
+Скачайте один из двух файлов со страницы [Releases](../../../releases/latest):
 
-   | Файл | Когда выбирать |
-   | --- | --- |
-   | **`MegaDownloader.exe`** (один файл) | Нужен самый простой путь: скачал и дважды кликнул — все 15 зависимых DLL встроены |
-   | **`MegaDownloader-Revival-win-x86.zip`** (портативный) | Предпочитаете архив: распакуйте и запустите исполняемый файл |
+| Файл | Когда выбирать |
+| --- | --- |
+| **`MegaDownloader.exe`** (один файл) | Нужен самый простой путь: скачал и дважды кликнул — все 15 зависимых DLL встроены |
+| **`MegaDownloader-Revival-win-x86.zip`** (портативный) | Предпочитаете архив: распакуйте и запустите исполняемый файл |
 
-2. **Запустите его** — без установщика и прав администратора
-   > Windows 7 SP1 или новее · .NET Framework 4.8 (встроен в Windows 10 1903+, на старых системах предлагается установщик)
+Требуются Windows 7 SP1 или новее и .NET Framework 4.8 (встроен в Windows 10 1903+; на старых системах предлагается установщик). Установка и права администратора не нужны.
 
-3. **Скопируйте MEGA-ссылку** — монитор буфера обмена подхватит её и добавит после вашего подтверждения
-
-Это всё. Другие способы: перетащите ссылку на окно · кнопка «Добавить ссылку» на панели инструментов · клик по ссылке протокола `mega://` в браузере.
+Кроме распознавания из буфера обмена, ссылки можно добавить перетаскиванием в окно, кнопкой «Добавить ссылку» на панели инструментов или кликом по ссылке протокола `mega://` в браузере.
 
 ---
 
