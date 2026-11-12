@@ -578,7 +578,13 @@ B 是同行下载数。]]></Text>
 也可以使用 Ctrl + V。]]></Text>
   <Text key="UI_NoMatches"><![CDATA[没有匹配的任务]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[有数据文件正被其它程序占用。当前使用临时数据，保存已暂停；文件释放后会自动恢复已保存的数据。]]></Text>
+  <Text key="Queue_LoadFailed"><![CDATA[下载列表未能载入]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[下载列表文件已损坏（并非被其它程序占用）。正在自动尝试用备份恢复；若此提示一直存在，请修复或删除该文件后重启程序。]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[文件锁已释放，已恢复磁盘上保存的数据。文件被占用期间修改的设置不会保存，请重新检查设置。]]></Text>
+  <Text key="Config_PasswordReentryWarning"><![CDATA[以下口令无法在本机或当前账户解密（配置可能是从备份恢复到了其他机器或账户），请重新输入，否则相关功能会连接失败：]]></Text>
+  <Text key="Config_ProxyPassword"><![CDATA[代理口令]]></Text>
+  <Text key="Config_StreamingPassword"><![CDATA[流媒体口令]]></Text>
+  <Text key="Startup could not be completed. Restart the application to try again."><![CDATA[启动未能完成，请重启应用后重试。]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[配置文件正被其它程序占用。为保护已有设置，本次未保存任何内容；占用解除后程序会自动恢复，请稍后重试。]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 个已下载文件来自不含完整性校验信息的旧链接，无法自动确认归属。仍要删除吗？任务目录中同名且大小一致的文件将被移除。]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[操作已取消，未删除任何任务或文件。]]></Text>

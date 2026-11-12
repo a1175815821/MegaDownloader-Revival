@@ -308,12 +308,11 @@ Public Class Configuration
         ' 否则只留日志（Configuracion 读盘时已记 Warning），避免打扰未用该功能的用户。
         Try
             Dim needReentry As New Generic.List(Of String)
-            If Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy Then needReentry.Add("代理口令 Proxy password")
-            If Config.ServidorStreamingPasswordNeedsReentry AndAlso Config.ServidorStreamingActivo Then needReentry.Add("流媒体口令 Streaming password")
+            If Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy Then needReentry.Add(Language.GetText("Config_ProxyPassword"))
+            If Config.ServidorStreamingPasswordNeedsReentry AndAlso Config.ServidorStreamingActivo Then needReentry.Add(Language.GetText("Config_StreamingPassword"))
             If needReentry.Count > 0 Then
-                MessageBox.Show(Me, "以下口令无法在本机解密（配置可能从备份恢复到了其他机器/账户），请重新输入，否则相关功能会连接失败：" & vbCrLf & _
-                    " * " & String.Join(vbCrLf & " * ", needReentry.ToArray()) & vbCrLf & _
-                    "The password(s) cannot be decrypted on this machine/user (config may have been restored from backup). Please re-enter, otherwise the feature will fail to connect: " & String.Join(", ", needReentry.ToArray()), _
+                MessageBox.Show(Me, Language.GetText("Config_PasswordReentryWarning") & vbCrLf & _
+                    " * " & String.Join(vbCrLf & " * ", needReentry.ToArray()), _
                     Language.GetText("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
             End If
         Catch ex As Exception
@@ -497,7 +496,12 @@ Public Class Configuration
         Dim ProxyPort As Integer = 0
         Integer.TryParse(txtProxyPort.Text, ProxyPort)
 
-        If chkProxy.Checked And (ProxyPort < 1 Or ProxyPort > 65535 Or String.IsNullOrEmpty(txtProxyIP.Text.Trim())) Then
+        ' 校验归一化后的主机串：运行时 SetProxy 用的就是它。空格/内嵌凭据等非法输入
+        ' 若放行，New WebProxy 会在每次请求时抛 UriFormatException。
+        Dim proxyHost As String = Conexion.NormalizeProxyHost(txtProxyIP.Text)
+        Dim proxyUri As System.Uri = Nothing
+        If chkProxy.Checked AndAlso (ProxyPort < 1 OrElse ProxyPort > 65535 OrElse String.IsNullOrEmpty(proxyHost) _
+                                     OrElse Not System.Uri.TryCreate("http://" & proxyHost, System.UriKind.Absolute, proxyUri)) Then
             MessageBox.Show(Language.GetText("Invalid proxy configuration"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
         End If
@@ -710,12 +714,14 @@ Public Class Configuration
         End Try
 
         ' Reiniciamos el servidor 
+        Dim avisoServidorWeb As String = ""
         If Not RequiereConfiguracion Then
             ServidorWebController.StopWebServer()
             Dim strErrServidorWeb As String = ServidorWebController.StartWebServer(Main, Me.Config)
             If Not String.IsNullOrEmpty(strErrServidorWeb) Then
-                MessageBox.Show(Language.GetText("Error starting web server") & ": " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Exit Sub
+                ' 设置此时已存盘,不能 Exit Sub:那会跳过"保存成功"提示与关窗,
+                ' 让用户以为设置没保存、反复重填。把服务器错误并入最终提示。
+                avisoServidorWeb = vbNewLine & vbNewLine & Language.GetText("Error starting web server") & ": " & strErrServidorWeb
             End If
         End If
 
@@ -738,7 +744,8 @@ Public Class Configuration
             avisos = vbNewLine & vbNewLine & Language.GetText("Please take into consideration the following") & ": " & avisos
         End If
 
-        MessageBox.Show(Language.GetText("Data saved successfully") & avisos, Language.GetText("Save"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Dim iconoAviso As MessageBoxIcon = If(String.IsNullOrEmpty(avisoServidorWeb), MessageBoxIcon.Information, MessageBoxIcon.Warning)
+        MessageBox.Show(Language.GetText("Data saved successfully") & avisos & avisoServidorWeb, Language.GetText("Save"), MessageBoxButtons.OK, iconoAviso)
 
 
         StartupConfigurationSaved = True

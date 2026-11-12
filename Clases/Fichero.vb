@@ -103,6 +103,7 @@ Public Class Fichero
 	Public DatosPartes As FileDownloader.DataPart
 	
 	Private NumErroresChunk As Integer
+	Private FechaUltimoErrorChunk As Date?
 	
 	Public LimiteVelocidad As Integer
 	
@@ -111,6 +112,9 @@ Public Class Fichero
     Private Version As Integer
 
     Private Const NUM_MAX_ERRORES_CHUNK As Integer = 30
+    ' 必须显著大于分块退避上限(约 16.5 秒),否则真正持续失败的重试会被误判为"已恢复",
+    ' 保护永不触发。取 120 秒:持续失败约 8 分钟内累计到上限,几小时里的零星抖动不累积。
+    Private Const CHUNK_ERROR_COOLDOWN_SECONDS As Integer = 120
 	
 	Public Sub New()
 		Me.New("")
@@ -823,6 +827,13 @@ Public Class Fichero
 		Log.WriteError(descError)
 		Me.UltimoErrorChunk = e
 		'  No hacemos nada, dejamos que vuelva a reconectarse, excepto si ha habido demasiados errores
+		' 终身计数器会把几小时里 31 次各自都自动重连成功的瞬时抖动判成"错误过多"而停掉任务。
+		' 改为连续失败语义:距上次分块错误超过冷却窗口即视为已恢复,重新计数。
+		If Me.FechaUltimoErrorChunk.HasValue AndAlso
+		   (Now - Me.FechaUltimoErrorChunk.Value).TotalSeconds > Fichero.CHUNK_ERROR_COOLDOWN_SECONDS Then
+			Me.NumErroresChunk = 0
+		End If
+		Me.FechaUltimoErrorChunk = Now
 		Me.NumErroresChunk += 1
 		If Me.NumErroresChunk > Fichero.NUM_MAX_ERRORES_CHUNK Then
 			Me.Stop()
@@ -1044,7 +1055,7 @@ Public Class Fichero
 		End Try
 	End Sub
 	
-	Private Sub EstablecerError(ByVal msj As String)
+	Friend Sub EstablecerError(ByVal msj As String)
 		EstablecerError(msj, IsPermanentErrorText(msj), IsQuotaErrorText(msj))
 	End Sub
 
@@ -1188,8 +1199,11 @@ Public Class Fichero
 	
     Public Sub CargarXML(ByVal XML As XmlNode)
 
-        If XML.Attributes("v") IsNot Nothing AndAlso IsNumeric(XML.Attributes("v").Value) Then
-            Version = CInt(XML.Attributes("v").Value)
+        ' IsNumeric 放行超出 Int32 的值(如 "2147483648"/"1e10"),CInt 会抛 OverflowException
+        ' 并让整个下载列表加载失败。与下面日期字段同样按"单个坏字段不拖垮整份队列"处理。
+        Dim versionAttr As Integer = 1
+        If XML.Attributes("v") IsNot Nothing AndAlso Integer.TryParse(XML.Attributes("v").Value, versionAttr) Then
+            Version = versionAttr
         Else
             Version = 1
         End If

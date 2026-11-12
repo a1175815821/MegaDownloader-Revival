@@ -109,7 +109,7 @@ Si sale ahora, los ficheros extraídos pueden quedar inservibles y tendrá que d
   <Text key="See Streaming &amp;Library"><![CDATA[Ver &biblioteca]]></Text>
   <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>
   <Text key="Watch &amp;Online"><![CDATA[Ver &online]]></Text>
-  <Text key="Encode lin&amp;ks"><![CDATA[Codi&ficar enlaces]]></Text>
+  <Text key="Encode lin&amp;ks"><![CDATA[Codificar en&laces]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Comproba&r actualizaciones]]></Text>
 
   <Text key="Collaborate"><![CDATA[Colaborar]]></Text>
@@ -638,7 +638,14 @@ Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen m�
   <Text key="UI_EmptyHint"><![CDATA[Arrastra un enlace de MEGA o pulsa Añadir enlaces. También puedes usar Ctrl+V.]]></Text>
   <Text key="UI_NoMatches"><![CDATA[No hay tareas coincidentes]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[A data file is in use by another program. Temporary data is active and saving is suspended. Saved data will be restored automatically when the file is released.]]></Text>
+  <Text key="Queue_LoadFailed"><![CDATA[No se pudo cargar la lista de descargas]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[El archivo de la lista de descargas está dañado; no está en uso por otro programa. Se intenta restaurar la copia de seguridad automáticamente. Si este mensaje persiste, repare o elimine el archivo y reinicie la aplicación.]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[Saved data was restored after the file lock was released. Settings changed while the file was locked were NOT saved - please check your settings again.]]></Text>
+  <Text key="Config_PasswordReentryWarning"><![CDATA[Las siguientes contraseñas no se pueden descifrar en este equipo o cuenta de usuario (la configuración puede haberse restaurado desde una copia de seguridad). Vuelva a introducirlas; de lo contrario, estas funciones no podrán conectar:]]></Text>
+  <Text key="Config_ProxyPassword"><![CDATA[Contraseña del proxy]]></Text>
+  <Text key="Config_StreamingPassword"><![CDATA[Contraseña de streaming]]></Text>
+  <Text key="Startup could not be completed. Restart the application to try again."><![CDATA[No se pudo completar el inicio. Reinicie la aplicación para volver a intentarlo.]]></Text>
+  <Text key="Startup requires attention. Open the main window to continue."><![CDATA[El inicio requiere atención. Abra la ventana principal para continuar.]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[The settings file is in use by another program. Nothing was saved, so your existing settings stay intact. The application will restore them automatically when the lock is released; please try again shortly.]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[These {COUNT} downloaded file(s) come from older links without an integrity checksum, so their ownership cannot be verified automatically. Delete them anyway? Files with the same name and size in the task folder will be removed.]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[Operation cancelled. No tasks or files were deleted.]]></Text>

@@ -141,7 +141,26 @@ Public NotInheritable Class PathGuard
         If String.IsNullOrWhiteSpace(relative) Then
             Throw New ArgumentException("Archive entry path is empty.")
         End If
+        relative = ShortenArchiveSegments(relative)
         Return GetSafePathUnderRoot(extractionRoot, relative, allowRoot:=False)
+    End Function
+
+    ''' <summary>归档条目名来自第三方压缩包,可能合法地超过本类的 240 字符上限
+    ''' (Windows 单段上限 255,实测 7zr 能正常创建/解压 254 字符名)。此前直接抛异常
+    ''' 会让整个压缩包被拒。与下载文件名一致改为截断;穿越/保留名/非法字符校验一律不放宽。</summary>
+    Private Shared Function ShortenArchiveSegments(ByVal relative As String) As String
+        Dim segments() As String = relative.Split(Path.DirectorySeparatorChar)
+        Dim changed As Boolean = False
+        For i As Integer = 0 To segments.Length - 1
+            Dim s As String = segments(i)
+            If s.Length <= MaxSegmentLength Then Continue For
+            Dim cut As String = s.Substring(0, MaxSegmentLength).TrimEnd(" "c, "."c)
+            If String.IsNullOrEmpty(cut) OrElse cut = "." OrElse cut = ".." Then cut = "_"
+            segments(i) = cut
+            changed = True
+        Next
+        If Not changed Then Return relative
+        Return String.Join(Path.DirectorySeparatorChar.ToString(), segments)
     End Function
 
     ''' <summary>

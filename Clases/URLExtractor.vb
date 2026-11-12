@@ -24,23 +24,27 @@ Public Class URLExtractor
     '   https://mega.nz/folder/<rootID>#<key>/file/<fileID>       -> single file only
     ' The SubFolderID/SubFileID groups keep the suffix inside match.Value so link
     ' extraction (clipboard / add-links dialog) does not silently drop it.
+    ' 字符类必须显式写 ASCII:.NET 的 \w 匹配 Unicode 字母,链接后紧跟中文/俄文/假名时
+    ' (QQ/微信/论坛复制的常态)会被并进 key,解密必败。MEGA 的 ID/key 都是 base64url。
+    ' 主机左边界必须显式写出:否则 "notmega.nz/folder/" 之类的仿冒域名会从 "mega.nz" 处
+    ' 起匹配成功,被当成官方文件夹链接送去解密。前一字符是字母/数字/点/连字符时不算主机开头。
     Private Shared ReadOnly patternHTTPURI() As String = _
-        {"(?:https?://)?(?:www\.)?mega\.co\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[\w\-#=]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?(?:/folder/(?<SubFolderID>[\w\-]+))?(?:/file/(?<SubFileID>[\w\-]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.co\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?", _
-         "(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[\w\-]+))?(?:/folder/(?<SubFolderID>[\w\-]+))?(?:/file/(?<SubFileID>[\w\-]+))?"}
+        {"(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.co\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[A-Za-z0-9_\-#=]+))?", _
+         "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.nz/(?<MODE2>#|#F|#N)!(?<FileID>[^\!\s]+)(!(?<FileKey>[A-Za-z0-9_\-#=]+))?", _
+         "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[A-Za-z0-9_\-]+))?", _
+         "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[A-Za-z0-9_\-]+))?(?:/folder/(?<SubFolderID>[A-Za-z0-9_\-]+))?(?:/file/(?<SubFileID>[A-Za-z0-9_\-]+))?", _
+         "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.co\.nz/file/(?<FileID>[^#/\s]+)(#(?<FileKey>[A-Za-z0-9_\-]+))?", _
+         "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[A-Za-z0-9_\-]+))?(?:/folder/(?<SubFolderID>[A-Za-z0-9_\-]+))?(?:/file/(?<SubFileID>[A-Za-z0-9_\-]+))?"}
 
     Private Shared ReadOnly patternMEGAURI() As String = _
-        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[\w-#=]+))?", _
-        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
-        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc2(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
-        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)", _
-        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc2(\?|/\?))(?<ENCODED_FILEID>[\w-#=]+)"}
+        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[A-Za-z0-9_\-#=]+))?", _
+        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
+        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc2(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
+        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
+        "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc2(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)"}
 
     Private Shared ReadOnly patternELCUri() As String = _
-        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>elc(\?|/\?))(?<ENCODED_FILEID>[\w-]+)"}
+        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>elc(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-]+)"}
 
     ' 注意:patternElcConfig 必须在下面的 rx 单例之前声明(Shared 字段按文本顺序初始化)。
     Private Shared ReadOnly patternElcConfig() As String = _
@@ -60,10 +64,11 @@ Public Class URLExtractor
     Private Shared ReadOnly rxHTTPURI As Regex() = BuildRegexes(patternHTTPURI)
     Private Shared ReadOnly rxELCUri As Regex() = BuildRegexes(patternELCUri)
     Private Shared ReadOnly rxGetInfoURL As Regex() = BuildRegexes(patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray())
-    Private Shared ReadOnly rxMegaGeneric As New Regex("(?<TAG>mega)(?<MODE>://|:///|:)(?<DATA>[\w-/#!:.?]+)", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxMegaGeneric As New Regex("(?<TAG>mega)(?<MODE>://|:///|:)(?<DATA>[A-Za-z0-9_\-/#!:.?]+)", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
     Private Shared ReadOnly rxElcConfig As Regex() = BuildRegexes(patternElcConfig)
-    Private Shared ReadOnly rxSubFolderSuffix As New Regex("/folder/(?<SubFolderID>[\w\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
-    Private Shared ReadOnly rxSubFileSuffix As New Regex("/file/(?<SubFileID>[\w\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxSubFolderSuffix As New Regex("/folder/(?<SubFolderID>[A-Za-z0-9_\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxSubFileSuffix As New Regex("/file/(?<SubFileID>[A-Za-z0-9_\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxFolderHost As New Regex("(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.(?:co\.)?nz/(?:#f!|folder/)", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
 
     Private Shared Function patternGetInfoURL() As String()
         Return patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray
@@ -79,9 +84,7 @@ Public Class URLExtractor
     Friend Shared Function IsMegaFolder(ByVal URI As String) As Boolean
         Dim Result As Boolean = False
         If String.IsNullOrEmpty(URI) Then Return False
-        Dim uriLower As String = URI.ToLowerInvariant()
-        Result = uriLower.Contains("mega.co.nz/#f!") OrElse uriLower.Contains("mega.nz/#f!") OrElse
-                 uriLower.Contains("mega.nz/folder/") OrElse uriLower.Contains("mega.co.nz/folder/")
+        Result = rxFolderHost.IsMatch(URI)
 
         If Not Result Then ' Enlaces mega sin codificar
             For Each regex As Regex In rxGetInfoURL
@@ -137,7 +140,7 @@ Public Class URLExtractor
             Dim matches As MatchCollection = regx.Matches(Texto)
 
             For Each match As Match In matches
-                Dim url As String = match.Value.Trim
+                Dim url As String = RepairSplitKey(Texto, match, match.Value.Trim, regx)
 
                 Dim fileid As String = match.Groups("FileID").Value
                 If Not String.IsNullOrEmpty(fileid) Then
@@ -177,6 +180,29 @@ Public Class URLExtractor
         Return conf.ToList
     End Function
 
+    ''' <summary>论坛/聊天软件常在长 key 中间插入空格或换行,正则在空白处截断后 key 变短,
+    ''' 整条链接被判"不完整"而丢弃。这里只救"key 明显偏短"的匹配:在其尾部小窗口内去空白
+    ''' 重取,且仅当结果恰好等于该类型标准 key 长度时才采用。完整 key 一律不动,
+    ''' 因此不会把链接后面的正文并进 key。</summary>
+    Private Shared Function RepairSplitKey(ByVal texto As String, ByVal m As Match, ByVal url As String, ByVal regx As Regex) As String
+        Dim key As String = m.Groups("FileKey").Value & ""
+        Dim isFolder As Boolean = url.IndexOf("/folder/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                  url.IndexOf("#F!", StringComparison.OrdinalIgnoreCase) >= 0
+        Dim expected As Integer = If(isFolder, 22, 43)
+        If key.Length >= expected Then Return url
+
+        Dim windowEnd As Integer = Math.Min(texto.Length, m.Index + m.Length + expected)
+        If windowEnd <= m.Index Then Return url
+        Dim span As String = texto.Substring(m.Index, windowEnd - m.Index)
+        Dim cleaned As String = span.Replace(" ", "").Replace(vbTab, "").Replace(vbCr, "").Replace(vbLf, "")
+        If cleaned.Length = span.Length Then Return url
+
+        Dim retry As Match = regx.Match(cleaned)
+        If Not retry.Success Then Return url
+        If (retry.Groups("FileKey").Value & "").Length <> expected Then Return url
+        Return retry.Value.Trim()
+    End Function
+
     Public Shared Function ExtraerURLs(ByVal Texto As String) As Generic.List(Of String)
         Dim links As New Generic.HashSet(Of String) ' Evitamos repetidos
 
@@ -197,7 +223,7 @@ Public Class URLExtractor
             matches = regx.Matches(Texto)
 
             For Each match As Match In matches
-                Dim url As String = match.Value.Trim
+                Dim url As String = RepairSplitKey(Texto, match, match.Value.Trim, regx)
 
                 Dim fileid As String = match.Groups("FileID").Value
                 If Not String.IsNullOrEmpty(fileid) Then
@@ -402,8 +428,11 @@ Public Class URLExtractor
             End If
         Next
 
-        If m Is Nothing OrElse Not m.Success Then Return ""
-        Dim subFolderID As String = m.Groups("SubFolderID").Value & ""
+        ' 不能在无 HTTP 匹配时提前 Return:旧式 token(mega://#F!根!key/folder/子ID,
+        ' ELC 解码产物)不含 mega.nz 主机,提前返回会让下面的后缀兜底变成死代码,
+        ' 用户只要一个子文件夹却把整个分享展开。
+        Dim subFolderID As String = ""
+        If m IsNot Nothing AndAlso m.Success Then subFolderID = m.Groups("SubFolderID").Value & ""
         If String.IsNullOrEmpty(subFolderID) Then
             ' 回退:旧式 token (mega://#F!根!key/folder/子ID,ELC 解码产物)后缀解析
             Dim suffix As System.Text.RegularExpressions.Match = rxSubFolderSuffix.Match(URL)
@@ -427,8 +456,9 @@ Public Class URLExtractor
             End If
         Next
 
-        If m Is Nothing OrElse Not m.Success Then Return ""
-        Dim subFileID As String = m.Groups("SubFileID").Value & ""
+        ' 同 ExtraerSubFolderID:无 HTTP 匹配时也要走后缀兜底,否则单文件范围丢失。
+        Dim subFileID As String = ""
+        If m IsNot Nothing AndAlso m.Success Then subFileID = m.Groups("SubFileID").Value & ""
         If String.IsNullOrEmpty(subFileID) Then
             ' 回退:旧式 token (mega://#F!根!key/file/文件ID,ELC 解码产物)后缀解析
             Dim suffix As System.Text.RegularExpressions.Match = rxSubFileSuffix.Match(URL)

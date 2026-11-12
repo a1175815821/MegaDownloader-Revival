@@ -17,87 +17,90 @@ Public Class ServidorWebController
             StopWebServer_Streaming()
         End If
 
-        ' Remote controller
-        If _WebServer Is Nothing And Config.ServidorWebActivo Then
+        ' 两个服务器彼此独立:Web 端口被占用不得连带让流媒体也起不来(此前早 Return
+        ' 直接跳过了整个流媒体启动块)。分别启动,末尾汇总错误。
+        Dim errores As New Generic.List(Of String)
+        Dim errWeb As String = StartRemoteController(Downloader, Config)
+        If Not String.IsNullOrEmpty(errWeb) Then errores.Add(errWeb)
+        Dim errStreaming As String = StartStreamingServer(Downloader, Config)
+        If Not String.IsNullOrEmpty(errStreaming) Then errores.Add(errStreaming)
+        Return String.Join(" ", errores.ToArray())
 
-            If IsBusy(Config.ServidorWebPuerto) Then
-                Return "Port " & Config.ServidorWebPuerto & " is not valid or is in use."
-            End If
+    End Function
 
-            ' Default security posture: bind loopback only. Opt-in LAN access
-            ' binds all interfaces so phones/other PCs can push downloads, but a
-            ' password is MANDATORY — an open LAN listener would let anyone on
-            ' the network control the downloader.
-            Dim bindAddress As System.Net.IPAddress = System.Net.IPAddress.Loopback
-            If Config.ServidorWebPermitirLAN Then
-                If String.IsNullOrEmpty(Config.ServidorWebPassword) Then
-                    Return "A web server password is required to allow LAN access."
-                End If
-                If Not String.IsNullOrEmpty(Config.ServidorWebBindIP) Then
-                    Try
-                        bindAddress = System.Net.IPAddress.Parse(Config.ServidorWebBindIP)
-                    Catch ex As FormatException
-                        Return "Invalid web server bind IP: " & Config.ServidorWebBindIP
-                    End Try
-                    Log.WriteWarning("Web server: LAN access enabled — binding to " & bindAddress.ToString & " (password required).")
-                Else
-                    bindAddress = System.Net.IPAddress.Any
-                    Log.WriteWarning("Web server: LAN access enabled — listening on all interfaces (password required).")
-                End If
-            End If
+    Private Shared Function StartRemoteController(ByVal Downloader As IDownloaderService, ByVal Config As Configuracion) As String
+        If _WebServer IsNot Nothing OrElse Not Config.ServidorWebActivo Then Return ""
 
-            Try
-                _WebServer = New HttpServer.HttpServer()
-                _WebServer.ServerName = "Internal"
-                _WebServer.SessionCookieName = "Sd_session"
-                _WebServer.Add(New WebInterfaceModule(Downloader, _
-                                                Config.ServidorWebRutaPlantilla, _
-                                                Config.ServidorWebPassword, _
-                                                Config.ServidorWebNombre, _
-                                                Config.ServidorWebTimeout * 60, _
-                                                Language.GetCurrentLanguageCode))
-                _WebServer.Start(bindAddress, Config.ServidorWebPuerto)
-
-                'Console.WriteLine("Server is loaded. Go to http://localhost:" & port & "/")
-            Catch ex As Exception
-                _WebServer = Nothing
-                Log.WriteError("Error starting web server: " & ex.ToString)
-                Return ex.Message
-            End Try
-
-
+        If IsBusy(Config.ServidorWebPuerto) Then
+            Return "Port " & Config.ServidorWebPuerto & " is not valid or is in use."
         End If
 
-        ' Streaming 
-        If _WebServerStreaming Is Nothing And Config.ServidorStreamingActivo Then
-
-            If IsBusy(Config.ServidorStreamingPuerto) Then
-                Return "Port " & Config.ServidorStreamingPuerto & " is not valid or is in use."
+        ' Default security posture: bind loopback only. Opt-in LAN access
+        ' binds all interfaces so phones/other PCs can push downloads, but a
+        ' password is MANDATORY — an open LAN listener would let anyone on
+        ' the network control the downloader.
+        Dim bindAddress As System.Net.IPAddress = System.Net.IPAddress.Loopback
+        If Config.ServidorWebPermitirLAN Then
+            If String.IsNullOrEmpty(Config.ServidorWebPassword) Then
+                Return "A web server password is required to allow LAN access."
             End If
-
-            Try
-                _WebServerStreaming = New HttpServer.HttpServer()
-                _WebServerStreaming.ServerName = "Streaming"
-                ' Must differ from the remote controller's cookie name: both servers bind
-                ' 127.0.0.1 and browsers scope cookies by host, not by port, so a shared
-                ' name made the two sessions overwrite each other and forced re-login.
-                _WebServerStreaming.SessionCookieName = "Sd_streaming"
-                _WebServerStreaming.Add(New MegaDownloader.StreamingModule(Config))
-                _WebServerStreaming.Add(New MegaDownloader.StreamingLibraryModule(Downloader, Config))
-                _WebServerStreaming.Start(System.Net.IPAddress.Loopback, Config.ServidorStreamingPuerto)
-
-                'Console.WriteLine("Server is loaded. Go to http://localhost:" & port & "/")
-            Catch ex As Exception
-                _WebServerStreaming = Nothing
-                Log.WriteError("Error starting streaming web server: " & ex.ToString)
-                Return ex.Message
-            End Try
-
-
+            If Not String.IsNullOrEmpty(Config.ServidorWebBindIP) Then
+                Try
+                    bindAddress = System.Net.IPAddress.Parse(Config.ServidorWebBindIP)
+                Catch ex As FormatException
+                    Return "Invalid web server bind IP: " & Config.ServidorWebBindIP
+                End Try
+                Log.WriteWarning("Web server: LAN access enabled — binding to " & bindAddress.ToString & " (password required).")
+            Else
+                bindAddress = System.Net.IPAddress.Any
+                Log.WriteWarning("Web server: LAN access enabled — listening on all interfaces (password required).")
+            End If
         End If
+
+        Try
+            _WebServer = New HttpServer.HttpServer()
+            _WebServer.ServerName = "Internal"
+            _WebServer.SessionCookieName = "Sd_session"
+            _WebServer.Add(New WebInterfaceModule(Downloader, _
+                                            Config.ServidorWebRutaPlantilla, _
+                                            Config.ServidorWebPassword, _
+                                            Config.ServidorWebNombre, _
+                                            Config.ServidorWebTimeout * 60, _
+                                            Language.GetCurrentLanguageCode))
+            _WebServer.Start(bindAddress, Config.ServidorWebPuerto)
+        Catch ex As Exception
+            _WebServer = Nothing
+            Log.WriteError("Error starting web server: " & ex.ToString)
+            Return ex.Message
+        End Try
 
         Return ""
+    End Function
 
+    Private Shared Function StartStreamingServer(ByVal Downloader As IDownloaderService, ByVal Config As Configuracion) As String
+        If _WebServerStreaming IsNot Nothing OrElse Not Config.ServidorStreamingActivo Then Return ""
+
+        If IsBusy(Config.ServidorStreamingPuerto) Then
+            Return "Port " & Config.ServidorStreamingPuerto & " is not valid or is in use."
+        End If
+
+        Try
+            _WebServerStreaming = New HttpServer.HttpServer()
+            _WebServerStreaming.ServerName = "Streaming"
+            ' Must differ from the remote controller's cookie name: both servers bind
+            ' 127.0.0.1 and browsers scope cookies by host, not by port, so a shared
+            ' name made the two sessions overwrite each other and forced re-login.
+            _WebServerStreaming.SessionCookieName = "Sd_streaming"
+            _WebServerStreaming.Add(New MegaDownloader.StreamingModule(Config))
+            _WebServerStreaming.Add(New MegaDownloader.StreamingLibraryModule(Downloader, Config))
+            _WebServerStreaming.Start(System.Net.IPAddress.Loopback, Config.ServidorStreamingPuerto)
+        Catch ex As Exception
+            _WebServerStreaming = Nothing
+            Log.WriteError("Error starting streaming web server: " & ex.ToString)
+            Return ex.Message
+        End Try
+
+        Return ""
     End Function
 
     Public Shared Sub StopWebServer()

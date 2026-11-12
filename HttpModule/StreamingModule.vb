@@ -254,7 +254,18 @@ Public Class StreamingModule
 
         Catch ex As Exception
             Log.WriteError("Error in StreamingModule: " & ex.ToString)
-            Throw
+            ' 不能把异常抛回 HttpServer:未订阅 ExceptionThrown 时它只写一条 Fatal 日志就
+            ' return,不发送任何响应,浏览器/播放器会一直转圈。这里兜底写回 5xx。
+            ' 头已发出(流媒体中途失败)时无法再改状态码,只能断开,由客户端按 EOF 处理。
+            Try
+                If Not response.HeadersSent Then
+                    response.Status = HttpStatusCode.BadGateway
+                    ComprimirRespuesta(request, response, "Streaming failed: " & ex.Message)
+                End If
+            Catch sendEx As Exception
+                Log.WriteError("StreamingModule: could not send the error response: " & sendEx.ToString)
+            End Try
+            Return True
         End Try
 
     End Function

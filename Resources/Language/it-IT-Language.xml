@@ -60,7 +60,7 @@
   <Text key="E&amp;xit"><![CDATA[E&sci]]></Text>
   <Text key="&amp;Options"><![CDATA[&Opzioni]]></Text>
   <Text key="&amp;Configuration"><![CDATA[&Configurazione]]></Text>
-  <Text key="See extraction &amp;queue"><![CDATA[Guarda l'estrazione e la &coda]]></Text>
+  <Text key="See extraction &amp;queue"><![CDATA[Guarda l'estrazione e la co&da]]></Text>
   <Text key="&amp;Help"><![CDATA[&Aiuto]]></Text>
   <Text key="FA&amp;Q"><![CDATA[FA&Q]]></Text>
   <Text key="&amp;About"><![CDATA[&Informazioni su MegaDownloader]]></Text>
@@ -579,7 +579,14 @@ In caso contrario, potrà scaricare i link ma non visualizzarli.]]></Text>
   <Text key="UI_EmptyHint"><![CDATA[Trascina un link MEGA o aggiungi link. Puoi anche usare Ctrl+V.]]></Text>
   <Text key="UI_NoMatches"><![CDATA[Nessuna attività corrispondente]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[A data file is in use by another program. Temporary data is active and saving is suspended. Saved data will be restored automatically when the file is released.]]></Text>
+  <Text key="Queue_LoadFailed"><![CDATA[Impossibile caricare l'elenco dei download]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[Il file dell'elenco dei download è danneggiato: non è in uso da un altro programma. Il backup viene provato automaticamente. Se questo messaggio persiste, ripara o rimuovi il file e riavvia l'applicazione.]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[Saved data was restored after the file lock was released. Settings changed while the file was locked were NOT saved - please check your settings again.]]></Text>
+  <Text key="Config_PasswordReentryWarning"><![CDATA[Le seguenti password non possono essere decifrate su questo computer o account utente (la configurazione potrebbe essere stata ripristinata da un backup). Reinseriscile, altrimenti queste funzioni non riusciranno a connettersi:]]></Text>
+  <Text key="Config_ProxyPassword"><![CDATA[Password del proxy]]></Text>
+  <Text key="Config_StreamingPassword"><![CDATA[Password dello streaming]]></Text>
+  <Text key="Startup could not be completed. Restart the application to try again."><![CDATA[Impossibile completare l'avvio. Riavvia l'applicazione per riprovare.]]></Text>
+  <Text key="Startup requires attention. Open the main window to continue."><![CDATA[L'avvio richiede attenzione. Apri la finestra principale per continuare.]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[The settings file is in use by another program. Nothing was saved, so your existing settings stay intact. The application will restore them automatically when the lock is released; please try again shortly.]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[These {COUNT} downloaded file(s) come from older links without an integrity checksum, so their ownership cannot be verified automatically. Delete them anyway? Files with the same name and size in the task folder will be removed.]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[Operation cancelled. No tasks or files were deleted.]]></Text>

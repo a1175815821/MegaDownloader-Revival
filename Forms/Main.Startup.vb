@@ -19,7 +19,8 @@ Partial Public Class Main
     End Sub
 
     Private Sub UpdateStartupActionAvailability()
-        Dim ready As Boolean = Not Volatile.Read(_startupQueueLoading) AndAlso Config IsNot Nothing AndAlso Not Config.LoadTransientError AndAlso Not Cerrando
+        Dim ready As Boolean = Not Volatile.Read(_startupQueueLoading) AndAlso Config IsNot Nothing AndAlso
+                               Not Config.LoadTransientError AndAlso Not Paquete.HasTransientLoadError AndAlso Not Cerrando
         btnPlay.Enabled = ready
         btnPause.Enabled = ready
         btnStop.Enabled = ready
@@ -100,6 +101,10 @@ Partial Public Class Main
             _startupQueueCompletion.TrySetResult(False)
             Log.WriteError("Startup queue load failed; writes are suspended until recovery: " & Log.SafeException(ex))
             If Not Cerrando AndAlso Not IsDisposed Then
+                ' 加载已经失败,不能继续显示"载入中,请稍候":那句话会让用户一直等一个永远不来的结果。
+                Dim failedText As String = Language.GetText("Queue_LoadFailed")
+                If _startupQueueStatus IsNot Nothing Then _startupQueueStatus.Text = failedText
+                ListaDescargas.EmptyListMsg = failedText
                 UpdateStartupActionAvailability()
             End If
         Finally
@@ -131,8 +136,13 @@ Partial Public Class Main
     End Sub
 
     Private Async Function WaitForStartupQueueAsync() As Task(Of Boolean)
-        If _startupQueueCompletion IsNot Nothing AndAlso Not Await _startupQueueCompletion.Task Then Return False
-        Return Not Cerrando AndAlso Not IsDisposed AndAlso Config IsNot Nothing AndAlso Not Config.LoadTransientError
+        ' TCS 是一次性的：启动失败后它永远停在 False，恢复计时器后来修好队列并跑完
+        ' CompleteStartup 也无法再置 True。因此 Await 只用于让出 UI 线程直到加载结束，
+        ' 放行与否必须按当前状态判断，否则添加链接/剪贴板导入会整个会话静默失效。
+        If _startupQueueCompletion IsNot Nothing Then Await _startupQueueCompletion.Task
+        Return Not Cerrando AndAlso Not IsDisposed AndAlso Config IsNot Nothing AndAlso
+               Not Config.LoadTransientError AndAlso Not Paquete.HasTransientLoadError AndAlso
+               Not Volatile.Read(_startupQueueLoading)
     End Function
 
     Private Sub CancelStartupQueueLoad()

@@ -60,15 +60,30 @@ Public Class StreamingLibraryModule
 
     Public Overrides Function Process(request As HttpServer.IHttpRequest, response As HttpServer.IHttpResponse, session As HttpServer.Sessions.IHttpSession) As Boolean
 
-        SetHeaders(response)
+        Try
+            SetHeaders(response)
 
-        ResetRequestVar(request)
+            ResetRequestVar(request)
 
-        If Not ComprobarAcceso(request, response, session) Then Return False
-        If Not ProcesarPagina(request, response, session) Then Return True
-        PintarPagina(request, response, session)
+            If Not ComprobarAcceso(request, response, session) Then Return False
+            If Not ProcesarPagina(request, response, session) Then Return True
+            PintarPagina(request, response, session)
 
-        Return True
+            Return True
+        Catch ex As Exception
+            Log.WriteError("Error in StreamingLibraryModule: " & ex.ToString)
+            ' 同 StreamingModule:抛回 HttpServer 等于不发送任何响应(它未订阅 ExceptionThrown
+            ' 时只写日志就 return),页面与 AJAX 会一直转圈。这里兜底写回 5xx。
+            Try
+                If Not response.HeadersSent Then
+                    response.Status = System.Net.HttpStatusCode.InternalServerError
+                    ComprimirRespuesta(request, response, "Internal server error")
+                End If
+            Catch sendEx As Exception
+                Log.WriteError("StreamingLibraryModule: could not send the error response: " & sendEx.ToString)
+            End Try
+            Return True
+        End Try
     End Function
 
 #Region "Funciones varias privadas"

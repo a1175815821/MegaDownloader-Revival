@@ -87,8 +87,12 @@ Friend Class CommandButton
             ink = ThemeManager.GetColor("ButtonDisabledFore")
         ElseIf pressed AndAlso (hovered OrElse Focused) Then
             fill = ThemeManager.GetColor(If(primary, "AccentPressed", "ButtonPressed"))
+            ' 换成主题底色就必须配套换成主题字色。自定义深底白字按钮(如配额横幅的
+            ' "立即重试")只换底色会变成白字白底:浅色主题下对比度仅 1.12:1,文字看不见。
+            ink = ThemeManager.GetColor(If(primary, "AccentFore", "Fore"))
         ElseIf hovered Then
             fill = ThemeManager.GetColor(If(primary, "AccentHover", "ButtonHover"))
+            ink = ThemeManager.GetColor(If(primary, "AccentFore", "Fore"))
         End If
         Dim bounds As New Rectangle(0, 0, Width - 1, Height - 1)
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias

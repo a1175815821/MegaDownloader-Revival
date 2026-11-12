@@ -466,6 +466,9 @@ Public Class FileDownloader
     ' 复用 IsBusy=False(m_canceled)不可行:Canceled 事件会把 Erroneo 状态覆盖成
     ' EnCola 并拆掉 Downloader。此标记在每次 Start(IsBusy=True)时复位。
     Private m_abortChunkRestart As Boolean
+    ' 退避指数必须来自"连续失败次数"。此前用存活 worker 数,而失败的 worker 已被移除,
+    ' 最后一个连接失败时该数恒为 0 → 恒定 1 秒重试,指数退避形同虚设。
+    Private m_consecutiveChunkFailures As Integer
     Private m_currentFileProgress, m_totalProgress, m_currentFileSize As Int64
     Private m_currentSpeed As Generic.Dictionary(Of String, Long)
 
@@ -1800,9 +1803,10 @@ Public Class FileDownloader
                 ' Exponential backoff with jitter (cap ~30s).
                 ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
                 ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
+                m_consecutiveChunkFailures += 1
+                Dim attempt As Integer = Math.Min(4, Math.Max(0, m_consecutiveChunkFailures - 1))
                 System.Threading.Tasks.Task.Run(Sub()
-                                                   Dim attempt As Integer = Math.Min(10, Math.Max(0, Me.listDownloaders.Count))
-                                                   Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, Math.Min(4, attempt))))
+                                                   Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, attempt)))
                                                    Dim jitter As Integer = (Now.Millisecond Mod 500)
                                                    Dim TiempoEspera As Double = baseMs + jitter
                                                    Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
@@ -1816,6 +1820,7 @@ Public Class FileDownloader
                                                    NewDownloaderWorker()
                                                End Sub)
             Else
+                m_consecutiveChunkFailures = 0
                 ' Lanzar nuevo worker
                 NewDownloaderWorker()
             End If

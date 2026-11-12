@@ -111,7 +111,7 @@
   <Text key="&amp;About"><![CDATA[&О программе MegaDownloader]]></Text>
   <Text key="Manage Streaming &amp;Library"><![CDATA[Управление &медиатекой]]></Text>
   <Text key="See Streaming &amp;Library"><![CDATA[Открыть м&едиатеку]]></Text>
-  <Text key="&amp;Streaming"><![CDATA[&Стриминг]]></Text>
+  <Text key="&amp;Streaming"><![CDATA[Ст&риминг]]></Text>
   <Text key="Watch &amp;Online"><![CDATA[Смотреть &онлайн]]></Text>
   <Text key="Encode lin&amp;ks"><![CDATA[Кодировать &ссылки]]></Text>
 
@@ -644,7 +644,13 @@
   <Text key="UI_EmptyHint"><![CDATA[Перетащите MEGA-ссылку сюда или выберите «Добавить ссылки». Можно также вставить через Ctrl+V.]]></Text>
   <Text key="UI_NoMatches"><![CDATA[Нет подходящих задач]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[Файл данных занят другой программой. Активны временные данные, сохранение приостановлено. Сохранённые данные восстановятся автоматически, когда файл освободится.]]></Text>
+  <Text key="Queue_LoadFailed"><![CDATA[Не удалось загрузить список загрузок]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[Файл списка загрузок повреждён — он не занят другой программой. Резервная копия пробуется автоматически. Если сообщение не исчезает, восстановите или удалите файл и перезапустите приложение.]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[Сохранённые данные восстановлены после снятия блокировки файла. Настройки, изменённые во время блокировки, НЕ сохранены — проверьте их ещё раз.]]></Text>
+  <Text key="Config_PasswordReentryWarning"><![CDATA[Следующие пароли не удаётся расшифровать на этом компьютере или в этой учётной записи (возможно, конфигурация восстановлена из резервной копии). Введите их заново, иначе соответствующие функции не смогут подключиться:]]></Text>
+  <Text key="Config_ProxyPassword"><![CDATA[Пароль прокси]]></Text>
+  <Text key="Config_StreamingPassword"><![CDATA[Пароль стриминга]]></Text>
+  <Text key="Startup could not be completed. Restart the application to try again."><![CDATA[Не удалось завершить запуск. Перезапустите приложение, чтобы попробовать снова.]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[Файл настроек занят другой программой. Ничего не сохранено, ваши текущие настройки не тронуты. Приложение восстановит их автоматически, когда блокировка снимется; попробуйте чуть позже.]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[Эти скачанные файлы ({COUNT}) получены по старым ссылкам без контрольной суммы целостности, поэтому их принадлежность нельзя проверить автоматически. Всё равно удалить? Файлы с тем же именем и размером в папке задачи будут удалены.]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[Операция отменена. Задачи и файлы не удалены.]]></Text>

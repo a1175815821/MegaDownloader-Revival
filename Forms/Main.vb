@@ -599,7 +599,12 @@ Public Class Main
                 _recoveryStatusLabel.ForeColor = Drawing.Color.OrangeRed
                 StatusStrip1.Items.Add(_recoveryStatusLabel)
             End If
-            _recoveryStatusLabel.Text = Language.GetText("Config_LoadLockedWarning")
+            ' 损坏与被占用是两回事:前者不会"文件释放后自动恢复",照抄占用文案会让用户白等。
+            If Paquete.HasCorruptLoadError Then
+                _recoveryStatusLabel.Text = Language.GetText("Queue_LoadCorruptWarning")
+            Else
+                _recoveryStatusLabel.Text = Language.GetText("Config_LoadLockedWarning")
+            End If
         Catch ex As Exception
             Log.WriteError("Showing transient-lock banner failed: " & Log.SafeException(ex))
         End Try
@@ -664,6 +669,7 @@ Public Class Main
                     End SyncLock
                     RefreshListaDescargas(True)
                     ClearStartupQueueBanner()
+                    ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
                     UpdateStartupActionAvailability()
                     queueRecovered = True
                     ' B7: the queue failed during startup, so CompleteStartup — which starts
@@ -2889,14 +2895,18 @@ Public Class Main
 
                     If Config.CheckUpdates Then
 
-                        SyncLock Mutex.NumeroConexionesMaxima
-                            Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
-                        End SyncLock
+                        ' 必须在连接数锁外做网络 IO：该锁被 430ms 调度/刷新节拍获取，圈住 60s 超时的更新请求会让下载与界面整体停摆。
+                        Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
                         If Not String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) Then
                             ActivarUpdateButton()
                             ' "永不提醒"只针对特定版本:已跳过的版本不再弹窗,新版本仍会提醒
                             If String.IsNullOrEmpty(Config.UpdateSkipVersion) OrElse Config.UpdateSkipVersion <> VersionNuevaVersionMegadownloader Then
-                                ProximoAvisoActualizacion = Now.AddSeconds(15)
+                                ' 已有安排时不得覆盖:用户选过"稍后提醒(3小时)"后,每小时检查
+                                ' 把它重置成 15 秒,表现为"刚点过稍后提醒又弹"。
+                                ' Date.MaxValue(本会话已弹过/已跳过)同样保持不动。
+                                If Not ProximoAvisoActualizacion.HasValue OrElse ProximoAvisoActualizacion.Value <= Now Then
+                                    ProximoAvisoActualizacion = Now.AddSeconds(15)
+                                End If
                             End If
                         End If
 
@@ -3102,6 +3112,12 @@ Public Class Main
                     Log.WriteDebug("Verify aborted for " & job.Fic.FileID)
                 Else
                     Log.WriteError("Error retrieving file info " & job.Fic.FileID & ": " & Log.SafeException(job.Fault))
+                    ' 必须落到错误态：否则 DescargaProcesada仍为 False 且状态不是 Erroneo，
+                    ' PumpVerifyQueue 下一拍会再选中同一个文件，整个队列永久卡在"验证中"且无提示。
+                    job.Fic.EstablecerError("The file could not be verified." & vbNewLine & _
+                        " * File code: " & job.Fic.FileID & vbNewLine & _
+                        " * Error type: Unexpected" & vbNewLine & _
+                        " * Internal info: " & job.Fault.Message)
                 End If
                 Return
             End If
@@ -3918,6 +3934,8 @@ Public Class Main
             Next
             If TodosExisten Then
                 e.Effect = DragDropEffects.Copy
+            Else
+                e.Effect = DragDropEffects.None
             End If
         End If
 
@@ -4831,10 +4849,10 @@ Public Class Main
                     End If
                 Next
                 If handled > 0 Then Return
-
-                ' 拖入的是其它类型文件:给出提示而不是静默丢弃
-                MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
+
+            ' 拖入文件夹或其它类型文件:给出提示而不是静默丢弃
+            MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
         End If
     End Sub
 
@@ -4854,6 +4872,10 @@ Public Class Main
             Next
             If TodosExisten Then
                 e.Effect = DragDropEffects.Copy
+            Else
+                ' 必须显式置 None:e.Effect 进来时是源允许的效果,不写回就等于告诉用户
+                ' "可以放",松手后却什么都不发生(拖文件夹是最常见的情形)。
+                e.Effect = DragDropEffects.None
             End If
         End If
     End Sub
@@ -5611,11 +5633,15 @@ Public Class Main
         If args Is Nothing OrElse args.Length = 0 Then Exit Sub
         If DeferStartupArguments(args) Then Return
 
-        Dim assemblyName As String = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name
-        If args(0).ToUpper.Contains(assemblyName.ToUpper) Then
+        ' 只有首个参数确实是本程序的可执行文件路径时才剥掉。此前用 Contains(assemblyName),
+        ' 于是 "D:\MegaDownloader\links.dlc" 这类路径也被当成程序名剥掉 —— 第二实例传进来的
+        ' .dlc/.elc 被静默丢弃(GetParameters 已经剥过一次 exe)。
+        Dim exePath As String = System.Windows.Forms.Application.ExecutablePath
+        If String.Equals(args(0), exePath, StringComparison.OrdinalIgnoreCase) Then
             ' First argument is app, ignore
             args = args.ToList.Skip(1).ToArray
         End If
+        If args.Length = 0 Then Exit Sub
 
 
         Dim URLlist As New Generic.HashSet(Of String)

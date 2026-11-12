@@ -2,7 +2,7 @@ Imports System.Drawing
 Imports System.Windows.Forms
 
 ''' <summary>
-''' P0-4 UI:轻量 Toast 提示。None 边框 / TopMost / 不进任务栏,2 秒自动关闭,点击即关。
+''' P0-4 UI:轻量 Toast 提示。None 边框 / TopMost / 不进任务栏,按文案长度停留 2~10 秒,点击即关。
 ''' 与 PantallaMsg 互不复用(后者是带文本框的错误窗,且被 ComprobarYAgregarLinks 的
 ''' formsDiscarded 判据依赖);本窗体已加入该判据名单,避免干扰剪贴板监控。
 ''' ShowToast 内部编组回 UI 线程,后台线程可直接调用,失败只记日志不抛错。
@@ -12,6 +12,11 @@ Public Class ToastForm
 
     Private Shared _current As ToastForm = Nothing
 
+    Private Const MinWidth As Integer = 300
+    Private Const MaxWidth As Integer = 420
+    Private Const MinHeight As Integer = 60
+    Private Const MaxHeight As Integer = 240
+
     Private WithEvents _timer As New Timer()
     Private _label As Label
 
@@ -20,7 +25,7 @@ Public Class ToastForm
         Me.ShowInTaskbar = False
         Me.TopMost = True
         Me.StartPosition = FormStartPosition.Manual
-        Me.Size = New Size(300, 60)
+        Me.Size = New Size(MinWidth, MinHeight)
         Me.Padding = New Padding(1)
         Me.BackColor = ThemeManager.GetColor("Border")
         Me.ForeColor = ThemeManager.GetColor("Fore")
@@ -38,7 +43,21 @@ Public Class ToastForm
         Me.Controls.Add(_label)
         AddHandler Me.Click, AddressOf ToastForm_Click
 
-        _timer.Interval = 2000
+        FitToText()
+    End Sub
+
+    ' 固定 300x60 配 AutoEllipsis 会把长文案(Config_LoadRecovered 有 170+ 字符)截成
+    ' 省略号,2 秒也读不完。按实测文本尺寸自适应,停留时间随长度增长。
+    Private Sub FitToText()
+        Dim text As String = _label.Text & ""
+        Dim chromeW As Integer = Me.Padding.Horizontal + _label.Padding.Horizontal
+        Dim chromeH As Integer = Me.Padding.Vertical + _label.Padding.Vertical
+        Dim measured As Size = TextRenderer.MeasureText(text, _label.Font,
+                                                       New Size(MaxWidth - chromeW, 10000),
+                                                       TextFormatFlags.WordBreak)
+        Me.Size = New Size(Math.Max(MinWidth, measured.Width + chromeW),
+                           Math.Max(MinHeight, Math.Min(MaxHeight, measured.Height + chromeH)))
+        _timer.Interval = Math.Min(10000, Math.Max(2000, 1000 + text.Length * 60))
     End Sub
 
     Protected Overrides Sub OnShown(e As EventArgs)
@@ -49,6 +68,7 @@ Public Class ToastForm
     Private Sub SetText(text As String)
         If _label IsNot Nothing AndAlso Not _label.IsDisposed Then
             _label.Text = text
+            FitToText()
         End If
         _timer.Stop()
         _timer.Start()

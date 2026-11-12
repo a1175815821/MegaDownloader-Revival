@@ -573,7 +573,13 @@ Please note that only basic support for ZIP and RAR files is currently provided.
 也可以使用 Ctrl + V。]]></Text>
   <Text key="UI_NoMatches"><![CDATA[沒有符合的工作]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[有資料檔案正被其它程式佔用。目前使用暫存資料，儲存已暫停；檔案釋放後會自動復原已儲存的資料。]]></Text>
+  <Text key="Queue_LoadFailed"><![CDATA[下載清單未能載入]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[下載清單檔案已損毀（並非被其它程式佔用）。正在自動嘗試用備份復原；若此提示一直存在，請修復或刪除該檔案後重新啟動程式。]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[檔案鎖已釋放，已復原磁碟上儲存的資料。檔案被佔用期間修改的設定不會儲存，請重新檢查設定。]]></Text>
+  <Text key="Config_PasswordReentryWarning"><![CDATA[以下密碼無法在本機或目前帳戶解密（設定可能是從備份還原到其他機器或帳戶），請重新輸入，否則相關功能會連線失敗：]]></Text>
+  <Text key="Config_ProxyPassword"><![CDATA[代理密碼]]></Text>
+  <Text key="Config_StreamingPassword"><![CDATA[串流密碼]]></Text>
+  <Text key="Startup could not be completed. Restart the application to try again."><![CDATA[啟動未能完成，請重新啟動應用程式後重試。]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[設定檔正被其它程式佔用。為保護既有設定，本次未儲存任何內容；佔用解除後程式會自動復原，請稍後重試。]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 個已下載檔案來自不含完整性校驗資訊的舊連結，無法自動確認歸屬。仍要刪除嗎？任務目錄中同名且大小一致的檔案將被移除。]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[操作已取消，未刪除任何工作或檔案。]]></Text>

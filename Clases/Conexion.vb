@@ -90,13 +90,19 @@ Public Class Conexion
     ''' request, and the label "代理地址/IP" invites exactly that input. The separate port
     ''' field in Configuration is the single source of truth for the port number.
     ''' Bracketed IPv6 ("[::1]") is preserved; bare IPv6 ("::1") gets wrapped in brackets.
+    ''' Inline credentials ("user:pass@host") are dropped: they belong in the dedicated
+    ''' ProxyUser/ProxyPassword fields, and leaving them in made the colon count look like
+    ''' a bare IPv6 address, producing an invalid URI on every request.
     ''' </summary>
-    Private Shared Function NormalizeProxyHost(ByVal value As String) As String
+    Friend Shared Function NormalizeProxyHost(ByVal value As String) As String
         If String.IsNullOrEmpty(value) Then Return value
         Dim host As String = value.Trim()
         Dim schemeAt As Integer = host.IndexOf("://", StringComparison.Ordinal)
         If schemeAt >= 0 Then host = host.Substring(schemeAt + 3)
         host = host.Trim().TrimEnd("/"c, "\"c)
+
+        Dim atSign As Integer = host.LastIndexOf("@"c)
+        If atSign >= 0 Then host = host.Substring(atSign + 1).Trim()
 
         ' [IPv6]:port → [IPv6](括号后的任何后缀都是端口)
         If host.StartsWith("[", StringComparison.Ordinal) Then
@@ -110,7 +116,7 @@ Public Class Conexion
             Dim secondColon As Integer = host.IndexOf(":"c, firstColon + 1)
             If secondColon < 0 Then
                 ' 单冒号 = host:port(首字符即冒号的 ":8080" 属垃圾输入,原样返回交由上层报错)
-                If firstColon > 0 Then Return host.Substring(0, firstColon)
+                If firstColon > 0 Then Return host.Substring(0, firstColon).Trim()
             Else
                 ' 裸 IPv6 → 加括号,否则 WebProxy 拼出的 URI 非法。注意回环地址 "::1" 的首字符
                 ' 就是冒号:旧代码用 "firstColon > 0" 判断,恰好把它漏掉,输入 "::1" 时
@@ -165,21 +171,8 @@ Public Class Conexion
     Friend Shared Function SendJSON(ByVal URL As String, ByVal JSON As String, Optional ByVal ContentType As String = "", Optional ByVal SendAppId As Boolean = True, Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Respuesta
 
 
-        Dim webRQ As HttpWebRequest = CreateHttpWebRequest(URL)
+        Dim webRQ As HttpWebRequest = Nothing
         Dim webRS As HttpWebResponse = Nothing
-
-        'Dim App_ID As String = GetAppID()
-        'If SendAppId Then webRQ.Headers.Add("APPID", App_ID)
-        webRQ.Method = "POST"
-
-        Dim data As Byte() = System.Text.Encoding.UTF8.GetBytes(JSON)
-
-        webRQ.ContentLength = data.Length
-        If Not String.IsNullOrEmpty(ContentType) Then
-            webRQ.ContentType = ContentType
-        End If
-
-
         Dim inStream As StreamReader = Nothing
 
         Dim Resultado As New Respuesta
@@ -195,6 +188,18 @@ Public Class Conexion
         Dim abortReg As System.Threading.CancellationTokenRegistration = Nothing
         Dim hasAbortReg As Boolean = False
         Try
+            ' 请求构造必须在 Try 内：非法代理串会让 New WebProxy 抛 UriFormatException，
+            ' 逸出后验证流程既不置错误态也不停止重选，整个队列会永久卡在"验证中"。
+            webRQ = CreateHttpWebRequest(URL)
+            webRQ.Method = "POST"
+
+            Dim data As Byte() = System.Text.Encoding.UTF8.GetBytes(JSON)
+
+            webRQ.ContentLength = data.Length
+            If Not String.IsNullOrEmpty(ContentType) Then
+                webRQ.ContentType = ContentType
+            End If
+
             If ct.CanBeCanceled Then
                 Dim reqToAbort As HttpWebRequest = webRQ
                 abortReg = ct.Register(Sub()

@@ -306,11 +306,21 @@ Public Class Paquete
     Private Shared _TransientBlockedSource As String
     ' 同 Configuracion._TransientSkipLogged:GuardarEnFichero 每 5s 一次,只在首次拦截时记日志。
     Private Shared _TransientSkipLogged As Boolean = False
+    ' 损坏 ≠ 被占用:前者重读主文件永远不会成功,必须允许 .bak 顶替并如实告知用户。
+    Private Shared _LoadCorruptError As Boolean = False
+    Private Shared _RecoveryErrorLogged As Boolean = False
 
     ''' <summary>B2: 主窗体恢复计时器用来判断队列是否仍处于"加载降级"状态。</summary>
     Public Shared ReadOnly Property HasTransientLoadError As Boolean
         Get
             Return _LoadTransientError
+        End Get
+    End Property
+
+    ''' <summary>降级原因是"文件损坏"而非"被其它程序占用"。两者提示语与恢复策略都不同。</summary>
+    Public Shared ReadOnly Property HasCorruptLoadError As Boolean
+        Get
+            Return _LoadCorruptError
         End Get
     End Property
 
@@ -325,7 +335,30 @@ Public Class Paquete
     Friend Shared Function TryReloadFromPath(ByVal Fichero As String) As Generic.List(Of Paquete)
         If Not _LoadTransientError Then Return Nothing
         Dim XML As XmlDocument = Nothing
+        If _LoadCorruptError Then
+            ' 损坏不是占用:重读主文件不会自己变好。先试主文件(可能已被外部修复/替换),
+            ' 反序列化仍失败再用 .bak 顶替 —— 与启动加载同一优先级,好过永久空队列。
+            If AtomicFile.TryReloadPrimary(Fichero, XML) Then
+                Dim primary As Generic.List(Of Paquete) = TryDeserializeQueue(XML)
+                If primary IsNot Nothing Then Return primary
+            End If
+            Dim backup As XmlDocument = Nothing
+            If AtomicFile.TryReloadPrimary(Path.GetFullPath(Fichero) & ".bak", backup) Then
+                Dim fromBackup As Generic.List(Of Paquete) = TryDeserializeQueue(backup)
+                If fromBackup IsNot Nothing Then
+                    Log.WriteWarning("Download list recovered from backup after the primary file proved corrupt.")
+                    Return fromBackup
+                End If
+            End If
+            Return Nothing
+        End If
         If Not AtomicFile.TryReloadAfterTransientFailure(Fichero, _TransientBlockedSource, XML) Then Return Nothing
+        Return TryDeserializeQueue(XML)
+    End Function
+
+    ''' <summary>反序列化已读出的 XML;失败返回 Nothing。恢复计时器每秒一拍,
+    ''' 损坏文件会让同一异常无限刷日志,故错误只记首次。</summary>
+    Private Shared Function TryDeserializeQueue(ByVal XML As XmlDocument) As Generic.List(Of Paquete)
         Dim l As New Generic.List(Of Paquete)
         Try
             If XML.DocumentElement Is Nothing Then
@@ -338,7 +371,11 @@ Public Class Paquete
             Next
             MarcarFicherosComoParados(l)
         Catch ex As Exception
-            Log.WriteError("Download list recovery failed: " & Log.SafeException(ex))
+            DisposeLoadedQueue(l)
+            If Not _RecoveryErrorLogged Then
+                _RecoveryErrorLogged = True
+                Log.WriteError("Download list recovery failed: " & Log.SafeException(ex))
+            End If
             Return Nothing
         End Try
         Return l
@@ -355,10 +392,10 @@ Public Class Paquete
                 _TransientSkipLogged = False
                 Log.WriteWarning("Download list could not be parsed; write protection armed to preserve the on-disk file until recovery succeeds.")
             End If
+            ' 本方法只在"XML 读出来了但节点反序列化抛异常"时被调用,即损坏而非占用。
+            _LoadCorruptError = True
+            _RecoveryErrorLogged = False
         End SyncLock
-        ' Keep TryReloadAfterTransientLock gated on _LoadTransientError: it re-reads
-        ' primary, falling back to .bak only when the primary is genuinely corrupt
-        ' (TryReloadAfterTransientFailure handles the .bak-lock case separately).
         _TransientBlockedSource = ObtenerRutaFicheroDescargas()
     End Sub
 
@@ -367,6 +404,8 @@ Public Class Paquete
     ''' 空队列被写盘、把刚恢复的真实队列挤进 .bak"的窗口。</summary>
     Public Shared Sub CommitTransientRecovery()
         _LoadTransientError = False
+        _LoadCorruptError = False
+        _RecoveryErrorLogged = False
         _TransientBlockedSource = Nothing
         _TransientSkipLogged = False
         _LastSavedXML = Nothing
