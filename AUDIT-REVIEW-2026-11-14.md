@@ -2,15 +2,15 @@
 
 日期：2026-11-14
 分支：`docs/readme-first-screen`
-结论：**阻断级问题已经修复并通过 Debug/Release 全量回归；但当前工作树仍未提交，也未推送，未做真实 MEGA 下载与发布验证。** 本轮包含本地工作树调整及后续验证，没有上传或发布。
+结论：**阻断级问题已经修复并通过 Debug/Release 全量回归；但当前工作树已提交推送至 a2c1d47（2026-11-14 加密多卷 RAR 提示补语言包轮），未做真实 MEGA 下载与发布验证。** 本轮包含本地工作树调整及后续验证，没有上传或发布。
 
 ## 1. 最终验证基线
 
 - Debug/x86 构建通过，无编译警告。
 - Release/x86 构建通过，无编译警告。
-- Debug 全量回归：`PASS: 936 assertions.`
-- Release 全量回归：`PASS: 936 assertions.`
-- 原始 924 条断言已增加至 936 条。
+- Debug 全量回归：`PASS: 1006 assertions.`
+- Release 全量回归：`PASS: 1006 assertions.`
+- 原始 924 条断言增至当前 Debug/Release **1006 项断言**（`FinalReleaseCases` 增加队列备份、解压事务、分卷 lifecycle 等）。原 936 项为已提交基线 a2c1d47 之前轮次。
 - 新增的 `ConfirmedAuditFixes()` 覆盖 split-key、长名哈希唯一化、非首分卷等待与 StreamingModule 的原始 TCP 502 响应。
 - 未在真实 MEGA 网络环境中下载并验证，也未完成实际安装/发布验证。
 
