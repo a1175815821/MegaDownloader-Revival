@@ -16,6 +16,8 @@
 
 <p align="center"><sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub></p>
 
+<p align="center"><sub>如果这个项目帮到了你，欢迎<a href="https://github.com/a1175815821/MegaDownloader-Revival">点个 ⭐ Star</a>，让更多人发现它。</sub></p>
+
 ## 30 秒开始下载
 
 1. 下载 `MegaDownloader.exe`，双击运行；免安装、无需管理员权限。

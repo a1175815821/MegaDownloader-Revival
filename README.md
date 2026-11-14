@@ -16,6 +16,8 @@
 
 <p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
 
+<p align="center"><sub>If MegaDownloader helps you, <a href="https://github.com/a1175815821/MegaDownloader-Revival">give the project a ⭐</a> so more people can find it.</sub></p>
+
 ## Get started in 30 seconds
 
 1. Download `MegaDownloader.exe` and double-click it; no installer or admin rights needed.
