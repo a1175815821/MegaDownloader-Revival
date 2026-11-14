@@ -12,11 +12,20 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="Скачать последний выпуск" src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-%D0%9F%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8F%D1%8F%20%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="Список изменений" src="https://img.shields.io/badge/Changelog-2.6.3-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>Русский</b></sub></p>
 
 <p align="center"><sub>Если MegaDownloader вам полезен, поставьте проекту <a href="https://github.com/a1175815821/MegaDownloader-Revival">⭐ Star</a>, чтобы его нашло больше людей.</sub></p>
+
+<p align="center">
+  <a href="../../../releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a1175815821/MegaDownloader-Revival?style=flat-square&label=release&color=FF6B1F"></a>
+  <a href="../../../releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/a1175815821/MegaDownloader-Revival/total?style=flat-square&label=downloads&color=4E8BFF"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%207%20SP1%2B-0078D4?style=flat-square">
+  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square"></a>
+  <a href="../../../stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a1175815821/MegaDownloader-Revival?style=flat-square&label=stars&color=FFC107"></a>
+</p>
 
 ## Начать за 30 секунд
 
