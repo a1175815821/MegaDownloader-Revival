@@ -14,7 +14,7 @@ Public Class Credits
         If Not Me.lblAutor.Text.Contains("%NAME") Then Me.lblAutor.Text = "Created and designed by %NAME"
         Me.lblAutor.Text = Me.lblAutor.Text.Replace("%NAME", "Andres Soliño [andres_age] & Yingxue")
 
-        Me.lblEmail.Text = "andres.age@gmail.com"
+        Me.lblEmail.Text = "a1175815821@163.com"
         Me.lblGraciasA.Text = Language.GetText("Thanks to") & ":"
         With Me.lblListaColaboradores
             .Text = ""

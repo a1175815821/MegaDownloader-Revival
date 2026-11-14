@@ -72,7 +72,7 @@ Partial Class Credits
         Me.lblEmail.Name = "lblEmail"
         Me.lblEmail.Size = New System.Drawing.Size(118, 13)
         Me.lblEmail.TabIndex = 3
-        Me.lblEmail.Text = "andres.age@gmail.com"
+        Me.lblEmail.Text = "a1175815821@163.com"
         '
         'lblGraciasA
         '

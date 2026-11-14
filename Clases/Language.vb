@@ -175,9 +175,25 @@ Public Class Language
             needBuiltinSync = True
         End Try
         For Each entry As KeyValuePair(Of String, XmlDocument) In builtin
-            If needBuiltinSync Then SaveBuiltinIfChanged(entry.Value, Path.Combine(builtinDirectory, entry.Key & ".xml"))
+            Dim builtinFile As String = Path.Combine(builtinDirectory, entry.Key & ".xml")
+            ' 旧内置包要在被覆盖前读出来:用户可编辑副本若与旧内置包完全一致(即从未自定义),
+            ' 升级时应同步成新内置包,否则老用户磁盘上的旧译文会一直盖住新文案。
+            Dim oldBuiltin As XmlDocument = Nothing
+            If needBuiltinSync AndAlso File.Exists(builtinFile) Then
+                Try
+                    oldBuiltin = New XmlDocument With {.XmlResolver = Nothing}
+                    oldBuiltin.Load(builtinFile)
+                Catch ex As Exception
+                    oldBuiltin = Nothing
+                End Try
+            End If
+            If needBuiltinSync Then SaveBuiltinIfChanged(entry.Value, builtinFile)
             Dim userFile As String = Path.Combine(languageDirectory, entry.Key & ".xml")
-            If Not File.Exists(userFile) Then entry.Value.Save(userFile)
+            If Not File.Exists(userFile) Then
+                entry.Value.Save(userFile)
+            ElseIf needBuiltinSync AndAlso oldBuiltin IsNot Nothing Then
+                RefreshUserPackIfUncustomized(userFile, oldBuiltin, entry.Value)
+            End If
         Next
         If needBuiltinSync Then
             Try
@@ -208,6 +224,29 @@ Public Class Language
             IO.File.WriteAllBytes(filePath, expected)
         End Using
     End Sub
+
+    ''' <summary>升级内置语言包时,把"从未自定义"的用户副本同步为新内置包。
+    ''' 判定依据:用户副本的键值内容与旧内置包完全一致。自定义过的副本保持不动,
+    ''' 缺失的新键仍由 GetText 回退到内置包补齐。返回是否执行了同步。</summary>
+    Friend Shared Function RefreshUserPackIfUncustomized(userFile As String, oldBuiltin As XmlDocument, newBuiltin As XmlDocument) As Boolean
+        Try
+            If Not File.Exists(userFile) Then Return False
+            Dim userPack As New XmlDocument With {.XmlResolver = Nothing}
+            userPack.Load(userFile)
+            Dim userMap As Dictionary(Of String, String) = BuildTextMap(userPack)
+            Dim oldMap As Dictionary(Of String, String) = BuildTextMap(oldBuiltin)
+            If userMap.Count <> oldMap.Count Then Return False
+            For Each pair As KeyValuePair(Of String, String) In oldMap
+                Dim value As String = Nothing
+                If Not userMap.TryGetValue(pair.Key, value) OrElse Not String.Equals(value, pair.Value, StringComparison.Ordinal) Then Return False
+            Next
+            newBuiltin.Save(userFile)
+            Return True
+        Catch ex As Exception
+            Log.WriteDebug("User language pack refresh skipped for " & userFile & ": " & Log.SafeException(ex))
+            Return False
+        End Try
+    End Function
 
     ''' <summary>P-15: GetText used to build an XPath string and scan the whole
     ''' XmlDocument three times per call (12-15 calls per 430ms tick). Cache the

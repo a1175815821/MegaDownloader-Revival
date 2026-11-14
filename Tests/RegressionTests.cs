@@ -170,6 +170,7 @@ public partial class RegressionTests {
         ScheduledQueueIntegration();
         InstanceBufferMutex();
         LanguageBuiltinWrites();
+        SimplifiedChineseQuality();
         SystemLanguageSelection();
         FeatureDialogs();
         ArchiveEdges();
@@ -892,6 +893,26 @@ public partial class RegressionTests {
         save.Invoke(null,new object[]{xml,path});
         var read=new System.Xml.XmlDocument(); read.Load(path);
         Check(read.DocumentElement.FirstChild.InnerText=="updated","changed builtin language file is updated");
+    }
+    static void SimplifiedChineseQuality() {
+        var zh=new System.Xml.XmlDocument(); zh.Load(Path.Combine(projectRoot,"Resources","Language","zh-CN-Language.xml"));
+        var nodes=zh.DocumentElement.SelectNodes("Text").Cast<System.Xml.XmlNode>().ToArray();
+        string all=string.Join("",nodes.Select(n=>n.InnerText));
+        foreach(char c in "萤儲資夾視訊網錯匯貼產欄帳優選單階設載連結圖隱寫導質誤體驗證據庫螢")
+            Check(all.IndexOf(c)<0,"zh-CN pack avoids Traditional-only glyph "+c);
+        Check(zh.DocumentElement.SelectSingleNode("Text[@key='This screen lets you see the status of the files pending of extraction']").InnerText=="此窗口用于查看待解压文件的状态","decompressor window text is natural Simplified Chinese");
+        Check(zh.DocumentElement.SelectSingleNode("Text[@key='Downloads_Failed_Banner']")!=null,"zh-CN covers the failure banner key");
+        // Uncustomized user copies must follow builtin upgrades; customized ones stay.
+        var refresh=typeof(Language).GetMethod("RefreshUserPackIfUncustomized",shared);
+        string uf=Path.Combine(root,"user-pack-refresh.xml");
+        var oldPack=new System.Xml.XmlDocument(); oldPack.LoadXml("<Language id='x'><Text key='a'>old</Text></Language>");
+        var newPack=new System.Xml.XmlDocument(); newPack.LoadXml("<Language id='x'><Text key='a'>new</Text><Text key='b'>added</Text></Language>");
+        oldPack.Save(uf);
+        Check((bool)refresh.Invoke(null,new object[]{uf,oldPack,newPack})&&File.ReadAllText(uf).Contains("new"),"uncustomized user pack follows builtin upgrade");
+        var custom=new System.Xml.XmlDocument(); custom.LoadXml("<Language id='x'><Text key='a'>mine</Text></Language>"); custom.Save(uf);
+        Check(!(bool)refresh.Invoke(null,new object[]{uf,oldPack,newPack})&&File.ReadAllText(uf).Contains("mine"),"customized user pack is preserved");
+        Check(!(bool)refresh.Invoke(null,new object[]{Path.Combine(root,"missing-pack.xml"),oldPack,newPack}),"missing user pack is not created by the refresh path");
+        Print("zh_cn_quality","simplified wording, traditional-glyph guard and user-pack upgrade sync passed");
     }
     static void SystemLanguageSelection() {
         var resolve=typeof(Language).GetMethod("ResolveLanguageCode",shared);
