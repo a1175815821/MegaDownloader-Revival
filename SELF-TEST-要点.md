@@ -1,7 +1,7 @@
 # MegaDownloader 自测要点（本轮修复）
 
-> exe：`bin/Release/MegaDownloader.exe`（v2.6.2.0）。
-> 完整回归：见文末最新一次运行结果。
+> exe：`bin/Release/MegaDownloader.exe`（v2.6.2.0，代码提交 `8f57482`，SHA256 `20C409B7…3A7A47`）。
+> 完整回归：`PASS: 1064 assertions`。
 
 ## 0. 设置页翻译与浏览按钮（最新一轮）
 - 设置 → 常规：「Manual check only」现在按语言显示（简中「仅手动检查」、繁中「僅手動檢查」等 10 语言）；间隔单位不再是不翻译的 “h”，显示「小时/小時/hours/…」.
