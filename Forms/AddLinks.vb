@@ -513,9 +513,15 @@ Public Class AddLinks
             If err IsNot Nothing Then
                 If TypeOf err Is MegaQuotaExceededException Then
                     MessageBox.Show(GetQuotaErrorMessage(), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Else
+                ElseIf TypeOf err Is ApplicationException Then
+                    ' Localized ApplicationException (folder network errors etc.): safe to show.
                     Log.WriteError("Error resolving links for streaming: " & err.ToString)
                     MessageBox.Show(err.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Else
+                    ' Generic errors may contain raw English/technical text: log full detail,
+                    ' show sanitized first line (redacted) per DownloadAdvice pattern.
+                    Log.WriteError("Error resolving links for streaming: " & err.ToString)
+                    MessageBox.Show(DownloadAdvice.FirstLine(Log.Redact(err.Message)), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
                 End If
                 Return
             End If
@@ -535,7 +541,8 @@ Public Class AddLinks
             Me.Close()
         Catch ex As Exception
             Log.WriteError("Error resolving links for streaming: " & ex.ToString)
-            MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+            ' Generic catch: don't leak raw exception text; show sanitized first line.
+            MessageBox.Show(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
             _watchResolving = False
             If btnWatchOnline IsNot Nothing AndAlso Not btnWatchOnline.IsDisposed Then btnWatchOnline.Enabled = True

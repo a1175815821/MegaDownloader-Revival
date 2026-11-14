@@ -17,6 +17,12 @@ Public Class LibraryElement
     Public Link As SecureString
     Public LinkVisible As Boolean
 
+    ' F3: Original DPAPI ciphertext preserved when LoadXML cannot decrypt it
+    ' (e.g. library restored cross-machine, then any add/delete triggers SaveXML).
+    ' Without this, SaveXML would re-encrypt the empty Link and permanently erase
+    ' the blob. Cleared when Link is non-empty or decode succeeds.
+    Private _undecryptableLinkBlob As String = Nothing
+
     ' Movie info
     Public IMDB As String
     Public Allocine As String
@@ -99,13 +105,34 @@ Public Class LibraryElement
             If Import Then
                 str = Criptografia.AES_DecryptString(str, ExportPassword)
             Else
+                Dim rawBlob As String = str
                 Link = Criptografia.DecryptString_DPAPI(str)
                 str = Criptografia.ToInsecureString(Link)
+                ' F3: DPAPI failure yields empty but raw was non-empty.
+                ' Only preserve when the blob looks like genuine base64 ciphertext
+                ' (DecryptString_DPAPI also returns empty for non-base64 plaintext
+                ' leftovers, where falling back to old behavior is fine).
+                If String.IsNullOrEmpty(str) AndAlso Not String.IsNullOrEmpty(rawBlob) Then
+                    Try
+                        Dim probe As Byte() = Convert.FromBase64String(rawBlob)
+                        If probe IsNot Nothing AndAlso probe.Length > 0 Then
+                            _undecryptableLinkBlob = rawBlob
+                        End If
+                    Catch
+                        ' Not base64: plaintext leftover, no preservation needed.
+                    End Try
+                Else
+                    _undecryptableLinkBlob = Nothing
+                End If
             End If
 
             LinkVisible = Not str.StartsWith(HIDDEN_LINK)
             str = str.Replace(HIDDEN_LINK, "")
             Link = Criptografia.ToSecureString(str)
+            ' Empty plaintext that started with HIDDEN_LINK legitimately decodes
+            ' to empty link with LinkVisible=False, while DPAPI failure leaves
+            ' LinkVisible=True (empty str). SaveXML uses that flag (with empty
+            ' Link and a preserved blob) to decide to keep the ciphertext.
         Else
             Link = New SecureString()
         End If
@@ -149,8 +176,19 @@ Public Class LibraryElement
                 ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = encryptedLink
             End If
         Else
-            Dim link3 As SecureString = Criptografia.ToSecureString(link2)
-            ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = Criptografia.EncryptString_DPAPI(link3)
+            ' F3: preserve original ciphertext when DPAPI decode failed on load
+            ' (Link empty, blob preserved, element still visible). Prevents the
+            ' empty re-encryption from erasing the stored blob on any save.
+            If Not String.IsNullOrEmpty(_undecryptableLinkBlob) AndAlso String.IsNullOrEmpty(Criptografia.ToInsecureString(Link)) AndAlso LinkVisible Then
+                ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = _undecryptableLinkBlob
+            Else
+                Dim link3 As SecureString = Criptografia.ToSecureString(link2)
+                ElementNode.AppendChild(XML.OwnerDocument.CreateElement("Link")).InnerText = Criptografia.EncryptString_DPAPI(link3)
+                ' If Link became non-empty (user edited it), stale blob is obsolete.
+                If Not String.IsNullOrEmpty(_undecryptableLinkBlob) AndAlso Not String.IsNullOrEmpty(Criptografia.ToInsecureString(Link)) Then
+                    _undecryptableLinkBlob = Nothing
+                End If
+            End If
         End If
 
 

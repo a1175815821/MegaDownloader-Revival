@@ -452,7 +452,17 @@ Public Class StreamingLibraryModule
                         PrepareAjaxResponseImport(-1, StreamingLibraryManager.ImportLibrary(links))
                         Return True
                     Else
-                        Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(Uri.UnescapeDataString(links))
+                        ' Guarded unescape (same pattern as URLExtractor.NormalizeLinkForExtraction):
+                        ' a stray "%" not followed by 2 hex digits makes UnescapeDataString throw
+                        ' UriFormatException, which would surface as HTTP 500 and leave the
+                        ' frontend "importing" mask stuck. Fall back to the raw text on failure.
+                        Dim plainLinks As String = links
+                        Try
+                            Dim unescaped As String = Uri.UnescapeDataString(links)
+                            If Not String.IsNullOrEmpty(unescaped) Then plainLinks = unescaped
+                        Catch
+                        End Try
+                        Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(plainLinks)
                         PrepareAjaxResponseImport(URLs.Count, StreamingLibraryManager.ImportLinks(Me.Config, URLs))
                         Return True
                     End If

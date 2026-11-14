@@ -48,6 +48,12 @@ Public Class PantallaMsg
                 Dim FileID As String = URLExtractor.ExtraerFileID(Url)
                 Dim FileKey As String = URLExtractor.ExtraerFileKey(Url)
                 If Not String.IsNullOrEmpty(FileID) Then
+                    ' enc2 密文内无子范围字段:子文件夹/单文件链接保持原文,避免静默扩大为整文件夹
+                    ' (同 EncodeLinksForm:GenerateEncodedURILink 没有子范围字段)。
+                    If Not String.IsNullOrEmpty(URLExtractor.ExtraerSubFolderID(Url)) OrElse _
+                       Not String.IsNullOrEmpty(URLExtractor.ExtraerSubFileID(Url)) Then
+                        Continue For
+                    End If
                     Dim NewUrl As String = URLExtractor.GenerateEncodedURILink(FileID, FileKey, URLExtractor.IsMegaFolder(Url), False)
                     Texto = Texto.Replace(Url, NewUrl)
                 End If

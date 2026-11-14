@@ -348,7 +348,8 @@ Public Class Fichero
 				SyncLock Mutex.FicheroDownloader
 				If Info IsNot Nothing AndAlso Info.Err = Conexion.TipoError.SinErrores Then
 					If Not String.IsNullOrEmpty(Info.URL) then Me.URLFichero = Info.URL
-					If Info.Tamano  > 0 Then Me.TamanoBytes = Info.Tamano
+					' F5: a verified 0-byte file must store 0, not keep a stale size.
+					Me.TamanoBytes = Math.Max(0, Info.Tamano)
 					If Not String.IsNullOrEmpty(Info.Nombre) AndAlso
 					   (Me.DatosPartes Is Nothing OrElse Not Me.DatosPartes.AllFinished OrElse String.IsNullOrEmpty(Me.NombreFichero)) Then
 						' A completed task may already use a collision suffix on disk.
@@ -939,7 +940,9 @@ Public Class Fichero
                 Me.EstadoDescarga = Estado.Descomprimiendo
                 Try
                     Dim archiveName As String = If(String.IsNullOrEmpty(completedFileName), Me.NombreFichero, completedFileName)
-                    Dim archive As String = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, archiveName)
+                    ' F4: resolve the true completed name (do not re-sanitize: a 240-cap
+                    ' collision suffix would truncate to a non-existent path).
+                    Dim archive As String = CompletedOutputPath(archiveName)
                     If Not DescompresorController.GetController.EnqueueArchive(_extractionCode, archive, True, Me.DescargaExtraccionPassword, AddressOf ExtractionStateChanged) Then
                         Me.EstadoDescarga = Estado.Completado
                     End If

@@ -31,6 +31,9 @@ Public Class ServidorWebController
     Private Shared Function StartRemoteController(ByVal Downloader As IDownloaderService, ByVal Config As Configuracion) As String
         If _WebServer IsNot Nothing OrElse Not Config.ServidorWebActivo Then Return ""
 
+        If Config.ServidorWebPuerto < 1 Then
+            Return "Server port is not configured (port must be between 1024 and 65535)."
+        End If
         If IsBusy(Config.ServidorWebPuerto) Then
             Return "Port " & Config.ServidorWebPuerto & " is not valid or is in use."
         End If
@@ -80,6 +83,9 @@ Public Class ServidorWebController
     Private Shared Function StartStreamingServer(ByVal Downloader As IDownloaderService, ByVal Config As Configuracion) As String
         If _WebServerStreaming IsNot Nothing OrElse Not Config.ServidorStreamingActivo Then Return ""
 
+        If Config.ServidorStreamingPuerto < 1 Then
+            Return "Server port is not configured (port must be between 1024 and 65535)."
+        End If
         If IsBusy(Config.ServidorStreamingPuerto) Then
             Return "Port " & Config.ServidorStreamingPuerto & " is not valid or is in use."
         End If

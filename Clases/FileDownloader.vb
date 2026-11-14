@@ -1210,7 +1210,23 @@ Public Class FileDownloader
                 End If
                 i += 1
                 Dim suffix As String = If(i <= 9999, i.ToString(), Guid.NewGuid().ToString("N").Substring(0, 8))
-                candidate = Path.Combine(directory, baseName & " (" & suffix & ")" & extension)
+                ' F4: cap the collision leaf at PathGuard's 240-char limit so the
+                ' on-disk name round-trips through GetSafeFilePathUnderRoot unmangled.
+                Dim suffixPart As String = " (" & suffix & ")"
+                Dim shortBase As String = baseName
+                If shortBase.Length + suffixPart.Length + extension.Length > 240 Then
+                    Dim keep As Integer = 240 - suffixPart.Length - extension.Length
+                    If keep < 1 Then
+                        ' huge extension: drop it for a GUID leaf, as before
+                        candidate = Path.Combine(directory, Guid.NewGuid().ToString("N").Substring(0, 8))
+                    Else
+                        If shortBase.Length > keep Then shortBase = shortBase.Substring(0, keep).TrimEnd(" "c, "."c)
+                        If String.IsNullOrEmpty(shortBase) Then shortBase = "file"
+                        candidate = Path.Combine(directory, shortBase & suffixPart & extension)
+                    End If
+                Else
+                    candidate = Path.Combine(directory, baseName & suffixPart & extension)
+                End If
             Loop
         End SyncLock
     End Function

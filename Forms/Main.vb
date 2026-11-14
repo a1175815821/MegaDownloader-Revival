@@ -554,7 +554,7 @@ Public Class Main
             If IsSilent() AndAlso Me.WindowState = FormWindowState.Minimized Then
                 IconoMinimizado.ShowBalloonTip(5000, Me.Text, Language.GetText("Error starting web server") & ": " & strErrServidorWeb, ToolTipIcon.Error)
             Else
-                MessageBox.Show("Error starting web server: " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show(Language.GetText("Error starting web server") & ": " & strErrServidorWeb, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             End If
         End If
     End Sub
@@ -5063,12 +5063,29 @@ Public Class Main
     End Sub
 
     Private Sub CheckUpdates_Click(sender As System.Object, e As System.EventArgs)
-        Dim codIdi As String = Language.GetCurrentLanguageCode.ToUpperInvariant
-        If codIdi.StartsWith("ES") Then
-            System.Diagnostics.Process.Start(InternalConfiguration.ObtenerValueFromInternalConfig("DOWNLOAD_LINK_ES"))
-        Else
-            System.Diagnostics.Process.Start(InternalConfiguration.ObtenerValueFromInternalConfig("DOWNLOAD_LINK_EN"))
-        End If
+        ' F8: manual check must actually query and show the result (was: open releases page).
+        System.Threading.Tasks.Task.Run(Sub()
+            Dim url As String = Nothing
+            Dim version As String = Nothing
+            Updater.ComprobarVersionMegadownloader(url, version)
+            Log.WriteWarning("Manual version check requested")
+
+            BeginInvoke(New Action(Of String, String)(Sub(resUrl As String, resVersion As String)
+                ' F8: bypass ApplyUpdateCheckResult's Config.CheckUpdates gate so a manual
+                ' click always shows something, even when periodic checks are disabled.
+                Dim available As Boolean = Not String.IsNullOrEmpty(resUrl) AndAlso Not String.IsNullOrEmpty(resVersion)
+                If available Then
+                    UrlNuevaVersionMegadownloader = resUrl
+                    VersionNuevaVersionMegadownloader = resVersion
+                    btnUpdate.Visible = True
+                    ' Reuse the periodic reminder (15s) but ignore UpdateSkipVersion for a manual click.
+                    ProximoAvisoActualizacion = Now.AddSeconds(15)
+                Else
+                    ' No existing "already up to date" key in the XML: reuse the "Check for updates" title.
+                    MessageBox.Show(Me, Language.GetText("Check for updates"), Language.GetText("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
+            End Sub), url, version)
+        End Sub)
     End Sub
 
 

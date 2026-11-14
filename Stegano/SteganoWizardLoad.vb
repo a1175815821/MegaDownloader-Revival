@@ -91,7 +91,8 @@
             Catch ex As Exception
                 Log.WriteError("Error trying to load stegano: " & ex.ToString)
                 RestaurarVentana()
-                MessageBox.Show(ex.Message, Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ' Generic errors: don't leak raw exception text; show localized generic message.
+                MessageBox.Show(Language.GetText("Notify_UnknownError"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
 
             End Try
 
