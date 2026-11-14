@@ -1444,9 +1444,26 @@ public partial class RegressionTests {
                     tabs.SelectedTab=page;System.Windows.Forms.Application.DoEvents();
                     foreach(var row in DescendantControls(page).Where(c=>c.GetType().Name=="SettingsFieldRow" && c.Visible)) {
                         Check(row.Controls[0].Right<=row.Controls[1].Left && row.Controls[1].Right<=row.ClientSize.Width,"setting labels and inputs do not overlap at width "+width);
+                        // Browse rows: trailing button sits to the right of the input and keeps a usable size.
+                        // The row hosts exactly [label, input, button]; check that single trailing button.
+                        if(row.Controls.Count==3 && row.Controls[2] is System.Windows.Forms.Button) {
+                            var btn=(System.Windows.Forms.Button)row.Controls[2];
+                            Check(btn.Left>=row.Controls[1].Right && btn.Width>=92 && btn.Height>=28 && btn.Right<=row.ClientSize.Width,"browse button stays visible and clears the input at width "+width);
+                            // A stretched button must shrink back once its text is short again.
+                            btn.Width=500; row.PerformLayout();
+                            Check(btn.Width<200,"browse button preferred width is content-driven, not monotonic: "+btn.Name);
+                        }
                     }
                 }
             }
+            // Manual-check translation must land in every pack and the code key must resolve.
+            foreach(string code in new[]{"de-DE","es-ES","fr-FR","hu-HU","it-IT","pt-BR","ro-RO","ru-RU","zh-CN","zh-TW","en-US"}) {
+                var packPath=Path.Combine(projectRoot,"Resources","Language",code+"-Language.xml");
+                var doc=new System.Xml.XmlDocument(); doc.Load(packPath);
+                var node=doc.DocumentElement.SelectSingleNode("Text[@key='Manual check only']");
+                Check(node!=null&&!string.IsNullOrEmpty(node.InnerText)&&node.InnerText!= "Manual check only"||code=="en-US","manual-check translation exists for "+code);
+            }
+            Check(Language.GetText("Manual check only")!=null&&Language.GetText("Manual check only").Length>0,"manual-check key resolves via Language.GetText");
             settings.ClientSize=new System.Drawing.Size(880,650);
             typeof(Configuration).GetMethod("LocateConfigText",hidden).Invoke(settings,new object[]{"代理"});
             Check(tabs.SelectedTab.Text.Contains("连接") && tabs.SelectedTab.AutoScrollPosition.Y<0,"settings search scrolls to a matching section below the fold");

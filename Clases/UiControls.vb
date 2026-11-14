@@ -17,12 +17,15 @@ Friend Class CommandButton
     End Sub
 
     Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
-        Dim result As Size = MyBase.GetPreferredSize(proposedSize)
+        ' 宽度必须只由内容决定:AutoSize 按钮的基类 GetPreferredSize 会回显当前宽度,
+        ' 若与当前值取 Max,任何一次瞬态布局把按钮拉宽后就永远缩不回来(设置页浏览按钮
+        ' 曾因此胀到 593px 压住输入框)。高度同理按字体+内边距计算。
         Dim textWidth As Integer = If(Text.Length = 0, 0, TextRenderer.MeasureText(Text, Font).Width)
         Dim imageWidth As Integer = If(Image Is Nothing, 0, Image.Width)
         Dim gap As Integer = If(textWidth > 0 AndAlso imageWidth > 0, UiStyles.Px(Me, 7), 0)
-        result.Width = Math.Max(result.Width, textWidth + imageWidth + gap + Math.Max(Padding.Horizontal, UiStyles.Px(Me, 20)))
-        Return result
+        Dim contentWidth As Integer = textWidth + imageWidth + gap + Math.Max(Padding.Horizontal, UiStyles.Px(Me, 20))
+        Dim contentHeight As Integer = Math.Max(If(Image Is Nothing, 0, Image.Height), Font.Height) + Padding.Vertical + UiStyles.Px(Me, 6)
+        Return New Size(contentWidth, Math.Max(contentHeight, UiStyles.Px(Me, 28)))
     End Function
 
     Protected Overrides Sub OnMouseEnter(e As EventArgs)

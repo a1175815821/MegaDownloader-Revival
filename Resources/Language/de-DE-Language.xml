@@ -117,6 +117,7 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="See logs"><![CDATA[Siehe logs]]></Text>
   <Text key="Decompressor"><![CDATA[Decompressor]]></Text>
   <Text key="minutes"><![CDATA[Protokoll]]></Text>
+  <Text key="hours"><![CDATA[Stunden]]></Text>
   <Text key="Capture links from clipboard"><![CDATA[Nehmen Sie Links aus der Zwischenablage]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Computer ausschalten, wenn Sie fertig]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Starten Sie den Download, wenn die Anwendung startet]]></Text>
@@ -310,6 +311,7 @@ If you mark another account as default, the previous default account will be unm
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[A&ktualisierung]]></Text>
   <Text key="Check for updates"><![CDATA[Automatisch aktualisierung]]></Text>
+  <Text key="Manual check only"><![CDATA[Nur manuell prüfen]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Links in einem Bild verstecken]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[Links &aus einem Bild extrahieren]]></Text>
   <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>

@@ -56,7 +56,8 @@ Partial Public Class Configuration
                                   InlineControls(chkUltimaConfig, linkUltConfig), chkCheckUpdates,
                                   InlineControls(chkUnZip, comboPrioridad)}
         ' 6: 更新检查行：间隔（小时） + 仅手动。Interval>0 有意义，ManualOnly 独立于 CheckUpdates。
-        Dim updateIntervalLabel As New Label With {.Text = "h", .AutoSize = True}
+        ' “h” 在区域设置下无意义：翻译后长尾巴会把复选框挤出可视区，沿用本语言的 hours 词。
+        Dim updateIntervalLabel As New Label With {.Text = Language.GetText("hours"), .AutoSize = True}
         Dim updateRow As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .Dock = DockStyle.Top, .WrapContents = True, .Margin = New Padding(0)}
         updateRow.Controls.AddRange(New Control() {chkUpdateManualOnly, txtUpdateCheckInterval, updateIntervalLabel})
         UiStyles.SetRole(updateRow, UiStyles.Role.Surface)

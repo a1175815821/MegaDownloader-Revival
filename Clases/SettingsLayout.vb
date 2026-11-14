@@ -109,11 +109,16 @@ Friend Class SettingsFieldRow
         AddHandler caption.TextChanged, AddressOf PreferredSizeChanged
         AddHandler caption.FontChanged, AddressOf PreferredSizeChanged
         AddHandler input.FontChanged, AddressOf PreferredSizeChanged
+        ' 翻译在 Load 时才写入控件 Text；末尾按钮的宽度必须跟随文本+字体重测，
+        ' 否则长文案（如各语言 Browse）会被裁或挤压 txtRuta。
+        AddHandler input.TextChanged, AddressOf PreferredSizeChanged
         input.Dock = DockStyle.None
         input.MinimumSize = Size.Empty
         For Each control As Control In trailing
             control.Dock = DockStyle.None
             control.AutoSize = True
+            AddHandler control.TextChanged, AddressOf PreferredSizeChanged
+            AddHandler control.FontChanged, AddressOf PreferredSizeChanged
         Next
     End Sub
 
@@ -143,12 +148,15 @@ Friend Class SettingsFieldRow
         For index As Integer = trailing.Length - 1 To 0 Step -1
             Dim control = trailing(index)
             Dim wanted = control.GetPreferredSize(Size.Empty)
+            wanted.Width = Math.Max(wanted.Width, UiStyles.Px(Me, 92))
+            wanted.Height = Math.Max(wanted.Height, UiStyles.Px(Me, 28))
             right -= wanted.Width
             control.SetBounds(right, Math.Max(0, (Height - wanted.Height) \ 2), wanted.Width, wanted.Height)
             right -= gap
         Next
         caption.SetBounds(0, 0, Math.Max(1, left - gap), Height)
         Dim inputHeight As Integer = input.GetPreferredSize(Size.Empty).Height
+        inputHeight = Math.Max(inputHeight, UiStyles.Px(Me, 28))
         input.SetBounds(left, Math.Max(0, (Height - inputHeight) \ 2), Math.Max(1, right - left), inputHeight)
     End Sub
 End Class

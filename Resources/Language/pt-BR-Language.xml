@@ -137,6 +137,7 @@ Se você mudar a opção 'Extração automática', ela será aplicada para todos
     <Text key="See logs"><![CDATA[Ver logs]]></Text>
     <Text key="Decompressor"><![CDATA[Decompressor]]></Text>
     <Text key="minutes"><![CDATA[minutos.]]></Text>
+  <Text key="hours"><![CDATA[horas]]></Text>
     <Text key="Capture links from clipboard"><![CDATA[Capturar links da área de transferência]]></Text>
     <Text key="Turn off computer when finished"><![CDATA[Desligar o PC quando terminar]]></Text>
     <Text key="Start downloading when application starts"><![CDATA[Começar a baixar quando abrir o aplicativo]]></Text>
@@ -373,6 +374,7 @@ Se você marcar outra conta como padrão, a conta anterior será desmarcada.]]>
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
     <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
     <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+    <Text key="Manual check only"><![CDATA[Verificação manual]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Ocultar links dentro de uma imagem]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[&Extrair links de uma imagem]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[É necessária uma senha do servidor web para permitir o acesso pela LAN.]]></Text>

@@ -168,6 +168,7 @@
   <Text key="See logs"><![CDATA[查看日志]]></Text>
   <Text key="Decompressor"><![CDATA[解压]]></Text>
   <Text key="minutes"><![CDATA[分]]></Text>
+  <Text key="hours"><![CDATA[小时]]></Text>
   <Text key="Capture links from clipboard"><![CDATA[监视剪贴板]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[任务完成后关闭电脑]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[启动后自动开始未完成任务]]></Text>
@@ -384,6 +385,7 @@ B 是同行下载数。]]></Text>
   </Text>
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
   <Text key="Check for updates"><![CDATA[检查更新]]></Text>
+  <Text key="Manual check only"><![CDATA[仅手动检查]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：数据校验失败，输出文件未创建。可能图片太小，请换一张更大的图片。]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[隐写(&Y)]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[隐藏链接到图片(&H)]]></Text>

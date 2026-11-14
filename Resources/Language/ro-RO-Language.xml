@@ -135,6 +135,7 @@ Dacă schimbi opțiunea de "extragere automată", se va aplica la toate fișiere
   <Text key="See logs"><![CDATA[Arată jurnalele]]></Text>
   <Text key="Decompressor"><![CDATA[Decompresie]]></Text>
   <Text key="minutes"><![CDATA[minute]]></Text>
+  <Text key="hours"><![CDATA[ore]]></Text>
   <Text key="Capture links from clipboard"><![CDATA[Capturează Link-urile din clipboard]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Oprește computerul când termini]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Descărcă la pornirea aplicației]]></Text>
@@ -342,6 +343,7 @@ Dacă marcați un alt cont ca implicit, contul implicit anterior va fi nemarcat.
   <Text key="MsgPasswordZip"><![CDATA[Dacă fișierul este protejat prin parolă, poți introduce parola de aici și va fi folosită la extragerea fișierului. Dacă nu, doar lăsă-l gol. Vă rugăm să reții că doar suportul de bază pentru ZIP și fișierele RAR sunt prevăzute în prezent. Fișierele RAR nu sunt acceptate încă.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+  <Text key="Manual check only"><![CDATA[Doar verificare manuală]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Ascunde legăturile dintr-o imagine]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[&Extrage legăturile dintr-o imagine]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[Pentru a permite accesul din LAN este necesară o parolă a serverului web.]]></Text>

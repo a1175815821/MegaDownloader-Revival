@@ -113,6 +113,7 @@
   <Text key="See logs"><![CDATA[Visualizza registri]]></Text>
   <Text key="Decompressor"><![CDATA[Estrazione]]></Text>
   <Text key="minutes"><![CDATA[verbale]]></Text>
+  <Text key="hours"><![CDATA[ore]]></Text>
   <Text key="Capture links from clipboard"><![CDATA[Catturare link dagli appunti]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Arresto PC automaticamente]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Avviare scaricare all'avvio dell'applicazione]]></Text>
@@ -303,6 +304,7 @@ If you mark another account as default, the previous default account will be unm
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
+  <Text key="Manual check only"><![CDATA[Controllo manuale]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Nascondi link dentro un'immagine]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[&Estrai link da un'immagine]]></Text>
   <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>

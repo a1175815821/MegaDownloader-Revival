@@ -184,6 +184,7 @@
   <Text key="See logs"><![CDATA[Показать журналы]]></Text>
   <Text key="Decompressor"><![CDATA[Распаковщик]]></Text>
   <Text key="minutes"><![CDATA[мин]]></Text>
+  <Text key="hours"><![CDATA[ч.]]></Text>
   <Text key="Capture links from clipboard"><![CDATA[Перехватывать ссылки из буфера обмена]]></Text>
   <Text key="Turn off computer when finished"><![CDATA[Выключить компьютер по завершении]]></Text>
   <Text key="Start downloading when application starts"><![CDATA[Начинать загрузку при запуске приложения]]></Text>
@@ -446,6 +447,7 @@
 Поддерживаются ZIP, RAR (включая многотомные) и 7z.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[Про&верить обновления]]></Text>
   <Text key="Check for updates"><![CDATA[Проверить обновления]]></Text>
+  <Text key="Manual check only"><![CDATA[Только ручная проверка]]></Text>
 
   <Text key="Steganograph&amp;y"><![CDATA[Стеганогра&фия]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Скрыть ссылки в изображении]]></Text>
