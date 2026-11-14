@@ -304,6 +304,7 @@ Partial Public Class Main
             Dim pad As Integer = CInt(24 * scale)
             Dim top As Integer = If(MainMenuStrip Is Nothing, 0, MainMenuStrip.Bottom)
             If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then top += quotaBannerPanel.Height
+            If failureBannerPanel IsNot Nothing AndAlso failureBannerPanel.Visible Then top += failureBannerPanel.Height
             Dim bottom As Integer = StatusStrip1.Top - pad
             Dim navWidth As Integer = CInt(192 * scale)
             Dim mainLeft As Integer = navWidth + pad

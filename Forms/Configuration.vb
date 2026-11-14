@@ -187,6 +187,8 @@ Public Class Configuration
             chkUnZip.Checked = Config.ExtraerAutomaticamente
             chkApagarPC.Checked = Config.ApagarPC
             chkCheckUpdates.Checked = Config.CheckUpdates
+            chkUpdateManualOnly.Checked = Config.UpdateManualOnly
+            txtUpdateCheckInterval.Text = Config.UpdateCheckIntervalHours.ToString
             chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
             chkComenzarPlay.Checked = Config.ComenzarDescargando
             chkStartWindows.Checked = Config.IniciarConWindows
@@ -357,6 +359,7 @@ Public Class Configuration
         Me.chkAnalisisPortapapeles.Text = Language.GetText("Capture links from clipboard")
         Me.chkUnZip.Text = Language.GetText("Automatic extraction") & ". " & Language.GetText("Priority") & ":"
         Me.chkCheckUpdates.Text = Language.GetText("Check for updates")
+        Me.chkUpdateManualOnly.Text = Language.GetText("Manual check only")
         Me.chkCrearDirectorio.Text = Language.GetText("Create folder per package")
         Me.btnExaminar.Text = Language.GetText("Browse")
         Me.Label1.Text = Language.GetText("Download path") & ":"
@@ -596,6 +599,17 @@ Public Class Configuration
         Config.QuotaBreakthroughMode = chkQuotaBreak.Checked
         Config.ApagarPC = chkApagarPC.Checked
         Config.CheckUpdates = chkCheckUpdates.Checked
+        Config.UpdateManualOnly = chkUpdateManualOnly.Checked
+        Dim updateInterval As Integer = 1
+        If Not Integer.TryParse(txtUpdateCheckInterval.Text, updateInterval) OrElse updateInterval <= 0 Then
+            If chkCheckUpdates.Checked Then
+                MessageBox.Show(Language.GetText("Must specify the update check interval, and this value must be a positive number of hours."), _
+                                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Exit Sub
+            End If
+            updateInterval = 1
+        End If
+        Config.UpdateCheckIntervalHours = updateInterval
         Config.MantenerUltimaConfiguracion = chkUltimaConfig.Checked
         Config.IniciarConWindows = chkStartWindows.Checked
         Config.ResetearErroresPeriodoMinutos = PeriodoReintentosError

@@ -312,6 +312,7 @@ Public Class Main
         InitWorkbench()
         InitBatchMenu()
         InitQuotaBanner()
+        InitFailureBanner()
         InitDownloadAreaLayout()
 
         'btnCollaborate.Visible = Not Config.HideCollaborateButton
@@ -1158,6 +1159,7 @@ Public Class Main
             End If
         End If
         LayoutQuotaBanner()
+        LayoutFailureBanner()
         LayoutDownloadArea()
     End Sub
 
@@ -2595,6 +2597,9 @@ Public Class Main
             If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then
                 top += quotaBannerPanel.Height
             End If
+            If failureBannerPanel IsNot Nothing AndAlso failureBannerPanel.Visible Then
+                top += failureBannerPanel.Height
+            End If
             Dim bottom As Integer = StatusStrip1.Top - 4
             Dim h As Integer = Math.Max(50, bottom - top)
             ListaDescargas.Top = top
@@ -2890,7 +2895,8 @@ Public Class Main
                 If Now >= ProximaComprobacionMaxConexiones Then
                     'Log.WriteWarning("Checking max connection number")
 
-                    ' Lo cogemos de configuracion, pero por defecto ponemos cada hora
+                    ' 遗留回退：内部配置 VERSION_PERIODO_REFRESCO_SEG（默认 3600）；用户配置
+                    ' UpdateCheckIntervalHours 在下面覆盖。保留原回退避免破坏旧用户/测试夹具。
                     Dim SegundosProximaActualizacion As Integer = 3600
                     If Not Integer.TryParse( _
                                             InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_PERIODO_REFRESCO_SEG"), _
@@ -2898,16 +2904,28 @@ Public Class Main
                         SegundosProximaActualizacion = 3600
                     End If
 
-                    ProximaComprobacionMaxConexiones = Now.AddSeconds(SegundosProximaActualizacion)
-
                     ' Aprovechamos para ver si hay una nueva versión
+
+                    ' 6:周期优先用用户可配置值（UpdateCheckIntervalHours，默认 1h）；内部配置
+                    ' VERSION_PERIODO_REFRESCO_SEG 仅作为遗留回退，0 视为关闭定时检查（仅手动）。
+                    Dim UseUserInterval As Boolean = Config.CheckUpdates AndAlso Not Config.UpdateManualOnly
+                    Dim CheckIntervalSec As Integer = SegundosProximaActualizacion
+                    If UseUserInterval AndAlso Config.UpdateCheckIntervalHours > 0 Then
+                        CheckIntervalSec = Math.Max(60, Config.UpdateCheckIntervalHours * 3600)
+                    End If
+                    If UseUserInterval Then
+                        ProximaComprobacionMaxConexiones = Now.AddSeconds(CheckIntervalSec)
+                    ElseIf Config.CheckUpdates AndAlso Config.UpdateManualOnly Then
+                        ' 仅手动：不倒计时，下一轮由用户点菜单触发；这里把下次检查推到明天避免空转。
+                        ProximaComprobacionMaxConexiones = Now.AddDays(1)
+                    End If
 
                     Dim url As String = Nothing
                     Dim version As String = Nothing
-                    If Config.CheckUpdates Then
+                    If UseUserInterval Then
                         ' Network I/O remains on the worker and outside the connection lock.
                         Updater.ComprobarVersionMegadownloader(url, version)
-                        Log.WriteWarning("Version checked; next check in " & SegundosProximaActualizacion & " seconds")
+                        Log.WriteWarning("Version checked; next check in " & CheckIntervalSec & " seconds")
                     End If
                     If Not worker.CancellationPending AndAlso Not Cerrando AndAlso IsHandleCreated Then
                         BeginInvoke(New Action(Of String, String)(AddressOf ApplyUpdateCheckResult), url, version)
@@ -3338,6 +3356,7 @@ Public Class Main
                 UpdateNavRailOverview()
 
                 UpdateQuotaUI()
+                RefreshFailureBanner()
 
                 If worker.CancellationPending Then Exit While
 

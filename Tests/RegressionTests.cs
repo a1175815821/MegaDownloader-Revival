@@ -2092,7 +2092,42 @@ public partial class RegressionTests {
         ArchiveCommitAndVolumes();
         DownloadGenerationAfterStop();
         UpdateReminderAndProxy();
+        ThemeContrast();
         Print("final_release", "queue backup, extraction transaction, multipart lifecycle, stop race, update reminder and proxy passed");
+    }
+
+    // I: text colors must keep WCAG contrast on their backgrounds (deep red + white text fails in light theme).
+    static double ChannelLum(byte v) { double s=v/255.0; return s<=0.03928 ? s/12.92 : Math.Pow((s+0.055)/1.055,2.4); }
+    static double RelativeLuminance(System.Drawing.Color c) {
+        return 0.2126*ChannelLum(c.R)+0.7152*ChannelLum(c.G)+0.0722*ChannelLum(c.B);
+    }
+    static double ContrastRatio(System.Drawing.Color a,System.Drawing.Color b) {
+        double l1=RelativeLuminance(a), l2=RelativeLuminance(b);
+        double hi=Math.Max(l1,l2), lo=Math.Min(l1,l2);
+        return (hi+0.05)/(lo+0.05);
+    }
+    static void ThemeContrast() {
+        using(var host=new System.Windows.Forms.Form()) {
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                ThemeManager.ApplyTheme(host,mode);
+                // Primary button: Accent/AccentHover/AccentPressed background with AccentFore text, WCAG 4.5:1.
+                // Dark theme AccentFore is dark text on a light accent, same check as light theme.
+                foreach(string backKey in new[]{"Accent","AccentHover","AccentPressed"}) {
+                    var back=ThemeManager.GetColor(backKey);
+                    var fore=ThemeManager.GetColor("AccentFore");
+                    double ratio=ContrastRatio(back,fore);
+                    Check(ratio>=4.5,"accent contrast "+mode+"/"+backKey+" >= 4.5:1, actual "+ratio.ToString("F2")+" for white-on-red in light theme");
+                }
+                // Secondary/Quiet: Back/ControlBack + Fore；Quota 错误横幅：QuotaBack + QuotaFore
+                Check(ContrastRatio(ThemeManager.GetColor("Back"),ThemeManager.GetColor("Fore"))>=4.5,"surface contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ControlBack"),ThemeManager.GetColor("Fore"))>=4.5,"control contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("QuotaBack"),ThemeManager.GetColor("QuotaFore"))>=4.5,"quota banner contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("Muted"),ThemeManager.GetColor("ControlBack"))>=3.0,"muted tone contrast (secondary text, 3:1) "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ButtonHover"),ThemeManager.GetColor("Fore"))>=4.5,"hover contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ButtonBack"),ThemeManager.GetColor("Fore"))>=4.5,"button contrast "+mode);
+            }
+            Print("theme_contrast","accent/surface/quota/hover all pass WCAG 4.5:1 in light and dark themes");
+        }
     }
 
     static void QueueBackupIntegrity() {

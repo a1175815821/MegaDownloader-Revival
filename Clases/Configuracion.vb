@@ -109,6 +109,18 @@ Public Class Configuracion
     Public CheckUpdates As Boolean
 
     ''' <summary>
+    ''' 6: 定时检查间隔（小时）。0 表示使用默认 1 小时；负数视为无效并回退默认。
+    ''' 与内部配置 VERSION_PERIODO_REFRESCO_SEG 兼容：用户值 >0 时覆盖回退。
+    ''' </summary>
+    Public UpdateCheckIntervalHours As Integer = 1
+
+    ''' <summary>
+    ''' 6: 仅手动检查。True 时后台 worker 不定时触发更新检查，只能由 Help > Check for updates
+    ''' 菜单手动触发。与 CheckUpdates=False（完全关闭）正交：手动模式仍允许手动检查。
+    ''' </summary>
+    Public UpdateManualOnly As Boolean = False
+
+    ''' <summary>
     ''' Versión que el usuario descartó con "no volver a avisar".
     ''' Vacío (por defecto) = ninguna versión descartada.
     ''' </summary>
@@ -312,6 +324,8 @@ Public Class Configuracion
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ComenzarDescargando")).InnerText = ComenzarDescargando.ToString
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("CheckUpdates")).InnerText = CheckUpdates.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("UpdateCheckIntervalHours")).InnerText = UpdateCheckIntervalHours.ToString
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("UpdateManualOnly")).InnerText = UpdateManualOnly.ToString
         Xml.DocumentElement.AppendChild(Xml.CreateElement("UpdateSkipVersion")).InnerText = UpdateSkipVersion
 		
 		Xml.DocumentElement.AppendChild(Xml.CreateElement("MantenerUltimaConfiguracion")).InnerText = MantenerUltimaConfiguracion.ToString
@@ -560,6 +574,14 @@ Public Class Configuracion
         HideCollaborateButton = False
         CheckUpdates = True
         Boolean.TryParse(LeerNodo(Xml, "CheckUpdates", "true"), CheckUpdates)
+        ' 6: 新字段缺失时回退默认（间隔 1h / 非手动），旧配置向前兼容。
+        Dim storedInterval As Integer
+        If Integer.TryParse(LeerNodo(Xml, "UpdateCheckIntervalHours", "1"), storedInterval) AndAlso storedInterval > 0 Then
+            UpdateCheckIntervalHours = storedInterval
+        Else
+            UpdateCheckIntervalHours = 1
+        End If
+        Boolean.TryParse(LeerNodo(Xml, "UpdateManualOnly", "false"), UpdateManualOnly)
         UpdateSkipVersion = LeerNodo(Xml, "UpdateSkipVersion", "")
 		Boolean.TryParse(LeerNodo(Xml, "HideCollaborateButton", "false"), HideCollaborateButton)
 		Boolean.TryParse(LeerNodo(Xml, "ExtraerAutomaticamente", "false"), ExtraerAutomaticamente)
@@ -753,6 +775,8 @@ Public Class Configuracion
         Me.MantenerUltimaConfiguracion = True
         Me.ComenzarDescargando = True
         Me.CheckUpdates = True
+        Me.UpdateCheckIntervalHours = 1
+        Me.UpdateManualOnly = False
         Me.UpdateSkipVersion = ""
 		Me.ProxyPort = 0
 		Me.VersionConfig = "0"

@@ -652,4 +652,7 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Config_LockedByAnotherProcess"><![CDATA[The settings file is in use by another program. Nothing was saved, so your existing settings stay intact. The application will restore them automatically when the lock is released; please try again shortly.]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[These {COUNT} downloaded file(s) come from older links without an integrity checksum, so their ownership cannot be verified automatically. Delete them anyway? Files with the same name and size in the task folder will be removed.]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[Operation cancelled. No tasks or files were deleted.]]></Text>
+  <Text key="Downloads_Failed_Banner"><![CDATA[%N% item(s) failed. Right-click a failed row for details, or retry below.]]></Text>
+  <Text key="Manual check only"><![CDATA[Manual check only]]></Text>
+  <Text key="Must specify the update check interval, and this value must be a positive number of hours."><![CDATA[Must specify the update check interval, and this value must be a positive number of hours.]]></Text>
 </Language>

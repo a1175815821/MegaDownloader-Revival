@@ -70,6 +70,8 @@ Partial Class Configuration
         Me.chkLimitarVelocidad = New System.Windows.Forms.CheckBox()
         Me.GroupBox4 = New Global.MegaDownloader.SettingsSection()
         Me.chkCheckUpdates = New System.Windows.Forms.CheckBox()
+        Me.chkUpdateManualOnly = New System.Windows.Forms.CheckBox()
+        Me.txtUpdateCheckInterval = New System.Windows.Forms.TextBox()
         Me.comboIdiomas = New System.Windows.Forms.ComboBox()
         Me.Label24 = New System.Windows.Forms.Label()
         Me.comboTheme = New System.Windows.Forms.ComboBox()
@@ -630,6 +632,8 @@ Partial Class Configuration
         'GroupBox4
         '
         Me.GroupBox4.Controls.Add(Me.chkCheckUpdates)
+        Me.GroupBox4.Controls.Add(Me.chkUpdateManualOnly)
+        Me.GroupBox4.Controls.Add(Me.txtUpdateCheckInterval)
         Me.GroupBox4.Controls.Add(Me.comboTheme)
         Me.GroupBox4.Controls.Add(Me.Label25)
         Me.GroupBox4.Controls.Add(Me.comboIdiomas)
@@ -664,6 +668,27 @@ Partial Class Configuration
         Me.chkCheckUpdates.TabIndex = 15
         Me.chkCheckUpdates.Text = "Comprobar actualizaciones"
         Me.chkCheckUpdates.UseVisualStyleBackColor = True
+        '
+        'chkUpdateManualOnly
+        '
+        Me.chkUpdateManualOnly.AutoSize = True
+        Me.chkUpdateManualOnly.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.chkUpdateManualOnly.Location = New System.Drawing.Point(10, 168)
+        Me.chkUpdateManualOnly.Name = "chkUpdateManualOnly"
+        Me.chkUpdateManualOnly.Size = New System.Drawing.Size(220, 17)
+        Me.chkUpdateManualOnly.TabIndex = 17
+        Me.chkUpdateManualOnly.Text = "Manual check only"
+        Me.chkUpdateManualOnly.UseVisualStyleBackColor = True
+        '
+        'txtUpdateCheckInterval
+        '
+        Me.txtUpdateCheckInterval.ImeMode = System.Windows.Forms.ImeMode.NoControl
+        Me.txtUpdateCheckInterval.Location = New System.Drawing.Point(180, 148)
+        Me.txtUpdateCheckInterval.MaxLength = 4
+        Me.txtUpdateCheckInterval.Name = "txtUpdateCheckInterval"
+        Me.txtUpdateCheckInterval.Size = New System.Drawing.Size(40, 20)
+        Me.txtUpdateCheckInterval.TabIndex = 18
+        Me.txtUpdateCheckInterval.Text = "1"
         '
         'comboIdiomas
         '
@@ -1394,5 +1419,7 @@ Partial Class Configuration
     Friend WithEvents txtStreamingPassword As System.Windows.Forms.TextBox
     Friend WithEvents lblStreamingPassword As System.Windows.Forms.Label
     Friend WithEvents chkCheckUpdates As System.Windows.Forms.CheckBox
+    Friend WithEvents chkUpdateManualOnly As System.Windows.Forms.CheckBox
+    Friend WithEvents txtUpdateCheckInterval As System.Windows.Forms.TextBox
     Friend WithEvents txtSearchConfig As System.Windows.Forms.TextBox
 End Class

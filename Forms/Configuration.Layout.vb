@@ -55,11 +55,21 @@ Partial Public Class Configuration
                                   InlineControls(chkApagarPC, linkApagarPC), chkStartWindows,
                                   InlineControls(chkUltimaConfig, linkUltConfig), chkCheckUpdates,
                                   InlineControls(chkUnZip, comboPrioridad)}
+        ' 6: 更新检查行：间隔（小时） + 仅手动。Interval>0 有意义，ManualOnly 独立于 CheckUpdates。
+        Dim updateIntervalLabel As New Label With {.Text = "h", .AutoSize = True}
+        Dim updateRow As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .Dock = DockStyle.Top, .WrapContents = True, .Margin = New Padding(0)}
+        updateRow.Controls.AddRange(New Control() {chkUpdateManualOnly, txtUpdateCheckInterval, updateIntervalLabel})
+        UiStyles.SetRole(updateRow, UiStyles.Role.Surface)
+        For Each c As Control In updateRow.Controls
+            c.Margin = New Padding(0, 3, 8, 3)
+            If TypeOf c Is TextBox Then c.Width = 44
+        Next
+
         For index As Integer = 0 To checks.Length - 1
             checks(index).Margin = New Padding(0, 6, 16, 6)
             options.Controls.Add(checks(index), index Mod 2, index \ 2)
         Next
-        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), options,
+        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), options, updateRow,
                         FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
         SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
                         InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,

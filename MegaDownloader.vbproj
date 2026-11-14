@@ -271,6 +271,9 @@
     <Compile Include="Forms\Main.Scheduling.vb">
       <DependentUpon>Main.vb</DependentUpon>
     </Compile>
+    <Compile Include="Forms\Main.Failures.shared.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
     <Compile Include="Clases\PreSharedKeyManager.vb" />
     <Compile Include="Clases\ResourceHelper.vb" />
     <Compile Include="Clases\ServidorWebController.vb" />
