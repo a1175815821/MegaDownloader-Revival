@@ -70,18 +70,19 @@ Partial Public Class Configuration
             checks(index).Margin = New Padding(0, 6, 16, 6)
             options.Controls.Add(checks(index), index Mod 2, index \ 2)
         Next
-        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), options, updateRow,
+        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), Divider(),
+                        options, updateRow, Divider(),
                         FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
         SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
                         InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
                         FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1)
-        SettingsSection(GroupBox2, chkProxy, FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
+        SettingsSection(GroupBox2, chkProxy, Divider(), FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
                         FieldRow(Label23, txtProxyName), FieldRow(Label22, txtProxyPassword))
         UiStyles.SetAppFont(Label8)
         UiStyles.SetRole(Label8, UiStyles.Role.Muted)
         SettingsSection(GroupBox3, Label8, FieldRow(Label4, txtTamanoPaquete, Label5),
                         FieldRow(Label6, txtTamanoBuffer, Label7), FieldRow(Label11, comboLog))
-        SettingsSection(GroupBox5, chkServidorWeb, chkServidorWebLAN,
+        SettingsSection(GroupBox5, chkServidorWeb, chkServidorWebLAN, Divider(),
                         FieldRow(lblServidorWebBindIP, txtServidorWebBindIP), FieldRow(Label16, txtServidorWebPort),
                         FieldRow(Label18, txtServidorWebTimeout, Label19), FieldRow(Label17, txtServidorWebPassword),
                         FieldRow(Label20, txtServidorWebNombre), FieldRow(Label21, txtServidorWebTemplate, btnExaminarTemplate))
@@ -163,6 +164,12 @@ Partial Public Class Configuration
         Dim row As New SettingsFieldRow(caption, input, trailing) With {.Margin = New Padding(0, 4, 0, 4)}
         UiStyles.SetRole(row, UiStyles.Role.Surface)
         Return row
+    End Function
+
+    Private Shared Function Divider() As SettingsDivider
+        Dim d As New SettingsDivider()
+        UiStyles.SetRole(d, UiStyles.Role.Surface)
+        Return d
     End Function
 
     Private Shared Sub SettingsSection(group As GroupBox, ParamArray rows As Control())

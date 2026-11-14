@@ -160,3 +160,27 @@ Friend Class SettingsFieldRow
         input.SetBounds(left, Math.Max(0, (Height - inputHeight) \ 2), Math.Max(1, right - left), inputHeight)
     End Sub
 End Class
+
+' 设置分组内逻辑子段之间的细分割线。SectionGroupBox 只画标题下横线,子段之间原本
+' 直接堆叠留白、显得空而丑;用与标题横线同色(Border)的细线把子段分开,留白变得有结构。
+Friend Class SettingsDivider
+    Inherits Panel
+
+    Public Sub New()
+        DoubleBuffered = True
+        Margin = New Padding(0, 10, 0, 10)
+        Height = 1
+    End Sub
+
+    Public Overrides Function GetPreferredSize(proposedSize As Size) As Size
+        Return New Size(Math.Max(1, If(proposedSize.Width > 0, proposedSize.Width, Width)), 1)
+    End Function
+
+    Protected Overrides Sub OnPaint(e As PaintEventArgs)
+        e.Graphics.Clear(BackColor)
+        Using pen As New Pen(ThemeManager.GetColor("Border"))
+            Dim y As Integer = Height \ 2
+            e.Graphics.DrawLine(pen, 0, y, Math.Max(0, Width - 1), y)
+        End Using
+    End Sub
+End Class

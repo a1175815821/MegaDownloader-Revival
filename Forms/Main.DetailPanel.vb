@@ -13,6 +13,7 @@ Partial Public Class Main
     Private detailRows As New Generic.List(Of KeyValuePair(Of Label, Label))()
     Private detailProgressBar As ProgressBar = Nothing
     Private detailLayoutSize As Drawing.Size
+    Private detailLayoutCaptionKey As String = Nothing
 
     ''' <summary>按需构建结构化详情面板(挂在 detailGroup 内,与空态 detailLabel 互斥显示)。
     ''' 行数固定为 状态/进度/大小/速度/剩余/路径,内容在 UpdateDetailContent 里填。</summary>
@@ -78,7 +79,12 @@ Partial Public Class Main
     Private Sub LayoutDetailContent()
         Try
             If detailContentPanel Is Nothing OrElse detailContentPanel.IsDisposed Then Return
-            If detailLayoutSize = detailContentPanel.ClientSize Then Return
+            ' 缓存键同时看尺寸与字段名:定时数值刷新不重排,切换语言(字段名变化)才重排。
+            Dim captionKey As String = ""
+            For Each kv As KeyValuePair(Of Label, Label) In detailRows
+                captionKey &= kv.Key.Text & "|"
+            Next
+            If detailLayoutSize = detailContentPanel.ClientSize AndAlso detailLayoutCaptionKey = captionKey Then Return
             Dim previousScroll As Drawing.Point = detailContentPanel.AutoScrollPosition
             detailContentPanel.SuspendLayout()
             Try
@@ -88,19 +94,31 @@ Partial Public Class Main
                 Dim pad As Integer = CInt(12 * sc)
                 Dim w As Integer = detailContentPanel.ClientSize.Width - If(detailContentPanel.VerticalScroll.Visible, 0, SystemInformation.VerticalScrollBarWidth)
                 Dim innerW As Integer = Math.Max(60, w - pad * 2)
-                Dim rowH As Integer = Math.Max(detailContentPanel.Font.Height + 4, CInt(22 * sc))
-                detailTitleLabel.SetBounds(pad, pad, innerW, CInt(56 * sc))
-                Dim y As Integer = detailTitleLabel.Bottom + CInt(4 * sc)
+                Dim rowH As Integer = Math.Max(detailContentPanel.Font.Height + 4, CInt(20 * sc))
+                ' 标题单行加粗,不再占 56px 高,消除标题下方的大块留白。
+                Dim titleH As Integer = Math.Max(detailContentPanel.Font.Height + 8, CInt(26 * sc))
+                detailTitleLabel.SetBounds(pad, pad, innerW, titleH)
+                ' 标签列 + 值列同行:标签列宽按当前语言字段名实测(避免翻译裁切),值列占剩余宽度。
+                ' 原先标签/值各占一行上下堆叠,6 个字段叠得很高,底部详情区放不下而出滚动条、显空。
+                Dim gap As Integer = CInt(10 * sc)
+                Dim labelW As Integer = CInt(48 * sc)
+                For Each kv As KeyValuePair(Of Label, Label) In detailRows
+                    labelW = Math.Max(labelW, System.Windows.Forms.TextRenderer.MeasureText(kv.Key.Text, kv.Key.Font).Width)
+                Next
+                labelW = Math.Min(labelW + CInt(4 * sc), CInt(innerW * 0.45))
+                Dim valW As Integer = Math.Max(40, innerW - labelW - gap)
+                Dim y As Integer = detailTitleLabel.Bottom + CInt(8 * sc)
                 For i As Integer = 0 To detailRows.Count - 1
                     Dim cap As Label = detailRows(i).Key
                     Dim val As Label = detailRows(i).Value
-                    cap.SetBounds(pad, y, innerW, rowH)
-                    val.SetBounds(pad, y + rowH, innerW, If(i = 5, rowH * 3, rowH))
-                    y = val.Bottom + CInt(8 * sc)
+                    Dim valH As Integer = If(i = 5, rowH * 2, rowH)
+                    cap.SetBounds(pad, y, labelW, rowH)
+                    val.SetBounds(pad + labelW + gap, y, valW, valH)
+                    y += valH + CInt(4 * sc)
                     If i = 1 AndAlso detailProgressBar IsNot Nothing Then
                         detailProgressBar.SetBounds(pad, y, innerW, CInt(6 * sc))
                         detailProgressBar.Visible = True
-                        y += detailProgressBar.Height + CInt(2 * sc)
+                        y += detailProgressBar.Height + CInt(4 * sc)
                     End If
                 Next
                 detailContentPanel.AutoScrollMinSize = New Drawing.Size(0, y + pad)
@@ -109,6 +127,7 @@ Partial Public Class Main
                 detailContentPanel.AutoScrollPosition = New Drawing.Point(-previousScroll.X, -previousScroll.Y)
             End Try
             detailLayoutSize = detailContentPanel.ClientSize
+            detailLayoutCaptionKey = captionKey
         Catch ex As Exception
             Log.WriteDebug("LayoutDetailContent failed: " & Log.SafeException(ex))
         End Try

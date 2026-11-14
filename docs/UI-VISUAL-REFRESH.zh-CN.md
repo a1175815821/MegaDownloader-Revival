@@ -45,6 +45,6 @@
 .\Tests\Run-RegressionTests.ps1 -OutputDirectory bin\Release-VisualRefresh -UiOnly
 ```
 
-2.6.1 发布前已重新截图并统一到 `docs/screenshots/`，不再重复保留 `visual-refresh/` 里的旧图。2.6.3 发布时再次从当前 Release 隔离夹具更新截图（浏览按钮改为内容驱动尺寸、设置页翻译补齐），Debug / Release 完整回归各通过 1102 项断言。清单及重现方式见 [原生截图](screenshots/README.md)。
+2.6.1 发布前已重新截图并统一到 `docs/screenshots/`，不再重复保留 `visual-refresh/` 里的旧图。2.6.3 发布时再次从当前 Release 隔离夹具更新截图（浏览按钮改为内容驱动尺寸、设置页翻译补齐）；替换原始 2.6.3 资产的修订包进一步修正对话框按钮重叠、详情面板紧凑同行布局与设置分组分割线，并同步重生成截图，Debug / Release 完整回归各通过 1121 项断言、界面夹具 271 项。清单及重现方式见 [原生截图](screenshots/README.md)。
 
 框架依据：[微软的 DWM 窗口属性文档](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute)。

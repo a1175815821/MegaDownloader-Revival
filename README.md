@@ -42,7 +42,8 @@
 - **Natural Simplified Chinese** — all 511 zh-CN strings rewritten as natural Simplified Chinese, and existing uncustomized language copies sync automatically on upgrade. "Manual check only" and the hour unit are now translated, and browse buttons no longer stretch over their input boxes.
 - **More reliable downloads and extraction** — split keys mangled by chat apps are recognised again; multi-volume archives wait and extract as a set; 7z extraction commits transactionally and rolls back on failure; over-long archive names get unique hash suffixes; encrypted multi-volume RAR errors are localized.
 - **Readable themes and safer exits** — light/dark accent, surface and quota-banner text meet WCAG 4.5:1 contrast; closing the window while extracting warns about corruption danger; proxy host:port parsing and startup queue-load recovery are fixed.
-- **Cleaner code, 1102 assertions** — 18 unreferenced dead members and a stray build artifact removed, and the docs reorganized. Debug / Release each pass 1102 regression assertions. [Full changelog](docs/CHANGELOG.md).
+- **No overlapping buttons, tighter layout** — Cancel / primary-action buttons no longer collide in Add Links, Settings, pre-flight and schedule; the selected-task details panel is a compact label＋value grid with a single-line title; settings groups gain divider lines between sub-sections.
+- **Cleaner code, 1121 assertions** — 18 unreferenced dead members and a stray build artifact removed, and the docs reorganized. Debug / Release each pass 1121 regression assertions. [Full changelog](docs/CHANGELOG.md).
 
 ## Workbench features introduced in 2.6
 
