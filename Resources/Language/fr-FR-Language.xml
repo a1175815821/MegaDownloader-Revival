@@ -78,6 +78,7 @@ Do vous voulez le télécharger?]]></Text>
   <Text key="Error capital leters"><![CDATA[ERREUR]]></Text>
   <Text key="Error"><![CDATA[Erreur]]></Text>
   <Text key="Extracting"><![CDATA[Extraction]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[En attente des volumes]]></Text>
   <Text key="Downloading"><![CDATA[Téléchargement]]></Text>
   <Text key="Completed"><![CDATA[Terminé]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hachage MD5]]></Text>

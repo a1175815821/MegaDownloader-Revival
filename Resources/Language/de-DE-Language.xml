@@ -76,6 +76,7 @@ Do Sie wollen, um es herunterzuladen aktualisieren?]]></Text>
   <Text key="Error capital leters"><![CDATA[ERROR]]></Text>
   <Text key="Error"><![CDATA[Fehler]]></Text>
   <Text key="Extracting"><![CDATA[Extrahieren]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Warten auf Archivteile]]></Text>
   <Text key="Downloading"><![CDATA[Herunterladen]]></Text>
   <Text key="Completed"><![CDATA[Fertiggestellt]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hashing MD5]]></Text>

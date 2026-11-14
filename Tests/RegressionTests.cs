@@ -171,6 +171,7 @@ public partial class RegressionTests {
         SystemLanguageSelection();
         FeatureDialogs();
         ArchiveEdges();
+        ConfirmedAuditFixes();
         PreserveCompletedName(plain,key,encrypted);
         // Cross multiple streaming buffers and end in a partial AES block.
         byte[] large=Enumerable.Range(0,65539).Select(i=>(byte)(i%251+1)).ToArray();
@@ -1965,6 +1966,90 @@ public partial class RegressionTests {
         using(var locked=new FileStream(sevenTarget,FileMode.Open,FileAccess.Read,FileShare.Read)) {
             Check(DescompresorController.ExtractArchiveSync(archive,output,"")!="" && File.ReadAllText(sevenTarget)=="REPLACED","7z fails safely when an original cannot be preserved");
         }
+    }
+    static void ConfirmedAuditFixes() {
+        string id="SPLITFILE01";
+        string key=new string('A',43);
+        string url="https://mega.nz/file/"+id+"#"+key.Substring(0,20)+"\n"+key.Substring(20);
+        var official=URLExtractor.ExtraerSoloURLsOficiales(url);
+        Check(official.Count==1 && official[0]=="https://mega.nz/file/"+id+"#"+key,
+              "split 43-character file key is repaired");
+        var all=URLExtractor.ExtraerURLs(url);
+        Check(all.Count>0 && all[0]=="https://mega.nz/file/"+id+"#"+key,
+              "general URL extraction repairs split key");
+        string folderKey=new string('B',22);
+        string folder="https://mega.nz/folder/FOLDERID01#"+folderKey.Substring(0,10)+"\r\n"+folderKey.Substring(10);
+        var folders=URLExtractor.ExtraerSoloURLsOficiales(folder);
+        Check(folders.Count==1 && folders[0]=="https://mega.nz/folder/FOLDERID01#"+folderKey,
+              "split 22-character folder key is repaired");
+
+        // A short-volume root leaves room below the legacy 260-character full-path
+        // limit, while a >240-character entry still exercises hash shortening.
+        string d=Path.Combine(Path.GetPathRoot(Path.GetFullPath(root)),"mdpg"+Guid.NewGuid().ToString("N").Substring(0,6));
+        Directory.CreateDirectory(d);
+        try {
+            string baseName=new string('L',248);
+            string p1=PathGuard.GetSafeArchiveEntryPath(d,baseName+"1.txt");
+            string p2=PathGuard.GetSafeArchiveEntryPath(d,baseName+"2.txt");
+            Check(!String.Equals(p1,p2,StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p1).Length<=240,
+                  "distinct long archive names remain distinct within segment limit");
+        } finally { Directory.Delete(d,true); }
+
+        string volumeDir=Path.Combine(root,"audit-volumes"); Directory.CreateDirectory(volumeDir);
+        string second=Path.Combine(volumeDir,"movie.7z.002"); File.WriteAllText(second,"not-first");
+        var controller=DescompresorController.GetController();
+        var added=(bool)typeof(DescompresorController).GetMethod("AgregarElemento",hidden|BindingFlags.Public).Invoke(controller,new object[]{"VOLUME02",second,true,""});
+        Check(added,"non-first volume is accepted into deferred extraction state");
+        var queue=(System.Collections.IDictionary)typeof(DescompresorController).GetField("_colaElementos",hidden).GetValue(controller);
+        Check(queue.Count>=1,"non-first volume is queued for waiting extraction");
+
+        var infoType=typeof(Conexion.InformacionFichero);
+        var info=System.Runtime.Serialization.FormatterServices.GetUninitializedObject(infoType);
+        infoType.GetField("FileID").SetValue(info,"HTTPRAW01");
+        infoType.GetField("FileKey").SetValue(info,key);
+        infoType.GetField("Nombre").SetValue(info,"data.bin");
+        infoType.GetField("Tamano").SetValue(info,1000L);
+        infoType.GetField("URL").SetValue(info,"http://127.0.0.1:1/nope");
+        var moduleType=typeof(StreamingModule);
+        var urls=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)moduleType.GetField("Urls",shared).GetValue(null);
+        urls.Clear(); urls["HTTPRAW01|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(5),(Conexion.InformacionFichero)info);
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        cfg.ServidorStreamingPassword="";
+        int port=FreeTcpPort();
+        using(var server=new LocalFileServer(new byte[]{1,2,3})) {
+            var http=new HttpServer.HttpServer(); http.Add(new StreamingModule(ref cfg)); http.Start(IPAddress.Loopback,port);
+            try {
+                foreach(bool ranged in new[]{false,true}) {
+                    using(var client=new TcpClient()) {
+                        client.Connect(IPAddress.Loopback,port); client.ReceiveTimeout=4000;
+                        var stream=client.GetStream();
+                        string req="GET /streaming?mega=!HTTPRAW01!"+key+" HTTP/1.1\r\nHost: 127.0.0.1\r\n"+(ranged?"Range: bytes=100-200\r\n":"")+"Connection: close\r\n\r\n";
+                        byte[] bytes=Encoding.ASCII.GetBytes(req); stream.Write(bytes,0,bytes.Length); stream.Flush();
+                        var sb=new StringBuilder(); byte[] buf=new byte[4096]; int n;
+                        try { while((n=stream.Read(buf,0,buf.Length))>0) sb.Append(Encoding.ASCII.GetString(buf,0,n)); } catch {}
+                        string raw=sb.ToString();
+                        int split=raw.IndexOf("\r\n\r\n",StringComparison.Ordinal);
+                        Check(split>0 && raw.StartsWith("HTTP/1.1 502"),"streaming error returns 502: ranged="+ranged);
+                        string head=raw.Substring(0,split), body=raw.Substring(split+4);
+                        Check(!head.Contains("Content-Range:") && !head.Contains("Accept-Ranges:"),"streaming error clears range headers: ranged="+ranged);
+                        int declaredLength=ExtractHeaderLong(head,"Content-Length");
+                        Check(body.Length>0 && declaredLength==body.Length,
+                              "streaming error declares exact error body length: ranged="+ranged);
+                    }
+                }
+            } finally { http.Stop(); }
+        }
+    }
+    static int ExtractHeaderLong(string head,string name) {
+        foreach(string line in head.Split(new[]{"\r\n"},StringSplitOptions.RemoveEmptyEntries)) {
+            int colon=line.IndexOf(':'); if(colon<0) continue;
+            if(String.Equals(line.Substring(0,colon).Trim(),name,StringComparison.OrdinalIgnoreCase)) return int.Parse(line.Substring(colon+1).Trim());
+        }
+        return -1;
+    }
+    static int FreeTcpPort() {
+        var listener=new TcpListener(IPAddress.Loopback,0); listener.Start();
+        int port=((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port;
     }
     static string EncryptedName(string name) {
         byte[] text=Encoding.UTF8.GetBytes("MEGA{\"n\":\""+name+"\"}");

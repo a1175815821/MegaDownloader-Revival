@@ -84,20 +84,18 @@ Partial Public Class Main
             _startupQueueCompletion.TrySetResult(False)
         Catch ex As Exception
             ' Do NOT leave _startupQueueLoading True here. A permanent True would keep
-            ' Play/Pause/Stop disabled and — worse — gate the recovery timer out
-            ' (Main.RecuperacionTransitoria_Tick checks Not _startupQueueLoading), so a
-            ' transiently-unreadable-but-not-corrupt file could never self-heal. Clear
-            ' the flag and arm write protection instead: the recovery timer re-reads the
-            ' queue every tick and, once the on-disk file parses, re-publishes it and
-            ' clears the degraded state. Startup hangs only until that succeeds.
+            ' Play/Pause/Stop disabled and gate the recovery timer out. The loader
+            ' classifies transient locks vs corrupt nodes; this generic catch only
+            ' supplies write protection when the loader did not classify the failure
+            ' (e.g. UI continuation or injected test loader), and never marks it corrupt.
             Volatile.Write(_startupQueueLoading, False)
-            Try
-                ' Failures here (empty root, corrupt node, transient disk error) all mean
-                ' the disk queue must be preserved untouched, exactly like a transient lock.
-                Paquete.ArmWriteProtection()
-            Catch logEx As Exception
-                Log.WriteError("Failed to arm queue write protection: " & Log.SafeException(logEx))
-            End Try
+            If Not Paquete.HasTransientLoadError AndAlso Not Paquete.HasCorruptLoadError Then
+                Try
+                    Paquete.ArmTransientWriteProtection()
+                Catch logEx As Exception
+                    Log.WriteError("Failed to arm queue write protection: " & Log.SafeException(logEx))
+                End Try
+            End If
             _startupQueueCompletion.TrySetResult(False)
             Log.WriteError("Startup queue load failed; writes are suspended until recovery: " & Log.SafeException(ex))
             If Not Cerrando AndAlso Not IsDisposed Then

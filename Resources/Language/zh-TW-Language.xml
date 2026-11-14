@@ -85,6 +85,7 @@
   <Text key="Error capital leters"><![CDATA[錯誤]]></Text>
   <Text key="Error"><![CDATA[錯誤]]></Text>
   <Text key="Extracting"><![CDATA[解壓中]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[等待磁碟區]]></Text>
   <Text key="Downloading"><![CDATA[下載中]]></Text>
   <Text key="Completed"><![CDATA[已完成]]></Text>
   <Text key="Hashing MD5"><![CDATA[檢驗 MD5]]></Text>

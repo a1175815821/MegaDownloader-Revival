@@ -127,6 +127,7 @@
   <Text key="See extraction queue"><![CDATA[Показать очередь распаковки]]></Text>
   <Text key="Manage Streaming Library"><![CDATA[Управление медиатекой стриминга]]></Text>
   <Text key="Extracting"><![CDATA[Распаковка]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Ожидание томов]]></Text>
   <Text key="Downloading"><![CDATA[Скачивание]]></Text>
   <Text key="Completed"><![CDATA[Завершено]]></Text>
   <Text key="Hashing MD5"><![CDATA[Вычисление MD5]]></Text>

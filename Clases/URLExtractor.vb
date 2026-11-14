@@ -125,6 +125,30 @@ Public Class URLExtractor
     End Function
 
 
+    ''' <summary>论坛/聊天软件常在长 key 中间插入空格或换行,正则在空白处截断后 key 变短,
+    ''' 整条链接被判"不完整"而丢弃。这里只救"key 明显偏短"的匹配:在其尾部小窗口内去空白
+    ''' 重取,且仅当结果恰好等于该类型标准 key 长度时才采用。完整 key 一律不动,
+    ''' 因此不会把链接后面的正文并进 key。旧版还用已截断的 match 判断链接类型;
+    ''' 统一用正则重新匹配清洗后的文本,避免 folder 链接被按 43 字符 file key 误判。</summary>
+    Private Shared Function RepairSplitKey(ByVal texto As String, ByVal m As Match, ByVal url As String, ByVal regx As Regex) As String
+        Dim key As String = m.Groups("FileKey").Value & ""
+        If key.Length >= 43 Then Return url
+
+        Dim windowEnd As Integer = Math.Min(texto.Length, m.Index + m.Length + 43)
+        If windowEnd <= m.Index Then Return url
+        Dim span As String = texto.Substring(m.Index, windowEnd - m.Index)
+        Dim cleaned As String = span.Replace(" ", "").Replace(vbTab, "").Replace(vbCr, "").Replace(vbLf, "")
+        If cleaned.Length = span.Length Then Return url
+
+        Dim retry As Match = regx.Match(cleaned)
+        If Not retry.Success Then Return url
+        Dim retryKey As String = retry.Groups("FileKey").Value & ""
+        Dim isFolder As Boolean = retry.Value.IndexOf("/folder/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                  retry.Value.IndexOf("#F!", StringComparison.OrdinalIgnoreCase) >= 0
+        If retryKey.Length <> If(isFolder, 22, 43) Then Return url
+        Return retry.Value.Trim()
+    End Function
+
     Public Shared Function ExtraerSoloURLsOficiales(ByVal Texto As String) As Generic.List(Of String)
         Dim links As New Generic.HashSet(Of String) ' Evitamos repetidos
 
@@ -178,29 +202,6 @@ Public Class URLExtractor
             Next
         Next
         Return conf.ToList
-    End Function
-
-    ''' <summary>论坛/聊天软件常在长 key 中间插入空格或换行,正则在空白处截断后 key 变短,
-    ''' 整条链接被判"不完整"而丢弃。这里只救"key 明显偏短"的匹配:在其尾部小窗口内去空白
-    ''' 重取,且仅当结果恰好等于该类型标准 key 长度时才采用。完整 key 一律不动,
-    ''' 因此不会把链接后面的正文并进 key。</summary>
-    Private Shared Function RepairSplitKey(ByVal texto As String, ByVal m As Match, ByVal url As String, ByVal regx As Regex) As String
-        Dim key As String = m.Groups("FileKey").Value & ""
-        Dim isFolder As Boolean = url.IndexOf("/folder/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
-                                  url.IndexOf("#F!", StringComparison.OrdinalIgnoreCase) >= 0
-        Dim expected As Integer = If(isFolder, 22, 43)
-        If key.Length >= expected Then Return url
-
-        Dim windowEnd As Integer = Math.Min(texto.Length, m.Index + m.Length + expected)
-        If windowEnd <= m.Index Then Return url
-        Dim span As String = texto.Substring(m.Index, windowEnd - m.Index)
-        Dim cleaned As String = span.Replace(" ", "").Replace(vbTab, "").Replace(vbCr, "").Replace(vbLf, "")
-        If cleaned.Length = span.Length Then Return url
-
-        Dim retry As Match = regx.Match(cleaned)
-        If Not retry.Success Then Return url
-        If (retry.Groups("FileKey").Value & "").Length <> expected Then Return url
-        Return retry.Value.Trim()
     End Function
 
     Public Shared Function ExtraerURLs(ByVal Texto As String) As Generic.List(Of String)

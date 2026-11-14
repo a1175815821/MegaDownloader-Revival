@@ -84,6 +84,7 @@ Dacă ieșiți acum, fișierele pot fi corupte la extragere și va trebui să le
   <Text key="Error capital leters"><![CDATA[EROARE]]></Text>
   <Text key="Error"><![CDATA[Eroare]]></Text>
   <Text key="Extracting"><![CDATA[Extrag]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Se așteaptă volumele]]></Text>
   <Text key="Downloading"><![CDATA[Descarc]]></Text>
   <Text key="Completed"><![CDATA[Complet]]></Text>
   <Text key="Hashing MD5"><![CDATA[Dispersie MD5]]></Text>

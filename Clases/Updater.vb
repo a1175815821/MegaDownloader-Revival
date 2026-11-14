@@ -10,6 +10,9 @@ Public Class Updater
     End Enum
 
     Public Shared Sub ComprobarVersionMegadownloader(ByRef UrlNuevaVersion As String, ByRef Version As String)
+        ' ByRef 由调用方按小时复用:失败时不清空会让上一次结果继续触发提醒/按钮。
+        UrlNuevaVersion = ""
+        Version = ""
         If String.IsNullOrEmpty(Conexion.GetUpdateCheckURL) Then Exit Sub
         Dim URL As String = Conexion.GetUpdateCheckURL()
         Dim Resultado As Conexion.Respuesta = Conexion.LeerURL(URL)

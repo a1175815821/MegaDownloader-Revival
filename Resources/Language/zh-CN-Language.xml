@@ -117,6 +117,7 @@
   <Text key="See extraction queue"><![CDATA[查看解压队列]]></Text>
   <Text key="Manage Streaming Library"><![CDATA[管理媒体库]]></Text>
   <Text key="Extracting"><![CDATA[解压中]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[等待分卷]]></Text>
   <Text key="Downloading"><![CDATA[下载中]]></Text>
   <Text key="Completed"><![CDATA[已完成]]></Text>
   <Text key="Hashing MD5"><![CDATA[验证 MD5]]></Text>

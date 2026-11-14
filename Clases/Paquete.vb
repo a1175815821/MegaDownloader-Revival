@@ -80,6 +80,7 @@ Public Class Paquete
             Dim HayGenerandoLocal As Boolean = False
             Dim HayPausados As Boolean = False
             Dim HayDescomprimiendo As Boolean = False
+            Dim HayEsperandoVolumenes As Boolean = False
             Dim HayComprobandoMD5 As Boolean = False
             Dim HayVerificando As Boolean = False
             Dim Total As Long = 0
@@ -103,6 +104,8 @@ Public Class Paquete
                             HayComprobandoMD5 = True
                         Case Estado.Descomprimiendo
                             HayDescomprimiendo = True
+                        Case Estado.EsperandoVolumenes
+                            HayEsperandoVolumenes = True
                         Case Estado.Verificando
                             HayVerificando = True
                         Case Estado.CreandoLocal
@@ -126,6 +129,8 @@ Public Class Paquete
                 EstadoDescarga = Estado.ComprobandoMD5
             ElseIf HayDescomprimiendo Then
                 EstadoDescarga = Estado.Descomprimiendo
+            ElseIf HayEsperandoVolumenes Then
+                EstadoDescarga = Estado.EsperandoVolumenes
             ElseIf HayVerificando Then
                 EstadoDescarga = Estado.Verificando
             Else
@@ -218,7 +223,22 @@ Public Class Paquete
     End Function
 
     Friend Shared Function CargarStartupQueue(cancellationToken As CancellationToken) As Generic.List(Of Paquete)
-        Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
+        Try
+            Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
+        Catch ex As Exception
+            ' 只有 AtomicFile 能区分"文件被瞬时占用"与"XML/节点确实损坏"。
+            ' 上层统一按损坏处理会让锁住的主队列被旧 .bak 顶替。
+            Dim transient As Boolean = (TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException) OrElse
+                                       (TypeOf ex Is System.Xml.XmlException AndAlso Not String.IsNullOrWhiteSpace(_TransientBlockedSource))
+            If transient OrElse _TransientBlockedSource IsNot Nothing Then
+                _LoadTransientError = True
+                _LoadCorruptError = False
+                _TransientBlockedSource = ObtenerRutaFicheroDescargas()
+            Else
+                ArmWriteProtection()
+            End If
+            Throw
+        End Try
     End Function
 
     Friend Shared Function CargarDesdeRuta(ByVal Fichero As String) As Generic.List(Of Paquete)
@@ -281,6 +301,7 @@ Public Class Paquete
                        Fichero.DescargaEstado = Estado.Pausado Or _
                        Fichero.DescargaEstado = Estado.Verificando Or _
                        Fichero.DescargaEstado = Estado.Descomprimiendo Or _
+                       Fichero.DescargaEstado = Estado.EsperandoVolumenes Or _
                        Fichero.DescargaEstado = Estado.CreandoLocal Or _
                        Fichero.DescargaEstado = Estado.ComprobandoMD5 Then
                         ' Verificando 是下载前的瞬态(EstadoAnterior 已丢失),Descomprimiendo 是下载完成但解压未完成:
@@ -381,10 +402,15 @@ Public Class Paquete
         Return l
     End Function
 
-    ''' <summary>B7: 队列加载(启动或恢复)遇到非瞬态失败(损坏/空根/解析异常)时,由调用方
-    ''' 调用本方法。与瞬态锁共用 `_LoadTransientError` 写保护:只要磁盘上的队伍没能读出来,
-    ''' 周期落盘就不得把空列表写盘、把用户队列挤进 .bak。恢复计时器每 tick 会复用
-    ''' CommitTransientRecovery 解除保护并重读。</summary>
+    ''' <summary>通用启动异常只能进入"暂时不写盘"模式,不能据此声称主文件损坏并回退旧 .bak。</summary>
+    Public Shared Sub ArmTransientWriteProtection()
+        SyncLock Mutex.GuardarDownloadList
+            _LoadTransientError = True
+            _LoadCorruptError = False
+            _TransientBlockedSource = ObtenerRutaFicheroDescargas()
+        End SyncLock
+    End Sub
+
     Public Shared Sub ArmWriteProtection()
         SyncLock Mutex.GuardarDownloadList
             If Not _LoadTransientError Then

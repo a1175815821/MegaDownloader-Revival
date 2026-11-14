@@ -147,16 +147,23 @@ Public NotInheritable Class PathGuard
 
     ''' <summary>归档条目名来自第三方压缩包,可能合法地超过本类的 240 字符上限
     ''' (Windows 单段上限 255,实测 7zr 能正常创建/解压 254 字符名)。此前直接抛异常
-    ''' 会让整个压缩包被拒。与下载文件名一致改为截断;穿越/保留名/非法字符校验一律不放宽。</summary>
+    ''' 会让整个压缩包被拒。超过上限时保留可读前缀并追加由完整原名派生的 8 位哈希;
+    ''' 两个仅末尾不同的长名不会映射成同一路径。穿越/保留名/非法字符校验一律不放宽。</summary>
     Private Shared Function ShortenArchiveSegments(ByVal relative As String) As String
         Dim segments() As String = relative.Split(Path.DirectorySeparatorChar)
         Dim changed As Boolean = False
         For i As Integer = 0 To segments.Length - 1
             Dim s As String = segments(i)
             If s.Length <= MaxSegmentLength Then Continue For
-            Dim cut As String = s.Substring(0, MaxSegmentLength).TrimEnd(" "c, "."c)
+            Dim suffix As String
+            Using sha As New System.Security.Cryptography.SHA256Managed()
+                Dim digest As Byte() = sha.ComputeHash(New System.Text.UTF8Encoding(False).GetBytes(s))
+                suffix = "~" & BitConverter.ToString(digest, 0, 6).Replace("-", "") & Path.GetExtension(s)
+            End Using
+            Dim keep As Integer = Math.Max(1, MaxSegmentLength - suffix.Length)
+            Dim cut As String = s.Substring(0, Math.Min(keep, s.Length)).TrimEnd(" "c, "."c)
             If String.IsNullOrEmpty(cut) OrElse cut = "." OrElse cut = ".." Then cut = "_"
-            segments(i) = cut
+            segments(i) = cut & suffix
             changed = True
         Next
         If Not changed Then Return relative
@@ -166,6 +173,13 @@ Public NotInheritable Class PathGuard
     ''' <summary>
     ''' Validates every non-directory archive entry; throws if any entry escapes the root.
     ''' </summary>
+    Public Shared Function GetRelativePath(ByVal root As String, ByVal fullPath As String) As String
+        Dim fullRoot As String = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) & Path.DirectorySeparatorChar
+        Dim full As String = Path.GetFullPath(fullPath)
+        If Not full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase) Then Throw New UnauthorizedAccessException("Path escapes the extraction root.")
+        Return full.Substring(fullRoot.Length)
+    End Function
+
     Public Shared Sub ValidateArchiveEntries(ByVal extractionRoot As String, ByVal entryKeys As IEnumerable(Of String))
         If entryKeys Is Nothing Then Return
         For Each key As String In entryKeys

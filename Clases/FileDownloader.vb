@@ -469,6 +469,7 @@ Public Class FileDownloader
     ' 退避指数必须来自"连续失败次数"。此前用存活 worker 数,而失败的 worker 已被移除,
     ' 最后一个连接失败时该数恒为 0 → 恒定 1 秒重试,指数退避形同虚设。
     Private m_consecutiveChunkFailures As Integer
+    Private m_chunkGeneration As Integer
     Private m_currentFileProgress, m_totalProgress, m_currentFileSize As Int64
     Private m_currentSpeed As Generic.Dictionary(Of String, Long)
 
@@ -1803,8 +1804,11 @@ Public Class FileDownloader
                 ' Exponential backoff with jitter (cap ~30s).
                 ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
                 ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
-                m_consecutiveChunkFailures += 1
-                Dim attempt As Integer = Math.Min(4, Math.Max(0, m_consecutiveChunkFailures - 1))
+                ' 计数必须原子递增:退避里新建的 worker 没有 UI 同步上下文,其完成回调落在
+                ' 线程池上,与首代 worker 的 UI 回调并发,普通 += 会丢增量。
+                Dim fallos As Integer = System.Threading.Interlocked.Increment(m_consecutiveChunkFailures)
+                Dim attempt As Integer = Math.Min(4, Math.Max(0, fallos - 1))
+                Dim generation As Integer = System.Threading.Volatile.Read(m_chunkGeneration)
                 System.Threading.Tasks.Task.Run(Sub()
                                                    Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, attempt)))
                                                    Dim jitter As Integer = (Now.Millisecond Mod 500)
@@ -1812,15 +1816,17 @@ Public Class FileDownloader
                                                    Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
                                                    While Now < Limite
                                                        System.Threading.Thread.Sleep(50)
-                                                       If HasBeenCanceled Then
-                                                           Return
-                                                       End If
+                                                       If HasBeenCanceled OrElse m_abortChunkRestart OrElse
+                                                          System.Threading.Volatile.Read(m_chunkGeneration) <> generation Then Return
                                                    End While
                                                    ' Lanzar nuevo worker
-                                                   NewDownloaderWorker()
+                                                   NewDownloaderWorker(generation)
                                                End Sub)
             Else
-                m_consecutiveChunkFailures = 0
+                ' A successful worker ends its own retry sequence, but it does not
+                ' prove that workers still backing off are healthy. Preserve the
+                ' global consecutive-failure count until no backoff worker remains.
+                System.Threading.Interlocked.Exchange(m_consecutiveChunkFailures, 0)
                 ' Lanzar nuevo worker
                 NewDownloaderWorker()
             End If
@@ -1859,10 +1865,11 @@ Public Class FileDownloader
         Return CInt(TotalDescargado / TiempoDescarga)
     End Function
 
-    Private Sub NewDownloaderWorker()
+    Private Sub NewDownloaderWorker(Optional ByVal generation As Integer = -1)
         ' 第10项:统一取消后禁止复活(含退避 Task.Run 延迟到达的调用),
         ' 与 ChunkDownloader_RunWorkerCompleted 的守卫双保险。
         If m_abortChunkRestart OrElse HasBeenCanceled Then Return
+        If generation >= 0 AndAlso System.Threading.Volatile.Read(m_chunkGeneration) <> generation Then Return
         SyncLock Mutex
             Dim part As Int32? = Me.File.GetDataPart.NextAvailablePartIndex
             If part.HasValue Then
@@ -2161,6 +2168,8 @@ Public Class FileDownloader
         Set(ByVal value As Boolean)
             If Me.IsBusy <> value Then
                 If Not value Then System.Threading.Volatile.Write(m_stopCompletionPending, True)
+                ' 每次 Start/Stop 都切换代际,旧退避 Task 醒来后不得给新一轮创建 worker。
+                System.Threading.Interlocked.Increment(m_chunkGeneration)
                 m_busy = value
                 m_canceled = Not value
                 If Me.IsBusy Then
@@ -2172,6 +2181,7 @@ Public Class FileDownloader
                     ' 第10项:新一轮下载复位"禁止复活"标记
                     m_abortChunkRestart = False
                     m_completedFilePath = Nothing
+                    System.Threading.Interlocked.Exchange(m_consecutiveChunkFailures, 0)
                     bgwDownloader.RunWorkerAsync()
                     RaiseEvent Started(Me, New EventArgs)
                     RaiseEvent IsBusyChanged(Me, New EventArgs)

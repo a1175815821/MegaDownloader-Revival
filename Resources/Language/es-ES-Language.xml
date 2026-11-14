@@ -121,6 +121,7 @@ Si sale ahora, los ficheros extraídos pueden quedar inservibles y tendrá que d
   <Text key="Error capital leters"><![CDATA[ERROR]]></Text>
   <Text key="Error"><![CDATA[Error]]></Text>
   <Text key="Extracting"><![CDATA[Descomprimiendo]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Esperando volúmenes]]></Text>
   <Text key="Downloading"><![CDATA[Descargando]]></Text>
   <Text key="Completed"><![CDATA[Completado]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hashing MD5]]></Text>

@@ -72,6 +72,7 @@
   <Text key="Error capital leters"><![CDATA[ERRORE]]></Text>
   <Text key="Error"><![CDATA[Errore]]></Text>
   <Text key="Extracting"><![CDATA[Estrazione]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[In attesa dei volumi]]></Text>
   <Text key="Downloading"><![CDATA[Download]]></Text>
   <Text key="Completed"><![CDATA[Completato]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hash MD5]]></Text>

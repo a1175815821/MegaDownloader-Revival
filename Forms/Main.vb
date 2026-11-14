@@ -508,6 +508,7 @@ Public Class Main
         bgwDescompresor.WorkerReportsProgress = True
         bgwDescompresor.WorkerSupportsCancellation = True
         AddHandler DescompresorController.GetController.DescompresionFinalizada, AddressOf DescompresionFinalizada_EventHandler
+        AddHandler DescompresorController.GetController.DescompresionDiferida, AddressOf DescompresionDiferida_EventHandler
         _descompresorLastStartUtc = DateTime.UtcNow
         _startupReady = True
         bgwComprobarMaxConexiones.RunWorkerAsync()
@@ -2682,6 +2683,8 @@ Public Class Main
                 Return Language.GetText("Paused")
             Case Estado.Descomprimiendo
                 Return Language.GetText("Extracting")
+            Case Estado.EsperandoVolumenes
+                Return Language.GetText("Waiting for volumes")
             Case Estado.Descargando
                 Return Language.GetText("Downloading")
             Case Estado.ComprobandoMD5
@@ -2793,10 +2796,8 @@ Public Class Main
     End Sub
 
     ''' <summary>
-    ''' Guarda en disco el listado de paquetes y descargas
-    ''' </summary>
-    ''' <remarks></remarks>
-    ''' <summary>P-01: only a shallow reference copy happens under the global queue
+    ''' Guarda en disco el listado de paquetes y descargas.
+    ''' P-01: only a shallow reference copy happens under the global queue
     ''' lock. All serialization, DPAPI/AES work and disk IO now run outside it, so a
     ''' 5000-file save no longer blocks the 430ms refresh loop and download workers.
     ''' A structure signature taken before/after the write detects additions or
@@ -2903,8 +2904,10 @@ Public Class Main
                             If String.IsNullOrEmpty(Config.UpdateSkipVersion) OrElse Config.UpdateSkipVersion <> VersionNuevaVersionMegadownloader Then
                                 ' 已有安排时不得覆盖:用户选过"稍后提醒(3小时)"后,每小时检查
                                 ' 把它重置成 15 秒,表现为"刚点过稍后提醒又弹"。
-                                ' Date.MaxValue(本会话已弹过/已跳过)同样保持不动。
-                                If Not ProximoAvisoActualizacion.HasValue OrElse ProximoAvisoActualizacion.Value <= Now Then
+                                ' Date.MaxValue 只抑制当时那个版本;版本号一变必须重新排期,
+                                ' 否则点过"立即更新/永不提醒"后新版本再也不弹窗。
+                                If Not ProximoAvisoActualizacion.HasValue OrElse ProximoAvisoActualizacion.Value <= Now OrElse
+                                   Not String.Equals(VersionAvisoSuprimido, VersionNuevaVersionMegadownloader, StringComparison.Ordinal) Then
                                     ProximoAvisoActualizacion = Now.AddSeconds(15)
                                 End If
                             End If
@@ -3270,7 +3273,8 @@ Public Class Main
                                 Me.NumDescargasErroneas += 1
                             ElseIf fic.EstadoDescarga = Estado.Completado Or _
                                    fic.EstadoDescarga = Estado.ComprobandoMD5 Or _
-                                   fic.EstadoDescarga = Estado.Descomprimiendo Then
+                                   fic.EstadoDescarga = Estado.Descomprimiendo Or _
+                                   fic.EstadoDescarga = Estado.EsperandoVolumenes Then
                                 Me.NumDescargasCompletadas += 1
 
                             End If
@@ -3769,6 +3773,7 @@ Public Class Main
                            Fichero.DescargaEstado = Estado.CreandoLocal Or _
                            Fichero.DescargaEstado = Estado.Verificando Or _
                            Fichero.DescargaEstado = Estado.Descomprimiendo Or _
+                           Fichero.DescargaEstado = Estado.EsperandoVolumenes Or _
                            Fichero.DescargaEstado = Estado.ComprobandoMD5 Then
                             TodosFinalizados = False
                         End If
@@ -4308,7 +4313,7 @@ Public Class Main
         If TypeOf (Objeto) Is Fichero Then
             Dim fic As Fichero = CType(Objeto, Fichero)
             Select Case Objeto.DescargaEstado
-                Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.CreandoLocal
+                Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.EsperandoVolumenes, Estado.CreandoLocal
                     AddHandler fic.CancellationComplete, AddressOf DisposeFichero
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                     If BorrarFicheros Then fic.LimpiezaPaquete = paqueteAEliminar
@@ -4327,7 +4332,7 @@ Public Class Main
             Dim limpios As New Generic.List(Of Fichero)
             For Each fic As Fichero In paqObj.ListaFicheros
                 Select Case fic.DescargaEstado
-                    Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.CreandoLocal
+                    Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.EsperandoVolumenes, Estado.CreandoLocal
                         AddHandler fic.CancellationComplete, AddressOf DisposeFichero
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                         If BorrarFicheros Then fic.LimpiezaPaquete = paqObj
@@ -4849,10 +4854,12 @@ Public Class Main
                     End If
                 Next
                 If handled > 0 Then Return
-            End If
 
-            ' 拖入文件夹或其它类型文件:给出提示而不是静默丢弃
-            MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ' 拖入的是其它类型文件:给出提示而不是静默丢弃。
+                ' 文件夹走不到这里 —— DragEnter 已置 None,OLE 不会再调 Drop,
+                ' 用户看到的是"禁止放置"光标,这是 Windows 的标准反馈。
+                MessageBox.Show(Language.GetText("Only ELC and DLC files are supported by drag and drop"), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
         End If
     End Sub
 
@@ -4905,15 +4912,20 @@ Public Class Main
     'End Sub
 
     Private ProximoAvisoActualizacion As Date? = Nothing
+    ' Date.MaxValue 表示"本版本已弹过/已抑制",但它不能连新版本一起抑制。
+    ' 记下被抑制的版本号,发现不同版本时允许重新排期。
+    Private VersionAvisoSuprimido As String = Nothing
     Delegate Sub MostrarMensajeActualizacionCallback()
     Private Sub MostrarMensajeActualizacion()
         If Me.StatusStrip1.InvokeRequired Then
             Dim d As New MostrarMensajeActualizacionCallback(AddressOf MostrarMensajeActualizacion)
             Me.Invoke(d, New Object() {})
         Else
-            If Form.ActiveForm IsNot Nothing AndAlso Form.ActiveForm.Equals(Me) Then
-                ProximoAvisoActualizacion = Date.MaxValue  ' Evitamos que si el usuario no cierra el mensaje vuelva a salir
-                ' 三选:是=现在更新 / 否=稍后提醒(3小时) / 取消=此版本永不提醒
+            ' 后台/最小化时不能每秒重入提醒逻辑:先把本版本标记为已排期,窗体激活后再弹。
+            ProximoAvisoActualizacion = Date.MaxValue
+            VersionAvisoSuprimido = VersionNuevaVersionMegadownloader
+            If Form.ActiveForm Is Nothing OrElse Not Form.ActiveForm.Equals(Me) Then Return
+            ' 三选:是=现在更新 / 否=稍后提醒(3小时) / 取消=此版本永不提醒
                 Dim Mensaje As String = Language.GetText("New version do you want to download it? Recommended!") & _
                     vbNewLine & vbNewLine & "Version: " & VersionNuevaVersionMegadownloader & vbNewLine & _
                     Language.GetText("Update prompt hint")
@@ -4933,7 +4945,6 @@ Public Class Main
                 Else
                     ProximoAvisoActualizacion = Now.AddHours(3)
                 End If
-            End If
         End If
     End Sub
 
@@ -4946,6 +4957,16 @@ Public Class Main
                     If fic.FileID = Code Then
                         fic.DescompresionFinalizada(Success, ErrorMessage)
                     End If
+                Next
+            Next
+        End SyncLock
+    End Sub
+
+    Private Sub DescompresionDiferida_EventHandler(ByVal Code As String)
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.FileID = Code Then fic.DescompresionDiferida()
                 Next
             Next
         End SyncLock

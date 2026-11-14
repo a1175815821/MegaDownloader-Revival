@@ -115,6 +115,9 @@ Public Class Fichero
     ' 必须显著大于分块退避上限(约 16.5 秒),否则真正持续失败的重试会被误判为"已恢复",
     ' 保护永不触发。取 120 秒:持续失败约 8 分钟内累计到上限,几小时里的零星抖动不累积。
     Private Const CHUNK_ERROR_COOLDOWN_SECONDS As Integer = 120
+    ' 分块失败回调可能来自线程池(退避后新建的 worker 无 UI 同步上下文),
+    ' 冷却判定与计数递增必须成对原子,否则并发回调会互相覆盖。
+    Private ReadOnly _errorChunkLock As New Object()
 	
 	Public Sub New()
 		Me.New("")
@@ -721,7 +724,7 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub DescompresionFinalizada(Optional ByVal success As Boolean = True, Optional ByVal errorMessage As String = "")
-		If Me.EstadoDescarga = Estado.Descomprimiendo Then
+		If Me.EstadoDescarga = Estado.Descomprimiendo OrElse Me.EstadoDescarga = Estado.EsperandoVolumenes Then
 			If success Then
 				Me.EstadoDescarga = Estado.Completado
 			Else
@@ -730,6 +733,21 @@ Public Class Fichero
 			End If
 		End If
 	End Sub
+
+	''' <summary>分卷尚未到齐:解压控制器已登记等待并会自行重试。
+	''' 这不是失败,也不能留在 Descomprimiendo(关闭/自动关机会误判)。</summary>
+	Public Sub DescompresionDiferida()
+		If Me.EstadoDescarga = Estado.Descomprimiendo OrElse Me.EstadoDescarga = Estado.EsperandoVolumenes Then
+			Me.EstadoDescarga = Estado.EsperandoVolumenes
+		End If
+	End Sub
+
+	''' <summary>已登记等待后,解压控制器是否仍需把此任务计入完成通知范围。</summary>
+	Public ReadOnly Property ExtraccionDiferida As Boolean
+		Get
+			Return Me.EstadoDescarga = Estado.EsperandoVolumenes
+		End Get
+	End Property
 	
 	
 	Private Sub downloader_Started(ByVal sender As System.Object, ByVal e As System.EventArgs)
@@ -829,13 +847,18 @@ Public Class Fichero
 		'  No hacemos nada, dejamos que vuelva a reconectarse, excepto si ha habido demasiados errores
 		' 终身计数器会把几小时里 31 次各自都自动重连成功的瞬时抖动判成"错误过多"而停掉任务。
 		' 改为连续失败语义:距上次分块错误超过冷却窗口即视为已恢复,重新计数。
-		If Me.FechaUltimoErrorChunk.HasValue AndAlso
-		   (Now - Me.FechaUltimoErrorChunk.Value).TotalSeconds > Fichero.CHUNK_ERROR_COOLDOWN_SECONDS Then
-			Me.NumErroresChunk = 0
-		End If
-		Me.FechaUltimoErrorChunk = Now
-		Me.NumErroresChunk += 1
-		If Me.NumErroresChunk > Fichero.NUM_MAX_ERRORES_CHUNK Then
+		Dim detenerPorErrores As Boolean = False
+		SyncLock Me._errorChunkLock
+			If Me.FechaUltimoErrorChunk.HasValue AndAlso
+			   (Now - Me.FechaUltimoErrorChunk.Value).TotalSeconds > Fichero.CHUNK_ERROR_COOLDOWN_SECONDS Then
+				Me.NumErroresChunk = 0
+			End If
+			Me.FechaUltimoErrorChunk = Now
+			Me.NumErroresChunk += 1
+			detenerPorErrores = Me.NumErroresChunk > Fichero.NUM_MAX_ERRORES_CHUNK
+		End SyncLock
+		' Stop 放在锁外:它会取别的锁,持锁调用有死锁风险。
+		If detenerPorErrores Then
 			Me.Stop()
 		End If
 	End Sub
@@ -869,7 +892,7 @@ Public Class Fichero
 	Private Sub downloader_Completed(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		If Me.EstadoDescarga <> Estado.Erroneo Then
 			Log.WriteWarning("File " & Me.FileID & " downloaded.")
-			Me.EstadoDescarga = Estado.Completado
+			If Me.EstadoDescarga <> Estado.EsperandoVolumenes Then Me.EstadoDescarga = Estado.Completado
 			
 			' Obsolete, MEGA doesn't check MD5
 			If Not String.IsNullOrEmpty(Me.MD5) Then
@@ -903,9 +926,14 @@ Public Class Fichero
 		If Me.EstadoDescarga <> Estado.Erroneo Then
 			' Descomprimimos fichero
 			' Crear directorio al descomprimir?? De momento ponemos siempre que sí...
-            If Me.ExtraccionFicheroAutomatica AndAlso _
-                DescompresorController.GetController.AgregarElemento(Me.FileID, PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero), True, Me.DescargaExtraccionPassword) Then
-                Me.EstadoDescarga = Estado.Descomprimiendo
+            If Me.ExtraccionFicheroAutomatica Then
+                Dim aceptado As Boolean = DescompresorController.GetController.AgregarElemento(Me.FileID, PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero), True, Me.DescargaExtraccionPassword)
+                If aceptado Then
+                    Me.EstadoDescarga = Estado.Descomprimiendo
+                ElseIf Me.EstadoDescarga <> Estado.EsperandoVolumenes Then
+                    ' 非归档或控制器彻底拒绝:下载本身已经完成。
+                    Me.EstadoDescarga = Estado.Completado
+                End If
             End If
 		End If
 		
@@ -1100,7 +1128,10 @@ Public Class Fichero
 	Public Sub ResetearDescarga(Optional ByVal preserveProgress As Boolean = False)
         CaptureDownloaderProgress()
 		If preserveProgress Then
-			Me.NumErroresChunk = 0
+			SyncLock Me._errorChunkLock
+				Me.NumErroresChunk = 0
+				Me.FechaUltimoErrorChunk = Nothing
+			End SyncLock
 			Me.UltimoErrorChunk = Nothing
 			Me.DescripcionError = Nothing
 			Me.FechaUltimoError = Nothing
@@ -1122,7 +1153,10 @@ Public Class Fichero
 		End If
 		Me.BytesDescargados = 0
 		Me.Porcentaje = 0
-		Me.NumErroresChunk = 0
+		SyncLock Me._errorChunkLock
+			Me.NumErroresChunk = 0
+			Me.FechaUltimoErrorChunk = Nothing
+		End SyncLock
 		Me.UltimoErrorChunk = Nothing
 		Me.DescripcionError = Nothing
 		Me.FechaUltimoError = Nothing

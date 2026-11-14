@@ -31,4 +31,7 @@ Public Enum Estado
     ComprobandoMD5
     Descomprimiendo
     Erroneo
+    ' Append new states: Fichero persists Estado by its symbolic name, but keeping
+    ' the original numeric values stable also protects external integrations.
+    EsperandoVolumenes
 End Enum

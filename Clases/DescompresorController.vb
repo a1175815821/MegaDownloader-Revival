@@ -7,6 +7,7 @@ Imports SharpCompress.Archives.Zip
 Imports SharpCompress.Readers.Rar
 Imports SharpCompress.Common
 Imports System.IO
+Imports System.Text.RegularExpressions
 
 
 Public Class DescompresorController
@@ -15,13 +16,20 @@ Public Class DescompresorController
         Public Path As String
         Public Password As String
         Public CreateDirectory As Boolean
+        Public Deferred As Boolean
     End Class
 
     ''' <summary>多卷归档必须全部到齐才能解压(实测:只有首卷、甚至只差最后一卷,
     ''' 7zr 都返回 exit 2 "Cannot open the file as archive")。磁盘上看不出总卷数,
     ''' 因此在等待窗口内定期重试;每有新卷落盘就刷新窗口,窗口耗尽才判真失败。</summary>
+    Private Structure VolumeLedgerEntry
+        Public Length As Long
+        Public LastWriteUtc As DateTime
+        Public ContentHash As ULong
+    End Structure
+
     Private Class EsperandoVolumenes
-        Public Code As String
+        Public Codes As New Generic.HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Public Password As String
         Public CreateDirectory As Boolean
         Public ProximoIntento As Date
@@ -58,10 +66,14 @@ Public Class DescompresorController
     Private _pathElementoActual As String
     Private _passwordElementoActual As String
     Private _crearDirectorio As Boolean
+    Private _currentDeferred As Boolean
+    Private _currentCodes As New Generic.HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
     Private _cancelRequested As Boolean
     ' 去重必须同时覆盖"待办 / 正在解压 / 已解压完"三态:只扫待办队列时,
     ' N 个分卷会各自触发一次解压,产出 movie.mkv / movie (2).mkv / movie (3).mkv。
-    Private _rutasCompletadas As Generic.HashSet(Of String)
+    ' 键附带归档的修改时间:重新下载同一路径后时间戳变化,台账自动失效,
+    ' 否则用户删掉成品再重试就永远不再解压(且不报错)。
+    Private _rutasCompletadas As Generic.Dictionary(Of String, VolumeLedgerEntry)
     Private _esperandoVolumenes As Generic.Dictionary(Of String, EsperandoVolumenes)
 
     Private _ExtensionesSoportadas As Generic.List(Of String)
@@ -80,7 +92,7 @@ Public Class DescompresorController
     Private Sub New()
         SyncLock Mutex
             _colaElementos = New Generic.Dictionary(Of String, QueueItem)()
-            _rutasCompletadas = New Generic.HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            _rutasCompletadas = New Generic.Dictionary(Of String, VolumeLedgerEntry)(StringComparer.OrdinalIgnoreCase)
             _esperandoVolumenes = New Generic.Dictionary(Of String, EsperandoVolumenes)(StringComparer.OrdinalIgnoreCase)
             _codigoElementoActual = Nothing
             _pathElementoActual = Nothing
@@ -95,6 +107,42 @@ Public Class DescompresorController
         End SyncLock
     End Sub
 
+    Private Shared ReadOnly rxVolumePath As New Regex("(?<base>.+)\.(?:7z\.(?<sz>\d+)|part(?<rp>\d+)\.rar|rar|r(?<ro>\d+))$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+
+    ''' <summary>把任意分卷文件名归一到第一卷;找不到首卷时也返回该分卷本身,
+    ''' 让控制器可以登记等待而不是让上游把任务误标为完成。</summary>
+    Private Shared Function NormalizeQueuePath(ByVal path As String) As String
+        If String.IsNullOrWhiteSpace(path) Then Return path
+        Dim full As String = IO.Path.GetFullPath(path)
+        Dim dir As String = IO.Path.GetDirectoryName(full)
+        Dim name As String = IO.Path.GetFileName(full)
+        Dim m As Match = rxVolumePath.Match(name)
+        If Not m.Success OrElse String.IsNullOrEmpty(dir) Then Return full
+        Dim baseName As String = m.Groups("base").Value
+        If m.Groups("sz").Success Then
+            Dim first As String = IO.Path.Combine(dir, baseName & ".7z." & "1".PadLeft(m.Groups("sz").Value.Length, "0"c))
+            Return If(IO.File.Exists(first), first, full)
+        End If
+        If m.Groups("rp").Success Then
+            Dim first As String = IO.Path.Combine(dir, baseName & ".part" & "1".PadLeft(m.Groups("rp").Value.Length, "0"c) & ".rar")
+            Return If(IO.File.Exists(first), first, full)
+        End If
+        If m.Groups("ro").Success Then
+            Dim first As String = IO.Path.Combine(dir, baseName & ".rar")
+            Return If(IO.File.Exists(first), first, full)
+        End If
+        Return full
+    End Function
+
+    Private Shared Function IsPotentialMultiVolumePath(ByVal path As String) As Boolean
+        If String.IsNullOrWhiteSpace(path) Then Return False
+        Dim name As String = IO.Path.GetFileName(path)
+        If rxVolumePath.Match(name).Groups("ro").Success Then Return True
+        Dim full As String = IO.Path.GetFullPath(path)
+        If name.ToLowerInvariant().EndsWith(".rar") AndAlso IO.File.Exists(full.Substring(0, full.Length - 4) & ".r00") Then Return True
+        Return IsMultiVolumePath(full)
+    End Function
+
     Public Sub RequestCancel()
         SyncLock Mutex
             _cancelRequested = True
@@ -107,16 +155,40 @@ Public Class DescompresorController
         End SyncLock
     End Function
 
+    ''' <summary>The worker may be restarted after a cancelled shutdown. Clear the
+    ''' one-shot shutdown signal before it dequeues another archive; otherwise every
+    ''' subsequent extraction in this process would immediately report "cancelled".</summary>
+    Private Sub ClearCancelIfIdle()
+        SyncLock Mutex
+            If _cancelRequested AndAlso String.IsNullOrEmpty(_pathElementoActual) AndAlso _colaElementos.Count = 0 Then
+                _cancelRequested = False
+            End If
+        End SyncLock
+    End Sub
+
     Private Function PonerElementoAProcesar() As Boolean
         SyncLock Mutex
             If Not String.IsNullOrEmpty(_pathElementoActual) Or _colaElementos.Count = 0 Then
                 Return False ' Ya hay un elemento procesando o la cola está vacía
             Else
                 _codigoElementoActual = _colaElementos.Keys(0)
-                _crearDirectorio = _colaElementos(_codigoElementoActual).CreateDirectory
-                _pathElementoActual = _colaElementos(_codigoElementoActual).Path
-                _passwordElementoActual = _colaElementos(_codigoElementoActual).Password
-                _colaElementos.Remove(_codigoElementoActual)
+                Dim item As QueueItem = _colaElementos(_codigoElementoActual)
+                _crearDirectorio = item.CreateDirectory
+                _pathElementoActual = item.Path
+                _passwordElementoActual = item.Password
+                _currentDeferred = item.Deferred
+                _currentCodes.Clear()
+                _currentCodes.Add(_codigoElementoActual)
+                For Each kvp As KeyValuePair(Of String, QueueItem) In _colaElementos
+                    If String.Equals(kvp.Value.Path, item.Path, StringComparison.OrdinalIgnoreCase) Then _currentCodes.Add(kvp.Key)
+                Next
+                Dim stale As New Generic.List(Of String)
+                For Each kvp As KeyValuePair(Of String, QueueItem) In _colaElementos
+                    If String.Equals(kvp.Value.Path, item.Path, StringComparison.OrdinalIgnoreCase) Then stale.Add(kvp.Key)
+                Next
+                For Each code As String In stale
+                    _colaElementos.Remove(code)
+                Next
                 Return True
             End If
         End SyncLock
@@ -150,24 +222,25 @@ Public Class DescompresorController
     ''' 若内部已走到正常收尾(状态已清空),则不重复上报失败事件。
     ''' </summary>
     Friend Function DiscardCurrentElementOnError(ByVal motivo As String) As String
-        Dim codigo As String = Nothing
+        Dim codes As New Generic.List(Of String)
         SyncLock Mutex
-            codigo = _codigoElementoActual
-            ' 异常丢弃时一并清掉"等分卷"记录:留着它会让 AgregarElemento 对该路径
-            ' 永远返回 False,该压缩包再也无法入队。
+            codes.AddRange(_currentCodes)
+            If Not String.IsNullOrEmpty(_codigoElementoActual) AndAlso Not codes.Contains(_codigoElementoActual) Then codes.Add(_codigoElementoActual)
             If Not String.IsNullOrEmpty(_pathElementoActual) Then _esperandoVolumenes.Remove(_pathElementoActual)
             Me._pathElementoActual = Nothing
             Me._passwordElementoActual = Nothing
             Me._codigoElementoActual = Nothing
+            Me._currentDeferred = False
+            Me._currentCodes.Clear()
         End SyncLock
-        If Not String.IsNullOrEmpty(codigo) Then
+        For Each codigo As String In codes
             Try
                 RaiseEvent DescompresionFinalizada(codigo, False, motivo)
             Catch ex As Exception
                 Log.WriteError("Decompressor: failed to report failure for '" & codigo & "': " & Log.SafeException(ex))
             End Try
-        End If
-        Return codigo
+        Next
+        Return If(codes.Count > 0, codes(0), Nothing)
     End Function
 
     Private Sub ProcesarElementoInterno(ByRef Cancel As Boolean)
@@ -186,6 +259,10 @@ Public Class DescompresorController
                 ' 靠它补报 DescompresionFinalizada 失败;此处一并清掉会让该元素
                 ' 永远卡在"解压中"(Fichero 侧只靠这个事件离开该状态)。
                 SyncLock Mutex
+                    ' 等分卷记录必须在这里清:外层 Catch 调 DiscardCurrentElementOnError 时
+                    ' _pathElementoActual 已被下面置空,那里的清理够不着,记录会孤立在
+                    ' ProximoIntento=MaxValue,该压缩包本次会话再也无法入队。
+                    If Not String.IsNullOrEmpty(Me._pathElementoActual) Then _esperandoVolumenes.Remove(Me._pathElementoActual)
                     Me._pathElementoActual = Nothing
                     Me._passwordElementoActual = Nothing
                 End SyncLock
@@ -213,15 +290,21 @@ Public Class DescompresorController
 
         If Not ObtenerNombres(_pathElementoActual, Directorio, Fichero, FicheroSinExtension, False, 0) Then
             ' Elemento inválido
-            ' P1-2: raise the completion event with a failure. This event is the ONLY exit
-            ' from the Descomprimiendo state (Fichero.DescompresionFinalizada), so exiting
-            ' without it left the item stuck "extracting" forever — visible in the list and
-            ' only cleared by a restart (Paquete.MarcarFicherosComoParados).
-            RaiseEvent DescompresionFinalizada(_codigoElementoActual, False, _
-                "Invalid archive path (file not found): '" & _pathElementoActual & "'")
+            ' 路径是等待中的非首卷时,还没有可解压的归档:保持等待态并重新登记,
+            ' 不能把"首卷未到"误报成失败。
+            If _currentDeferred AndAlso IsPotentialMultiVolumePath(_pathElementoActual) Then
+                DeferCurrentElement("First volume or remaining volumes are not on disk yet.")
+                elementHandled = True
+                Exit Sub
+            End If
+            For Each codigo As String In _currentCodes
+                RaiseEvent DescompresionFinalizada(codigo, False, _
+                    "Invalid archive path (file not found): '" & _pathElementoActual & "'")
+            Next
 
             Dim codigoDescartado As String = _codigoElementoActual
             SyncLock Mutex
+                If Not String.IsNullOrEmpty(Me._pathElementoActual) Then _esperandoVolumenes.Remove(Me._pathElementoActual)
                 Me._pathElementoActual = Nothing
                 Me._passwordElementoActual = Nothing
                 ' R-P1-2 follow-up: clear the code as well, matching the normal exit below.
@@ -309,6 +392,8 @@ Public Class DescompresorController
 
         Dim codigoActual As String = _codigoElementoActual
         Dim rutaActual As String = _pathElementoActual
+        Dim codigosActuales As New Generic.HashSet(Of String)(_currentCodes, StringComparer.OrdinalIgnoreCase)
+        If Not String.IsNullOrEmpty(codigoActual) Then codigosActuales.Add(codigoActual)
         Dim diferido As Boolean = False
 
         If extractOk Then
@@ -317,8 +402,9 @@ Public Class DescompresorController
             If desc.CollisionsKeptOriginal > 0 Then
                 Log.WriteInfo("P2-4: " & desc.CollisionsKeptOriginal & " pre-existing file(s) in the extraction folder were kept under a ""(n)"" suffix instead of being overwritten.")
             End If
+            Dim completedSeal As VolumeLedgerEntry = SelloArchivo(rutaActual)
             SyncLock Mutex
-                _rutasCompletadas.Add(rutaActual)
+                _rutasCompletadas(rutaActual) = completedSeal
                 _esperandoVolumenes.Remove(rutaActual)
             End SyncLock
         Else
@@ -326,9 +412,11 @@ Public Class DescompresorController
             ' 多卷缺卷不是真失败:登记等待并定期重试,不报红错。每有新卷落盘就刷新窗口,
             ' 窗口耗尽(确实没有新卷再来)才按真失败上报。取消不走等待路径。
             If Not Cancel AndAlso Not desc.CancelRequested AndAlso Not IsCancelRequested() AndAlso
-               IsMultiVolumePath(rutaActual) AndAlso IsIncompleteVolumeError(extractErrorMessage) Then
+               IsPotentialMultiVolumePath(rutaActual) AndAlso IsIncompleteVolumeError(rutaActual, extractErrorMessage) Then
+                ' 目录枚举必须在锁外:Mutex 被 UI 的 300ms 刷新和下载线程的 AgregarElemento 争用,
+                ' 圈住 GetFiles 会让大下载目录把界面拖停。卷数只是启发式,读到略旧的值无害。
+                Dim present As Integer = CountPresentVolumes(rutaActual)
                 SyncLock Mutex
-                    Dim present As Integer = CountPresentVolumes(rutaActual)
                     Dim w As EsperandoVolumenes = Nothing
                     If _esperandoVolumenes.TryGetValue(rutaActual, w) Then
                         If present > w.VolumenesVistos Then
@@ -341,7 +429,7 @@ Public Class DescompresorController
                         End If
                     Else
                         _esperandoVolumenes(rutaActual) = New EsperandoVolumenes With {
-                            .Code = codigoActual,
+                            .Codes = New Generic.HashSet(Of String)(codigosActuales, StringComparer.OrdinalIgnoreCase),
                             .Password = _passwordElementoActual,
                             .CreateDirectory = _crearDirectorio,
                             .ProximoIntento = Now.AddSeconds(VolumeRetryIntervalSeconds),
@@ -349,17 +437,23 @@ Public Class DescompresorController
                             .Limite = Now.AddMinutes(VolumeWaitWindowMinutes)}
                         diferido = True
                     End If
+                    If diferido AndAlso _esperandoVolumenes.TryGetValue(rutaActual, w) Then w.Codes.UnionWith(codigosActuales)
                 End SyncLock
             End If
         End If
 
         If diferido Then
             Log.WriteInfo("Element '" & codigoActual & "' is a multi-volume archive still waiting for the remaining volumes; retry scheduled, no failure reported.")
+            For Each codigo As String In codigosActuales
+                RaiseEvent DescompresionDiferida(codigo)
+            Next
         Else
             SyncLock Mutex
                 _esperandoVolumenes.Remove(rutaActual)
             End SyncLock
-            RaiseEvent DescompresionFinalizada(codigoActual, extractOk, extractErrorMessage)
+            For Each codigo As String In codigosActuales
+                RaiseEvent DescompresionFinalizada(codigo, extractOk, extractErrorMessage)
+            Next
         End If
 
         ' Hemos terminado
@@ -367,6 +461,8 @@ Public Class DescompresorController
             Me._pathElementoActual = Nothing
             Me._passwordElementoActual = Nothing
             Me._codigoElementoActual = Nothing
+            Me._currentDeferred = False
+            Me._currentCodes.Clear()
         End SyncLock
 
         ' P1-2:正常收尾完成(已上报 + 已清状态)→ Finally 不再重复处理。
@@ -419,6 +515,7 @@ Public Class DescompresorController
 #Region "Región pública"
 
     Public Event DescompresionFinalizada(ByVal Code As String, ByVal Success As Boolean, ByVal ErrorMessage As String)
+    Public Event DescompresionDiferida(ByVal Code As String)
 
     ' Tamaño total de los ficheros dentro del elemento que se está descomprimiendo
     Public ReadOnly Property EleActual_TamanoTotal As System.Nullable(Of Long)
@@ -501,6 +598,11 @@ Public Class DescompresorController
                 Dim mRar As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(name, "^(?<base>.+)\.part\d+\.rar$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                 If mRar.Success Then
                     pattern = "^" & System.Text.RegularExpressions.Regex.Escape(mRar.Groups("base").Value) & "\.part\d+\.rar$"
+                Else
+                    Dim mOldRar As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(name, "^(?<base>.+)\.(?:rar|r\d+)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                    If mOldRar.Success Then
+                        pattern = "^" & System.Text.RegularExpressions.Regex.Escape(mOldRar.Groups("base").Value) & "\.(?:rar|r\d+)$"
+                    End If
                 End If
             End If
             If pattern Is Nothing OrElse String.IsNullOrEmpty(dir) Then Return 1
@@ -515,26 +617,98 @@ Public Class DescompresorController
         End Try
     End Function
 
+    ''' <summary>归档的"长度 + 修改时间 + 前 8KB 内容摘要"共同作为已解压台账版本。
+    ''' 单看 LastWriteTimeUtc 会因粗时间粒度或复制时保留 mtime 把重下的不同归档误判成旧文件。</summary>
+    Private Shared Function SelloArchivo(ByVal path As String) As VolumeLedgerEntry
+        Dim sello As New VolumeLedgerEntry With {.LastWriteUtc = DateTime.MinValue}
+        Try
+            Dim fi As New FileInfo(path)
+            If Not fi.Exists Then Return sello
+            sello.Length = fi.Length
+            sello.LastWriteUtc = fi.LastWriteTimeUtc
+            Using fs As New FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite Or FileShare.Delete)
+                Dim buffer(CInt(Math.Min(8192L, Math.Max(1L, fi.Length))) - 1) As Byte
+                Dim read As Integer = fs.Read(buffer, 0, buffer.Length)
+                Using sha As New System.Security.Cryptography.SHA256Managed()
+                    sha.TransformBlock(buffer, 0, read, Nothing, 0)
+                    sha.TransformFinalBlock(New Byte() {}, 0, 0)
+                    sello.ContentHash = BitConverter.ToUInt64(sha.Hash, 0)
+                End Using
+            End Using
+        Catch ex As Exception
+            Return New VolumeLedgerEntry With {.LastWriteUtc = DateTime.MinValue}
+        End Try
+        Return sello
+    End Function
+
     ''' <summary>是否为分卷归档。只有分卷才允许"等齐再解压"的延迟;
     ''' 单卷压缩包打不开就是真损坏/密码错,必须立刻报错,不能拖到窗口耗尽。</summary>
     Private Shared Function IsMultiVolumePath(ByVal path As String) As Boolean
         If String.IsNullOrEmpty(path) Then Return False
         Dim name As String = IO.Path.GetFileName(path)
         Return System.Text.RegularExpressions.Regex.IsMatch(name, "\.7z\.\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) OrElse
-               System.Text.RegularExpressions.Regex.IsMatch(name, "\.part\d+\.rar$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+               System.Text.RegularExpressions.Regex.IsMatch(name, "\.part\d+\.rar$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) OrElse
+               System.Text.RegularExpressions.Regex.IsMatch(name, "\.r\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
     End Function
 
-    ''' <summary>是否为"分卷没齐/打不开归档"这类可等待的错误,而非密码错、损坏等真失败。</summary>
-    Private Shared Function IsIncompleteVolumeError(ByVal message As String) As Boolean
+    ''' <summary>是否为"分卷没齐/打不开归档"这类可等待的错误,而非密码错、损坏等真失败。
+    ''' 7-Zip 对缺后续卷有明确的 "Unexpected end of archive" 系列提示;
+    ''' "Cannot open the file as archive" 同样可能是首卷损坏或密码错误,不能一概等 30 分钟。
+    ''' 只有明确证据表明归档可读但缺卷时才允许延迟。</summary>
+    Private Shared Function IsIncompleteVolumeError(ByVal path As String, ByVal message As String) As Boolean
         If String.IsNullOrEmpty(message) Then Return False
-        If message.IndexOf("Cannot open the file as", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
         Dim localized As String = Language.GetText("Archive is incomplete: one or more volumes are missing")
-        Return Not String.IsNullOrEmpty(localized) AndAlso message.IndexOf(localized, StringComparison.OrdinalIgnoreCase) >= 0
+        If Not String.IsNullOrEmpty(localized) AndAlso message.IndexOf(localized, StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+        If message.IndexOf("Unexpected end of archive", StringComparison.OrdinalIgnoreCase) < 0 Then Return False
+        ' A .7z.NNN or .partN.rar first volume that cannot be recognized may still be
+        ' a genuinely corrupt single-volume file. Require at least one sibling volume,
+        ' or the CLI's explicit missing-volume diagnostic, before entering the wait window.
+        Return CountPresentVolumes(path) > 1
     End Function
 
     ''' <summary>把到期的"等分卷"项放回待办队列。等待项不留在 _colaElementos 里,
     ''' 否则 Ocupado() 恒为 True,关闭时会误报"正在解压,有损坏风险"。
     ''' 记录本身保留(卷数/窗口要跨多次重试累计),用 ProximoIntento=MaxValue 表示已入队。</summary>
+    Private Sub DeferCurrentElement(ByVal reason As String)
+        Dim rutaActual As String = _pathElementoActual
+        Dim codigosActuales As New Generic.HashSet(Of String)(_currentCodes, StringComparer.OrdinalIgnoreCase)
+        If Not String.IsNullOrEmpty(_codigoElementoActual) Then codigosActuales.Add(_codigoElementoActual)
+        ' Directory enumeration must stay outside the shared controller lock: the UI
+        ' refresh and download-completion handlers contend for Mutex every few hundred ms.
+        Dim present As Integer = CountPresentVolumes(rutaActual)
+        Dim password As String = _passwordElementoActual
+        Dim createDirectory As Boolean = _crearDirectorio
+        Dim w As EsperandoVolumenes = Nothing
+        SyncLock Mutex
+            If Not _esperandoVolumenes.TryGetValue(rutaActual, w) Then
+                w = New EsperandoVolumenes With {
+                    .Codes = New Generic.HashSet(Of String)(codigosActuales, StringComparer.OrdinalIgnoreCase),
+                    .Password = password,
+                    .CreateDirectory = createDirectory,
+                    .VolumenesVistos = present,
+                    .Limite = Now.AddMinutes(VolumeWaitWindowMinutes)}
+                _esperandoVolumenes(rutaActual) = w
+            Else
+                w.Codes.UnionWith(codigosActuales)
+                If present > w.VolumenesVistos Then
+                    w.VolumenesVistos = present
+                    w.Limite = Now.AddMinutes(VolumeWaitWindowMinutes)
+                End If
+                w.Limite = If(w.Limite > Now, w.Limite, Now.AddMinutes(VolumeWaitWindowMinutes))
+            End If
+            w.ProximoIntento = Now.AddSeconds(VolumeRetryIntervalSeconds)
+            Me._pathElementoActual = Nothing
+            Me._passwordElementoActual = Nothing
+            Me._codigoElementoActual = Nothing
+            Me._currentDeferred = False
+            Me._currentCodes.Clear()
+        End SyncLock
+        For Each codigo As String In codigosActuales
+            RaiseEvent DescompresionDiferida(codigo)
+        Next
+        Log.WriteInfo("Deferred '" & rutaActual & "': " & reason)
+    End Sub
+
     Private Sub PromoteWaitingVolumes()
         SyncLock Mutex
             If _esperandoVolumenes.Count = 0 Then Return
@@ -545,97 +719,50 @@ Public Class DescompresorController
             For Each path As String In due
                 Dim w As EsperandoVolumenes = _esperandoVolumenes(path)
                 w.ProximoIntento = Date.MaxValue
-                _colaElementos(w.Code) = New QueueItem With {.Path = path, .Password = w.Password, .CreateDirectory = w.CreateDirectory}
+                For Each code As String In w.Codes
+                    _colaElementos(code) = New QueueItem With {.Path = path, .Password = w.Password, .CreateDirectory = w.CreateDirectory, .Deferred = True}
+                Next
             Next
         End SyncLock
     End Sub
 
     Public Function AgregarElemento(ByVal Code As String, ByVal Path As String, ByVal CrearDirectorio As Boolean, Password As String) As Boolean
-        ' Comprobamos que el path no sea nulo, que el fichero exista, y tenga una extensión soportada
-        If String.IsNullOrEmpty(Path) Then Return False
-        If Not File.Exists(Path) Then Return False
-        ' Solo admite 7z, rar, tar, zip
-        Dim FicheroSoportado As Boolean = False
-        For Each extension As String In _ExtensionesSoportadas
-            If Path.ToLower.EndsWith("." & extension) Then
-                FicheroSoportado = True
+        If String.IsNullOrEmpty(Code) OrElse String.IsNullOrEmpty(Path) Then Return False
+        Dim originalPath As String = IO.Path.GetFullPath(Path)
+        If Not File.Exists(originalPath) Then Return False
+        Dim isVolume As Boolean = IsPotentialMultiVolumePath(originalPath)
+        Dim normalizedPath As String = NormalizeQueuePath(originalPath)
+        Dim extension As String = IO.Path.GetExtension(normalizedPath).ToLowerInvariant()
+        If Not _ExtensionesSoportadas.Contains(extension.TrimStart("."c)) AndAlso
+           Not Regex.IsMatch(normalizedPath, "\.7z\.\d+$", RegexOptions.IgnoreCase) AndAlso
+           Not Regex.IsMatch(normalizedPath, "\.r\d+$", RegexOptions.IgnoreCase) Then Return False
+
+        ' SelloArchivo performs file I/O. Keep it outside the short global queue lock;
+        ' every persistent decision below compares and stores the value under Mutex.
+        Dim pendingSeal As VolumeLedgerEntry = New VolumeLedgerEntry With {.LastWriteUtc = DateTime.MinValue}
+        If Not isVolume Then pendingSeal = SelloArchivo(normalizedPath)
+
+        SyncLock Mutex
+            If String.Equals(_pathElementoActual, normalizedPath, StringComparison.OrdinalIgnoreCase) Then Return True
+            Dim selloCompletado As VolumeLedgerEntry
+            If _rutasCompletadas.TryGetValue(normalizedPath, selloCompletado) AndAlso
+               selloCompletado.LastWriteUtc <> DateTime.MinValue AndAlso
+               selloCompletado.Length = pendingSeal.Length AndAlso
+               selloCompletado.LastWriteUtc = pendingSeal.LastWriteUtc AndAlso
+               selloCompletado.ContentHash = pendingSeal.ContentHash AndAlso Not isVolume Then Return True
+            Dim w As EsperandoVolumenes = Nothing
+            If _esperandoVolumenes.TryGetValue(normalizedPath, w) Then
+                w.Codes.Add(Code)
+                If isVolume Then w.Limite = Now.AddMinutes(VolumeWaitWindowMinutes)
+                _rutasCompletadas.Remove(normalizedPath)
+                Return True
             End If
-        Next
-        ' Multipart 7z volumes (.7z.001, .7z.002, ...) are also supported via the
-        ' 7-Zip CLI — queue the first volume.
-        If Not FicheroSoportado AndAlso System.Text.RegularExpressions.Regex.IsMatch(Path.ToLower, "\.7z\.\d+$") Then
-            FicheroSoportado = True
-        End If
-        If Not FicheroSoportado Then Return False
-
-
-        Dim Fichero As String = ""
-        Dim Directorio As String = ""
-        Dim FicheroSinExtension As String = ""
-        Dim IsPartRAR As Boolean = False
-        Dim RARPartLength As Integer = 0
-
-        If ObtenerNombres(Path, Directorio, Fichero, FicheroSinExtension, IsPartRAR, RARPartLength) Then
-
-            If IsPartRAR Then
-                ' Si es un RAR multivolumen intentamos poner en la cola tan solo el primer rar
-                Dim Path2 As String = IO.Path.Combine(Directorio, FicheroSinExtension) & ".part" & "1".PadLeft(RARPartLength, "0"c) & ".rar"
-                ' 首卷还没落盘就不入队:拿非首卷去解压必然失败,给用户一个假红错。
-                ' 每个分卷下完都会再调用本方法,首卷到齐时自然入队。
-                If Not File.Exists(Path2) Then
-                    Log.WriteInfo("First RAR volume '" & Path2 & "' is not on disk yet; deferring element '" & Code & "'.")
-                    Return False
-                End If
-                Path = Path2
-            End If
-
-            ' Multipart 7z: queue the first volume, like the RAR case above.
-            Dim m7z As System.Text.RegularExpressions.Match = System.Text.RegularExpressions.Regex.Match(Path, "\.7z\.(\d+)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            If m7z.Success Then
-                Dim primera7z As String = Path.Substring(0, m7z.Index) & ".7z.001"
-                If Not File.Exists(primera7z) Then
-                    Log.WriteInfo("First 7z volume '" & primera7z & "' is not on disk yet; deferring element '" & Code & "'.")
-                    Return False
-                End If
-                Path = primera7z
-            End If
-
-            ' 去重必须覆盖三态:待办队列 / 正在解压 / 已解压完成(以及正在等分卷)。
-            ' 只扫待办队列时,N 个分卷会各解压一次,产出 "name (2).ext" 等重复成品。
-            SyncLock Mutex
-                If String.Equals(_pathElementoActual, Path, StringComparison.OrdinalIgnoreCase) Then
-                    Log.WriteInfo("File '" & Path & "' for element '" & Code & "' is already being extracted.")
-                    Return False
-                End If
-                If _rutasCompletadas.Contains(Path) Then
-                    Log.WriteInfo("File '" & Path & "' for element '" & Code & "' was already extracted.")
-                    Return False
-                End If
-                If _esperandoVolumenes.ContainsKey(Path) Then
-                    Log.WriteInfo("File '" & Path & "' for element '" & Code & "' is already waiting for the remaining volumes.")
-                    Return False
-                End If
-                For Each key As String In _colaElementos.Keys
-                    If String.Equals(_colaElementos(key).Path, Path, StringComparison.OrdinalIgnoreCase) Then
-                        Log.WriteInfo("File '" & Path & "' for element '" & Code & "' is already in queue.")
-                        Return False
-                    End If
-                Next
-            End SyncLock
-
-            Log.WriteInfo("Adding to decompression queue element '" & Code & "' (file '" & Path & "')")
-
-            SyncLock Mutex
-                ' 同一 Code 重复入队时更新既有条目(索引器赋值"存在即更新"):
-                ' 此前重复项被静默跳过却仍返回 True,上游状态会卡在"正在解压"且进度条不动
-                _colaElementos(Code) = New QueueItem With {.Path = Path, .CreateDirectory = CrearDirectorio, .Password = Password}
-            End SyncLock
-
+            _rutasCompletadas.Remove(normalizedPath)
+            _colaElementos(Code) = New QueueItem With {
+                .Path = normalizedPath, .CreateDirectory = CrearDirectorio, .Password = Password,
+                .Deferred = isVolume AndAlso Not String.Equals(normalizedPath, originalPath, StringComparison.OrdinalIgnoreCase)}
             Return True
-        Else
-            Return False
-        End If
-
+        End SyncLock
     End Function
 
     ''' <summary>
@@ -659,6 +786,7 @@ Public Class DescompresorController
             Dim worker As BackgroundWorker = CType(sender, BackgroundWorker)
 
             While Not worker.CancellationPending
+                GetController.ClearCancelIfIdle()
 
                 ' P1-2:逐次迭代独立兜底。此前整个 While 被一个 Try 包住,任何异常
                 ' (哪怕只是 PonerElementoAProcesar 的一次瞬时失败)都会跳出循环 →
@@ -729,6 +857,7 @@ Public Class DescompresorController
         Private PathFichero As String
         Private PathExtraccion As String
         Public Exception As Exception
+        Private ReadOnly PreservedCopies As New Generic.List(Of KeyValuePair(Of String, String))
         Public CancelRequested As Boolean
 
         ' P2-4: collision accounting for the extraction folder. Read by the controller
@@ -883,14 +1012,19 @@ Public Class DescompresorController
 
         Public Sub Extract()
             Try
-
-
+                ' Managed ZIP/RAR/TAR extraction also uses ResolveEntryDestination.
+                ' If a later entry fails, restore files that this run renamed aside
+                ' instead of leaving the user's originals under "(n)" suffixes.
+                PreservedCopies.Clear()
+                Dim committed As Boolean = False
+                Try
                 ' 7z archives (single .7z or multipart .7z.001/.002/...) are handled by
                 ' the external 7-Zip CLI — SharpCompress does not support the 7z container
                 ' format at all, which made every .7z extraction fail. Prefer a system
                 ' 7-Zip install; fall back to the embedded 7zr.exe (public domain).
                 If Is7zContainer(PathFichero) Then
                     Extract7z()
+                    committed = True
                     Return
                 End If
 
@@ -1130,6 +1264,13 @@ Public Class DescompresorController
                     End If
 
                 End Using
+                committed = True
+                PreservedCopies.Clear()
+            Catch ex As Exception
+                Exception = ex
+            Finally
+                If Not committed Then RestorePreservedCopies(PathExtraccion)
+            End Try
             Catch ex As Exception
                 Exception = ex
             End Try
@@ -1223,50 +1364,58 @@ Public Class DescompresorController
             EnsureExtractWithinQuota(totalUncompressed, entryKeys.Count)
             PathGuard.ValidateArchiveEntries(PathExtraccion, entryKeys)
 
-            ' Preserve every pre-existing file. Equal lengths do not prove equal
-            ' contents or that a file belongs to a previous extraction.
-            ' 改名必须可回滚:密码错时 Pass1(l) 仍可能成功(头未加密),若先把用户原有文件
-            ' 全部改名、再解压失败,用户就只剩一堆 "name (2)" 副本且什么都没解出来。
-            Dim renames As New Generic.List(Of KeyValuePair(Of String, String))
-            For Each kvp In entrySizes
-                Dim dest7z As String = PathGuard.GetSafeArchiveEntryPath(PathExtraccion, kvp.Key)
-                If System.IO.File.Exists(dest7z) Then
-                    Dim kept As String = GetNonCollidingPath(dest7z)
-                    Dim resolved As String = ResolveEntryDestination(dest7z)
-                    If Not String.Equals(resolved, dest7z, StringComparison.OrdinalIgnoreCase) Then
-                        Throw New IOException("Could not preserve the existing file before extraction: " & dest7z)
-                    End If
-                    renames.Add(New KeyValuePair(Of String, String)(dest7z, kept))
+            ' 7z CLI 必须先写进空白临时目录,再以托管方式提交:外部 CLI 不认识
+            ' PathGuard 截断后的目标名,也无法参与可回滚的预改名事务。
+            ' CLI 输出按"规范化原名 → 安全相对路径"的映射搬回;长名截断带稳定哈希,
+            ' 既避免两个长条目撞同一文件,也保证同名旧文件用托管后缀规则保留。
+            Dim staging As String = IO.Path.Combine(PathExtraccion, ".megadownloader-extract-" & Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory(staging)
+            Dim targetKeys As New Generic.List(Of String)
+            Dim relativeKeys As New Generic.Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+            For Each key As String In entryKeys
+                Dim sourceRelative As String = key.Replace("/"c, Path.DirectorySeparatorChar).Replace("\"c, Path.DirectorySeparatorChar)
+                Dim targetRelative As String = PathGuard.GetRelativePath(PathExtraccion, PathGuard.GetSafeArchiveEntryPath(PathExtraccion, key))
+                If relativeKeys.ContainsKey(sourceRelative) OrElse targetKeys.Contains(targetRelative, StringComparer.OrdinalIgnoreCase) Then
+                    Throw New IOException("Archive contains ambiguous entry names: " & key)
                 End If
+                relativeKeys(sourceRelative) = targetRelative
+                targetKeys.Add(targetRelative)
             Next
-
-            ' ⑩:把 Pass1 已算出的解压后总量发布到控制器,解压窗不再全程显示 " -"。
-            ' CLI 无逐字节回调,已解字节只能显示 0/总量(托管分支才有细粒度);结束后按惯例清回 Nothing。
             Dim c As DescompresorController = DescompresorController.GetController
-            SyncLock Mutex
-                c._TamanoTotal = totalUncompressed
-                c._FicActTamanoTotal = 0
-                c._TamanoTotalExtraido = 0
-                c._FicActExtraido = 0
-                c._FicActNombre = PathFichero
-            End SyncLock
-
-            Dim extractSucceeded As Boolean = False
+            Dim committed As Boolean = False
             Try
-                ' ---- Pass 2: extract ----
-                ' -p<password>: no space after -p; no -p at all means "no password",
-                ' and an empty -p would make 7-Zip prompt (impossible headless).
+                SyncLock Mutex
+                    c._TamanoTotal = totalUncompressed
+                    c._FicActTamanoTotal = 0
+                    c._TamanoTotalExtraido = 0
+                    c._FicActExtraido = 0
+                    c._FicActNombre = PathFichero
+                End SyncLock
                 Dim args As New System.Text.StringBuilder()
-                args.Append("x -y -aou -bd -sccUTF-8 -o""")
-                args.Append(PathExtraccion)
-                args.Append("""")
-                args.Append(passwordArg)
-                args.Append(" -- """).Append(PathFichero).Append(""""c)
-
+                args.Append("x -y -bd -sccUTF-8 -o""").Append(staging).Append("""")
+                args.Append(passwordArg).Append(" -- """).Append(PathFichero).Append(""""c)
                 RunSevenZip(cli, args.ToString(), checkCancel:=True)
-                extractSucceeded = True
+                For Each kvp As KeyValuePair(Of String, String) In relativeKeys
+                    Dim source As String = PathGuard.GetSafePathUnderRoot(staging, kvp.Key, allowRoot:=False)
+                    Dim dest As String = PathGuard.GetSafePathUnderRoot(PathExtraccion, kvp.Value, allowRoot:=False)
+                    If Not File.Exists(source) AndAlso Not Directory.Exists(source) Then Throw New IOException("7-Zip did not produce archive entry: " & kvp.Key)
+                    If Directory.Exists(source) Then
+                        Directory.CreateDirectory(dest)
+                    Else
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest))
+                        Dim preserved As String = ResolveEntryDestination(dest)
+                        If Not String.Equals(preserved, dest, StringComparison.OrdinalIgnoreCase) Then Throw New IOException("Could not preserve the existing file before extraction: " & dest)
+                        File.Copy(source, dest, False)
+                    End If
+                Next
+                committed = True
             Finally
-                If Not extractSucceeded Then UndoPreservingRenames(renames)
+                If Not committed Then RestorePreservedCopies(PathExtraccion)
+                Try
+                    If Directory.Exists(staging) Then Directory.Delete(staging, True)
+                Catch ex As Exception
+                    Log.WriteError("Extraction: could not remove staging directory '" & staging & "': " & Log.SafeException(ex))
+                End Try
                 SyncLock Mutex
                     c._TamanoTotal = Nothing
                     c._FicActTamanoTotal = Nothing
@@ -1277,19 +1426,18 @@ Public Class DescompresorController
             End Try
         End Sub
 
-        ''' <summary>解压失败/取消时还原"为保留原文件而做的改名"。原名已被本次解压的
-        ''' 新文件占用时不还原 —— 用户的原文件仍安全地留在副本名下,不能覆盖新成品。</summary>
-        Private Shared Sub UndoPreservingRenames(ByVal renames As Generic.List(Of KeyValuePair(Of String, String)))
-            For Each pair As KeyValuePair(Of String, String) In renames
-                Try
-                    If File.Exists(pair.Value) AndAlso Not File.Exists(pair.Key) Then
+        Private Sub RestorePreservedCopies(ByVal root As String)
+            For i As Integer = PreservedCopies.Count - 1 To 0 Step -1
+                Dim pair As KeyValuePair(Of String, String) = PreservedCopies(i)
+                If File.Exists(pair.Value) AndAlso Not File.Exists(pair.Key) Then
+                    Try
                         File.Move(pair.Value, pair.Key)
-                        Log.WriteInfo("Extraction: restored '" & pair.Value & "' back to '" & pair.Key & "' after the extraction failed.")
-                    End If
-                Catch ex As Exception
-                    Log.WriteError("Extraction: could not restore '" & pair.Value & "' to '" & pair.Key & "': " & Log.SafeException(ex))
-                End Try
+                    Catch ex As Exception
+                        Log.WriteError("Extraction: could not restore '" & pair.Value & "': " & Log.SafeException(ex))
+                    End Try
+                End If
             Next
+            PreservedCopies.Clear()
         End Sub
 
         ''' <summary>
@@ -1462,6 +1610,7 @@ Public Class DescompresorController
             Dim kept As String = GetNonCollidingPath(dest)
             Try
                 System.IO.File.Move(dest, kept)
+                PreservedCopies.Add(New KeyValuePair(Of String, String)(dest, kept))
                 CollisionsKeptOriginal += 1
                 Log.WriteWarning("Extraction: preserving existing file '" & dest & "' as '" & kept & "'.")
                 ' The rename freed the original name — that is where the entry goes.

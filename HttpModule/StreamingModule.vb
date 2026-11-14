@@ -254,13 +254,17 @@ Public Class StreamingModule
 
         Catch ex As Exception
             Log.WriteError("Error in StreamingModule: " & ex.ToString)
-            ' 不能把异常抛回 HttpServer:未订阅 ExceptionThrown 时它只写一条 Fatal 日志就
-            ' return,不发送任何响应,浏览器/播放器会一直转圈。这里兜底写回 5xx。
             ' 头已发出(流媒体中途失败)时无法再改状态码,只能断开,由客户端按 EOF 处理。
+            ' 未发头时必须重建一个"纯错误响应":RangeAdjust 已通过 AddHeader 排入
+            ' Content-Length/Content-Range/Accept-Ranges,ContentLength 属性是另一份状态,
+            ' 仅把它置 0 不会删除这些头。
             Try
                 If Not response.HeadersSent Then
+                    ClearMediaHeaders(response)
                     response.Status = HttpStatusCode.BadGateway
-                    ComprimirRespuesta(request, response, "Streaming failed: " & ex.Message)
+                    response.ContentLength = 0
+                    response.ContentType = "text/plain; charset=utf-8"
+                    WriteErrorResponse(request, response, "Streaming failed: " & ex.Message)
                 End If
             Catch sendEx As Exception
                 Log.WriteError("StreamingModule: could not send the error response: " & sendEx.ToString)
@@ -458,6 +462,44 @@ Public Class StreamingModule
             Return ReflectBroken()
         End Try
     End Function
+
+    ''' <summary>删除 RangeAdjust 预排的媒体响应头。HttpServer 的 ContentLength 属性与
+    ''' AddHeader("Content-Length",...) 是两份独立状态;错误响应必须同时清掉两者。</summary>
+    Private Shared Sub ClearMediaHeaders(ByVal response As HttpServer.IHttpResponse)
+        Dim headers As System.Collections.Specialized.NameValueCollection =
+            TryCast(response.GetType().GetField("_headers", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).GetValue(response),
+                    System.Collections.Specialized.NameValueCollection)
+        If headers IsNot Nothing Then
+            For Each name As String In New String() {"Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Content-Encoding", "Content-Type"}
+                headers.Remove(name)
+            Next
+        Else
+            For Each name As String In New String() {"Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Content-Encoding", "Content-Type"}
+                response.AddHeader(name, "")
+            Next
+        End If
+        response.Chunked = False
+    End Sub
+
+    Private Shared Function ErrorBodyBytes(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String) As Byte()
+        Dim bytes As Byte() = New System.Text.UTF8Encoding(False).GetBytes(text)
+        Dim acceptEncoding As String = request.Headers("Accept-Encoding")
+        If String.IsNullOrEmpty(acceptEncoding) OrElse Not acceptEncoding.ToLowerInvariant().Contains("gzip") Then Return bytes
+        Using compressed As New MemoryStream()
+            Using gzip As New GZipStream(compressed, CompressionMode.Compress, True)
+                gzip.Write(bytes, 0, bytes.Length)
+            End Using
+            Dim result As Byte() = compressed.ToArray()
+            response.AddHeader("Content-Encoding", "gzip")
+            Return result
+        End Using
+    End Function
+
+    Private Shared Sub WriteErrorResponse(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String)
+        Dim bytes As Byte() = ErrorBodyBytes(request, response, text)
+        response.ContentLength = bytes.Length
+        response.Body.Write(bytes, 0, bytes.Length)
+    End Sub
 
     Private Sub ComprimirRespuesta(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef ResponseBody As String)
 

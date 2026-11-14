@@ -127,6 +127,7 @@ If you exit now, the extracted files can be corrupted and you will have to extra
   <Text key="See extraction queue"><![CDATA[See extraction queue]]></Text>
   <Text key="Manage Streaming Library"><![CDATA[Manage Streaming Library]]></Text>
   <Text key="Extracting"><![CDATA[Extracting]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Waiting for volumes]]></Text>
   <Text key="Downloading"><![CDATA[Downloading]]></Text>
   <Text key="Completed"><![CDATA[Completed]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hashing MD5]]></Text>

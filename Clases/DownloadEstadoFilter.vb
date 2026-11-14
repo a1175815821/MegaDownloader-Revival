@@ -37,7 +37,7 @@ Friend Class DownloadEstadoFilter
     Public Shared Function ScopeOf(st As Estado) As NavScope
         Select Case st
             Case Estado.Descargando, Estado.Verificando, Estado.Descomprimiendo,
-                 Estado.CreandoLocal, Estado.ComprobandoMD5
+                 Estado.EsperandoVolumenes, Estado.CreandoLocal, Estado.ComprobandoMD5
                 Return NavScope.Downloading
             Case Estado.EnCola, Estado.Pausado
                 Return NavScope.Waiting

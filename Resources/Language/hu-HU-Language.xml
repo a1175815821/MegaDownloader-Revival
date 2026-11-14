@@ -84,6 +84,7 @@ Ha kilépsz, félbemarad a művelet és később neked kell manuálisan kibontan
   <Text key="Error capital leters"><![CDATA[HIBA]]></Text>
   <Text key="Error"><![CDATA[Hiba]]></Text>
   <Text key="Extracting"><![CDATA[Kicsomagolva]]></Text>
+  <Text key="Waiting for volumes"><![CDATA[Várakozás az archív kötetekre]]></Text>
   <Text key="Downloading"><![CDATA[Letöltve]]></Text>
   <Text key="Completed"><![CDATA[Kész]]></Text>
   <Text key="Hashing MD5"><![CDATA[Hashing MD5]]></Text>
