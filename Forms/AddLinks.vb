@@ -160,10 +160,6 @@ Public Class AddLinks
         Me.Activate()
     End Sub
 
-    Private Sub ToggleOpciones_Click(sender As System.Object, e As System.EventArgs)
-        OpcionesPaquete.Visible = Not OpcionesPaquete.Visible
-    End Sub
-
 	''' <summary>P0-6:输入变化只重启 debounce 计时,真正的正则解析在 Tick 里跑一次。</summary>
 	Private Sub txtLinks_TextChanged(sender As Object, e As System.EventArgs) Handles txtLinks.TextChanged
 		' RC:清空与 HiddenLinks 同步,不等 300ms debounce,否则窗口期内点添加仍用残留建包。

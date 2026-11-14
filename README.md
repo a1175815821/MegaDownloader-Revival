@@ -22,7 +22,7 @@
 2. Copy a MEGA link — the app detects it automatically.
 3. Confirm the link → choose files → start the download.
 
-> v2.6.2: large queues load in the background, and settings and queues recover automatically after temporary file locks.
+> v2.6.3: an actionable failure banner, update checks on your terms, and a fully rewritten natural Simplified Chinese UI — plus another round of download and extraction reliability fixes.
 
 <table>
 <tr>
@@ -35,14 +35,14 @@
 
 ---
 
-## ✨ What's new in 2.6.2
+## ✨ What's new in 2.6.3
 
-- **The window stays responsive while restoring your queue** — queue loading and file-lock retries run in the background; saving and scheduling wait until recovery is ready. In an isolated 679-task benchmark, median queue recovery and UI preparation fell from 3.69 s to 1.33 s; this is not full process cold-start time. [Measurement details](docs/PERFORMANCE_ANALYSIS_2026-11-05.zh-CN.md).
-- **Locked files recover automatically** — temporary access conflicts no longer masquerade as first-run setup or disk errors. Settings, queues and the streaming library keep write protection until recovery completes, and edits made during recovery are merged.
-- **Safer deletion and reliable retries** — deleting a task protects unrelated existing files; expired download URLs refresh without losing valid resume data. Resuming preallocated files checks only the extra disk space needed.
-- **Faster verification and less repeated work** — batched MetaMAC verification, reusable encrypted queue fields, shorter save locks and merged list refreshes reduce overhead. Settings also avoids repeated layout work.
-- **Correct speed limits and cancellation** — decimal limits round-trip across regional formats; per-task resume restores throttling, and download / 7z cancellation waits for active work to finish before restarting.
-- **Russian joins the built-in languages** — 11 UI languages; documentation is maintained in English, Simplified Chinese and Russian. Updated native screenshots and 924 assertions in each Debug / Release regression run accompany this release. [Full changelog](docs/CHANGELOG.md).
+- **A failure banner you can act on** — failed tasks raise a persistent banner with a count; dismiss it and it stays hidden until the count changes. "Retry now" retries only recoverable failures (quota failures keep their resume data); permanently dead links are skipped so they don't burn quota.
+- **Update checks on your terms** — choose "Manual check only" plus an interval in hours; the background checker no longer pops up on a fixed timer. Help → Check for updates still works on demand.
+- **Natural Simplified Chinese** — all 511 zh-CN strings rewritten as natural Simplified Chinese, and existing uncustomized language copies sync automatically on upgrade. "Manual check only" and the hour unit are now translated, and browse buttons no longer stretch over their input boxes.
+- **More reliable downloads and extraction** — split keys mangled by chat apps are recognised again; multi-volume archives wait and extract as a set; 7z extraction commits transactionally and rolls back on failure; over-long archive names get unique hash suffixes; encrypted multi-volume RAR errors are localized.
+- **Readable themes and safer exits** — light/dark accent, surface and quota-banner text meet WCAG 4.5:1 contrast; closing the window while extracting warns about corruption danger; proxy host:port parsing and startup queue-load recovery are fixed.
+- **Cleaner code, 1102 assertions** — 18 unreferenced dead members and a stray build artifact removed, and the docs reorganized. Debug / Release each pass 1102 regression assertions. [Full changelog](docs/CHANGELOG.md).
 
 ## Workbench features introduced in 2.6
 
@@ -208,10 +208,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.2 settings" src="docs/screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.3 settings" src="docs/screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>Settings in 2.6.2 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+<p align="center"><sub>Settings in 2.6.3 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
 
 ---
 
@@ -221,7 +221,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.2** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.3** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -327,7 +327,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.2](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.2) | Highlights and downloads for v2.6.2 |
+| [Release notes 2.6.3](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.3) | Highlights and downloads for v2.6.3 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

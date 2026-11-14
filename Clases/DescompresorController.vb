@@ -246,24 +246,6 @@ Public Class DescompresorController
         End Get
     End Property
 
-    ' Codigo del elemento que se está descomprimiendo
-    Public ReadOnly Property EleActual_Codigo As String
-        Get
-            SyncLock Mutex
-                Return If(_current Is Nothing, Nothing, _current.Codes.FirstOrDefault())
-            End SyncLock
-        End Get
-    End Property
-
-    ' Tamaño total del fichero que se está descomprimiendo
-    Public ReadOnly Property EleActual_FicActTamano As System.Nullable(Of Long)
-        Get
-            SyncLock Mutex
-                Return _FicActTamanoTotal
-            End SyncLock
-        End Get
-    End Property
-
     ' Bytes extraidos del fichero que se está descomprimiendo
     Public ReadOnly Property EleActual_FicActExtraido As System.Nullable(Of Long)
         Get

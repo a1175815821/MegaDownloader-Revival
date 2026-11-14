@@ -46,15 +46,6 @@ Public Class InstanceProxy
     End Property
     Private Shared m_CommandLineArgs As String()
 
-    ''' <summary>
-    ''' Sets the command line args.
-    ''' </summary>
-    ''' <param name="isFirstInstance__1">if set to <c>true</c> [is first instance].</param>
-    ''' <param name="commandLineArgs__2">The command line args.</param>
-    Public Sub SetCommandLineArgs(isFirstInstance__1 As Boolean, commandLineArgs__2 As String())
-        IsFirstInstance = isFirstInstance__1
-        CommandLineArgs = commandLineArgs__2
-    End Sub
 End Class
 
 ''' <summary>

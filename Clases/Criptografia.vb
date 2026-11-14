@@ -682,16 +682,6 @@ Public Class Criptografia
             Me.counterOut = New Byte(blockSize - 1) {}
         End Sub
 
-        '*
-        '		* return the underlying block cipher that we are wrapping.
-        '		*
-        '		* @return the underlying block cipher that we are wrapping.
-        '		
-
-        Public Function GetUnderlyingCipher() As IBlockCipher
-            Return cipher
-        End Function
-
         'ignored by this CTR mode
         Public Sub Init(forEncryption As Boolean, parameters As ICipherParameters) Implements Org.BouncyCastle.Crypto.IBlockCipher.Init
             If TypeOf parameters Is ParametersWithIV Then

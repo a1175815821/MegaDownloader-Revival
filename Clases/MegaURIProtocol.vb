@@ -66,11 +66,4 @@ Public Class MegaURIProtocol
         End Try
     End Function
 
-    Public Function IsAdmin() As Boolean
-        Dim id As WindowsIdentity = WindowsIdentity.GetCurrent()
-        Dim p As WindowsPrincipal = New WindowsPrincipal(id)
-        Return p.IsInRole(WindowsBuiltInRole.Administrator)
-    End Function
-
-
 End Class

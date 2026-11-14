@@ -124,15 +124,6 @@ Public Class ClipboardViewer
     ''' </summary>
     Public ClearOnReceive As Boolean
 
-    ''' <summary>
-    ''' Return true if ClipboardViewer is installed
-    ''' </summary>
-    Public ReadOnly Property IsInstalled() As Boolean
-        Get
-            Return Not _installedHandle.Equals(IntPtr.Zero)
-        End Get
-    End Property
-
 #Region "IDisposable Members"
 
     ''' <summary>

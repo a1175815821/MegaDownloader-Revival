@@ -218,10 +218,6 @@ Public Class Paquete
     End Function
 
 
-    Public Shared Function CargarDesdeFichero() As Generic.List(Of Paquete)
-        Return CargarDesdeRuta(ObtenerRutaFicheroDescargas())
-    End Function
-
     Friend Shared Function CargarStartupQueue(cancellationToken As CancellationToken) As Generic.List(Of Paquete)
         Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
     End Function

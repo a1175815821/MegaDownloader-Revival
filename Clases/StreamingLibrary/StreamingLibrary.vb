@@ -61,14 +61,6 @@ Public Class StreamingLibrary
         End SyncLock
     End Function
 
-    Public Function GetIDandIncrement() As Integer
-        SyncLock _sync
-            Dim n As Integer = _NextID
-            _NextID += 1
-            Return n
-        End SyncLock
-    End Function
-
     Public Sub LoadXML()
         SyncLock _loadSync
             Dim filePath As String = If(_sourcePath, ObtenerRutaFicheroConfiguracion())

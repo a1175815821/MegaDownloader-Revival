@@ -855,12 +855,6 @@ RecurseChildren:
         End Get
     End Property
 
-    Public Shared ReadOnly Property CurrentMode As ConfiguracionUI.ThemeModeType
-        Get
-            Return _currentMode
-        End Get
-    End Property
-
 End Class
 
 ''' <summary>

@@ -151,10 +151,6 @@ Public Class Conexion
         Return webrq
     End Function
 
-    Public Shared Function CertificationAccept(ByVal sender As Object, ByVal certification As System.Security.Cryptography.X509Certificates.X509Certificate, ByVal chain As System.Security.Cryptography.X509Certificates.X509Chain, ByVal sslPolicyErrors As System.Net.Security.SslPolicyErrors) As Boolean
-        Return Security.SslPolicyErrors.None = sslPolicyErrors
-    End Function
-
     Public Shared Function Get_MEGA_API_Url(ByVal Session As String) As String
 
         Dim Url As String
@@ -376,11 +372,6 @@ Public Class Conexion
         Return RepoRawUrl
     End Function
 
-
-    Private Shared Function TratarUsuario(ByVal Usuario As String) As String
-        Dim str As String = System.Uri.EscapeUriString(Usuario & "")
-        Return str
-    End Function
 
     Friend Const patternGetFileName As String = "MEGA.*?""n""\s*:\s*""(?<FileName>.*?)"""
 

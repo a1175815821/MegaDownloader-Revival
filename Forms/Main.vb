@@ -1535,8 +1535,6 @@ Public Class Main
     ' 注意:做成字段而非常量——过滤器文本超宽(大计数/长译文)时 FitNavListBoxNoScroll
     ' 会按实测加宽到 220,免横滚;Const 写死就加不动了。
     Private NavRailWidth As Integer = 168
-    ' 过滤器文本超宽时面板最多加到该宽度,再宽就吃掉中部列表,改出横滚兜底。
-    Private Const NavRailMaxWidth As Integer = 220
 
 #End Region
 
@@ -2265,15 +2263,6 @@ Public Class Main
 
     End Function
 
-
-    ''' <summary>
-    ''' P0-1 UI:应用一次性列默认集。AllColumns 顺序固定 = Designer Add 顺序:
-    ''' 0 Nombre / 1 # / 2 Descargado / 3 Tamaño / 4 Estado / 5 Progreso% / 6 Progreso / 7 Velocidad / 8 EDT / 9 Restante。
-    ''' RC:升级为全量默认(含顺序/显隐/宽度),复用为右键"恢复默认列宽"与坏状态自愈的唯一入口。
-    ''' </summary>
-    Private Sub ApplyColumnUIDefaultsV26()
-        ApplyColumnDefaults()
-    End Sub
 
     ''' <summary>列宽上下限(拖拽"无限长"的根因:此前所有列都无 Minimum/MaximumWidth)。</summary>
     Private Sub ApplyColumnWidthLimits()
@@ -4560,20 +4549,6 @@ Public Class Main
 #End Region
 
 #Region "Eventos varios"
-
-    ''' <summary>
-    ''' Indica si la versión del SO es superior a XP (Vista para delante)
-    ''' </summary>
-    ''' <returns></returns>
-    ''' <remarks></remarks>
-    Private Function VersionMayorWindowsXP() As Boolean
-        'http://stackoverflow.com/questions/2819934/detect-windows-7-in-net
-        If System.Environment.OSVersion.Platform = PlatformID.Win32NT Then
-            Return Environment.OSVersion.Version.Major > 5 ' XP es la 5, Vista es la 6
-        Else
-            Return False
-        End If
-    End Function
 
 
     ''' <summary>

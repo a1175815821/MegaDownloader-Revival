@@ -841,13 +841,6 @@ Public Class Configuration
         txtLimiteVelocidadKBs.Enabled = chkLimitarVelocidad.Checked
     End Sub
 
-    Private Sub btnVerDescompresor_Click(sender As System.Object, e As System.EventArgs)
-        If Main.IsFormAlreadyOpen(GetType(Descompresor)) Is Nothing Then
-            Dim frmName As New Descompresor
-            frmName.Show()
-        End If
-    End Sub
-
     Private Sub chkUnZip_CheckedChanged(sender As System.Object, e As System.EventArgs) Handles chkUnZip.CheckedChanged
         comboPrioridad.Enabled = chkUnZip.Checked
     End Sub

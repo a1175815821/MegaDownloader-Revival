@@ -27,11 +27,6 @@ Public Class StreamingLibraryManager
 		Return System.Threading.Volatile.Read(_StreamingLibrary)
 	End Function
 	
-    Public Shared Sub SaveLibrary()
-        Dim existing As StreamingLibrary = System.Threading.Volatile.Read(_StreamingLibrary)
-        If existing IsNot Nothing Then existing.SaveXML()
-    End Sub
-
 	''' <summary>B2: 只在实例已被真正使用过时报告降级状态,避免恢复计时器为了检查
 	''' 状态反而创建出一个从未被用户打开的媒体库实例。</summary>
 	Public Shared Function HasPendingRecovery() As Boolean
