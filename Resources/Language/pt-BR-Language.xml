@@ -507,6 +507,7 @@ Caso contrário, ele poderá baixar os links, mas não vê-los.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Aviso: imagem pequena demais, os dados podem estar corrompidos.]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[Não foi possível resolver o link MEGA. Verifique o link e se o servidor de streaming está em execução.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Não foi possível extrair o arquivo RAR. Verifique se todos os volumes estão presentes e se a senha está correta.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Arquivos RAR multipart criptografados requerem um extrator RAR externo para descriptografia.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Downloads agendados]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Ativar agendamento]]></Text>
@@ -601,7 +602,7 @@ Caso contrário, ele poderá baixar os links, mas não vê-los.]]></Text>
   <Text key="UI_NoMatches"><![CDATA[Nenhuma tarefa correspondente]]></Text>
   <Text key="Config_LoadLockedWarning"><![CDATA[A data file is in use by another program. Temporary data is active and saving is suspended. Saved data will be restored automatically when the file is released.]]></Text>
   <Text key="Queue_LoadFailed"><![CDATA[Não foi possível carregar a lista de downloads]]></Text>
-  <Text key="Queue_LoadCorruptWarning"><![CDATA[O arquivo da lista de downloads está danificado - não está em uso por outro programa. O backup está sendo tentado automaticamente. Se esta mensagem persistir, reparre ou remova o arquivo e reinicie o aplicativo.]]></Text>
+  <Text key="Queue_LoadCorruptWarning"><![CDATA[O arquivo da lista de downloads está danificado - não está em uso por outro programa. O backup está sendo tentado automaticamente. Se esta mensagem persistir, repare ou remova o arquivo e reinicie o aplicativo.]]></Text>
   <Text key="Config_LoadRecovered"><![CDATA[Saved data was restored after the file lock was released. Settings changed while the file was locked were NOT saved - please check your settings again.]]></Text>
   <Text key="Config_PasswordReentryWarning"><![CDATA[As seguintes senhas não podem ser descriptografadas neste computador ou conta de usuário (a configuração pode ter sido restaurada de um backup). Digite-as novamente, caso contrário esses recursos não conseguirão conectar:]]></Text>
   <Text key="Config_ProxyPassword"><![CDATA[Senha do proxy]]></Text>

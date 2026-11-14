@@ -471,6 +471,7 @@ Sinon, il pourra télécharger les liens mais pas les voir.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Avertissement : image trop petite, les données sont peut-être endommagées.]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[Impossible de résoudre le lien MEGA. Vérifiez le lien et que le serveur de streaming est démarré.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Impossible d'extraire l'archive RAR. Vérifiez que tous les volumes sont présents et que le mot de passe est correct.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Les archives RAR multipartes chiffrées nécessitent un extracteur RAR externe pour être déchiffrées.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Téléchargements planifiés]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Activer la planification]]></Text>

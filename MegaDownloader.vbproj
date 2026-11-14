@@ -563,7 +563,7 @@
   <PropertyGroup>
     <PostBuildEvent>if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"
 if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\MegaSearchDesktop.exe"
-if $(ConfigurationName) == Release_MSD copy "$(ProjectDir)$(OutDir)$(TargetFileName)" "$(ProjectDir)Resources\Installer MSD"
+if $(ConfigurationName) == Release_MSD copy /Y "$(TargetPath)" "$(ProjectDir)Resources\Installer MSD"
 if $(ConfigurationName) == Release_MSD rename "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)" "MegaSearchDesktop.exe"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

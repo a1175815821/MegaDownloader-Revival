@@ -43,7 +43,7 @@ Public Class StreamingModule
                     ' WWW-Authenticate 头才有意义;403 让播放器/浏览器按真正的
                     ' 错误处理,而不是把 "Error: Access denied" 文本当媒体数据
                     response.Status = HttpStatusCode.Forbidden
-                    ComprimirRespuesta(request, response, "Error: Access denied")
+                    WriteTextResponse(request, response, "Error: Access denied")
                     Return True
                 End If
             End If
@@ -63,7 +63,7 @@ Public Class StreamingModule
                 If ele Is Nothing Then
                     ' 第16项:错误分支也要设 4xx,200+文本体会被播放器当媒体数据
                     response.Status = HttpStatusCode.NotFound
-                    ComprimirRespuesta(request, response, "Invalid ID")
+                    WriteTextResponse(request, response, "Invalid ID")
                     Return True
                 End If
                 Dim link As String = Criptografia.ToInsecureString(ele.Link)
@@ -73,7 +73,7 @@ Public Class StreamingModule
                 If Not StreamingHelper.GetFileDataFromTempID(request.Param.Item("t").Value, FileID, FileKey) Then
                     ' 第16项:同上,错误分支设 4xx
                     response.Status = HttpStatusCode.NotFound
-                    ComprimirRespuesta(request, response, "Invalid ID")
+                    WriteTextResponse(request, response, "Invalid ID")
                     Return True
                 End If
             End If
@@ -82,7 +82,7 @@ Public Class StreamingModule
             If String.IsNullOrEmpty(FileID) Then
                 ' 第16项:错误分支设 4xx,防播放器把错误文本当媒体数据
                 response.Status = HttpStatusCode.BadRequest
-                ComprimirRespuesta(request, response, "Missing FileID and/or FileKey")
+                WriteTextResponse(request, response, "Missing FileID and/or FileKey")
                 Return True
             End If
 
@@ -103,7 +103,7 @@ Public Class StreamingModule
                     Dim errTxt As String = If(InfoFichero Is Nothing, "Unknown", InfoFichero.Errtxt)
                     ' 第16项:上游 MEGA 取文件信息失败同样不能回 200,502 表示网关侧错误
                     response.Status = HttpStatusCode.BadGateway
-                    ComprimirRespuesta(request, response, "Error: " & errTxt)
+                    WriteTextResponse(request, response, "Error: " & errTxt)
                     Return True
                 End If
                 SyncLock UrlsLock
@@ -132,26 +132,16 @@ Public Class StreamingModule
                 Dim requestRangeStart As Long = 0
                 Dim requestRangeEnd As Long = 0
                 Dim content As Long = 0
-                RangeAdjust(rangeStart, rangeEnd, requestRangeStart, requestRangeEnd, content, request, response, InfoFichero.Tamano)
-                If response.Status = HttpStatusCode.RequestedRangeNotSatisfiable Then
-                    Return True ' 416 响应已写好,直接结束本次请求
+                Dim status As HttpStatusCode = RangeAdjust(rangeStart, rangeEnd, requestRangeStart, requestRangeEnd, content, request, InfoFichero.Tamano)
+                If status = HttpStatusCode.RequestedRangeNotSatisfiable Then
+                    response.Status = status
+                    response.AddHeader("Content-Range", "bytes */" & InfoFichero.Tamano.ToString())
+                    response.ContentLength = 0
+                    Return True
                 End If
 
 
-                'response.AddHeader("Content-Disposition", "attachment; filename=" & InfoFichero.Nombre)
-                Dim contentDispositionHeader As New Mime.ContentDisposition()
-                contentDispositionHeader.FileName = Utils.RemoveDiacritics(InfoFichero.Nombre)
-                response.AddHeader("Content-Disposition", contentDispositionHeader.ToString)
-
-                response.AddHeader("Cache-Control", "private")
-
-                response.ContentLength = content 'InfoFichero.Tamano
-                response.ContentType = "application/octet-stream"
-                ' 状态由 RangeAdjust 统一决定(含 P2-3(b) 忽略畸形 Range → 200);
-                ' 此处不再按原始请求头重复推导,否则 206/200 会与 Content-Range 不一致。
-                response.Connection = ConnectionType.Close
-
-
+                Dim disposition As New Mime.ContentDisposition With {.FileName = Utils.RemoveDiacritics(InfoFichero.Nombre)}
 
                 webReq = Conexion.CreateHttpWebRequest(InfoFichero.URL)
 
@@ -178,6 +168,17 @@ Public Class StreamingModule
 
                 Dim Stream As Stream = webResp.GetResponseStream()
                 Try
+                    ' Publish media headers only after opening the upstream stream.
+                    response.Status = status
+                    response.Connection = ConnectionType.Close
+                    response.ContentLength = content
+                    response.ContentType = "application/octet-stream"
+                    response.AddHeader("Content-Disposition", disposition.ToString())
+                    response.AddHeader("Cache-Control", "private")
+                    If InfoFichero.Tamano > 0 Then response.AddHeader("Accept-Ranges", "bytes")
+                    If status = HttpStatusCode.PartialContent Then
+                        response.AddHeader("Content-Range", "bytes " & requestRangeStart & "-" & requestRangeEnd & "/" & InfoFichero.Tamano)
+                    End If
                     response.SendHeaders()
 
                     Dim finishAfterSend As Boolean = False
@@ -254,17 +255,10 @@ Public Class StreamingModule
 
         Catch ex As Exception
             Log.WriteError("Error in StreamingModule: " & ex.ToString)
-            ' 头已发出(流媒体中途失败)时无法再改状态码,只能断开,由客户端按 EOF 处理。
-            ' 未发头时必须重建一个"纯错误响应":RangeAdjust 已通过 AddHeader 排入
-            ' Content-Length/Content-Range/Accept-Ranges,ContentLength 属性是另一份状态,
-            ' 仅把它置 0 不会删除这些头。
             Try
                 If Not response.HeadersSent Then
-                    ClearMediaHeaders(response)
                     response.Status = HttpStatusCode.BadGateway
-                    response.ContentLength = 0
-                    response.ContentType = "text/plain; charset=utf-8"
-                    WriteErrorResponse(request, response, "Streaming failed: " & ex.Message)
+                    WriteTextResponse(request, response, "Streaming failed.")
                 End If
             Catch sendEx As Exception
                 Log.WriteError("StreamingModule: could not send the error response: " & sendEx.ToString)
@@ -275,15 +269,12 @@ Public Class StreamingModule
     End Function
 
 
-    ''' <summary>
-    ''' 计算 Range:range* 为内部解密用的 16 字节对齐范围,requestRange* 为协议响应用的原始范围。
-    ''' 返回 False 表示请求不可满足(416 已写好),调用方应立即结束本次请求。
-    ''' </summary>
+    ''' <summary>Calculates the client range and the upstream range aligned for decryption.
+    ''' Does not write response headers.</summary>
     Private Function RangeAdjust(ByRef rangeStart As Long, ByRef rangeEnd As Long, _
         ByRef requestRangeStart As Long, ByRef requestRangeEnd As Long, _
         ByRef content As Long, _
-        request As HttpServer.IHttpRequest, response As HttpServer.IHttpResponse, _
-        FileSize As Long) As Boolean
+        request As HttpServer.IHttpRequest, FileSize As Long) As HttpStatusCode
         rangeStart = 0
         rangeEnd = 0
         ' P2-3(b): a Range header this server cannot parse (wrong unit, garbage
@@ -346,11 +337,7 @@ Public Class StreamingModule
 
         ' RFC 7233:起始位置超出文件末尾必须回应 416(带 bytes */size),不能静默钳位
         If FileSize > 0 AndAlso requestRangeStart > FileSize - 1 Then
-            response.Status = HttpStatusCode.RequestedRangeNotSatisfiable
-            response.AddHeader("Content-Range", "bytes */" & FileSize.ToString())
-            response.ContentLength = 0
-            rangeStart = 0 : rangeEnd = 0 : requestRangeStart = 0 : requestRangeEnd = 0 : content = 0
-            Return False
+            Return HttpStatusCode.RequestedRangeNotSatisfiable
         End If
 
         If rangeStart Mod 16 <> 0 Then
@@ -370,9 +357,7 @@ Public Class StreamingModule
             requestRangeStart = 0
             requestRangeEnd = 0
             content = 0
-            response.Status = HttpStatusCode.OK
-            response.AddHeader("Content-Length", "0")
-            Return True
+            Return HttpStatusCode.OK
         End If
 
         ' rangeEnd=0 的三种来源:无 Range 头(取整个文件)、P2-3(b) 无法解析的 Range 头
@@ -397,21 +382,7 @@ Public Class StreamingModule
 
         content = (requestRangeEnd - requestRangeStart) + 1
 
-        response.AddHeader("Content-Length", content.ToString())
-        response.ContentType = "application/octet-stream"
-        response.AddHeader("Accept-Ranges", "bytes")
-
-        ' P2-3(b): an ignored Range header behaves exactly like "no Range header" —
-        ' 200 + full body, no Content-Range. The caller relies on the status set
-        ' here (it must not re-derive it from the raw header).
-        If rangeIgnored OrElse String.IsNullOrEmpty(request.Headers("Range")) Then
-            response.Status = HttpStatusCode.OK
-        Else
-            response.Status = HttpStatusCode.PartialContent
-            response.AddHeader("Content-Range", "bytes " & requestRangeStart & "-" & requestRangeEnd.ToString() & "/" & FileSize.ToString())
-        End If
-        Return True
-        ' / Range adjustment
+        Return If(rangeIgnored OrElse String.IsNullOrEmpty(request.Headers("Range")), HttpStatusCode.OK, HttpStatusCode.PartialContent)
     End Function
 
     ' 通过反射访问 HttpServer 库的私有字段 _context / Stream.Connected,
@@ -463,25 +434,7 @@ Public Class StreamingModule
         End Try
     End Function
 
-    ''' <summary>删除 RangeAdjust 预排的媒体响应头。HttpServer 的 ContentLength 属性与
-    ''' AddHeader("Content-Length",...) 是两份独立状态;错误响应必须同时清掉两者。</summary>
-    Private Shared Sub ClearMediaHeaders(ByVal response As HttpServer.IHttpResponse)
-        Dim headers As System.Collections.Specialized.NameValueCollection =
-            TryCast(response.GetType().GetField("_headers", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).GetValue(response),
-                    System.Collections.Specialized.NameValueCollection)
-        If headers IsNot Nothing Then
-            For Each name As String In New String() {"Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Content-Encoding", "Content-Type"}
-                headers.Remove(name)
-            Next
-        Else
-            For Each name As String In New String() {"Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Content-Encoding", "Content-Type"}
-                response.AddHeader(name, "")
-            Next
-        End If
-        response.Chunked = False
-    End Sub
-
-    Private Shared Function ErrorBodyBytes(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String) As Byte()
+    Private Shared Function TextResponseBytes(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String) As Byte()
         Dim bytes As Byte() = New System.Text.UTF8Encoding(False).GetBytes(text)
         Dim acceptEncoding As String = request.Headers("Accept-Encoding")
         If String.IsNullOrEmpty(acceptEncoding) OrElse Not acceptEncoding.ToLowerInvariant().Contains("gzip") Then Return bytes
@@ -495,39 +448,14 @@ Public Class StreamingModule
         End Using
     End Function
 
-    Private Shared Sub WriteErrorResponse(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String)
-        Dim bytes As Byte() = ErrorBodyBytes(request, response, text)
+    Friend Shared Sub WriteTextResponse(ByVal request As HttpServer.IHttpRequest, ByVal response As HttpServer.IHttpResponse, ByVal text As String)
+        Dim bytes As Byte() = TextResponseBytes(request, response, text)
+        response.Connection = ConnectionType.Close
+        response.Chunked = False
+        response.ContentType = "text/plain; charset=utf-8"
         response.ContentLength = bytes.Length
         response.Body.Write(bytes, 0, bytes.Length)
     End Sub
-
-    Private Sub ComprimirRespuesta(ByRef request As HttpServer.IHttpRequest, ByRef response As HttpServer.IHttpResponse, ByRef ResponseBody As String)
-
-        Dim acceptEncoding As String = request.Headers("Accept-Encoding")
-
-        If Not String.IsNullOrEmpty(acceptEncoding) AndAlso acceptEncoding.ToLower.Contains("gzip") Then
-            response.AddHeader("Content-Encoding", "gzip")
-
-
-            Dim bytes As Byte() = Text.UTF8Encoding.UTF8.GetBytes(ResponseBody)
-            Using memWriter As New MemoryStream
-                Using writer As New GZipStream(memWriter, CompressionMode.Compress)
-                    writer.Write(bytes, 0, bytes.Length)
-                    writer.Flush()
-                End Using
-                bytes = memWriter.ToArray
-                response.Body.Write(bytes, 0, bytes.Length)
-            End Using
-        Else
-            ' leaveOpen 保证响应流不被关闭(框架负责其生命周期),同时确定性释放 writer;
-            ' UTF8Encoding(False) 明确不写 BOM
-            Using writer As New StreamWriter(response.Body, New System.Text.UTF8Encoding(False), 1024, leaveOpen:=True)
-                writer.Write(ResponseBody)
-                writer.Flush()
-            End Using
-        End If
-    End Sub
-
 
     Private Function IsStreaming(ByRef request As HttpServer.IHttpRequest) As Boolean
         Return request.Uri.LocalPath = PaginaStreaming

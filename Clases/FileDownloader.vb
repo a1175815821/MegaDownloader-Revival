@@ -344,7 +344,10 @@ Public Class FileDownloader
         Private _ChunkIndex As Int32
         Private _file As FileInfo
         Private _ChunkDownloadFailed As Boolean
-        Public Sub New(ChunkIndex As Int32, file As FileInfo)
+        Public ReadOnly Generation As Long
+
+        Public Sub New(ChunkIndex As Int32, file As FileInfo, generation As Long)
+            Me.Generation = generation
             Me._ChunkIndex = ChunkIndex
             Me._file = file
             Me._ChunkDownloadFailed = False
@@ -469,7 +472,8 @@ Public Class FileDownloader
     ' 退避指数必须来自"连续失败次数"。此前用存活 worker 数,而失败的 worker 已被移除,
     ' 最后一个连接失败时该数恒为 0 → 恒定 1 秒重试,指数退避形同虚设。
     Private m_consecutiveChunkFailures As Integer
-    Private m_chunkGeneration As Integer
+    ' Mutations and chunk creation share Mutex. Workers retain the generation assigned at creation.
+    Private m_chunkGeneration As Long
     Private m_currentFileProgress, m_totalProgress, m_currentFileSize As Int64
     Private m_currentSpeed As Generic.Dictionary(Of String, Long)
 
@@ -940,7 +944,7 @@ Public Class FileDownloader
             If Not file.GetDataPart.AllFinished Then
                 For i As Integer = 1 To Me.NumConnections
                     Log.WriteDebug("Event raised for starting a new connection")
-                    bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, Nothing)
+                    bgwDownloader.ReportProgress(InvokeType.StartDownloaderRaiser, System.Threading.Interlocked.Read(m_chunkGeneration))
                 Next
                 ' Wait until all chunks finish. NOTE: there is deliberately NO size-based
                 ' force-finish here — the .part file is preallocated to the full size, so
@@ -974,8 +978,8 @@ Public Class FileDownloader
                     If bgwDownloader.CancellationPending Then
                         Log.WriteDebug("Aborting connection - stop requested")
                         ' 第10项:统一取消后禁止 chunk worker 复活(见 m_abortChunkRestart)
-                        m_abortChunkRestart = True
                         SyncLock Mutex
+                            m_abortChunkRestart = True
                             For Each w As DownloaderWorker In Me.listDownloaders
                                 If w.IsBusy Then
                                     w.CancelAsync()
@@ -1014,8 +1018,8 @@ Public Class FileDownloader
                         ' two generations could write the same regions concurrently.
                         ' 第10项:同时置 m_abortChunkRestart —— 旧代码只 CancelAsync 不改
                         ' m_canceled,完成回调的 HasBeenCanceled 恒 False,worker 一比一复活。
-                        m_abortChunkRestart = True
                         SyncLock Mutex
+                            m_abortChunkRestart = True
                             For Each w As DownloaderWorker In Me.listDownloaders
                                 If w.IsBusy Then
                                     w.CancelAsync()
@@ -1064,7 +1068,7 @@ Public Class FileDownloader
         Finally
             ' If all chunks finished despite an earlier non-fatal error, the download itself succeeded.
             ' Do NOT report FileDownloadFailed — that would wrongly mark a completed file as error.
-            If exc IsNot Nothing AndAlso file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
+            If exc IsNot Nothing AndAlso file.Size > 0 AndAlso file.GetDataPart.AllFinished AndAlso Not bgwDownloader.CancellationPending Then
                 Log.WriteWarning("Non-fatal error during download of " & file.Name & " but all chunks finished. Suppressing failure: " & Log.SafeException(exc))
                 exc = Nothing
             End If
@@ -1240,16 +1244,22 @@ Public Class FileDownloader
             Case InvokeType.CalculatingFileNrRaiser
                 RaiseEvent CalculatingFileSize(Me)
             Case InvokeType.StartDownloaderRaiser
-                NewDownloaderWorker()
+                NewDownloaderWorker(CLng(e.UserState))
         End Select
     End Sub
 
     Private Sub bgwDownloader_RunWorkerCompleted(ByVal sender As Object, ByVal e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwDownloader.RunWorkerCompleted
         Me.IsPaused = False
-        m_busy = False
+        Dim canceled As Boolean
+        SyncLock Mutex
+            System.Threading.Volatile.Write(m_stopCompletionPending, True)
+            System.Threading.Volatile.Write(m_busy, False)
+            m_abortChunkRestart = True
+            canceled = m_canceled
+        End SyncLock
 
         Try
-            If Me.HasBeenCanceled Then
+            If canceled Then
                 RaiseEvent Canceled(Me, New EventArgs)
             Else
                 RaiseEvent Completed(Me, New EventArgs)
@@ -1264,6 +1274,7 @@ Public Class FileDownloader
     End Sub
 
     Private Sub ChunkDownloader_ProgressChanged(ByVal sender As Object, ByVal e As ProgressChangedEventArgs)
+        If DirectCast(sender, DownloaderWorker).Generation <> System.Threading.Interlocked.Read(m_chunkGeneration) Then Return
         Select Case CType(e.ProgressPercentage, InvokeType)
             Case InvokeType.EventRaiser
                 Select Case CType(e.UserState, [Event])
@@ -1302,8 +1313,7 @@ Public Class FileDownloader
 
             Dim worker As DownloaderWorker = CType(sender, DownloaderWorker)
 
-            Dim file As FileInfo = Me.File
-
+            Dim file As FileInfo = worker.File
 
             Dim FicheroPART As String = GetPartialFilePath(Me.LocalDirectory, file.Name, file.PartialFileName)
 
@@ -1772,68 +1782,35 @@ Public Class FileDownloader
         End If
     End Sub
 
-    Private Sub ChunkDownloader_RunWorkerCompleted(ByVal sender As Object, ByVal e As System.ComponentModel.RunWorkerCompletedEventArgs)
-        Dim worker As DownloaderWorker = CType(sender, DownloaderWorker)
-        Dim ChunkFallido As Boolean
-        SyncLock Mutex
-            ChunkFallido = worker.ChunkDownloadFailed
-            Dim chunk As DataPart.Chunk = worker.File.GetDataPart.ChunkList(worker.ChunkIndex)
-            If chunk.Size > chunk.Index Then
-                chunk.Available = True
-            End If
-            Dim key As String = worker.ChunkIndex.ToString
-            If m_currentSpeed.ContainsKey(key) Then
-                m_currentSpeed.Remove(key)
-            End If
-            RemoveHandler worker.DoWork, AddressOf ChunkDownloader_DoWork
-            RemoveHandler worker.ProgressChanged, AddressOf ChunkDownloader_ProgressChanged
-            RemoveHandler worker.RunWorkerCompleted, AddressOf ChunkDownloader_RunWorkerCompleted
-            Me.listDownloaders.Remove(worker)
-            worker.Dispose()
-        End SyncLock
-        ' 第10项:停滞看门狗/停止路径统一取消后(m_abortChunkRestart)也不得复活 worker,
-        ' 旧代码只看 HasBeenCanceled,而该标志在这些路径下恒 False → 一比一复活。
-        If Not HasBeenCanceled AndAlso Not m_abortChunkRestart Then
+    Private Async Sub ChunkDownloader_RunWorkerCompleted(ByVal sender As Object, ByVal e As RunWorkerCompletedEventArgs)
+        Dim worker As DownloaderWorker = DirectCast(sender, DownloaderWorker)
+        Dim delayMs As Integer = 0
+        Try
+            SyncLock Mutex
+                Dim wasTracked As Boolean = listDownloaders.Remove(worker)
+                RemoveHandler worker.DoWork, AddressOf ChunkDownloader_DoWork
+                RemoveHandler worker.ProgressChanged, AddressOf ChunkDownloader_ProgressChanged
+                RemoveHandler worker.RunWorkerCompleted, AddressOf ChunkDownloader_RunWorkerCompleted
+                worker.Dispose()
+                If Not wasTracked Then Return
 
-            If worker.ChunkDownloadFailed Then
-                ' v2.5 beta: 配额期内不再空转重试,等待全局熔断解除后由调度器统一唤醒。
-                If MegaQuotaManager.IsQuarantined() Then
-                    Log.WriteInfo("Chunk failed during MEGA quota quarantine; worker will NOT restart until quota clears.")
-                    Return
+                If Not CanStartChunk(worker.Generation) Then Return
+                m_currentSpeed.Remove(worker.ChunkIndex.ToString())
+
+                If worker.ChunkDownloadFailed Then
+                    If MegaQuotaManager.IsQuarantined() Then Return
+                    m_consecutiveChunkFailures = Math.Min(5, m_consecutiveChunkFailures + 1)
+                    delayMs = (1000 << (m_consecutiveChunkFailures - 1)) + (Now.Millisecond Mod 500)
+                Else
+                    m_consecutiveChunkFailures = 0
                 End If
-                ' Exponential backoff with jitter (cap ~30s).
-                ' 该事件处理器被编组回 UI 线程执行(RunWorkerCompleted),在这里 Thread.Sleep
-                ' 忙等会冻结界面(最长约 16.5 秒)——把退避和重启移到线程池执行
-                ' 计数必须原子递增:退避里新建的 worker 没有 UI 同步上下文,其完成回调落在
-                ' 线程池上,与首代 worker 的 UI 回调并发,普通 += 会丢增量。
-                Dim fallos As Integer = System.Threading.Interlocked.Increment(m_consecutiveChunkFailures)
-                Dim attempt As Integer = Math.Min(4, Math.Max(0, fallos - 1))
-                Dim generation As Integer = System.Threading.Volatile.Read(m_chunkGeneration)
-                System.Threading.Tasks.Task.Run(Sub()
-                                                   Dim baseMs As Integer = CInt(Math.Min(30000, 1000 * Math.Pow(2, attempt)))
-                                                   Dim jitter As Integer = (Now.Millisecond Mod 500)
-                                                   Dim TiempoEspera As Double = baseMs + jitter
-                                                   Dim Limite As Date = Now.AddMilliseconds(TiempoEspera)
-                                                   While Now < Limite
-                                                       System.Threading.Thread.Sleep(50)
-                                                       If HasBeenCanceled OrElse m_abortChunkRestart OrElse
-                                                          System.Threading.Volatile.Read(m_chunkGeneration) <> generation Then Return
-                                                   End While
-                                                   ' Lanzar nuevo worker
-                                                   NewDownloaderWorker(generation)
-                                               End Sub)
-            Else
-                ' A successful worker ends its own retry sequence, but it does not
-                ' prove that workers still backing off are healthy. Preserve the
-                ' global consecutive-failure count until no backoff worker remains.
-                System.Threading.Interlocked.Exchange(m_consecutiveChunkFailures, 0)
-                ' Lanzar nuevo worker
-                NewDownloaderWorker()
-            End If
-        End If
+            End SyncLock
+            If delayMs > 0 Then Await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(False)
+            NewDownloaderWorker(worker.Generation, worker.ChunkIndex)
+        Catch ex As Exception
+            Log.WriteError("Could not restart a download chunk: " & Log.SafeException(ex))
+        End Try
     End Sub
-
-
 
     Private Sub fireEventFromBgw(ByVal eventName As [Event])
         bgwDownloader.ReportProgress(InvokeType.EventRaiser, eventName)
@@ -1865,23 +1842,27 @@ Public Class FileDownloader
         Return CInt(TotalDescargado / TiempoDescarga)
     End Function
 
-    Private Sub NewDownloaderWorker(Optional ByVal generation As Integer = -1)
-        ' 第10项:统一取消后禁止复活(含退避 Task.Run 延迟到达的调用),
-        ' 与 ChunkDownloader_RunWorkerCompleted 的守卫双保险。
-        If m_abortChunkRestart OrElse HasBeenCanceled Then Return
-        If generation >= 0 AndAlso System.Threading.Volatile.Read(m_chunkGeneration) <> generation Then Return
+    Private Function CanStartChunk(generation As Long) As Boolean
+        Return m_busy AndAlso Not m_disposed AndAlso Not m_canceled AndAlso Not m_abortChunkRestart AndAlso
+               generation = System.Threading.Interlocked.Read(m_chunkGeneration)
+    End Function
+
+    Private Sub NewDownloaderWorker(generation As Long, Optional retryIndex As Integer = -1)
         SyncLock Mutex
-            Dim part As Int32? = Me.File.GetDataPart.NextAvailablePartIndex
-            If part.HasValue Then
-                Dim worker As New DownloaderWorker(part.Value, Me.File)
-                worker.WorkerSupportsCancellation = True
-                worker.WorkerReportsProgress = True
-                AddHandler worker.DoWork, AddressOf ChunkDownloader_DoWork
-                AddHandler worker.ProgressChanged, AddressOf ChunkDownloader_ProgressChanged
-                AddHandler worker.RunWorkerCompleted, AddressOf ChunkDownloader_RunWorkerCompleted
-                Me.listDownloaders.Add(worker)
-                worker.RunWorkerAsync()
+            If Not CanStartChunk(generation) Then Return
+            If retryIndex >= 0 Then
+                Dim previous As DataPart.Chunk = Me.File.GetDataPart.ChunkList(retryIndex)
+                If previous.Index < previous.Size Then previous.Available = True
             End If
+            Dim part As Int32? = Me.File.GetDataPart.NextAvailablePartIndex
+            If Not part.HasValue Then Return
+            Dim worker As New DownloaderWorker(part.Value, Me.File, generation) With {
+                .WorkerSupportsCancellation = True, .WorkerReportsProgress = True}
+            AddHandler worker.DoWork, AddressOf ChunkDownloader_DoWork
+            AddHandler worker.ProgressChanged, AddressOf ChunkDownloader_ProgressChanged
+            AddHandler worker.RunWorkerCompleted, AddressOf ChunkDownloader_RunWorkerCompleted
+            listDownloaders.Add(worker)
+            worker.RunWorkerAsync()
         End SyncLock
     End Sub
 
@@ -1914,76 +1895,81 @@ Public Class FileDownloader
     End Sub
 
     Protected Overridable Sub Dispose(ByVal disposing As Boolean)
-        If Not m_disposed Then
-            If disposing Then
-                Try
-                    If bgwDownloader IsNot Nothing AndAlso bgwDownloader.IsBusy Then
-                        bgwDownloader.CancelAsync()
-                    End If
-                    SyncLock Mutex
-                        For Each w As DownloaderWorker In Me.listDownloaders.ToList()
-                            If w.IsBusy Then w.CancelAsync()
-                        Next
-                    End SyncLock
-                    Dim waitUntil As Date = Now.AddSeconds(5)
-                    While Now < waitUntil
-                        Dim busy As Boolean
-                        SyncLock Me.Mutex
-                            busy = Me.listDownloaders.Any(Function(x) x.IsBusy)
-                        End SyncLock
-                        If Not busy Then Exit While
-                        System.Threading.Thread.Sleep(50)
-                    End While
-                Catch ex As Exception
-                    Log.WriteError("FileDownloader.Dispose: error while cancelling workers: " & ex.ToString)
-                End Try
-                ' Dispose every worker we spawned, not just the outer bgwDownloader.
-                ' Workers that were still running when CancelAsync was called will not
-                ' have hit their RunWorkerCompleted handler, so they must be disposed here.
+        SyncLock Mutex
+            If m_disposed Then Return
+            m_disposed = True
+            m_abortChunkRestart = True
+            System.Threading.Interlocked.Increment(m_chunkGeneration)
+        End SyncLock
+        If disposing Then
+            Try
+                trigger.Set()
+                If bgwDownloader IsNot Nothing AndAlso bgwDownloader.IsBusy Then
+                    bgwDownloader.CancelAsync()
+                End If
                 SyncLock Mutex
                     For Each w As DownloaderWorker In Me.listDownloaders.ToList()
-                        Try
-                            w.Dispose()
-                        Catch ex As Exception
-                            Log.WriteError("FileDownloader.Dispose: worker dispose failed: " & ex.ToString)
-                        End Try
+                        If w.IsBusy Then w.CancelAsync()
                     Next
-                    Me.listDownloaders.Clear()
                 End SyncLock
-                If bgwDownloader IsNot Nothing Then
-                    ' 等主 worker 退出后再做收尾,避免 DoWork 仍在使用共享状态时被 Dispose 干扰
-                    Dim waitMain As Date = Now.AddSeconds(10)
-                    While bgwDownloader.IsBusy AndAlso Now < waitMain
-                        System.Threading.Thread.Sleep(50)
-                    End While
-                    bgwDownloader.Dispose()
-                End If
-
-                ' 确定性释放本实例的内核对象。SyncLock 锁对象无需释放；
-                ' trigger（ManualResetEvent）仍需关闭。复用写流先关，避免 .part 句柄泄漏
-                ' 挡住后续删除/重建。
-                Try
-                    SyncLock MutexFile
-                        ClosePartStream()
+                Dim waitUntil As Date = Now.AddSeconds(5)
+                While Now < waitUntil
+                    Dim busy As Boolean
+                    SyncLock Me.Mutex
+                        busy = Me.listDownloaders.Any(Function(x) x.IsBusy)
                     End SyncLock
-                Catch ex As Exception
-                    Log.WriteWarning("FileDownloader.Dispose: part stream close failed: " & ex.ToString)
-                End Try
-                Try
-                    If trigger IsNot Nothing Then
-                        trigger.Set() ' 唤醒可能还在 Pause 等待的路径,让其尽快退出
-                        trigger.Close()
-                    End If
-                Catch ex As Exception
-                    Log.WriteWarning("FileDownloader.Dispose: trigger close failed: " & ex.ToString)
-                End Try
-                ' SyncLock 锁对象无需释放（此前 Mutex 每个下载任务泄漏 3 个内核句柄，
-                ' 改轻量锁后泄漏源头消失）。trigger 是 ManualResetEvent，仍需关闭。
-                ' 复用写流已在上一步关闭（MutexFile 保护下）。
+                    If Not busy Then Exit While
+                    System.Threading.Thread.Sleep(50)
+                End While
+            Catch ex As Exception
+                Log.WriteError("FileDownloader.Dispose: error while cancelling workers: " & ex.ToString)
+            End Try
+            ' Dispose every worker we spawned, not just the outer bgwDownloader.
+            ' Workers that were still running when CancelAsync was called will not
+            ' have hit their RunWorkerCompleted handler, so they must be disposed here.
+            SyncLock Mutex
+                For Each w As DownloaderWorker In Me.listDownloaders.ToList()
+                    Try
+                        w.Dispose()
+                    Catch ex As Exception
+                        Log.WriteError("FileDownloader.Dispose: worker dispose failed: " & ex.ToString)
+                    End Try
+                Next
+                Me.listDownloaders.Clear()
+            End SyncLock
+            If bgwDownloader IsNot Nothing Then
+                ' 等主 worker 退出后再做收尾,避免 DoWork 仍在使用共享状态时被 Dispose 干扰
+                Dim waitMain As Date = Now.AddSeconds(10)
+                While bgwDownloader.IsBusy AndAlso Now < waitMain
+                    System.Threading.Thread.Sleep(50)
+                End While
+                bgwDownloader.Dispose()
             End If
-            Me.File = Nothing
+
+            ' 确定性释放本实例的内核对象。SyncLock 锁对象无需释放；
+            ' trigger（ManualResetEvent）仍需关闭。复用写流先关，避免 .part 句柄泄漏
+            ' 挡住后续删除/重建。
+            Try
+                SyncLock MutexFile
+                    ClosePartStream()
+                End SyncLock
+            Catch ex As Exception
+                Log.WriteWarning("FileDownloader.Dispose: part stream close failed: " & ex.ToString)
+            End Try
+            Try
+                If trigger IsNot Nothing Then
+                    trigger.Set() ' 唤醒可能还在 Pause 等待的路径,让其尽快退出
+                    trigger.Close()
+                End If
+            Catch ex As Exception
+                Log.WriteWarning("FileDownloader.Dispose: trigger close failed: " & ex.ToString)
+            End Try
+            ' SyncLock 锁对象无需释放（此前 Mutex 每个下载任务泄漏 3 个内核句柄，
+            ' 改轻量锁后泄漏源头消失）。trigger 是 ManualResetEvent，仍需关闭。
+            ' 复用写流已在上一步关闭（MutexFile 保护下）。
         End If
-        m_disposed = True
+        m_file = Nothing
+        System.Threading.Volatile.Write(m_busy, False)
     End Sub
 #End Region
 
@@ -2163,40 +2149,42 @@ Public Class FileDownloader
     ''' <summary>Gets or sets the busy state of the FileDownloader</summary>
     Public Property IsBusy() As Boolean
         Get
-            Return m_busy
+            Return System.Threading.Volatile.Read(m_busy)
         End Get
         Set(ByVal value As Boolean)
-            If Me.IsBusy <> value Then
-                If Not value Then System.Threading.Volatile.Write(m_stopCompletionPending, True)
-                ' 每次 Start/Stop 都切换代际,旧退避 Task 醒来后不得给新一轮创建 worker。
+            SyncLock Mutex
+                If m_busy = value OrElse m_disposed Then Return
+                If value AndAlso (bgwDownloader.IsBusy OrElse m_stopCompletionPending OrElse listDownloaders.Any(Function(w) w.IsBusy)) Then Return
                 System.Threading.Interlocked.Increment(m_chunkGeneration)
-                m_busy = value
                 m_canceled = Not value
-                If Me.IsBusy Then
-                    ' ②:复用同一 Downloader 重试时 m_currentFileProgress 残留旧值,
-                    ' downloadFile() 入口又 += chunk.Index 会双计(瞬间满格)。与 m_totalProgress 同清零,
-                    ' 入口重播 chunk.Index 即得正确值;暂停/恢复不走 IsBusy,不受影响。
+                System.Threading.Volatile.Write(m_busy, value)
+                If value Then
                     m_currentFileProgress = 0
                     m_totalProgress = 0
-                    ' 第10项:新一轮下载复位"禁止复活"标记
                     m_abortChunkRestart = False
                     m_completedFilePath = Nothing
-                    System.Threading.Interlocked.Exchange(m_consecutiveChunkFailures, 0)
+                    m_consecutiveChunkFailures = 0
+                    m_currentSpeed.Clear()
+                    If Me.File IsNot Nothing AndAlso Me.File.Size > 0 AndAlso Me.File.DataPartInitialized Then Me.File.GetDataPart.ResetAvailableParts()
                     bgwDownloader.RunWorkerAsync()
-                    RaiseEvent Started(Me, New EventArgs)
-                    RaiseEvent IsBusyChanged(Me, New EventArgs)
-                    RaiseEvent StateChanged(Me, New EventArgs)
                 Else
+                    System.Threading.Volatile.Write(m_stopCompletionPending, True)
                     bgwDownloader.CancelAsync()
-                    If Me.IsPaused Then
-                        trigger.Set()
-                    End If
+                    For Each worker As DownloaderWorker In listDownloaders
+                        If worker.IsBusy Then worker.CancelAsync()
+                    Next
+                    trigger.Set()
                     m_paused = False
-
-                    RaiseEvent CancelRequested(Me, New EventArgs)
-                    RaiseEvent StateChanged(Me, New EventArgs)
                 End If
+            End SyncLock
+
+            If value Then
+                RaiseEvent Started(Me, EventArgs.Empty)
+                RaiseEvent IsBusyChanged(Me, EventArgs.Empty)
+            Else
+                RaiseEvent CancelRequested(Me, EventArgs.Empty)
             End If
+            RaiseEvent StateChanged(Me, EventArgs.Empty)
         End Set
     End Property
 
@@ -2228,8 +2216,10 @@ Public Class FileDownloader
         Get
             ' Stop clears m_busy when cancellation is requested; the worker can
             ' still be blocked in HTTP or draining its connections at that point.
-            Return Not m_disposed AndAlso Not Me.IsBusy AndAlso Not bgwDownloader.IsBusy AndAlso
-                   Not System.Threading.Volatile.Read(m_stopCompletionPending)
+            SyncLock Mutex
+                Return Not m_disposed AndAlso Not m_busy AndAlso Not bgwDownloader.IsBusy AndAlso
+                       Not System.Threading.Volatile.Read(m_stopCompletionPending) AndAlso Not listDownloaders.Any(Function(w) w.IsBusy)
+            End SyncLock
         End Get
     End Property
 
@@ -2331,12 +2321,6 @@ Public Class FileDownloader
         End Get
     End Property
 
-    ''' <summary>Gets if the last download was canceled by the user</summary>
-    Private ReadOnly Property HasBeenCanceled() As Boolean
-        Get
-            Return m_canceled
-        End Get
-    End Property
 #End Region
 
 End Class

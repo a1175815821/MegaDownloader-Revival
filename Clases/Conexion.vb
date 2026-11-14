@@ -58,73 +58,53 @@ Public Class Conexion
         Public Cookies As String
     End Class
 
-    Private Shared _UsarProxy As Boolean = False
-    Private Shared _ProxyIP As String
-    Private Shared _ProxyUser As String
-    Private Shared _ProxyPassword As String
-    Private Shared _ProxyPort As Integer
+    Private Class ProxySettings
+        Public ReadOnly Address As Uri
+        Public ReadOnly Username As String
+        Public ReadOnly Password As String
+
+        Public Sub New(address As Uri, username As String, password As String)
+            Me.Address = address
+            Me.Username = username
+            Me.Password = password
+        End Sub
+    End Class
+
+    Private Shared _proxy As ProxySettings
 
     Public Shared Sub SetProxy(Config As Configuracion)
-        _UsarProxy = Config.UsarProxy
-        _ProxyIP = NormalizeProxyHost(Config.ProxyIP)
-        ' P3-5(a): last line of defense before New WebProxy(host, port) — an
-        ' out-of-range port (hand-edited XML that bypassed ApplyConfigLimits) made
-        ' every request throw from the hot path. Clamp instead of failing.
-        _ProxyPort = Config.ProxyPort
-        If _ProxyPort < 1 OrElse _ProxyPort > 65535 Then
-            _ProxyPort = If(_ProxyPort > 65535, 65535, 8080)
-            Log.WriteWarning("Conexion.SetProxy: proxy port " & Config.ProxyPort & " is out of range; using " & _ProxyPort & ".")
+        Dim settings As ProxySettings = Nothing
+        If Config.UsarProxy Then
+            Dim address As Uri = Nothing
+            Dim host As String = NormalizeProxyHost(Config.ProxyIP)
+            Dim port As Integer = If(Config.ProxyPort > 65535, 65535, If(Config.ProxyPort < 1, 8080, Config.ProxyPort))
+            If host IsNot Nothing Then TryCreateProxyAddress(host, port, address)
+            settings = New ProxySettings(address, Config.ProxyUser, Config.ProxyPassword)
         End If
-        _ProxyUser = Config.ProxyUser
-        _ProxyPassword = Config.ProxyPassword
+        System.Threading.Volatile.Write(_proxy, settings)
     End Sub
 
-    ''' <summary>
-    ''' Reduces a user-entered proxy address to the bare host WebProxy(String, Int32) expects.
-    ''' That overload prepends "http://" itself, so "http://1.2.3.4" used to become
-    ''' "http://http//1.2.3.4:port" — a host literally named "http" — and every request then
-    ''' failed with no hint that the field format was at fault. Surrounding whitespace and a
-    ''' trailing slash are also rejected by the Uri parser, so they are trimmed here too.
-    ''' P1-2: an inline port ("127.0.0.1:7890", "[::1]:8080") must be stripped as well —
-    ''' WebProxy("host:port", port) throws UriFormatException ("指定的端口无效") on every
-    ''' request, and the label "代理地址/IP" invites exactly that input. The separate port
-    ''' field in Configuration is the single source of truth for the port number.
-    ''' Bracketed IPv6 ("[::1]") is preserved; bare IPv6 ("::1") gets wrapped in brackets.
-    ''' Inline credentials ("user:pass@host") are dropped: they belong in the dedicated
-    ''' ProxyUser/ProxyPassword fields, and leaving them in made the colon count look like
-    ''' a bare IPv6 address, producing an invalid URI on every request.
-    ''' </summary>
-    Friend Shared Function NormalizeProxyHost(ByVal value As String) As String
-        If String.IsNullOrEmpty(value) Then Return value
+    ''' <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.</summary>
+    Friend Shared Function NormalizeProxyHost(value As String) As String
+        If String.IsNullOrWhiteSpace(value) Then Return Nothing
         Dim host As String = value.Trim()
-        Dim schemeAt As Integer = host.IndexOf("://", StringComparison.Ordinal)
-        If schemeAt >= 0 Then host = host.Substring(schemeAt + 3)
-        host = host.Trim().TrimEnd("/"c, "\"c)
+        If host.StartsWith("http://", StringComparison.OrdinalIgnoreCase) Then host = host.Substring(7)
+        If host.StartsWith("https://", StringComparison.OrdinalIgnoreCase) Then host = host.Substring(8)
+        host = host.TrimEnd("/"c, "\"c)
+        If host.IndexOfAny(New Char() {"/"c, "\"c, "?"c, "#"c, "@"c}) >= 0 OrElse host.Any(AddressOf Char.IsWhiteSpace) Then Return Nothing
 
-        Dim atSign As Integer = host.LastIndexOf("@"c)
-        If atSign >= 0 Then host = host.Substring(atSign + 1).Trim()
+        Dim ip As IPAddress = Nothing
+        If Not host.StartsWith("[", StringComparison.Ordinal) AndAlso IPAddress.TryParse(host, ip) AndAlso
+           ip.AddressFamily = System.Net.Sockets.AddressFamily.InterNetworkV6 Then host = "[" & host & "]"
 
-        ' [IPv6]:port → [IPv6](括号后的任何后缀都是端口)
-        If host.StartsWith("[", StringComparison.Ordinal) Then
-            Dim closeBracket As Integer = host.IndexOf("]"c)
-            If closeBracket >= 0 Then Return host.Substring(0, closeBracket + 1)
-            Return host
-        End If
+        Dim address As Uri = Nothing
+        If Not Uri.TryCreate("http://" & host, UriKind.Absolute, address) OrElse address.HostNameType = UriHostNameType.Unknown OrElse
+           address.UserInfo.Length <> 0 OrElse address.AbsolutePath <> "/" Then Return Nothing
+        Return address.Host
+    End Function
 
-        Dim firstColon As Integer = host.IndexOf(":"c)
-        If firstColon >= 0 Then
-            Dim secondColon As Integer = host.IndexOf(":"c, firstColon + 1)
-            If secondColon < 0 Then
-                ' 单冒号 = host:port(首字符即冒号的 ":8080" 属垃圾输入,原样返回交由上层报错)
-                If firstColon > 0 Then Return host.Substring(0, firstColon).Trim()
-            Else
-                ' 裸 IPv6 → 加括号,否则 WebProxy 拼出的 URI 非法。注意回环地址 "::1" 的首字符
-                ' 就是冒号:旧代码用 "firstColon > 0" 判断,恰好把它漏掉,输入 "::1" 时
-                ' WebProxy 抛 UriFormatException("未能分析主机名")。
-                Return "[" & host & "]"
-            End If
-        End If
-        Return host
+    Private Shared Function TryCreateProxyAddress(host As String, port As Integer, ByRef address As Uri) As Boolean
+        Return Uri.TryCreate("http://" & host & ":" & port.ToString(Globalization.CultureInfo.InvariantCulture), UriKind.Absolute, address)
     End Function
 
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest
@@ -135,15 +115,15 @@ Public Class Conexion
         webrq.Timeout = 60000
         webrq.ReadWriteTimeout = 120000
 
-        If _UsarProxy Then
-            Dim proxy As New WebProxy(_ProxyIP, _ProxyPort)
-            If Not String.IsNullOrEmpty(_ProxyUser) Then
-                proxy.Credentials = New NetworkCredential(_ProxyUser, _ProxyPassword)
+        Dim settings As ProxySettings = System.Threading.Volatile.Read(_proxy)
+        If settings IsNot Nothing Then
+            If settings.Address Is Nothing Then Throw New UriFormatException("Invalid proxy address.")
+            Dim proxy As New WebProxy(settings.Address)
+            If Not String.IsNullOrEmpty(settings.Username) Then
+                proxy.Credentials = New NetworkCredential(settings.Username, settings.Password)
             End If
             webrq.Proxy = proxy
         End If
-
-        'webrq.UserAgent = GetUserAgent()
 
         Return webrq
     End Function

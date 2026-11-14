@@ -11,6 +11,8 @@ using System.Threading;
 using System.Collections.Generic;
 using MegaDownloader;
 
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
+
 // Runs against the built .NET Framework application, with isolated files and
 // loopback HTTP fixtures. No real MEGA account or user configuration is loaded.
 public partial class RegressionTests {
@@ -172,6 +174,7 @@ public partial class RegressionTests {
         FeatureDialogs();
         ArchiveEdges();
         ConfirmedAuditFixes();
+        FinalReleaseCases();
         PreserveCompletedName(plain,key,encrypted);
         // Cross multiple streaming buffers and end in a partial AES block.
         byte[] large=Enumerable.Range(0,65539).Select(i=>(byte)(i%251+1)).ToArray();
@@ -804,7 +807,7 @@ public partial class RegressionTests {
             var until=DateTime.UtcNow.AddSeconds(5);
             while(pid==0&&DateTime.UtcNow<until){try{if(File.Exists(marker))int.TryParse(File.ReadAllText(marker),out pid);}catch(IOException){}Thread.Sleep(10);}
             Check(pid>0,"7z cancellation helper started");
-            var timer=System.Diagnostics.Stopwatch.StartNew();type.GetField("CancelRequested").SetValue(extractor,true);
+            var timer=System.Diagnostics.Stopwatch.StartNew();type.GetProperty("CancelRequested").SetValue(extractor,true,null);
             Check(task.Wait(5000)&&task.Result is OperationCanceledException,"cancellation interrupts a live CLI with open stdout/stderr");
             bool stopped;
             try{using(var child=System.Diagnostics.Process.GetProcessById(pid))stopped=child.HasExited;}catch(ArgumentException){stopped=true;}
@@ -939,6 +942,12 @@ public partial class RegressionTests {
             File.WriteAllText(Path.Combine(directory,"fr-CA.xml"),"<Language id='fr-CA' name='Français (Canada)'><Text key='Stop'>Arrêt personnalisé</Text></Language>",Encoding.UTF8);
             init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("fr-CA"),directory});
             Check(Language.GetCurrentLanguageCode()=="fr-CA" && Language.GetText("Stop")=="Arrêt personnalisé" && Language.GetText("Start")=="Démarrer","a regional custom pack retains its same-language built-in fallback for missing text");
+            string oldFrench=Path.Combine(directory,"fr-FR.xml");
+            const string oldPack="<Language id='fr-FR'><Text key='&amp;Help'>Aide&amp;</Text><Text key='E&amp;xit'>My custom exit</Text></Language>";
+            File.WriteAllText(oldFrench,oldPack,Encoding.UTF8);
+            init.Invoke(null,new object[]{"fr-FR",System.Globalization.CultureInfo.GetCultureInfo("fr-FR"),directory});
+            Check(Language.GetText("&Help")=="&Aide","the stock French menu mnemonic migrates on upgrade");
+            Check(Language.GetText("E&xit")=="My custom exit"&&File.ReadAllText(oldFrench)==oldPack,"other overrides and the disk file are preserved");
             File.WriteAllText(custom,"<broken");
             init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
             Check(Language.GetCurrentLanguageCode()=="en-US" && Language.GetText("Stop")=="Stop","a corrupt custom-only language pack falls back to English");
@@ -1977,11 +1986,20 @@ public partial class RegressionTests {
         var all=URLExtractor.ExtraerURLs(url);
         Check(all.Count>0 && all[0]=="https://mega.nz/file/"+id+"#"+key,
               "general URL extraction repairs split key");
+        string fileLink="https://mega.nz/file/"+id+"#"+key;
+        Check(URLExtractor.ExtraerSoloURLsOficiales(url+" followed by prose").Single()==fileLink,
+              "file key repair stops before trailing English prose");
+        Check(URLExtractor.ExtraerURLs("mega://#!"+id+"!"+key.Substring(0,20)+"\n"+key.Substring(20)+" next").Single()=="mega://#!"+id+"!"+key,
+              "legacy protocol URLs repair split keys without absorbing prose");
         string folderKey=new string('B',22);
         string folder="https://mega.nz/folder/FOLDERID01#"+folderKey.Substring(0,10)+"\r\n"+folderKey.Substring(10);
         var folders=URLExtractor.ExtraerSoloURLsOficiales(folder);
         Check(folders.Count==1 && folders[0]=="https://mega.nz/folder/FOLDERID01#"+folderKey,
               "split 22-character folder key is repaired");
+        Check(URLExtractor.ExtraerURLs(folder+"/file/CHILD123 next").Single()=="https://mega.nz/folder/FOLDERID01#"+folderKey+"/file/CHILD123",
+              "repaired folder key retains the selected child");
+        Check(URLExtractor.ExtraerSoloURLsOficiales("https://mega.nz/folder/FOLDERID01#"+folderKey+" trailing words").Single().EndsWith(folderKey),
+              "a complete folder key is left intact");
 
         // A short-volume root leaves room below the legacy 260-character full-path
         // limit, while a >240-character entry still exercises hash shortening.
@@ -1997,11 +2015,11 @@ public partial class RegressionTests {
 
         string volumeDir=Path.Combine(root,"audit-volumes"); Directory.CreateDirectory(volumeDir);
         string second=Path.Combine(volumeDir,"movie.7z.002"); File.WriteAllText(second,"not-first");
-        var controller=DescompresorController.GetController();
-        var added=(bool)typeof(DescompresorController).GetMethod("AgregarElemento",hidden|BindingFlags.Public).Invoke(controller,new object[]{"VOLUME02",second,true,""});
+        var controller=(DescompresorController)Activator.CreateInstance(typeof(DescompresorController),true);
+        bool added=controller.AgregarElemento("VOLUME02",second,true,"");
         Check(added,"non-first volume is accepted into deferred extraction state");
-        var queue=(System.Collections.IDictionary)typeof(DescompresorController).GetField("_colaElementos",hidden).GetValue(controller);
-        Check(queue.Count>=1,"non-first volume is queued for waiting extraction");
+        Check(string.Equals(controller.GetCola().Single(),Path.GetFullPath(second),StringComparison.OrdinalIgnoreCase),
+              "non-first volume is queued for waiting extraction");
 
         var infoType=typeof(Conexion.InformacionFichero);
         var info=System.Runtime.Serialization.FormatterServices.GetUninitializedObject(infoType);
@@ -2009,35 +2027,300 @@ public partial class RegressionTests {
         infoType.GetField("FileKey").SetValue(info,key);
         infoType.GetField("Nombre").SetValue(info,"data.bin");
         infoType.GetField("Tamano").SetValue(info,1000L);
-        infoType.GetField("URL").SetValue(info,"http://127.0.0.1:1/nope");
+        infoType.GetField("URL").SetValue(info,"invalid upstream URL");
         var moduleType=typeof(StreamingModule);
         var urls=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)moduleType.GetField("Urls",shared).GetValue(null);
         urls.Clear(); urls["HTTPRAW01|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(5),(Conexion.InformacionFichero)info);
         var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
-        cfg.ServidorStreamingPassword="";
-        int port=FreeTcpPort();
-        using(var server=new LocalFileServer(new byte[]{1,2,3})) {
-            var http=new HttpServer.HttpServer(); http.Add(new StreamingModule(ref cfg)); http.Start(IPAddress.Loopback,port);
-            try {
-                foreach(bool ranged in new[]{false,true}) {
-                    using(var client=new TcpClient()) {
-                        client.Connect(IPAddress.Loopback,port); client.ReceiveTimeout=4000;
-                        var stream=client.GetStream();
-                        string req="GET /streaming?mega=!HTTPRAW01!"+key+" HTTP/1.1\r\nHost: 127.0.0.1\r\n"+(ranged?"Range: bytes=100-200\r\n":"")+"Connection: close\r\n\r\n";
-                        byte[] bytes=Encoding.ASCII.GetBytes(req); stream.Write(bytes,0,bytes.Length); stream.Flush();
-                        var sb=new StringBuilder(); byte[] buf=new byte[4096]; int n;
-                        try { while((n=stream.Read(buf,0,buf.Length))>0) sb.Append(Encoding.ASCII.GetString(buf,0,n)); } catch {}
-                        string raw=sb.ToString();
-                        int split=raw.IndexOf("\r\n\r\n",StringComparison.Ordinal);
-                        Check(split>0 && raw.StartsWith("HTTP/1.1 502"),"streaming error returns 502: ranged="+ranged);
-                        string head=raw.Substring(0,split), body=raw.Substring(split+4);
-                        Check(!head.Contains("Content-Range:") && !head.Contains("Accept-Ranges:"),"streaming error clears range headers: ranged="+ranged);
-                        int declaredLength=ExtractHeaderLong(head,"Content-Length");
-                        Check(body.Length>0 && declaredLength==body.Length,
-                              "streaming error declares exact error body length: ranged="+ranged);
+        cfg.ServidorStreamingActivo=true;
+        cfg.ServidorWebActivo=true;
+        cfg.ServidorStreamingPuerto=FreePort();
+        var busy=new TcpListener(IPAddress.Loopback,0);
+        var previousProxy=WebRequest.DefaultWebProxy;
+        busy.Start();
+        cfg.ServidorWebPuerto=((IPEndPoint)busy.LocalEndpoint).Port;
+        try {
+            WebRequest.DefaultWebProxy=null;
+            Check(!string.IsNullOrEmpty(ServidorWebController.StartWebServer(null,cfg)),
+                  "the busy remote-control port reports an error while streaming still starts");
+            foreach(bool ranged in new[]{false,true}) foreach(bool compressed in new[]{false,true}) {
+                using(var client=new TcpClient(IPAddress.Loopback.ToString(),cfg.ServidorStreamingPuerto)) {
+                    client.ReceiveTimeout=4000;
+                    var stream=client.GetStream();
+                    string request="GET /streaming?mega=!HTTPRAW01!"+key+" HTTP/1.1\r\nHost: 127.0.0.1\r\n"+
+                        (ranged?"Range: bytes=100-200\r\n":"")+(compressed?"Accept-Encoding: gzip\r\n":"")+"Connection: close\r\n\r\n";
+                    byte[] wire=Encoding.ASCII.GetBytes(request);
+                    stream.Write(wire,0,wire.Length);
+                    var header=new StringBuilder();
+                    while(header.Length<8192) {
+                        int next=stream.ReadByte();
+                        if(next<0) break;
+                        header.Append((char)next);
+                        int length=header.Length;
+                        if(length>=4&&header[length-4]=='\r'&&header[length-3]=='\n'&&header[length-2]=='\r'&&header[length-1]=='\n') break;
+                    }
+                    string head=header.ToString();
+                    Check(head.StartsWith("HTTP/1.1 502"),"streaming returns 502 with and without Range and gzip");
+                    Check(!head.Contains("Content-Range:")&&!head.Contains("Accept-Ranges:")&&!head.Contains("Content-Disposition:"),
+                          "streaming errors omit media headers");
+                    int declaredLength=ExtractHeaderLong(head,"Content-Length");
+                    Check(declaredLength>0&&declaredLength<=1024,"error has a bounded, nonzero content length");
+                    byte[] body=new byte[declaredLength];
+                    for(int received=0;received<body.Length;) {
+                        int read=stream.Read(body,received,body.Length-received);
+                        if(read==0) throw new EndOfStreamException("Incomplete streaming error text");
+                        received+=read;
+                    }
+                    if(compressed) {
+                        Check(head.Contains("Content-Encoding: gzip"),"gzip response advertises its encoding");
+                        using(var zipped=new GZipStream(new MemoryStream(body),CompressionMode.Decompress))
+                        using(var reader=new StreamReader(zipped))
+                            Check(reader.ReadToEnd()=="Streaming failed.","compressed 502 decodes to the complete declared response");
+                    } else {
+                        Check(Encoding.UTF8.GetString(body)=="Streaming failed.","plain 502 contains the complete declared response");
                     }
                 }
-            } finally { http.Stop(); }
+            }
+        } finally {
+            ServidorWebController.StopWebServer();
+            WebRequest.DefaultWebProxy=previousProxy;
+            busy.Stop();
+        }
+    }
+    static void FinalReleaseCases() {
+        QueueBackupIntegrity();
+        ArchiveCommitAndVolumes();
+        DownloadGenerationAfterStop();
+        UpdateReminderAndProxy();
+        Print("final_release", "queue backup, extraction transaction, multipart lifecycle, stop race, update reminder and proxy passed");
+    }
+
+    static void QueueBackupIntegrity() {
+        var fields = new[]{"_LoadTransientError","_LoadCorruptError","_PreserveBackupOnNextSave","_LastSavedXML","_TransientSkipLogged"}
+            .Select(name => typeof(Paquete).GetField(name,shared)).ToArray();
+        object[] original = fields.Select(field => field.GetValue(null)).ToArray();
+        var load = typeof(Paquete).GetMethod("CargarDesdeRuta",shared);
+        var loadOnce = typeof(Paquete).GetMethod("ReadQueue",shared);
+        var reload = typeof(Paquete).GetMethod("TryReloadFromPath",shared);
+        var save = typeof(Paquete).GetMethod("GuardarEnRuta",shared);
+        string primary = Path.Combine(root,"queue-final-release.xml");
+        string backup = primary+".bak";
+        const string invalid = "<Unexpected/>";
+        const string persisted = "<ListaPaquetes><Paquete><Nombre>last good queue</Nombre></Paquete></ListaPaquetes>";
+        try {
+            File.WriteAllText(primary,invalid);
+            File.WriteAllText(backup,persisted);
+            var packages = (List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Count==1&&packages[0].Nombre=="last good queue","wrong root restores the valid backup");
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(backup)==persisted&&File.ReadAllText(primary).Contains("last good queue"),"first save keeps the valid backup after recovering a corrupt primary");
+
+            File.WriteAllText(primary,"<ListaPaquetes><Unexpected/></ListaPaquetes>");
+            packages=(List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="last good queue","unknown queue content cannot mask a valid backup");
+
+            File.WriteAllText(primary,invalid);
+            File.WriteAllText(backup,"<ListaPaquetes>");
+            packages=(List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Count==0&&Paquete.HasTransientLoadError&&Paquete.HasCorruptLoadError,"invalid primary and backup arm write protection");
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(primary)==invalid&&File.ReadAllText(backup)=="<ListaPaquetes>","a degraded queue cannot overwrite either source");
+
+            File.WriteAllText(primary,persisted.Replace("last good queue","repaired primary"));
+            File.WriteAllText(backup,persisted);
+            using(File.Open(primary,FileMode.Open,FileAccess.Read,FileShare.None)) {
+                Check(reload.Invoke(null,new object[]{primary})==null&&Paquete.HasTransientLoadError&&!Paquete.HasCorruptLoadError,
+                      "a newly locked valid primary cannot be replaced by a stale backup");
+            }
+            packages=(List<Paquete>)reload.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="repaired primary"&&Paquete.HasTransientLoadError,"repaired primary is recovered, with protection until publication");
+            Paquete.CommitTransientRecovery();
+
+            using(File.Open(primary,FileMode.Open,FileAccess.Read,FileShare.None)) {
+                loadOnce.Invoke(null,new object[]{primary,1,0,CancellationToken.None,false});
+                Check(Paquete.HasTransientLoadError&&!Paquete.HasCorruptLoadError,"a new lock is classified independently of past corruption");
+            }
+            File.WriteAllText(primary,"<ListaPaquetes>");
+            packages=(List<Paquete>)reload.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="last good queue"&&Paquete.HasTransientLoadError,"a formerly locked primary may fall back after a fresh read proves corruption");
+            Paquete.CommitTransientRecovery();
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(backup)==persisted,"recovery with two different error states keeps the good backup");
+        } finally {
+            for(int i=0;i<fields.Length;i++) fields[i].SetValue(null,original[i]);
+        }
+    }
+
+    static string ExtendedTestPath(string path) {
+        return @"\\?\"+Path.GetFullPath(path);
+    }
+
+    static void MakeSevenZip(string sourceDir, string archive, string volumeSize = "") {
+        string arguments="a -t7z -y -mx=0 "+volumeSize+" \""+archive+"\" .\\*";
+        var start=new System.Diagnostics.ProcessStartInfo(Path.Combine(projectRoot,"Resources","Binaries","7zr.exe"),arguments) {
+            UseShellExecute=false, CreateNoWindow=true, WorkingDirectory=sourceDir, RedirectStandardOutput=true, RedirectStandardError=true
+        };
+        using(var process=System.Diagnostics.Process.Start(start)) {
+            var stdout=process.StandardOutput.ReadToEndAsync();
+            var stderr=process.StandardError.ReadToEndAsync();
+            if(!process.WaitForExit(15000)) { process.Kill(); throw new Exception("7z fixture creation timed out"); }
+            stdout.Wait();
+            Check(process.ExitCode==0,"7z fixture creation: "+stderr.Result);
+        }
+    }
+
+    static void ArchiveCommitAndVolumes() {
+        string archiveRoot=Path.Combine(root,"final-archive");
+        string source=Path.Combine(archiveRoot,"source");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source,"alpha.txt"),"NEW");
+        File.WriteAllText(Path.Combine(source,"bravo.txt"),"ADDED");
+        File.WriteAllText(Path.Combine(source,"omega.txt"),"BLOCKED");
+        string seven=Path.Combine(archiveRoot,"rollback.7z");
+        MakeSevenZip(source,seven);
+        string zip=Path.Combine(archiveRoot,"rollback.zip");
+        ZipFile.CreateFromDirectory(source,zip);
+        foreach(string archive in new[]{zip,seven}) {
+            string output=Path.Combine(archiveRoot,Path.GetExtension(archive).Substring(1));
+            Directory.CreateDirectory(Path.Combine(output,"omega.txt"));
+            File.WriteAllText(Path.Combine(output,"alpha.txt"),"ORIGINAL");
+            Check(DescompresorController.ExtractArchiveSync(archive,output,"")!="","a later output conflict fails "+archive);
+            Check(File.ReadAllText(Path.Combine(output,"alpha.txt"))=="ORIGINAL","rollback restores original content to the original name");
+            Check(Directory.GetFiles(output).Length==1&&Directory.GetDirectories(output).Length==1,"rollback removes only this extraction's new files and staging");
+        }
+
+        string longSource=Path.Combine(archiveRoot,"long-source");
+        string longOutput=Path.Combine(archiveRoot,"long-destination");
+        Directory.CreateDirectory(longSource);
+        string longName=new string('L',241)+".txt";
+        File.WriteAllText(ExtendedTestPath(Path.Combine(longSource,longName)),"long entry");
+        string longArchive=Path.Combine(archiveRoot,"long.7z");
+        MakeSevenZip(longSource,longArchive);
+        string error=DescompresorController.ExtractArchiveSync(longArchive,longOutput,"");
+        Check(error=="","real long-name 7z extraction succeeds: "+error);
+        string shortened=PathGuard.GetSafeArchiveEntryPath(longOutput,longName);
+        Check(Path.GetFileName(shortened).Length<=240&&File.ReadAllText(ExtendedTestPath(shortened))=="long entry","long 7z staging name reaches the shortened destination");
+        File.WriteAllText(ExtendedTestPath(Path.Combine(longSource,Path.GetFileName(shortened))),"maps to the same target");
+        string ambiguous=Path.Combine(archiveRoot,"ambiguous.7z");
+        MakeSevenZip(longSource,ambiguous);
+        Check(DescompresorController.ExtractArchiveSync(ambiguous,longOutput,"").Contains("ambiguous entry names"),"duplicate normalized 7z destinations are rejected");
+        Check(Directory.GetDirectories(longOutput).Length==0&&File.ReadAllText(ExtendedTestPath(shortened))=="long entry","a rejected 7z archive leaves no staging residue");
+
+        string volumeSource=Path.Combine(archiveRoot,"vol-source");
+        Directory.CreateDirectory(volumeSource);
+        byte[] payload=new byte[150000]; new Random(2602).NextBytes(payload);
+        File.WriteAllBytes(Path.Combine(volumeSource,"payload.bin"),payload);
+        string multi=Path.Combine(archiveRoot,"movie.7z");
+        MakeSevenZip(volumeSource,multi,"-v64k");
+        var type=typeof(DescompresorController);
+        var singleton=type.GetField("_Controller",shared);
+        object originalController=singleton.GetValue(null);
+        using(var worker=new System.ComponentModel.BackgroundWorker()) {
+            try {
+                foreach(int initial in new[]{1,2}) {
+                    var controller=(DescompresorController)Activator.CreateInstance(type,true);
+                    singleton.SetValue(null,controller);
+                    string directory=Path.Combine(archiveRoot,"volume-arrival-"+initial);
+                    Directory.CreateDirectory(directory);
+                    var downloads=Enumerable.Range(1,3).Select(n=>new Fichero {
+                        FileID="VOLUME"+n, NombreFichero="movie.7z."+n.ToString("D3"), RutaLocal=directory,
+                        ExtraccionFicheroAutomatica=true
+                    }).ToArray();
+                    try {
+                        Action<int> publish=n=>File.Copy(multi+"."+n.ToString("D3"),Path.Combine(directory,downloads[n-1].NombreFichero));
+                        Action<int> complete=n=>InvokePrivate(downloads[n-1],"downloader_Completed",null,EventArgs.Empty);
+                        Action work=()=>{
+                            InvokePrivate(controller,"PromoteWaitingVolumes");
+                            Check((bool)InvokePrivate(controller,"PonerElementoAProcesar"),"one archive group is available");
+                            InvokePrivate(controller,"ProcesarElemento",worker);
+                        };
+                        publish(initial);
+                        complete(initial);
+                        work();
+                        Check(downloads[initial-1].DescargaEstado()==Estado.EsperandoVolumenes&&!controller.Ocupado(),
+                              "first or later 7z volume waits without blocking shutdown");
+                        foreach(int n in Enumerable.Range(1,3).Where(n=>n!=initial)) publish(n);
+                        int joining=initial==1?2:1;
+                        complete(joining);
+                        InvokePrivate(controller,"PromoteWaitingVolumes");
+                        Check((bool)InvokePrivate(controller,"PonerElementoAProcesar"),"arrival wakes the existing waiting group");
+                        complete(3);
+                        InvokePrivate(controller,"ProcesarElemento",worker);
+                        Check(downloads.All(task=>task.DescargaEstado()==Estado.Completado),"all waiting and active-join tasks receive completion");
+                        foreach(var task in downloads) InvokePrivate(task,"downloader_Completed",null,EventArgs.Empty);
+                        Check(downloads.All(task=>task.DescargaEstado()==Estado.Completado)&&controller.GetCola().Count==0,
+                              "late completion notifications use the seal without queuing more extraction");
+                        string output=Path.Combine(directory,"movie");
+                        Check(Directory.GetFiles(output).Length==1&&File.ReadAllBytes(Path.Combine(output,"payload.bin")).SequenceEqual(payload),
+                              "the entire multipart archive extracts exactly once under the original basename");
+                    } finally { foreach(var task in downloads) task.Dispose(); }
+                }
+            } finally { singleton.SetValue(null,originalController); }
+        }
+    }
+
+    static void DownloadGenerationAfterStop() {
+        using(var downloader=new FileDownloader(false))
+        using(var entered=new ManualResetEvent(false)) {
+            downloader.LocalDirectory=root;
+            var data=new FileDownloader.DataPart(64,1);
+            downloader.AddFileInfo("STALE", "", "http://127.0.0.1/unused", "stale.bin",data);
+            downloader.File.Size=64;
+            var type=typeof(FileDownloader);
+            object gate=type.GetField("Mutex",hidden).GetValue(downloader);
+            var generation=type.GetField("m_chunkGeneration",hidden);
+            type.GetField("m_busy",hidden).SetValue(downloader,true);
+            generation.SetValue(downloader,7L);
+            Exception fault=null;
+            var late=new Thread(()=>{
+                try { entered.Set(); InvokePrivate(downloader,"NewDownloaderWorker",7L,-1); }
+                catch(Exception ex) { fault=Unwrap(ex); }
+            }) { IsBackground=true };
+            lock(gate) {
+                late.Start();
+                Check(entered.WaitOne(2000)&&SpinWait.SpinUntil(()=>(late.ThreadState&ThreadState.WaitSleepJoin)!=0,2000),"old backoff task reaches the worker creation lock");
+                downloader.Stop();
+            }
+            Check(late.Join(2000)&&fault==null,"stale worker callback exits after stop");
+            Check(data.ChunkList[0].Available&&downloader.OpenConnections==0&&(long)generation.GetValue(downloader)==8L,
+                  "a stopped generation cannot claim a chunk or start a worker");
+        }
+    }
+
+    static void UpdateReminderAndProxy() {
+        var normalize=typeof(Conexion).GetMethod("NormalizeProxyHost",shared);
+        foreach(string invalid in new[]{"http://localhost/folder","http://localhost?choice","http://localhost#fragment","http://example:secret@localhost"})
+            Check(normalize.Invoke(null,new object[]{invalid})==null,"unsafe or ambiguous proxy host is rejected");
+        var previousProxy=typeof(Conexion).GetField("_proxy",shared);
+        object original=previousProxy.GetValue(null);
+        try {
+            var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            config.UsarProxy=true;
+            config.ProxyPort=18081;
+            foreach(string input in new[]{"http://127.0.0.1:8000/","::1","[::1]:8000","example.local"}) {
+                config.ProxyIP=input;
+                Conexion.SetProxy(config);
+                var req=Conexion.CreateHttpWebRequest("https://localhost/");
+                Check(((WebProxy)req.Proxy).Address.Port==18081,"runtime proxy uses the separately configured port: "+input);
+            }
+        } finally { previousProxy.SetValue(null,original); }
+
+        using(var main=new StartupPerformanceMain()) {
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.CheckUpdates=true;
+            var due=typeof(Main).GetField("ProximoAvisoActualizacion",hidden);
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            var deadline=(DateTime)due.GetValue(main);
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            Check((DateTime)due.GetValue(main)==deadline,"a periodic update check preserves the same version's reminder deadline");
+            due.SetValue(main,(DateTime?)DateTime.Now.AddSeconds(-1));
+            typeof(Main).GetMethod("UpdateReminder_Tick",hidden).Invoke(main,new object[]{null,EventArgs.Empty});
+            Check(due.GetValue(main)!=null,"a hidden or inactive window does not consume a due reminder");
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            Check((DateTime)due.GetValue(main)>DateTime.Now,"a new version receives its own reminder deadline");
+            main.Config.UpdateSkipVersion="9.10.0";
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            Check(due.GetValue(main)==null,"skipping a specific version clears only its reminder");
         }
     }
     static int ExtractHeaderLong(string head,string name) {
@@ -2046,10 +2329,6 @@ public partial class RegressionTests {
             if(String.Equals(line.Substring(0,colon).Trim(),name,StringComparison.OrdinalIgnoreCase)) return int.Parse(line.Substring(colon+1).Trim());
         }
         return -1;
-    }
-    static int FreeTcpPort() {
-        var listener=new TcpListener(IPAddress.Loopback,0); listener.Start();
-        int port=((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port;
     }
     static string EncryptedName(string name) {
         byte[] text=Encoding.UTF8.GetBytes("MEGA{\"n\":\""+name+"\"}");

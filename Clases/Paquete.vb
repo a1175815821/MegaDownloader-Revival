@@ -223,22 +223,7 @@ Public Class Paquete
     End Function
 
     Friend Shared Function CargarStartupQueue(cancellationToken As CancellationToken) As Generic.List(Of Paquete)
-        Try
-            Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
-        Catch ex As Exception
-            ' 只有 AtomicFile 能区分"文件被瞬时占用"与"XML/节点确实损坏"。
-            ' 上层统一按损坏处理会让锁住的主队列被旧 .bak 顶替。
-            Dim transient As Boolean = (TypeOf ex Is IOException OrElse TypeOf ex Is UnauthorizedAccessException) OrElse
-                                       (TypeOf ex Is System.Xml.XmlException AndAlso Not String.IsNullOrWhiteSpace(_TransientBlockedSource))
-            If transient OrElse _TransientBlockedSource IsNot Nothing Then
-                _LoadTransientError = True
-                _LoadCorruptError = False
-                _TransientBlockedSource = ObtenerRutaFicheroDescargas()
-            Else
-                ArmWriteProtection()
-            End If
-            Throw
-        End Try
+        Return CargarDesdeRutaCancelable(ObtenerRutaFicheroDescargas(), cancellationToken)
     End Function
 
     Friend Shared Function CargarDesdeRuta(ByVal Fichero As String) As Generic.List(Of Paquete)
@@ -246,52 +231,76 @@ Public Class Paquete
     End Function
 
     Friend Shared Function CargarDesdeRutaCancelable(ByVal Fichero As String, cancellationToken As CancellationToken) As Generic.List(Of Paquete)
-
-        Log.WriteDebug("Loading download list XML")
-
-        Dim XML As XmlDocument = Nothing
-        Dim recoveredFromBackup As Boolean = False
-        Dim transientFailure As Boolean = False
-        SyncLock Mutex.GuardarDownloadList
-            If Not AtomicFile.TryLoadXmlCancelable(Fichero, XML, recoveredFromBackup, transientFailure, _TransientBlockedSource, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs, cancellationToken) Then
-                ' P0-3:被瞬时占用 ≠ 损坏:置标记让 GuardarEnFichero 拒写,否则周期性
-                ' 落盘会把"空队列"写盘、把完好队列文件挤进 .bak 直至彻底覆盖。
-                _LoadTransientError = transientFailure
-                If transientFailure Then
-                    Log.WriteError("Download list is locked by another process (transient). Running with an empty list; writes are suspended to preserve the on-disk file.")
-                End If
-                Return New Generic.List(Of Paquete)
-            End If
-            If recoveredFromBackup Then
-                Log.WriteWarning("Download list restored from backup file.")
-            End If
-        End SyncLock
-
-        Dim l As New Generic.List(Of Paquete)
-
-        Try
-            If XML.DocumentElement Is Nothing Then
-                ' An empty-but-well-formed file (no root element) passes XmlDocument.Load
-                ' with a null DocumentElement. Treat it as a corrupt primary and fall
-                ' back to the .bak rather than throwing an NRE which permanently disables
-                ' the queue. The caller (recovery) re-reads primary-or-bak next tick.
-                Throw New ApplicationException("Download list XML has no root element.")
-            End If
-            For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
-                cancellationToken.ThrowIfCancellationRequested()
-                Dim p As New Paquete
-                p.CargarXMLCancelable(NodoPaq, cancellationToken, 4)
-                l.Add(p)
-            Next
-            cancellationToken.ThrowIfCancellationRequested()
-            MarcarFicherosComoParados(l)
-        Catch
-            DisposeLoadedQueue(l)
-            Throw
-        End Try
-        Return l
+        Return ReadQueue(Fichero, AtomicFile.StartupAttempts, AtomicFile.StartupRetryDelayMs, cancellationToken, recovering:=False)
     End Function
 
+    Private Shared Function ReadQueue(filePath As String, attempts As Integer, delayMs As Integer,
+                                      cancellationToken As CancellationToken, recovering As Boolean) As Generic.List(Of Paquete)
+        Dim fullPath As String = Path.GetFullPath(filePath)
+        Dim packages As Generic.List(Of Paquete) = Nothing
+        Dim primary As AtomicFile.XmlReadState = ReadQueueFile(fullPath, attempts, delayMs, cancellationToken, packages)
+        Dim backup As AtomicFile.XmlReadState = AtomicFile.XmlReadState.Missing
+        If primary <> AtomicFile.XmlReadState.Loaded AndAlso primary <> AtomicFile.XmlReadState.Blocked Then
+            backup = ReadQueueFile(fullPath & ".bak", attempts, delayMs, cancellationToken, packages)
+        End If
+
+        If cancellationToken.IsCancellationRequested Then
+            DisposeLoadedQueue(packages)
+            cancellationToken.ThrowIfCancellationRequested()
+        End If
+        Dim loadedBackup As Boolean = backup = AtomicFile.XmlReadState.Loaded
+        Dim blocked As Boolean = primary = AtomicFile.XmlReadState.Blocked OrElse backup = AtomicFile.XmlReadState.Blocked
+        Dim invalid As Boolean = primary = AtomicFile.XmlReadState.Invalid OrElse backup = AtomicFile.XmlReadState.Invalid
+        SyncLock Mutex.GuardarDownloadList
+            If packages IsNot Nothing Then
+                _PreserveBackupOnNextSave = loadedBackup
+            ElseIf blocked OrElse invalid OrElse recovering Then
+                Dim corrupt As Boolean = invalid AndAlso Not blocked
+                If Not _LoadTransientError OrElse corrupt <> _LoadCorruptError Then
+                    Log.WriteWarning(If(corrupt, "Download list could not be read as a valid queue. Writes are suspended.",
+                                        "Download list is unavailable. Writes are suspended."))
+                End If
+                Volatile.Write(_LoadCorruptError, corrupt)
+                Volatile.Write(_LoadTransientError, True)
+                Return If(recovering, Nothing, New Generic.List(Of Paquete))
+            Else
+                _PreserveBackupOnNextSave = False
+            End If
+            If Not recovering Then ClearQueueWriteProtection()
+        End SyncLock
+
+        If packages Is Nothing Then Return New Generic.List(Of Paquete)
+        If loadedBackup Then Log.WriteWarning("Download list restored from backup file.")
+        MarcarFicherosComoParados(packages)
+        Return packages
+    End Function
+
+    Private Shared Function ReadQueueFile(filePath As String, attempts As Integer, delayMs As Integer,
+                                          cancellationToken As CancellationToken, ByRef packages As Generic.List(Of Paquete)) As AtomicFile.XmlReadState
+        Dim xml As XmlDocument = Nothing
+        Dim state As AtomicFile.XmlReadState = AtomicFile.ReadXml(filePath, xml, attempts, delayMs, cancellationToken)
+        If state <> AtomicFile.XmlReadState.Loaded Then Return state
+        If xml.DocumentElement Is Nothing OrElse xml.DocumentElement.Name <> "ListaPaquetes" OrElse
+           xml.DocumentElement.SelectSingleNode("*[not(self::Paquete)]") IsNot Nothing Then Return AtomicFile.XmlReadState.Invalid
+        Dim loaded As New Generic.List(Of Paquete)
+        Try
+            For Each node As XmlNode In xml.DocumentElement.SelectNodes("Paquete")
+                Dim package As New Paquete
+                loaded.Add(package)
+                package.CargarXMLCancelable(node, cancellationToken, 4)
+            Next
+            cancellationToken.ThrowIfCancellationRequested()
+            packages = loaded
+            Return AtomicFile.XmlReadState.Loaded
+        Catch ex As Exception When TypeOf ex Is FormatException OrElse TypeOf ex Is OverflowException OrElse
+                                   TypeOf ex Is ArgumentException OrElse TypeOf ex Is InvalidDataException
+            DisposeLoadedQueue(loaded)
+            Return AtomicFile.XmlReadState.Invalid
+        Catch
+            DisposeLoadedQueue(loaded)
+            Throw
+        End Try
+    End Function
 
     Private Shared Sub MarcarFicherosComoParados(ByRef ListaPaquetes As Generic.List(Of Paquete))
         SyncLock Mutex.ListaDescargas
@@ -321,165 +330,83 @@ Public Class Paquete
     End Sub
 
     Private Shared _LastSavedXML As String = Nothing
-    ''' <summary>P0-3:见 CargarDesdeFichero——加载因文件被瞬时占用而失败时,磁盘上的
-    ''' 队列可能完好,写盘必须全部跳过(空列表落盘=用户队列被清空)。</summary>
-    Private Shared _LoadTransientError As Boolean = False
-    Private Shared _TransientBlockedSource As String
-    ' 同 Configuracion._TransientSkipLogged:GuardarEnFichero 每 5s 一次,只在首次拦截时记日志。
-    Private Shared _TransientSkipLogged As Boolean = False
-    ' 损坏 ≠ 被占用:前者重读主文件永远不会成功,必须允许 .bak 顶替并如实告知用户。
-    Private Shared _LoadCorruptError As Boolean = False
-    Private Shared _RecoveryErrorLogged As Boolean = False
+    Private Shared _LoadTransientError As Boolean
+    Private Shared _LoadCorruptError As Boolean
+    Private Shared _TransientSkipLogged As Boolean
+    Private Shared _PreserveBackupOnNextSave As Boolean
 
-    ''' <summary>B2: 主窗体恢复计时器用来判断队列是否仍处于"加载降级"状态。</summary>
     Public Shared ReadOnly Property HasTransientLoadError As Boolean
         Get
-            Return _LoadTransientError
+            Return Volatile.Read(_LoadTransientError)
         End Get
     End Property
 
-    ''' <summary>降级原因是"文件损坏"而非"被其它程序占用"。两者提示语与恢复策略都不同。</summary>
     Public Shared ReadOnly Property HasCorruptLoadError As Boolean
         Get
-            Return _LoadCorruptError
+            Return Volatile.Read(_LoadCorruptError)
         End Get
     End Property
 
-    ''' <summary>Retries the locked source and returns the persisted queue.
-    ''' 写保护在调用方把列表合并进活动队列之后由 CommitTransientRecovery 解除;
-    ''' 仍被占用时返回 Nothing 且状态不变。</summary>
     Public Shared Function TryReloadAfterTransientLock() As Generic.List(Of Paquete)
-        If Not _LoadTransientError Then Return Nothing
+        If Not HasTransientLoadError Then Return Nothing
         Return TryReloadFromPath(ObtenerRutaFicheroDescargas())
     End Function
 
-    Friend Shared Function TryReloadFromPath(ByVal Fichero As String) As Generic.List(Of Paquete)
-        If Not _LoadTransientError Then Return Nothing
-        Dim XML As XmlDocument = Nothing
-        If _LoadCorruptError Then
-            ' 损坏不是占用:重读主文件不会自己变好。先试主文件(可能已被外部修复/替换),
-            ' 反序列化仍失败再用 .bak 顶替 —— 与启动加载同一优先级,好过永久空队列。
-            If AtomicFile.TryReloadPrimary(Fichero, XML) Then
-                Dim primary As Generic.List(Of Paquete) = TryDeserializeQueue(XML)
-                If primary IsNot Nothing Then Return primary
-            End If
-            Dim backup As XmlDocument = Nothing
-            If AtomicFile.TryReloadPrimary(Path.GetFullPath(Fichero) & ".bak", backup) Then
-                Dim fromBackup As Generic.List(Of Paquete) = TryDeserializeQueue(backup)
-                If fromBackup IsNot Nothing Then
-                    Log.WriteWarning("Download list recovered from backup after the primary file proved corrupt.")
-                    Return fromBackup
-                End If
-            End If
-            Return Nothing
-        End If
-        If Not AtomicFile.TryReloadAfterTransientFailure(Fichero, _TransientBlockedSource, XML) Then Return Nothing
-        Return TryDeserializeQueue(XML)
+    Friend Shared Function TryReloadFromPath(filePath As String) As Generic.List(Of Paquete)
+        If Not HasTransientLoadError Then Return Nothing
+        Return ReadQueue(filePath, 1, 0, CancellationToken.None, recovering:=True)
     End Function
 
-    ''' <summary>反序列化已读出的 XML;失败返回 Nothing。恢复计时器每秒一拍,
-    ''' 损坏文件会让同一异常无限刷日志,故错误只记首次。</summary>
-    Private Shared Function TryDeserializeQueue(ByVal XML As XmlDocument) As Generic.List(Of Paquete)
-        Dim l As New Generic.List(Of Paquete)
-        Try
-            If XML.DocumentElement Is Nothing Then
-                Throw New ApplicationException("Download list XML has no root element.")
-            End If
-            For Each NodoPaq As XmlNode In XML.DocumentElement.SelectNodes("Paquete")
-                Dim p As New Paquete
-                p.CargarXML(NodoPaq)
-                l.Add(p)
-            Next
-            MarcarFicherosComoParados(l)
-        Catch ex As Exception
-            DisposeLoadedQueue(l)
-            If Not _RecoveryErrorLogged Then
-                _RecoveryErrorLogged = True
-                Log.WriteError("Download list recovery failed: " & Log.SafeException(ex))
-            End If
-            Return Nothing
-        End Try
-        Return l
-    End Function
-
-    ''' <summary>通用启动异常只能进入"暂时不写盘"模式,不能据此声称主文件损坏并回退旧 .bak。</summary>
     Public Shared Sub ArmTransientWriteProtection()
         SyncLock Mutex.GuardarDownloadList
-            _LoadTransientError = True
-            _LoadCorruptError = False
-            _TransientBlockedSource = ObtenerRutaFicheroDescargas()
+            Volatile.Write(_LoadTransientError, True)
         End SyncLock
     End Sub
 
-    Public Shared Sub ArmWriteProtection()
-        SyncLock Mutex.GuardarDownloadList
-            If Not _LoadTransientError Then
-                _LoadTransientError = True
-                _TransientSkipLogged = False
-                Log.WriteWarning("Download list could not be parsed; write protection armed to preserve the on-disk file until recovery succeeds.")
-            End If
-            ' 本方法只在"XML 读出来了但节点反序列化抛异常"时被调用,即损坏而非占用。
-            _LoadCorruptError = True
-            _RecoveryErrorLogged = False
-        End SyncLock
-        _TransientBlockedSource = ObtenerRutaFicheroDescargas()
-    End Sub
-
-    ''' <summary>B2 final fix: 由主窗体在 Mutex.ListaDescargas 内完成合并后调用。
-    ''' 在此之前 _LoadTransientError 仍为 True,周期落盘一律拒写,不会出现"恢复中的
-    ''' 空队列被写盘、把刚恢复的真实队列挤进 .bak"的窗口。</summary>
-    Public Shared Sub CommitTransientRecovery()
-        _LoadTransientError = False
-        _LoadCorruptError = False
-        _RecoveryErrorLogged = False
-        _TransientBlockedSource = Nothing
-        _TransientSkipLogged = False
+    Private Shared Sub ClearQueueWriteProtection()
         _LastSavedXML = Nothing
-        Log.WriteInfo("Download list recovered after the on-disk file was unlocked.")
+        _TransientSkipLogged = False
+        Volatile.Write(_LoadCorruptError, False)
+        Volatile.Write(_LoadTransientError, False)
+    End Sub
+
+    Public Shared Sub CommitTransientRecovery()
+        SyncLock Mutex.GuardarDownloadList
+            ClearQueueWriteProtection()
+        End SyncLock
     End Sub
 
     Public Shared Sub GuardarEnFichero(ByVal ListaPaquetes As Generic.List(Of Paquete))
+        GuardarEnRuta(ObtenerRutaFicheroDescargas(), ListaPaquetes)
+    End Sub
 
-        Dim Fichero As String = ObtenerRutaFicheroDescargas()
-
-        ' B2: 不再依赖 File.Exists,文件被杀软移走时保护仍须生效;
-        ' 解除由 Main 的恢复计时器合并真实队列后调用 CommitTransientRecovery 完成。
-        If _LoadTransientError Then
-            If Not _TransientSkipLogged Then
-                _TransientSkipLogged = True
-                Log.WriteWarning("Skipping download list save: the on-disk file could not be loaded earlier (locked). It is preserved untouched.")
-            End If
-            Exit Sub
+    Friend Shared Sub GuardarEnRuta(filePath As String, packages As Generic.List(Of Paquete))
+        If HasTransientLoadError Then
+            SyncLock Mutex.GuardarDownloadList
+                If Not _TransientSkipLogged Then
+                    _TransientSkipLogged = True
+                    Log.WriteWarning("Skipping download list save until the on-disk queue can be recovered.")
+                End If
+            End SyncLock
+            Return
         End If
 
-        ' P-01: one comparison snapshot + one encrypted write document instead of
-        ' three full serializations. The old third pass re-serialized after a
-        ' successful write; state mutated during the write is now caught by
-        ' Main.GuardarFicheroDescargas' structure signature, which schedules the
-        ' next save. No queue state can be lost either way (worst case one extra write).
-        Dim compareXml As XmlDocument = GuardarXML(ListaPaquetes, False)
-        Dim snapshotXml As String = compareXml.DocumentElement.OuterXml
+        Dim snapshot As String = GuardarXML(packages, False).DocumentElement.OuterXml
+        SyncLock Mutex.GuardarDownloadList
+            If _LoadTransientError OrElse _LastSavedXML = snapshot Then Return
+        End SyncLock
+        Dim xml As XmlDocument = GuardarXML(packages, True)
 
-        If _LastSavedXML Is Nothing OrElse _LastSavedXML <> snapshotXml Then
-
-            Dim previousSaved As String = _LastSavedXML
-
-            ' Como el usuario y password se guarda cifrado con entropia, cada vez tendrá un valor distinto, no podemos compararlos...
-            Dim XML As XmlDocument = GuardarXML(ListaPaquetes, True)
-            Log.WriteDebug("Saving download list")
-
-            SyncLock Mutex.GuardarDownloadList
+        SyncLock Mutex.GuardarDownloadList
+            If _LoadTransientError OrElse _LastSavedXML = snapshot Then Return
             Try
-                AtomicFile.SaveXml(XML, Fichero)
-                _LastSavedXML = snapshotXml
+                AtomicFile.SaveXml(xml, filePath, preserveBackup:=_PreserveBackupOnNextSave)
+                _PreserveBackupOnNextSave = False
+                _LastSavedXML = snapshot
             Catch ex As Exception
                 Log.WriteError("Error saving download list XML: " & Log.SafeException(ex))
-                _LastSavedXML = previousSaved
             End Try
-            End SyncLock
-
-        End If
-
+        End SyncLock
     End Sub
 
     Private Shared Function GuardarXML(ByVal ListaPaquetes As Generic.List(Of Paquete), IncluirDatosCifrados As Boolean) As XmlDocument

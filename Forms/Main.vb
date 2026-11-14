@@ -146,7 +146,6 @@ Public Class Main
     Private bgwComprobarMaxConexionesCompleted As Boolean = False
     Private bgwActualizadorListaDescargasCompleted As Boolean = False
     Private bgwActualizadorDatosDiscoCompleted As Boolean = False
-    Private bgwDescompresorCompleted As Boolean = False
     ' P1-2:解压 worker 看门狗的重启防风暴计数。该 worker 是常驻循环,正常只在关闭时结束;
     ' 若它启动即崩,无节制重启会变成 3 秒一次的死循环(比原 bug 更吵)。
     ' 记录上次启动时刻:上一轮存活不足 30s 即视为崩溃,连续 5 次则放弃重启并写日志。
@@ -247,6 +246,7 @@ Public Class Main
     ' Enabled after Shown; the refresh worker owns the sampler and its Process handle.
     Private _resourceMonitoringEnabled As Integer
     Private _startupReady As Boolean = False
+    Private _startupCompleting As Boolean
     Private _startupNeedsAttention As Boolean = False
     Private _firstPaintLogged As Boolean = False
 
@@ -462,8 +462,17 @@ Public Class Main
     End Sub
 
     Private Sub CompleteStartup()
-        If _startupReady OrElse Cerrando OrElse IsDisposed OrElse System.Threading.Volatile.Read(_startupQueueLoading) Then Return
-        If Config Is Nothing Then Return
+        If _startupReady OrElse _startupCompleting OrElse Cerrando OrElse IsDisposed OrElse
+           System.Threading.Volatile.Read(_startupQueueLoading) OrElse Paquete.HasTransientLoadError OrElse Config Is Nothing Then Return
+        _startupCompleting = True
+        Try
+            CompleteStartupCore()
+        Finally
+            _startupCompleting = False
+        End Try
+    End Sub
+
+    Private Sub CompleteStartupCore()
         IniciarRecuperacionTransitoria()
         ' Defaults do not represent the user's start, proxy, speed or schedule
         ' preferences. Keep the UI/recovery timer alive without starting workers.
@@ -507,10 +516,11 @@ Public Class Main
         AddHandler bgwDescompresor.DoWork, AddressOf DescompresorController.DescompresorController_DoWork
         bgwDescompresor.WorkerReportsProgress = True
         bgwDescompresor.WorkerSupportsCancellation = True
-        AddHandler DescompresorController.GetController.DescompresionFinalizada, AddressOf DescompresionFinalizada_EventHandler
-        AddHandler DescompresorController.GetController.DescompresionDiferida, AddressOf DescompresionDiferida_EventHandler
         _descompresorLastStartUtc = DateTime.UtcNow
         _startupReady = True
+        Dim updateReminderTimer As New System.Windows.Forms.Timer(Me.components) With {.Interval = 1000}
+        AddHandler updateReminderTimer.Tick, AddressOf UpdateReminder_Tick
+        updateReminderTimer.Start()
         bgwComprobarMaxConexiones.RunWorkerAsync()
         bgwActualizadorListaDescargas.RunWorkerAsync()
         bgwActualizadorDatosDisco.RunWorkerAsync()
@@ -619,10 +629,7 @@ Public Class Main
         If _recoveryBusy Then Return
         _recoveryBusy = True
         Try
-            If HayCargaBloqueada() AndAlso _recoveryStatusLabel Is Nothing Then
-                MostrarAvisoCargaBloqueada()
-                Log.WriteWarning("A transient file lock was detected after startup; automatic recovery is active.")
-            End If
+            If HayCargaBloqueada() Then MostrarAvisoCargaBloqueada()
             Dim configRecovered As Boolean = False
             Dim queueRecovered As Boolean = False
             Dim libraryRecovered As Boolean = False
@@ -673,14 +680,6 @@ Public Class Main
                     ListaDescargas.EmptyListMsg = Language.GetText("OLV_EmptyList")
                     UpdateStartupActionAvailability()
                     queueRecovered = True
-                    ' B7: the queue failed during startup, so CompleteStartup — which starts
-                    ' the business workers — was never reached (StartDownload resumes the
-                    ' UI but not those workers). Healing the queue must now drive startup
-                    ' to completion, exactly like config recovery does. Idempotent when
-                    ' startup already ran (guarded by _startupReady inside CompleteStartup).
-                    If Not _startupReady AndAlso Not System.Threading.Volatile.Read(_startupQueueLoading) Then
-                        CompleteStartup()
-                    End If
                 End If
             End If
 
@@ -689,10 +688,19 @@ Public Class Main
                 If Cerrando OrElse IsDisposed Then Return
             End If
 
-            If configRecovered Then ResumeAfterConfigurationRecovery()
+            If configRecovered Then
+                ResumeAfterConfigurationRecovery()
+                If queueRecovered AndAlso _startupReady Then ProcessDeferredStartupArguments()
+            ElseIf queueRecovered Then
+                If _startupReady Then
+                    ProcessDeferredStartupArguments()
+                Else
+                    ContinueStartupAfterQueueLoad()
+                End If
+            End If
 
             If configRecovered OrElse queueRecovered OrElse libraryRecovered Then
-                Log.WriteInfo("Transient file lock recovered; on-disk data restored.")
+                Log.WriteInfo("On-disk application data was recovered.")
             End If
 
             ' Only celebrate once, when every degraded source is healthy again:
@@ -2894,34 +2902,17 @@ Public Class Main
 
                     ' Aprovechamos para ver si hay una nueva versión
 
+                    Dim url As String = Nothing
+                    Dim version As String = Nothing
                     If Config.CheckUpdates Then
-
-                        ' 必须在连接数锁外做网络 IO：该锁被 430ms 调度/刷新节拍获取，圈住 60s 超时的更新请求会让下载与界面整体停摆。
-                        Updater.ComprobarVersionMegadownloader(UrlNuevaVersionMegadownloader, VersionNuevaVersionMegadownloader)
-                        If Not String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) Then
-                            ActivarUpdateButton()
-                            ' "永不提醒"只针对特定版本:已跳过的版本不再弹窗,新版本仍会提醒
-                            If String.IsNullOrEmpty(Config.UpdateSkipVersion) OrElse Config.UpdateSkipVersion <> VersionNuevaVersionMegadownloader Then
-                                ' 已有安排时不得覆盖:用户选过"稍后提醒(3小时)"后,每小时检查
-                                ' 把它重置成 15 秒,表现为"刚点过稍后提醒又弹"。
-                                ' Date.MaxValue 只抑制当时那个版本;版本号一变必须重新排期,
-                                ' 否则点过"立即更新/永不提醒"后新版本再也不弹窗。
-                                If Not ProximoAvisoActualizacion.HasValue OrElse ProximoAvisoActualizacion.Value <= Now OrElse
-                                   Not String.Equals(VersionAvisoSuprimido, VersionNuevaVersionMegadownloader, StringComparison.Ordinal) Then
-                                    ProximoAvisoActualizacion = Now.AddSeconds(15)
-                                End If
-                            End If
-                        End If
-
-
+                        ' Network I/O remains on the worker and outside the connection lock.
+                        Updater.ComprobarVersionMegadownloader(url, version)
                         Log.WriteWarning("Version checked; next check in " & SegundosProximaActualizacion & " seconds")
                     End If
-
+                    If Not worker.CancellationPending AndAlso Not Cerrando AndAlso IsHandleCreated Then
+                        BeginInvoke(New Action(Of String, String)(AddressOf ApplyUpdateCheckResult), url, version)
+                    End If
                 End If
-                If ProximoAvisoActualizacion.HasValue AndAlso ProximoAvisoActualizacion.Value < Now Then
-                    MostrarMensajeActualizacion()
-                End If
-
 
                 ' Aprovechamos y hacemos un flush de memoria ya que este worker no hace mucho trabajo
                 If Me.ProximoFlushMemoria < Now Then
@@ -3512,7 +3503,6 @@ Public Class Main
     End Sub
 
     Private Sub bgwDescompresor_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgwDescompresor.RunWorkerCompleted
-        bgwDescompresorCompleted = True
         ' P1-2:解压 worker 看门狗。该 worker 是常驻循环(While Not CancellationPending),
         ' 正常只在关闭(CancelAsync)时结束;非关闭流程中结束 = 异常穿透 = worker 已死,
         ' 此后整个解压队列无人消费,直到重启进程。此前此处理只置标志不重启。
@@ -3541,11 +3531,6 @@ Public Class Main
                                                 Try
                                                     If Cerrando OrElse _ForzarCierre OrElse Me.IsDisposed OrElse Me.Disposing OrElse Not Me.IsHandleCreated Then Return
                                                     If bgwDescompresor.IsBusy Then Return
-                                                    ' 注意:不把 bgwDescompresorCompleted 置回 False。
-                                                    ' 该标志被关闭等待循环读取(:3531),若在此处清 False 而关闭流程
-                                                    ' 已经开始,关闭循环会永远等不到该 worker 结束。
-                                                    ' 重启后 worker 立刻进入 RunWorkerCompleted → 又置 True,自愈;
-                                                    ' 而关闭期由上面的 Cerrando 守卫直接跳过重启,不会走到这里。
                                                     _descompresorLastStartUtc = DateTime.UtcNow
                                                     bgwDescompresor.RunWorkerAsync()
                                                 Catch ex As Exception
@@ -3772,8 +3757,6 @@ Public Class Main
                         If Fichero.DescargaEstado = Estado.Descargando Or _
                            Fichero.DescargaEstado = Estado.CreandoLocal Or _
                            Fichero.DescargaEstado = Estado.Verificando Or _
-                           Fichero.DescargaEstado = Estado.Descomprimiendo Or _
-                           Fichero.DescargaEstado = Estado.EsperandoVolumenes Or _
                            Fichero.DescargaEstado = Estado.ComprobandoMD5 Then
                             TodosFinalizados = False
                         End If
@@ -3784,7 +3767,7 @@ Public Class Main
             If Not bgwActualizadorDatosDiscoCompleted Then TodosFinalizados = False
             If Not bgwComprobarMaxConexionesCompleted Then TodosFinalizados = False
             If Not bgwActualizadorListaDescargasCompleted Then TodosFinalizados = False
-            If Not bgwDescompresorCompleted Then TodosFinalizados = False
+            If DescompresorController.GetController.IsExtracting OrElse bgwDescompresor.IsBusy Then TodosFinalizados = False
             ' P2-2: pump the message loop instead of Thread.Sleep. Sleeping on the UI
             ' thread stopped the pump, so BackgroundWorker completions marshaled back
             ' to the UI thread (several "Completed" flags above are set from
@@ -4312,6 +4295,7 @@ Public Class Main
         ' Ya podemos trabajar con el objeto "tranquilamente"
         If TypeOf (Objeto) Is Fichero Then
             Dim fic As Fichero = CType(Objeto, Fichero)
+            fic.RemovePendingExtraction()
             Select Case Objeto.DescargaEstado
                 Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.EsperandoVolumenes, Estado.CreandoLocal
                     AddHandler fic.CancellationComplete, AddressOf DisposeFichero
@@ -4331,6 +4315,7 @@ Public Class Main
             Dim paqObj As Paquete = CType(Objeto, Paquete)
             Dim limpios As New Generic.List(Of Fichero)
             For Each fic As Fichero In paqObj.ListaFicheros
+                fic.RemovePendingExtraction()
                 Select Case fic.DescargaEstado
                     Case Estado.ComprobandoMD5, Estado.Descargando, Estado.Pausado, Estado.Descomprimiendo, Estado.EsperandoVolumenes, Estado.CreandoLocal
                         AddHandler fic.CancellationComplete, AddressOf DisposeFichero
@@ -4465,6 +4450,7 @@ Public Class Main
 
     Public Function ControlRemotoAgregarLinks(ByVal Links As String, ByVal NombrePaquete As String, ByVal CrearDirectorio As Boolean) As String Implements IDownloaderService.ControlRemotoAgregarLinks
         If System.Threading.Volatile.Read(_startupQueueLoading) Then Return Language.GetText("Loading please wait")
+        If Paquete.HasTransientLoadError Then Return Language.GetText("Queue_LoadFailed")
         Dim URLs As Generic.List(Of String) = URLExtractor.ExtraerURLs(Links)
         If URLs.Count = 0 Then
             Return Language.GetText("No valid URLs have been inserted")
@@ -4776,21 +4762,6 @@ Public Class Main
 
     ' This delegate enables asynchronous calls for setting
     ' the text property on a TextBox control.
-    Delegate Sub ActivarUpdateButtonCallback()
-    Private Sub ActivarUpdateButton()
-        ' InvokeRequired required compares the thread ID of the
-        ' calling thread to the thread ID of the creating thread.
-        ' If these threads are different, it returns true.
-        If Me.btnPause.InvokeRequired Then
-            Dim d As New ActivarUpdateButtonCallback(AddressOf ActivarUpdateButton)
-            Me.Invoke(d, New Object() {})
-        Else
-            If Not Me.btnUpdate.Visible Then
-                Me.btnUpdate.Visible = True
-            End If
-        End If
-    End Sub
-
     Delegate Sub CerrarAplicacionCallback()
     Private Sub CerrarAplicacion()
         ' InvokeRequired required compares the thread ID of the
@@ -4911,66 +4882,49 @@ Public Class Main
     '    End If
     'End Sub
 
-    Private ProximoAvisoActualizacion As Date? = Nothing
-    ' Date.MaxValue 表示"本版本已弹过/已抑制",但它不能连新版本一起抑制。
-    ' 记下被抑制的版本号,发现不同版本时允许重新排期。
-    Private VersionAvisoSuprimido As String = Nothing
-    Delegate Sub MostrarMensajeActualizacionCallback()
-    Private Sub MostrarMensajeActualizacion()
-        If Me.StatusStrip1.InvokeRequired Then
-            Dim d As New MostrarMensajeActualizacionCallback(AddressOf MostrarMensajeActualizacion)
-            Me.Invoke(d, New Object() {})
-        Else
-            ' 后台/最小化时不能每秒重入提醒逻辑:先把本版本标记为已排期,窗体激活后再弹。
-            ProximoAvisoActualizacion = Date.MaxValue
-            VersionAvisoSuprimido = VersionNuevaVersionMegadownloader
-            If Form.ActiveForm Is Nothing OrElse Not Form.ActiveForm.Equals(Me) Then Return
-            ' 三选:是=现在更新 / 否=稍后提醒(3小时) / 取消=此版本永不提醒
-                Dim Mensaje As String = Language.GetText("New version do you want to download it? Recommended!") & _
-                    vbNewLine & vbNewLine & "Version: " & VersionNuevaVersionMegadownloader & vbNewLine & _
-                    Language.GetText("Update prompt hint")
-                Dim Respuesta As Windows.Forms.DialogResult = MessageBox.Show(Mensaje, _
-                                   Language.GetText("New version available"), MessageBoxButtons.YesNoCancel)
-                If Respuesta = Windows.Forms.DialogResult.Yes Then
-                    btnUpdate_Click(Nothing, Nothing)
-                    ' Ya no avisamos más al usuario y dejamos Date.MaxValue
-                ElseIf Respuesta = Windows.Forms.DialogResult.No Then
-                    ProximoAvisoActualizacion = Now.AddHours(3) ' Cada 3 horas se lo recordamos
-                ElseIf Respuesta = Windows.Forms.DialogResult.Cancel Then
-                    ' 此版本永不提醒:记录跳过的版本号并保存,新版本仍会正常提醒
-                    Config.UpdateSkipVersion = VersionNuevaVersionMegadownloader
-                    Config.GuardarXML(False)
-                    Log.WriteInfo("User skipped version reminder: " & VersionNuevaVersionMegadownloader)
-                    ' 保持 Date.MaxValue,本版本不再弹窗
-                Else
-                    ProximoAvisoActualizacion = Now.AddHours(3)
-                End If
+    Private ProximoAvisoActualizacion As Date?
+
+    ' Update availability and the reminder deadline belong to the UI thread.
+    Private Sub ApplyUpdateCheckResult(url As String, version As String)
+        If Cerrando OrElse IsDisposed OrElse Config Is Nothing Then Return
+        Dim available As Boolean = Config.CheckUpdates AndAlso Not String.IsNullOrEmpty(url) AndAlso Not String.IsNullOrEmpty(version)
+        Dim sameVersion As Boolean = String.Equals(VersionNuevaVersionMegadownloader, version, StringComparison.Ordinal)
+        UrlNuevaVersionMegadownloader = If(available, url, Nothing)
+        VersionNuevaVersionMegadownloader = If(available, version, Nothing)
+        btnUpdate.Visible = available
+        If Not available OrElse String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal) Then
+            ProximoAvisoActualizacion = Nothing
+        ElseIf Not sameVersion Then
+            ProximoAvisoActualizacion = Now.AddSeconds(15)
         End If
     End Sub
 
+    Private Sub UpdateReminder_Tick(sender As Object, e As EventArgs) Handles Me.Activated
+        If Cerrando OrElse IsDisposed OrElse Config Is Nothing OrElse Not Config.CheckUpdates OrElse
+           Not Me.Visible OrElse Form.ActiveForm IsNot Me OrElse WindowState = FormWindowState.Minimized OrElse
+           Not ProximoAvisoActualizacion.HasValue OrElse Now < ProximoAvisoActualizacion.Value Then Return
 
-
-    Private Sub DescompresionFinalizada_EventHandler(ByVal Code As String, ByVal Success As Boolean, ByVal ErrorMessage As String)
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each fic As Fichero In paq.ListaFicheros
-                    If fic.FileID = Code Then
-                        fic.DescompresionFinalizada(Success, ErrorMessage)
-                    End If
-                Next
-            Next
-        End SyncLock
+        ProximoAvisoActualizacion = Nothing
+        Dim version As String = VersionNuevaVersionMegadownloader
+        If String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) OrElse
+           String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal) Then Return
+        Dim mensaje As String = Language.GetText("New version do you want to download it? Recommended!") &
+            vbNewLine & vbNewLine & "Version: " & version & vbNewLine & Language.GetText("Update prompt hint")
+        Dim respuesta As DialogResult = MessageBox.Show(Me, mensaje, Language.GetText("New version available"), MessageBoxButtons.YesNoCancel)
+        Select Case respuesta
+            Case DialogResult.Yes
+                btnUpdate_Click(Nothing, Nothing)
+            Case DialogResult.No
+                If String.Equals(VersionNuevaVersionMegadownloader, version, StringComparison.Ordinal) Then
+                    ProximoAvisoActualizacion = Now.AddHours(3)
+                End If
+            Case DialogResult.Cancel
+                Config.UpdateSkipVersion = version
+                Config.GuardarXML(False)
+                Log.WriteInfo("User skipped version reminder: " & version)
+        End Select
     End Sub
 
-    Private Sub DescompresionDiferida_EventHandler(ByVal Code As String)
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each fic As Fichero In paq.ListaFicheros
-                    If fic.FileID = Code Then fic.DescompresionDiferida()
-                Next
-            Next
-        End SyncLock
-    End Sub
 
 #End Region
 
@@ -5620,23 +5574,24 @@ Public Class Main
         ' exception here would then escape the Async Sub as an unhandled async-void
         ' exception (logged, but destabilising the message loop). Keep it contained.
         Try
-            Dim frmName As New AddLinks
-            frmName.Main = Me
+            Dim importedPackage As Paquete
+            Dim openStegano As Boolean
+            Using frmName As New AddLinks
+                frmName.Main = Me
 
-            frmName.Config = Me.Config
-            If Not String.IsNullOrEmpty(Url) Then
-                frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks, parsed)
-            End If
-            If Not String.IsNullOrEmpty(NombrePaquete) Then
-                frmName.txtNombre.Text = NombrePaquete
-            End If
+                frmName.Config = Me.Config
+                If Not String.IsNullOrEmpty(Url) Then
+                    frmName.AgregarEnlaces(Url, True, ExtraerURLs, EsconderLinks, parsed)
+                End If
+                If Not String.IsNullOrEmpty(NombrePaquete) Then
+                    frmName.txtNombre.Text = NombrePaquete
+                End If
 
-            frmName.ShowDialog(Me)
+                frmName.ShowDialog(Me)
 
-            Dim importedPackage As Paquete = frmName.LastImportedPackage
-            Dim openStegano As Boolean =   frmName.OpenSteganoLoadOnExit
-            ' Hasta que no se cierre la ventana no continuamos la ejecución
-            frmName.Dispose()
+                importedPackage = frmName.LastImportedPackage
+                openStegano = frmName.OpenSteganoLoadOnExit
+            End Using
 
             If importedPackage IsNot Nothing Then RevealImportedPackage(importedPackage)
 

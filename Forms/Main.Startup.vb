@@ -62,6 +62,7 @@ Partial Public Class Main
         Try
             loaded = Await Task.Run(Function() loader(cancellation.Token), cancellation.Token)
             cancellation.Token.ThrowIfCancellationRequested()
+            If Paquete.HasTransientLoadError Then Throw New IO.IOException("Download list needs recovery.")
             If Cerrando OrElse IsDisposed Then
                 _startupQueueCompletion.TrySetResult(False)
                 Return
@@ -149,9 +150,9 @@ Partial Public Class Main
     End Sub
 
     Private Function DeferStartupArguments(args As String()) As Boolean
-        If Not Volatile.Read(_startupQueueLoading) Then Return False
+        If Not Volatile.Read(_startupQueueLoading) AndAlso Not Paquete.HasTransientLoadError Then Return False
         SyncLock Mutex.ListaDescargas
-            If Not _startupQueueLoading Then Return False
+            If Not _startupQueueLoading AndAlso Not Paquete.HasTransientLoadError Then Return False
             _pendingStartupArguments.Add(CType(args.Clone(), String()))
             Return True
         End SyncLock

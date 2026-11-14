@@ -70,6 +70,18 @@ Public Class Language
         Return packs
     End Function
 
+    ' Stock v2.6.2 menu values also exist in the editable copies created on first run.
+    ' Migrate an exact match and preserve every other user translation.
+    Private Shared ReadOnly legacyMenuLabels As New Dictionary(Of String, Dictionary(Of String, String))(StringComparer.OrdinalIgnoreCase) From {
+        {"de-DE", New Dictionary(Of String, String) From {{"&Retrieve links from an image", "&Links aus einem Bild extrahieren"}}},
+        {"es-ES", New Dictionary(Of String, String) From {{"Encode lin&ks", "Codi&ficar enlaces"}}},
+        {"fr-FR", New Dictionary(Of String, String) From {{"&Help", "Aide&"}, {"E&xit", "F&ermer"}, {"Steganograph&y", "Stéganographi&e"}}},
+        {"hu-HU", New Dictionary(Of String, String) From {{"&Streaming", "&Streaming"}, {"&Retrieve links from an image", "&Linkek kinyerése képből"}}},
+        {"it-IT", New Dictionary(Of String, String) From {{"See extraction &queue", "Guarda l'estrazione e la &coda"}}},
+        {"pt-BR", New Dictionary(Of String, String) From {{"&Help", "&Ajuda"}, {"Manage Streaming &Library", "Editar &Biblioteca"}}},
+        {"ro-RO", New Dictionary(Of String, String) From {{"&Streaming", "&Flux"}, {"Manage Streaming &Library", "Gestionează & Biblioteca"}, {"FA&Q", "Întrebări frecvente&"}}},
+        {"ru-RU", New Dictionary(Of String, String) From {{"&Streaming", "&Стриминг"}}}  }
+
     Private Shared Function LoadUserPacks(directory As String) As Dictionary(Of String, XmlDocument)
         Dim packs As New Dictionary(Of String, XmlDocument)(StringComparer.OrdinalIgnoreCase)
         If Not IO.Directory.Exists(directory) Then Return packs
@@ -80,7 +92,9 @@ Public Class Language
                 If pack.DocumentElement Is Nothing OrElse pack.DocumentElement.Name <> "Language" Then Continue For
                 Dim code As String = pack.DocumentElement.GetAttribute("id")
                 If IsValidLanguageCode(code) AndAlso Not String.Equals(code, FollowSystemLanguageCode, StringComparison.OrdinalIgnoreCase) Then
-                    packs(CultureInfo.GetCultureInfo(code).Name) = pack
+                    Dim canonical As String = CultureInfo.GetCultureInfo(code).Name
+                    MigrateLegacyMenuLabels(pack, canonical)
+                    packs(canonical) = pack
                 End If
             Catch ex As Exception
                 Log.WriteError("User language file could not be loaded: " & file & " (" & Log.SafeException(ex) & ")")
@@ -88,6 +102,21 @@ Public Class Language
         Next
         Return packs
     End Function
+
+    Private Shared Sub MigrateLegacyMenuLabels(pack As XmlDocument, code As String)
+        Dim oldLabels As Dictionary(Of String, String) = Nothing
+        Dim defaultPack As XmlDocument = Nothing
+        If Not legacyMenuLabels.TryGetValue(code, oldLabels) OrElse Not builtinPacks.Value.TryGetValue(code, defaultPack) Then Return
+        Dim currentLabels As Dictionary(Of String, String) = GetTextMap(defaultPack)
+        For Each node As XmlElement In pack.DocumentElement.SelectNodes("Text").OfType(Of XmlElement)()
+            Dim key As String = node.GetAttribute("key")
+            Dim oldLabel As String = Nothing
+            Dim newLabel As String = Nothing
+            If oldLabels.TryGetValue(key, oldLabel) AndAlso node.InnerText = oldLabel AndAlso currentLabels.TryGetValue(key, newLabel) Then
+                node.InnerText = newLabel
+            End If
+        Next
+    End Sub
 
     Private Shared Function GetLanguageFamily(value As CultureInfo) As String
         Dim parent As CultureInfo = value

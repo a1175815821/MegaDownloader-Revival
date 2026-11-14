@@ -188,7 +188,7 @@ public partial class RegressionTests {
                 }finally {
                     release.Set();InvokeMain(main,"CancelStartupQueueLoad");PumpStartupUntil(()=>task.IsCompleted);
                     var timer=typeof(Main).GetField("_recoveryTimer",hidden).GetValue(main) as System.Windows.Forms.Timer;if(timer!=null)timer.Dispose();
-                    var completed=typeof(DescompresorController).GetEvent("DescompresionFinalizada");var handler=Delegate.CreateDelegate(completed.EventHandlerType,main,typeof(Main).GetMethod("DescompresionFinalizada_EventHandler",hidden));completed.RemoveEventHandler(DescompresorController.GetController(),handler);
+                    Paquete.CommitTransientRecovery();
                     foreach(var worker in workers)worker.Dispose();
                 }
             }

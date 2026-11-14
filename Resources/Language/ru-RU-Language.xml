@@ -552,6 +552,7 @@
   <Text key="Active downloads"><![CDATA[Активные загрузки]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[Не удалось разрешить MEGA-ссылку. Проверьте ссылку и убедитесь, что сервер стриминга запущен.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Не удалось распаковать RAR-архив. Проверьте, что все тома на месте и пароль верен.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Зашифрованные многотомные RAR-архивы требуют внешнего RAR-распаковщика для расшифровки.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Загрузки по расписанию]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Включить расписание загрузок]]></Text>

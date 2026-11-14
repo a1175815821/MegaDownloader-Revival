@@ -547,6 +547,7 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Active downloads"><![CDATA[Active downloads]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[Could not resolve the MEGA link. Please check the link and make sure the streaming server is running.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Could not extract the RAR archive. Check that all volumes are present and that the password is correct.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Encrypted multipart RAR archives require an external RAR extractor to decrypt.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Scheduled downloads]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Enable download schedule]]></Text>

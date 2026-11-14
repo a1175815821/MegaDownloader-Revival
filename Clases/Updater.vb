@@ -23,6 +23,7 @@ Public Class Updater
                 ' 会跟随 DOCTYPE 外部实体(file/http),仓库沦陷/MITM 时即 XXE。
                 XML.XmlResolver = Nothing
                 XML.LoadXml(Resultado.Mensaje)
+                If XML.DocumentElement Is Nothing Then Exit Sub
             Catch ex As Exception
                 Log.WriteError("Error loading the version check XML: " & ex.ToString)
                 Exit Sub

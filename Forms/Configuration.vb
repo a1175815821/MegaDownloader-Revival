@@ -496,12 +496,8 @@ Public Class Configuration
         Dim ProxyPort As Integer = 0
         Integer.TryParse(txtProxyPort.Text, ProxyPort)
 
-        ' 校验归一化后的主机串：运行时 SetProxy 用的就是它。空格/内嵌凭据等非法输入
-        ' 若放行，New WebProxy 会在每次请求时抛 UriFormatException。
         Dim proxyHost As String = Conexion.NormalizeProxyHost(txtProxyIP.Text)
-        Dim proxyUri As System.Uri = Nothing
-        If chkProxy.Checked AndAlso (ProxyPort < 1 OrElse ProxyPort > 65535 OrElse String.IsNullOrEmpty(proxyHost) _
-                                     OrElse Not System.Uri.TryCreate("http://" & proxyHost, System.UriKind.Absolute, proxyUri)) Then
+        If chkProxy.Checked AndAlso (ProxyPort < 1 OrElse ProxyPort > 65535 OrElse proxyHost Is Nothing) Then
             MessageBox.Show(Language.GetText("Invalid proxy configuration"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
         End If
@@ -608,7 +604,7 @@ Public Class Configuration
         Config.ProxyPasswordNeedsReentry = False
         Config.ProxyUser = txtProxyName.Text
         Config.ProxyPort = ProxyPort
-        Config.ProxyIP = txtProxyIP.Text
+        Config.ProxyIP = If(proxyHost, "")
         Config.LimiteVelocidadKBs = LimiteVelocidad
 
         Config.ServidorStreamingActivo = chkStreamingServer.Checked

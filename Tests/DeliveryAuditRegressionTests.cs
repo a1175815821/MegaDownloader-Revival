@@ -147,9 +147,6 @@ public partial class RegressionTests {
                         Check(workers.All(w=>w.Starts==1),"startup completion is idempotent after recovery");
                     } finally {
                         ServidorWebController.StopWebServer();
-                        var completed=typeof(DescompresorController).GetEvent("DescompresionFinalizada");
-                        var handler=Delegate.CreateDelegate(completed.EventHandlerType,main,typeof(Main).GetMethod("DescompresionFinalizada_EventHandler",hidden));
-                        completed.RemoveEventHandler(DescompresorController.GetController(),handler);
                         var timer=typeof(Main).GetField("_recoveryTimer",hidden).GetValue(main) as System.Windows.Forms.Timer;
                         if(timer!=null)timer.Dispose();
                         foreach(var worker in workers)worker.Dispose();
@@ -239,7 +236,7 @@ public partial class RegressionTests {
             var persisted=new XmlDocument();persisted.Load(libraryPath);
             Check(persisted.SelectNodes("XML/Elements/Element").Count==2,"library backup recovery writes both saved and pending entries");
         } finally { WebRequest.DefaultWebProxy=previousProxy; }
-        var fields=new[]{"_LoadTransientError","_TransientBlockedSource","_LastSavedXML","_TransientSkipLogged"}.Select(n=>typeof(Paquete).GetField(n,shared)).ToArray();
+        var fields=new[]{"_LoadTransientError","_LoadCorruptError","_PreserveBackupOnNextSave","_LastSavedXML","_TransientSkipLogged"}.Select(n=>typeof(Paquete).GetField(n,shared)).ToArray();
         object[] originals=fields.Select(f=>f.GetValue(null)).ToArray();
         try {
             string path=Path.Combine(root,"queue-backup-recovery.xml");

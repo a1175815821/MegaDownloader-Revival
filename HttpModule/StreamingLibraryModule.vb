@@ -77,7 +77,8 @@ Public Class StreamingLibraryModule
             Try
                 If Not response.HeadersSent Then
                     response.Status = System.Net.HttpStatusCode.InternalServerError
-                    ComprimirRespuesta(request, response, "Internal server error")
+                    response.Body.SetLength(0)
+                    StreamingModule.WriteTextResponse(request, response, "Internal server error")
                 End If
             Catch sendEx As Exception
                 Log.WriteError("StreamingLibraryModule: could not send the error response: " & sendEx.ToString)

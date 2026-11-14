@@ -6,6 +6,7 @@ Imports System.IO
 ''' </summary>
 Public NotInheritable Class PathGuard
     Private Const MaxSegmentLength As Integer = 240
+    Private Const MaxWindowsSegmentLength As Integer = 255
 
     Private Shared ReadOnly ReservedNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
         "CON", "PRN", "AUX", "NUL",
@@ -17,10 +18,14 @@ Public NotInheritable Class PathGuard
     End Sub
 
     Public Shared Function RequireSafePathSegment(ByVal value As String, Optional ByVal context As String = "path segment") As String
+        Return RequireSafePathSegment(value, context, MaxSegmentLength)
+    End Function
+
+    Private Shared Function RequireSafePathSegment(value As String, context As String, maxSegmentLength As Integer) As String
         If String.IsNullOrWhiteSpace(value) Then
             Throw New ArgumentException("Invalid " & context & ": the name is empty.")
         End If
-        If value.Length > MaxSegmentLength Then
+        If value.Length > maxSegmentLength Then
             Throw New ArgumentException("Invalid " & context & ": the name is too long.")
         End If
         If Path.IsPathRooted(value) OrElse value.IndexOf(Path.DirectorySeparatorChar) >= 0 OrElse value.IndexOf(Path.AltDirectorySeparatorChar) >= 0 Then
@@ -79,6 +84,10 @@ Public NotInheritable Class PathGuard
     End Function
 
     Public Shared Function GetSafePathUnderRoot(ByVal rootPath As String, ByVal relativePath As String, Optional ByVal allowRoot As Boolean = True) As String
+        Return GetSafePathUnderRoot(rootPath, relativePath, allowRoot, MaxSegmentLength)
+    End Function
+
+    Private Shared Function GetSafePathUnderRoot(rootPath As String, relativePath As String, allowRoot As Boolean, maxSegmentLength As Integer) As String
         If String.IsNullOrWhiteSpace(rootPath) Then Throw New ArgumentException("The destination root is empty.")
         Dim canonicalRoot As String = NormalizeFullPath(rootPath)
         If String.IsNullOrEmpty(relativePath) Then
@@ -89,9 +98,10 @@ Public NotInheritable Class PathGuard
             Throw New ArgumentException("Rooted and drive-qualified paths are not allowed.")
         End If
 
-        ValidateRelativePath(relativePath)
+        ValidateRelativePath(relativePath, maxSegmentLength)
         Dim normalizedRelative As String = relativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-        Dim candidate As String = Path.GetFullPath(Path.Combine(canonicalRoot, normalizedRelative))
+        Dim combined As String = Path.Combine(canonicalRoot, normalizedRelative)
+        Dim candidate As String = Path.GetFullPath(combined)
         EnsurePathUnderRoot(canonicalRoot, candidate, allowRoot)
         Return candidate
     End Function
@@ -127,73 +137,57 @@ Public NotInheritable Class PathGuard
         Return trimmed
     End Function
 
-    ''' <summary>
-    ''' Resolves an archive entry key under an extraction root. Rejects Zip Slip / absolute paths.
-    ''' </summary>
-    Public Shared Function GetSafeArchiveEntryPath(ByVal extractionRoot As String, ByVal entryKey As String) As String
-        If String.IsNullOrWhiteSpace(entryKey) Then
-            Throw New ArgumentException("Archive entry path is empty.")
-        End If
-        Dim relative As String = entryKey.Replace("/"c, Path.DirectorySeparatorChar).Replace("\"c, Path.DirectorySeparatorChar)
-        While relative.StartsWith(Path.DirectorySeparatorChar)
-            relative = relative.Substring(1)
-        End While
-        If String.IsNullOrWhiteSpace(relative) Then
-            Throw New ArgumentException("Archive entry path is empty.")
-        End If
-        relative = ShortenArchiveSegments(relative)
-        Return GetSafePathUnderRoot(extractionRoot, relative, allowRoot:=False)
+    ''' <summary>Resolves a validated Windows archive name (up to 255 UTF-16 code units per segment).
+    ''' The staging name can be longer than the final application filename.</summary>
+    Friend Shared Function GetArchiveStagingPath(root As String, entryKey As String) As String
+        Return GetSafePathUnderRoot(root, NormalizeArchivePath(entryKey), allowRoot:=False, maxSegmentLength:=MaxWindowsSegmentLength)
     End Function
 
-    ''' <summary>归档条目名来自第三方压缩包,可能合法地超过本类的 240 字符上限
-    ''' (Windows 单段上限 255,实测 7zr 能正常创建/解压 254 字符名)。此前直接抛异常
-    ''' 会让整个压缩包被拒。超过上限时保留可读前缀并追加由完整原名派生的 8 位哈希;
-    ''' 两个仅末尾不同的长名不会映射成同一路径。穿越/保留名/非法字符校验一律不放宽。</summary>
-    Private Shared Function ShortenArchiveSegments(ByVal relative As String) As String
-        Dim segments() As String = relative.Split(Path.DirectorySeparatorChar)
-        Dim changed As Boolean = False
+    ''' <summary>Resolves an archive entry to its final destination, shortening long segments.</summary>
+    Public Shared Function GetSafeArchiveEntryPath(ByVal extractionRoot As String, ByVal entryKey As String) As String
+        Dim relative As String = NormalizeArchivePath(entryKey)
+        ValidateRelativePath(relative, MaxWindowsSegmentLength)
+        Return GetSafePathUnderRoot(extractionRoot, ShortenArchiveSegments(relative), allowRoot:=False)
+    End Function
+
+    ' Call only after canonicalizing and validating the archive path.
+    Friend Shared Function ArchiveIoPath(fullPath As String) As String
+        If fullPath.Length < 248 OrElse fullPath.StartsWith("\\?\", StringComparison.Ordinal) Then Return fullPath
+        If fullPath.StartsWith("\\", StringComparison.Ordinal) Then Return "\\?\UNC\" & fullPath.Substring(2)
+        Return "\\?\" & fullPath
+    End Function
+
+    Private Shared Function NormalizeArchivePath(entryKey As String) As String
+        If String.IsNullOrWhiteSpace(entryKey) Then Throw New ArgumentException("Archive entry path is empty.")
+        Return entryKey.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
+    End Function
+
+    Private Shared Function ShortenArchiveSegments(relative As String) As String
+        Dim segments As String() = relative.Split(Path.DirectorySeparatorChar)
         For i As Integer = 0 To segments.Length - 1
-            Dim s As String = segments(i)
-            If s.Length <= MaxSegmentLength Then Continue For
+            Dim name As String = segments(i)
+            If name.Length <= MaxSegmentLength Then Continue For
+            Dim extension As String = Path.GetExtension(name)
+            If extension.Length > 32 Then extension = ""
             Dim suffix As String
-            Using sha As New System.Security.Cryptography.SHA256Managed()
-                Dim digest As Byte() = sha.ComputeHash(New System.Text.UTF8Encoding(False).GetBytes(s))
-                suffix = "~" & BitConverter.ToString(digest, 0, 6).Replace("-", "") & Path.GetExtension(s)
+            Using sha As System.Security.Cryptography.SHA256 = System.Security.Cryptography.SHA256.Create()
+                Dim digest As Byte() = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(name))
+                suffix = "~" & BitConverter.ToString(digest, 0, 6).Replace("-", "") & extension
             End Using
-            Dim keep As Integer = Math.Max(1, MaxSegmentLength - suffix.Length)
-            Dim cut As String = s.Substring(0, Math.Min(keep, s.Length)).TrimEnd(" "c, "."c)
-            If String.IsNullOrEmpty(cut) OrElse cut = "." OrElse cut = ".." Then cut = "_"
-            segments(i) = cut & suffix
-            changed = True
+            Dim keep As Integer = MaxSegmentLength - suffix.Length
+            If Char.IsHighSurrogate(name(keep - 1)) Then keep -= 1
+            Dim prefix As String = name.Substring(0, keep).TrimEnd(" "c, "."c)
+            segments(i) = If(prefix.Length = 0, "_", prefix) & suffix
         Next
-        If Not changed Then Return relative
         Return String.Join(Path.DirectorySeparatorChar.ToString(), segments)
     End Function
 
-    ''' <summary>
-    ''' Validates every non-directory archive entry; throws if any entry escapes the root.
-    ''' </summary>
-    Public Shared Function GetRelativePath(ByVal root As String, ByVal fullPath As String) As String
-        Dim fullRoot As String = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) & Path.DirectorySeparatorChar
-        Dim full As String = Path.GetFullPath(fullPath)
-        If Not full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase) Then Throw New UnauthorizedAccessException("Path escapes the extraction root.")
-        Return full.Substring(fullRoot.Length)
-    End Function
-
-    Public Shared Sub ValidateArchiveEntries(ByVal extractionRoot As String, ByVal entryKeys As IEnumerable(Of String))
-        If entryKeys Is Nothing Then Return
-        For Each key As String In entryKeys
-            If String.IsNullOrWhiteSpace(key) Then Continue For
-            GetSafeArchiveEntryPath(extractionRoot, key)
-        Next
-    End Sub
-
-    Private Shared Sub ValidateRelativePath(ByVal relativePath As String)
+    Private Shared Sub ValidateRelativePath(ByVal relativePath As String, Optional maxSegmentLength As Integer = MaxSegmentLength)
         Dim normalized As String = relativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
         If String.IsNullOrEmpty(normalized) Then Return
         Dim segments() As String = normalized.Split(New Char() {Path.DirectorySeparatorChar}, StringSplitOptions.None)
         For Each segment As String In segments
-            RequireSafePathSegment(segment)
+            RequireSafePathSegment(segment, "path segment", maxSegmentLength)
         Next
     End Sub
 End Class

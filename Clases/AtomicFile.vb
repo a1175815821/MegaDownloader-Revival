@@ -6,7 +6,7 @@ Friend NotInheritable Class AtomicFile
     Private Sub New()
     End Sub
 
-    Public Shared Sub SaveXml(ByVal document As XmlDocument, ByVal destinationPath As String)
+    Public Shared Sub SaveXml(ByVal document As XmlDocument, ByVal destinationPath As String, Optional preserveBackup As Boolean = False)
         If document Is Nothing Then Throw New ArgumentNullException("document")
         If String.IsNullOrWhiteSpace(destinationPath) Then Throw New ArgumentException("A destination path is required.", "destinationPath")
 
@@ -31,7 +31,7 @@ Friend NotInheritable Class AtomicFile
             End Using
 
             If File.Exists(fullDestination) Then
-                File.Replace(tempPath, fullDestination, fullDestination & ".bak", True)
+                File.Replace(tempPath, fullDestination, If(preserveBackup, Nothing, fullDestination & ".bak"), True)
             Else
                 File.Move(tempPath, fullDestination)
             End If
@@ -76,69 +76,59 @@ Friend NotInheritable Class AtomicFile
     End Function
 
     Friend Shared Function TryLoadXmlCancelable(ByVal sourcePath As String, ByRef document As XmlDocument, ByRef recoveredFromBackup As Boolean, ByRef transientFailure As Boolean, ByRef blockedSource As String, ByVal attempts As Integer, ByVal retryDelayMs As Integer, cancellationToken As Threading.CancellationToken) As Boolean
-        cancellationToken.ThrowIfCancellationRequested()
         recoveredFromBackup = False
         transientFailure = False
         blockedSource = Nothing
-        document = Nothing
         Dim fullSource As String = Path.GetFullPath(sourcePath)
-        If attempts < 1 Then attempts = 1
-        If retryDelayMs < 0 Then retryDelayMs = 0
-
-        If File.Exists(fullSource) Then
-            Dim locked As Boolean = False
-            For attempt As Integer = 1 To attempts
-                cancellationToken.ThrowIfCancellationRequested()
-                Try
-                    Dim primary As New XmlDocument
-                    primary.Load(fullSource)
-                    document = primary
-                    Return True
-                Catch ex As IOException
-                    ' 瞬时占用 ≠ 文件损坏:重试窗口内吃掉杀软/同步盘扫描。
-                    locked = True
-                    If attempt < attempts AndAlso retryDelayMs > 0 Then WaitForRetry(retryDelayMs, cancellationToken)
-                Catch
-                    ' 真正的 XML 损坏等:与占用无关,走 .bak 恢复。
-                    locked = False
-                    Exit For
-                End Try
-            Next
-            If locked Then
-                ' A locked primary is not corrupt. An older backup must not become
-                ' the writable state that replaces it when the lock is released.
-                transientFailure = True
-                blockedSource = fullSource
-                Return False
+        Dim state As XmlReadState = ReadXml(fullSource, document, attempts, retryDelayMs, cancellationToken)
+        If state = XmlReadState.Loaded Then Return True
+        If state = XmlReadState.Blocked Then
+            blockedSource = fullSource
+        Else
+            Dim backupPath As String = fullSource & ".bak"
+            state = ReadXml(backupPath, document, attempts, retryDelayMs, cancellationToken)
+            If state = XmlReadState.Loaded Then
+                recoveredFromBackup = True
+                Return True
             End If
+            If state = XmlReadState.Blocked Then blockedSource = backupPath
         End If
-
-        Dim backupPath As String = fullSource & ".bak"
-        If File.Exists(backupPath) Then
-            Dim locked As Boolean = False
-            For attempt As Integer = 1 To attempts
-                cancellationToken.ThrowIfCancellationRequested()
-                Try
-                    Dim backup As New XmlDocument
-                    backup.Load(backupPath)
-                    document = backup
-                    recoveredFromBackup = True
-                    Return True
-                Catch ex As IOException
-                    locked = True
-                    If attempt < attempts AndAlso retryDelayMs > 0 Then WaitForRetry(retryDelayMs, cancellationToken)
-                Catch
-                    locked = False
-                    Exit For
-                End Try
-            Next
-            If locked Then
-                transientFailure = True
-                blockedSource = backupPath
-            End If
-        End If
-
+        transientFailure = (state = XmlReadState.Blocked)
         Return False
+    End Function
+
+    Friend Enum XmlReadState
+        Missing
+        Loaded
+        Invalid
+        Blocked
+    End Enum
+
+    Friend Shared Function ReadXml(source As String, ByRef document As XmlDocument, attempts As Integer,
+                                   delayMs As Integer, cancellationToken As Threading.CancellationToken) As XmlReadState
+        document = Nothing
+        For attempt As Integer = 1 To Math.Max(1, attempts)
+            cancellationToken.ThrowIfCancellationRequested()
+            Try
+                Using stream As New FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    Dim xml As New XmlDocument With {.XmlResolver = Nothing}
+                    xml.Load(stream)
+                    document = xml
+                    Return XmlReadState.Loaded
+                End Using
+            Catch ex As FileNotFoundException
+                Return XmlReadState.Missing
+            Catch ex As DirectoryNotFoundException
+                Return XmlReadState.Missing
+            Catch ex As XmlException
+                Return XmlReadState.Invalid
+            Catch ex As UnauthorizedAccessException
+                Return XmlReadState.Blocked
+            Catch ex As IOException
+                If attempt < attempts AndAlso delayMs > 0 Then WaitForRetry(delayMs, cancellationToken)
+            End Try
+        Next
+        Return XmlReadState.Blocked
     End Function
 
     Private Shared Sub WaitForRetry(delayMs As Integer, cancellationToken As Threading.CancellationToken)
@@ -178,16 +168,6 @@ Friend NotInheritable Class AtomicFile
     ''' <summary>Re-reads ONLY the primary file after a transient lock. Never falls back to
     ''' the .bak: a stale backup must not become the recovered writable state.</summary>
     Public Shared Function TryReloadPrimary(ByVal sourcePath As String, ByRef document As XmlDocument) As Boolean
-        document = Nothing
-        Dim fullSource As String = Path.GetFullPath(sourcePath)
-        If Not File.Exists(fullSource) Then Return False
-        Try
-            Dim primary As New XmlDocument
-            primary.Load(fullSource)
-            document = primary
-            Return True
-        Catch ex As Exception
-            Return False
-        End Try
+        Return ReadXml(Path.GetFullPath(sourcePath), document, 1, 0, Threading.CancellationToken.None) = XmlReadState.Loaded
     End Function
 End Class

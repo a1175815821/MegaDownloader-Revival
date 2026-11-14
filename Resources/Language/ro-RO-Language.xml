@@ -476,6 +476,7 @@ Pentru a utiliza această opțiune, trebuie doar să urmați acești 3 pași sim
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Avertisment: imagine prea mică, este posibil ca datele să fie deteriorate.]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[Nu s-a putut rezolva linkul MEGA. Verificați linkul și dacă serverul de streaming rulează.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[Nu s-a putut extrage arhiva RAR. Verificați că toate volumele sunt prezente și că parola este corectă.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Arhivele RAR multipart criptate necesită un extractor RAR extern pentru decriptare.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Descărcări programate]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Activează programarea]]></Text>

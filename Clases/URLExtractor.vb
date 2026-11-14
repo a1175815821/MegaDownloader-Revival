@@ -37,7 +37,7 @@ Public Class URLExtractor
          "(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.co\.nz/folder/(?<FileID>[^#/\s]+)(#(?<FileKey>[A-Za-z0-9_\-]+))?(?:/folder/(?<SubFolderID>[A-Za-z0-9_\-]+))?(?:/file/(?<SubFileID>[A-Za-z0-9_\-]+))?"}
 
     Private Shared ReadOnly patternMEGAURI() As String = _
-        {"(?<TAG>mega)(?<MODE1>://|:///|:)(?<MODE2>#|#F|F|#N|N)!(?<FileID>[^\!]+)(!(?<FileKey>[A-Za-z0-9_\-#=]+))?", _
+        {"(?<TAG>mega)(?<MODE1>:///|://|:)(?<MODE2>#F|F|#N|N|#|)!(?<FileID>[^!\s]+)(!(?<FileKey>[A-Za-z0-9_\-#=]+))?", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>enc2(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
         "(?<TAG>mega)(?<MODE1>://|:///|:)(?<BASIC_ENCODE>fenc(\?|/\?))(?<ENCODED_FILEID>[A-Za-z0-9_\-#=]+)", _
@@ -70,9 +70,9 @@ Public Class URLExtractor
     Private Shared ReadOnly rxSubFileSuffix As New Regex("/file/(?<SubFileID>[A-Za-z0-9_\-]+)\s*$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
     Private Shared ReadOnly rxFolderHost As New Regex("(?<![A-Za-z0-9.\-])(?:https?://)?(?:www\.)?mega\.(?:co\.)?nz/(?:#f!|folder/)", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
 
-    Private Shared Function patternGetInfoURL() As String()
-        Return patternHTTPURI.Concat(patternMEGAURI).Concat(patternELCUri).ToArray
-    End Function
+    Private Shared ReadOnly rxMegaPlainAt As New Regex("\G" & patternMEGAURI(0), RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Shared ReadOnly rxFolderSelection As New Regex("\G(?:/folder/[A-Za-z0-9_\-]+)?(?:/file/[A-Za-z0-9_\-]+)?",
+                                                             RegexOptions.IgnoreCase Or RegexOptions.Compiled)
 
 
     ''' <summary>
@@ -125,58 +125,61 @@ Public Class URLExtractor
     End Function
 
 
-    ''' <summary>论坛/聊天软件常在长 key 中间插入空格或换行,正则在空白处截断后 key 变短,
-    ''' 整条链接被判"不完整"而丢弃。这里只救"key 明显偏短"的匹配:在其尾部小窗口内去空白
-    ''' 重取,且仅当结果恰好等于该类型标准 key 长度时才采用。完整 key 一律不动,
-    ''' 因此不会把链接后面的正文并进 key。旧版还用已截断的 match 判断链接类型;
-    ''' 统一用正则重新匹配清洗后的文本,避免 folder 链接被按 43 字符 file key 误判。</summary>
-    Private Shared Function RepairSplitKey(ByVal texto As String, ByVal m As Match, ByVal url As String, ByVal regx As Regex) As String
-        Dim key As String = m.Groups("FileKey").Value & ""
-        If key.Length >= 43 Then Return url
+    ''' <summary>Repairs a short key from complete base64url fragments. Stop at the key boundary
+    ''' so ordinary prose after the final fragment remains outside the extracted link.</summary>
+    Private Shared Function RepairSplitKey(text As String, m As Match) As String
+        Dim key As Group = m.Groups("FileKey")
+        Dim url As String = m.Value.Trim()
+        Dim isFolder As Boolean = rxFolderHost.IsMatch(url) OrElse
+                                  String.Equals(m.Groups("MODE2").Value.TrimStart("#"c), "F", StringComparison.OrdinalIgnoreCase)
+        Dim expected As Integer = If(isFolder, 22, 43)
+        If Not key.Success OrElse key.Length >= expected OrElse key.Index + key.Length <> m.Index + m.Length Then Return url
 
-        Dim windowEnd As Integer = Math.Min(texto.Length, m.Index + m.Length + 43)
-        If windowEnd <= m.Index Then Return url
-        Dim span As String = texto.Substring(m.Index, windowEnd - m.Index)
-        Dim cleaned As String = span.Replace(" ", "").Replace(vbTab, "").Replace(vbCr, "").Replace(vbLf, "")
-        If cleaned.Length = span.Length Then Return url
+        Dim index As Integer = key.Index + key.Length
+        Dim limit As Integer = index + Math.Min(text.Length - index, 128)
+        Dim remaining As Integer = expected - key.Length
+        Dim tail As New System.Text.StringBuilder(remaining)
+        While remaining > 0
+            If index >= limit OrElse Not Char.IsWhiteSpace(text(index)) Then Return url
+            While index < limit AndAlso Char.IsWhiteSpace(text(index))
+                index += 1
+            End While
+            Dim start As Integer = index
+            While index < limit AndAlso IsKeyCharacter(text(index))
+                index += 1
+            End While
+            Dim length As Integer = index - start
+            If length = 0 OrElse length > remaining OrElse
+               (index = limit AndAlso index < text.Length AndAlso IsKeyCharacter(text(index))) Then Return url
+            tail.Append(text, start, length)
+            remaining -= length
+        End While
 
-        Dim retry As Match = regx.Match(cleaned)
-        If Not retry.Success Then Return url
-        Dim retryKey As String = retry.Groups("FileKey").Value & ""
-        Dim isFolder As Boolean = retry.Value.IndexOf("/folder/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
-                                  retry.Value.IndexOf("#F!", StringComparison.OrdinalIgnoreCase) >= 0
-        If retryKey.Length <> If(isFolder, 22, 43) Then Return url
-        Return retry.Value.Trim()
+        If isFolder Then
+            Dim suffix As Match = rxFolderSelection.Match(text, index)
+            If suffix.Success Then tail.Append(suffix.Value)
+        End If
+        Return url & tail.ToString()
+    End Function
+
+    Private Shared Function IsKeyCharacter(c As Char) As Boolean
+        Return (c >= "A"c AndAlso c <= "Z"c) OrElse (c >= "a"c AndAlso c <= "z"c) OrElse
+               (c >= "0"c AndAlso c <= "9"c) OrElse c = "_"c OrElse c = "-"c
     End Function
 
     Public Shared Function ExtraerSoloURLsOficiales(ByVal Texto As String) As Generic.List(Of String)
-        Dim links As New Generic.HashSet(Of String) ' Evitamos repetidos
-
-        If Texto Is Nothing Then Return links.ToList
-
-        For Each regx As Regex In rxHTTPURI
-
-            ' 1) Detect ONLY valid MEGA http links
-            ' Examples:
-            ' https://mega.co.nz/#!abcdef!ghijklmnopqr
-            ' https://mega.co.nz/#!123456!789123456789
-
-            Dim matches As MatchCollection = regx.Matches(Texto)
-
-            For Each match As Match In matches
-                Dim url As String = RepairSplitKey(Texto, match, match.Value.Trim, regx)
-
-                Dim fileid As String = match.Groups("FileID").Value
-                If Not String.IsNullOrEmpty(fileid) Then
-                    links.Add(url)
-                End If
-            Next
-        Next
-
-
-        Return links.ToList
+        Dim links As New Generic.HashSet(Of String)
+        If Not String.IsNullOrEmpty(Texto) Then AddOfficialLinks(Texto, links)
+        Return links.ToList()
     End Function
 
+    Private Shared Sub AddOfficialLinks(text As String, links As Generic.HashSet(Of String))
+        For Each regex As Regex In rxHTTPURI
+            For Each m As Match In regex.Matches(text)
+                If m.Groups("FileID").Length > 0 Then links.Add(RepairSplitKey(text, m))
+            Next
+        Next
+    End Sub
 
     ' mega://configelc?http%3A%2F%2Ftest.com%2Felc%3Fa%3D1%26b%3D2:User%20Name:Api%20Key:Account%20Alias
     Public Shared Function ExtraerConfiguracionELC(ByVal Texto As String) As Generic.List(Of String)
@@ -210,35 +213,7 @@ Public Class URLExtractor
         If String.IsNullOrEmpty(Texto) Then Return links.ToList
 
 
-        ' 1) Detect ONLY valid MEGA http links 
-        ' Examples:
-        ' https://mega.co.nz/#!abcdef!ghijklmnopqr
-        ' https://mega.co.nz/#!123456!789123456789
-
-
-        'Dim regx As New Regex("(http|https)://([\w+?\.\w+])+([a-zA-Z0-9\~\!\@\#\$\%\^\&amp;\*\(\)_\-\=\+\\\/\?\.\:\;\'\,]*)?", RegexOptions.IgnoreCase)
-        Dim matches As MatchCollection
-
-        For Each regx As Regex In rxHTTPURI
-
-            matches = regx.Matches(Texto)
-
-            For Each match As Match In matches
-                Dim url As String = RepairSplitKey(Texto, match, match.Value.Trim, regx)
-
-                Dim fileid As String = match.Groups("FileID").Value
-                If Not String.IsNullOrEmpty(fileid) Then
-                    links.Add(url)
-                ElseIf EsUrlAcortador(url) Then
-                    url = Conexion.ObtenerUrlDesdeAcortador(url)
-                    fileid = ExtraerFileID(url)
-                    If Not String.IsNullOrEmpty(fileid) Then
-                        links.Add(url)
-                    End If
-                End If
-            Next
-        Next
-
+        AddOfficialLinks(Texto, links)
 
         ' 2) Detect MEGA uri
         ' Examples:
@@ -250,12 +225,13 @@ Public Class URLExtractor
         ' mega://https://mega.co.nz/#!abcdef!ghijklmnopqr
         ' mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
         ' mega://senc?_xlPqemSILarh5VBKbhSTFyQQQ0
-        matches = rxMegaGeneric.Matches(Texto)
+        Dim matches As MatchCollection = rxMegaGeneric.Matches(Texto)
         For Each match As Match In matches
 
             Dim data As String = match.Groups("DATA").Value
-            Dim value As String = match.Value.Trim
-
+            Dim value As String = match.Value.Trim()
+            Dim plain As Match = rxMegaPlainAt.Match(Texto, match.Index)
+            If plain.Success AndAlso plain.Length = value.Length Then value = RepairSplitKey(Texto, plain)
 
             If Not String.IsNullOrEmpty(data) AndAlso data.Length > 5 Then
 

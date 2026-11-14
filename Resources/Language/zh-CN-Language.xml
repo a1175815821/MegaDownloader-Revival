@@ -484,6 +484,7 @@ B 是同行下载数。]]></Text>
   <Text key="Active downloads"><![CDATA[活动下载]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[无法解析该 MEGA 链接。请检查链接是否正确,并确认流媒体服务器已启动。]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[无法解压 RAR 压缩包。请检查所有分卷是否齐全、密码是否正确。]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[加密的分卷 RAR 压缩包需要外部 RAR 解压工具才能解密。]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[定时下载]]></Text>
   <Text key="Schedule_Enable"><![CDATA[启用定时下载]]></Text>

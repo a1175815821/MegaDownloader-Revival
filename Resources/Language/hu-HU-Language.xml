@@ -473,6 +473,7 @@ Egyébként le tudja tölteni a linkeket, de nem látja azokat.]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[Figyelmeztetés: a kép túl kicsi, előfordulhat, hogy az adatok sérültek.]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[A MEGA link nem oldható fel. Ellenőrizd a linket és hogy a streaming kiszolgáló fut-e.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[A RAR archívum kicsomagolása nem sikerült. Ellenőrizd, hogy minden rész megvan-e, és hogy a jelszó helyes-e.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[A titkosított többrészes RAR-archívumok külső RAR-kicsomagolót igényelnek a feloldáshoz.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Ütemezett letöltések]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Letöltési ütemezés bekapcsolása]]></Text>

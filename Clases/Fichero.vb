@@ -118,6 +118,7 @@ Public Class Fichero
     ' 分块失败回调可能来自线程池(退避后新建的 worker 无 UI 同步上下文),
     ' 冷却判定与计数递增必须成对原子,否则并发回调会互相覆盖。
     Private ReadOnly _errorChunkLock As New Object()
+    Private ReadOnly _extractionCode As String = Guid.NewGuid().ToString("N")
 	
 	Public Sub New()
 		Me.New("")
@@ -465,7 +466,7 @@ Public Class Fichero
         ' Older queues have no output marker. Require a real MetaMAC match before
         ' treating a same-named existing file as their completed output.
         If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
-           EstadoDescarga <> Estado.ComprobandoMD5 AndAlso (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
+           EstadoDescarga <> Estado.EsperandoVolumenes AndAlso EstadoDescarga <> Estado.ComprobandoMD5 AndAlso (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
 
         OutputNeedsConfirmation = False
         OutputConfirmationPath = Nothing
@@ -742,14 +743,21 @@ Public Class Fichero
 		End If
 	End Sub
 
-	''' <summary>已登记等待后,解压控制器是否仍需把此任务计入完成通知范围。</summary>
-	Public ReadOnly Property ExtraccionDiferida As Boolean
-		Get
-			Return Me.EstadoDescarga = Estado.EsperandoVolumenes
-		End Get
-	End Property
 	
 	
+    Private Sub ExtractionStateChanged(deferred As Boolean, success As Boolean, message As String)
+        If disposedValue Then Return
+        If deferred Then
+            DescompresionDiferida()
+        Else
+            DescompresionFinalizada(success, message)
+        End If
+    End Sub
+
+    Friend Sub RemovePendingExtraction()
+        DescompresorController.GetController.RemoveDownload(_extractionCode)
+    End Sub
+
 	Private Sub downloader_Started(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		Me.EstadoDescarga = Estado.Descargando
 		Me.DescargaComenzada = True
@@ -883,7 +891,7 @@ Public Class Fichero
 		' Completed event is delayed or the background worker's RunWorkerCompleted is slow to fire.
 		' A delayed notification must also preserve extraction/verification already in progress.
 		If Me.EstadoDescarga <> Estado.Erroneo AndAlso
-		   Me.EstadoDescarga <> Estado.Descomprimiendo AndAlso
+		   Me.EstadoDescarga <> Estado.Descomprimiendo AndAlso Me.EstadoDescarga <> Estado.EsperandoVolumenes AndAlso
 		   Me.EstadoDescarga <> Estado.ComprobandoMD5 Then
 			Me.EstadoDescarga = Estado.Completado
 		End If
@@ -892,7 +900,8 @@ Public Class Fichero
 	Private Sub downloader_Completed(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		If Me.EstadoDescarga <> Estado.Erroneo Then
 			Log.WriteWarning("File " & Me.FileID & " downloaded.")
-			If Me.EstadoDescarga <> Estado.EsperandoVolumenes Then Me.EstadoDescarga = Estado.Completado
+			If Me.EstadoDescarga = Estado.EsperandoVolumenes OrElse Me.EstadoDescarga = Estado.Descomprimiendo Then Return
+			Me.EstadoDescarga = Estado.Completado
 			
 			' Obsolete, MEGA doesn't check MD5
 			If Not String.IsNullOrEmpty(Me.MD5) Then
@@ -927,13 +936,17 @@ Public Class Fichero
 			' Descomprimimos fichero
 			' Crear directorio al descomprimir?? De momento ponemos siempre que sí...
             If Me.ExtraccionFicheroAutomatica Then
-                Dim aceptado As Boolean = DescompresorController.GetController.AgregarElemento(Me.FileID, PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, Me.NombreFichero), True, Me.DescargaExtraccionPassword)
-                If aceptado Then
-                    Me.EstadoDescarga = Estado.Descomprimiendo
-                ElseIf Me.EstadoDescarga <> Estado.EsperandoVolumenes Then
-                    ' 非归档或控制器彻底拒绝:下载本身已经完成。
-                    Me.EstadoDescarga = Estado.Completado
-                End If
+                Me.EstadoDescarga = Estado.Descomprimiendo
+                Try
+                    Dim archiveName As String = If(String.IsNullOrEmpty(completedFileName), Me.NombreFichero, completedFileName)
+                    Dim archive As String = PathGuard.GetSafeFilePathUnderRoot(Me.RutaLocal, archiveName)
+                    If Not DescompresorController.GetController.EnqueueArchive(_extractionCode, archive, True, Me.DescargaExtraccionPassword, AddressOf ExtractionStateChanged) Then
+                        Me.EstadoDescarga = Estado.Completado
+                    End If
+                Catch ex As Exception
+                    Log.WriteError("Could not enqueue automatic extraction: " & Log.SafeException(ex))
+                    Me.DescompresionFinalizada(False, ex.Message)
+                End Try
             End If
 		End If
 		

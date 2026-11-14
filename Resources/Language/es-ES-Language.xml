@@ -546,6 +546,7 @@ Esto puede ocurrir si la imagen es demasiado pequeña, intente con una imagen m�
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[Advertencia: la verificación de datos ha fallado. No se ha creado el archivo de salida. Esto puede ocurrir si la imagen es demasiado pequeña; pruebe con una imagen más grande.]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[No se pudo resolver el enlace MEGA. Comprueba el enlace y que el servidor de streaming esté en marcha.]]></Text>
   <Text key="Could not extract the RAR archive. Check that all volumes are present and that the password is correct."><![CDATA[No se pudo extraer el archivo RAR. Comprueba que estén todos los volúmenes y que la contraseña sea correcta.]]></Text>
+  <Text key="Encrypted multipart RAR archives require an external RAR extractor to decrypt."><![CDATA[Los archivos RAR multiparte cifrados requieren un extractor RAR externo para descifrarlos.]]></Text>
   <!-- v2.6: batch preview and local download schedule -->
   <Text key="Schedule_Title"><![CDATA[Descargas programadas]]></Text>
   <Text key="Schedule_Enable"><![CDATA[Activar programación]]></Text>
