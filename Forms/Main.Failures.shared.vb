@@ -13,6 +13,8 @@ Partial Public Class Main
     Private failureBannerLabel As Label = Nothing
     Private failureRetryButton As Button = Nothing
     Private failureDismissButton As Button = Nothing
+    ' Dismissed failure count: suppressed until a new failure (or a changed set) needs attention again.
+    Private _failureBannerDismissedCount As Integer = 0
 
     ''' <summary>A 收口版：由 430ms UI 刷新 tick 认领 end-state 的 Erroneo 计数快照。
     ''' 与 quota 同款：UI 线程常驻刷新 vs 线程池 worker 调用，故内部 BeginInvoke。 </summary>
@@ -38,12 +40,17 @@ Partial Public Class Main
             Catch ex As ObjectDisposedException
             End Try
             If count > 0 Then
-                If Not failureBannerPanel.Visible Then
+                Dim dismissed As Boolean = (count = _failureBannerDismissedCount)
+                If Not dismissed AndAlso Not failureBannerPanel.Visible Then
                     failureBannerPanel.Visible = True
                     failureBannerPanel.BringToFront()
                     LayoutDownloadArea()
                 End If
                 failureBannerLabel.Text = Language.GetText("Downloads_Failed_Banner").Replace("%N%", count.ToString())
+                If dismissed AndAlso failureBannerPanel.Visible Then
+                    failureBannerPanel.Visible = False
+                    LayoutDownloadArea()
+                End If
             ElseIf failureBannerPanel.Visible Then
                 failureBannerPanel.Visible = False
                 LayoutDownloadArea()
@@ -100,10 +107,22 @@ Partial Public Class Main
         failureDismissButton.Top = (bannerH - failureDismissButton.Height) \ 2
         failureDismissButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         AddHandler failureDismissButton.Click, Sub()
-                                                 ' 隐藏而不清除计数：下轮刷新会按当前 Erroneo 重算，
-                                                 ' 若仍有失败会再次弹出，因此这里只隐藏的是“已看到”状态。
-                                                 ' 用户真正要消除的是修掉失败（重试/删除），不是关横幅。
-                                                 ' 若仍有失败，下轮刷新会重新弹出——这正是为了防止“关一次就永远看不到”。
+                                                 ' “已看到”：记住当前失败数，下轮刷新不再弹出，
+                                                 ' 失败数变化（新增/减少）时重新提示。重试/删除仍是清零的途径。
+                                                 Dim count As Integer = 0
+                                                 Try
+                                                     If ListaPaquetes IsNot Nothing Then
+                                                         SyncLock Mutex.ListaDescargas
+                                                             For Each paq As Paquete In ListaPaquetes
+                                                                 For Each fic As Fichero In paq.ListaFicheros
+                                                                     If fic.DescargaEstado = Estado.Erroneo Then count += 1
+                                                                 Next
+                                                             Next
+                                                         End SyncLock
+                                                     End If
+                                                 Catch
+                                                 End Try
+                                                 _failureBannerDismissedCount = count
                                                  failureBannerPanel.Visible = False
                                                  LayoutDownloadArea()
                                              End Sub

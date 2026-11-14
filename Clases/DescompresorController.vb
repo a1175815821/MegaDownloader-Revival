@@ -482,7 +482,7 @@ Public Class DescompresorController
 
     Public Function Ocupado() As Boolean
         SyncLock Mutex
-            Return _current IsNot Nothing OrElse _colaElementos.Values.Any(Function(item) item.DeadlineUtc = Date.MinValue)
+            Return _current IsNot Nothing OrElse _colaElementos.Count > 0
         End SyncLock
     End Function
 

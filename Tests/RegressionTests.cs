@@ -576,6 +576,16 @@ public partial class RegressionTests {
             Check(ReferenceEquals(typeof(Fichero).GetField("_Downloader",hidden).GetValue(f),newFd),"B8 a late cancel cannot clear a replacement downloader");
             f.Dispose();oldFd.Dispose();
         }
+        // Audit fix: over-limit counter with no recorded exception must not NRE.
+        using(var f=new Fichero())using(var fd=new FileDownloader(false)) {
+            f.FileID="NULLERR01";f.EstadoDescarga=Estado.Descargando;
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(f,fd);
+            typeof(Fichero).GetField("NumErroresChunk",hidden).SetValue(f,31);
+            typeof(Fichero).GetField("UltimoErrorChunk",hidden).SetValue(f,null);
+            InvokePrivate(f,"downloader_Canceled",fd,EventArgs.Empty);
+            Check(f.EstadoDescarga==Estado.Erroneo&&f.DescripcionError.Contains("too many connection errors"),"null last-error after over-limit counter becomes Erroneo without NRE");
+            Check(ReferenceEquals(typeof(Fichero).GetField("_Downloader",hidden).GetValue(f),null),"canceled downloader is detached even on the null-error path");
+        }
         Print("batch1_bugfixes","B1/B2 recovery, B3 ownership cache, B4 no-MAC links, B5 locale, B6/B7/B8 lifecycle passed");
     }
     // Independent MEGA chunk-MAC generator (zero-key AES ECB, SDK chunk schedule).
@@ -2013,6 +2023,13 @@ public partial class RegressionTests {
                   "distinct long archive names remain distinct within segment limit");
         } finally { Directory.Delete(d,true); }
 
+        // Audit fix: a queued-but-not-started archive must keep Ocupado() True.
+        {
+            string dir=Path.Combine(root,"ocupado-queue"); Directory.CreateDirectory(dir);
+            string single=Path.Combine(dir,"single.zip"); File.WriteAllText(single,"PK");
+            var ctl=(DescompresorController)Activator.CreateInstance(typeof(DescompresorController),true);
+            Check(ctl.AgregarElemento("OCUPADO01",single,false,"")&&ctl.Ocupado(),"queued extraction keeps Ocupado true before processing starts");
+        }
         string volumeDir=Path.Combine(root,"audit-volumes"); Directory.CreateDirectory(volumeDir);
         string second=Path.Combine(volumeDir,"movie.7z.002"); File.WriteAllText(second,"not-first");
         var controller=(DescompresorController)Activator.CreateInstance(typeof(DescompresorController),true);
@@ -2324,8 +2341,11 @@ public partial class RegressionTests {
 
     static void UpdateReminderAndProxy() {
         var normalize=typeof(Conexion).GetMethod("NormalizeProxyHost",shared);
-        foreach(string invalid in new[]{"http://localhost/folder","http://localhost?choice","http://localhost#fragment","http://example:secret@localhost"})
-            Check(normalize.Invoke(null,new object[]{invalid})==null,"unsafe or ambiguous proxy host is rejected");
+        foreach(string invalid in new[]{"http://localhost/folder","http://localhost?choice","http://localhost#fragment","http://example:secret@localhost",":8000","[::1","127.0.0.1:abc:def"})
+            Check(normalize.Invoke(null,new object[]{invalid})==null,"unsafe or ambiguous proxy host is rejected: "+invalid);
+        foreach(var kv in new Dictionary<string,string>{
+            {"127.0.0.1:8000","127.0.0.1"},{"[::1]:9999","::1"},{"http://proxy.local:1234/","proxy.local"},{"https://127.0.0.1:7000","127.0.0.1"}})
+            Check(string.Equals((string)normalize.Invoke(null,new object[]{kv.Key}),kv.Value,StringComparison.OrdinalIgnoreCase),"proxy host strips inline port and returns bare host: "+kv.Key);
         var previousProxy=typeof(Conexion).GetField("_proxy",shared);
         object original=previousProxy.GetValue(null);
         try {

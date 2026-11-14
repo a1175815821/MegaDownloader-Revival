@@ -84,7 +84,8 @@ Public Class Conexion
         System.Threading.Volatile.Write(_proxy, settings)
     End Sub
 
-    ''' <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.</summary>
+    ''' <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.
+    ''' An inline port ("127.0.0.1:8000", "[::1]:8000") is stripped; the configured port wins.</summary>
     Friend Shared Function NormalizeProxyHost(value As String) As String
         If String.IsNullOrWhiteSpace(value) Then Return Nothing
         Dim host As String = value.Trim()
@@ -93,6 +94,23 @@ Public Class Conexion
         host = host.TrimEnd("/"c, "\"c)
         If host.IndexOfAny(New Char() {"/"c, "\"c, "?"c, "#"c, "@"c}) >= 0 OrElse host.Any(AddressOf Char.IsWhiteSpace) Then Return Nothing
 
+        ' [IPv6]:port → [IPv6]
+        If host.StartsWith("[", StringComparison.Ordinal) Then
+            Dim close As Integer = host.IndexOf("]"c)
+            If close < 0 Then Return Nothing
+            host = host.Substring(0, close + 1)
+        Else
+            Dim firstColon As Integer = host.IndexOf(":"c)
+            If firstColon >= 0 Then
+                Dim secondColon As Integer = host.IndexOf(":"c, firstColon + 1)
+                If secondColon < 0 Then
+                    If firstColon = 0 Then Return Nothing ' ":8000" is not a host
+                    host = host.Substring(0, firstColon)
+                End If
+            End If
+        End If
+        If String.IsNullOrEmpty(host) Then Return Nothing
+
         Dim ip As IPAddress = Nothing
         If Not host.StartsWith("[", StringComparison.Ordinal) AndAlso IPAddress.TryParse(host, ip) AndAlso
            ip.AddressFamily = System.Net.Sockets.AddressFamily.InterNetworkV6 Then host = "[" & host & "]"
@@ -100,11 +118,16 @@ Public Class Conexion
         Dim address As Uri = Nothing
         If Not Uri.TryCreate("http://" & host, UriKind.Absolute, address) OrElse address.HostNameType = UriHostNameType.Unknown OrElse
            address.UserInfo.Length <> 0 OrElse address.AbsolutePath <> "/" Then Return Nothing
-        Return address.Host
+        Dim bare As String = address.Host
+        Dim bracket As Integer = bare.IndexOf("["c)
+        If bracket >= 0 AndAlso bare.EndsWith("]") Then bare = bare.Substring(bracket + 1, bare.Length - bracket - 2)
+        Return bare
     End Function
 
     Private Shared Function TryCreateProxyAddress(host As String, port As Integer, ByRef address As Uri) As Boolean
-        Return Uri.TryCreate("http://" & host & ":" & port.ToString(Globalization.CultureInfo.InvariantCulture), UriKind.Absolute, address)
+        Dim authority As String = If(host.StartsWith("[", StringComparison.Ordinal), host,
+                                     If(host.IndexOf(":"c) >= 0, "[" & host & "]", host))
+        Return Uri.TryCreate("http://" & authority & ":" & port.ToString(Globalization.CultureInfo.InvariantCulture), UriKind.Absolute, address)
     End Function
 
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest

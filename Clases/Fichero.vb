@@ -995,7 +995,7 @@ Public Class Fichero
 				"Last error: " & vbNewLine & _
 				" * File code: " & Me.FileID & vbNewLine & _
 				" * Error type: Connection error." & vbNewLine & _
-				" * Internal info: " & Me.UltimoErrorChunk.ToString
+				" * Internal info: " & If(Me.UltimoErrorChunk Is Nothing, "(no error detail recorded)", Me.UltimoErrorChunk.ToString)
 			Me.EstablecerError(descError, False, lastIsQuota)
 			Log.WriteError(descError)
 		Else
