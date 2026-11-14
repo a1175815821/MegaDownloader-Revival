@@ -1385,6 +1385,7 @@ public partial class RegressionTests {
                     daily.Checked=true;
                     ThemeManager.ApplyTheme(schedule,ConfiguracionUI.ThemeModeType.Light);
                     DrawFeatureDialog(schedule,"download-schedule.png");
+                    CheckActionButtons("schedule", schedule);
                     typeof(DownloadScheduleForm).GetMethod("SaveSettings",hidden).Invoke(schedule,new object[]{null,EventArgs.Empty});
                     Check(schedule.Settings.Enabled && schedule.Settings.StartMinute==1380 && schedule.Settings.EndMinute==420,"native schedule form returns the edited overnight settings");
                     Check(schedule.Settings.OnceStart==booking,"saving daily mode preserves the inactive booking draft");
@@ -1617,6 +1618,7 @@ public partial class RegressionTests {
                 DrawFeatureDialog(settings,"settings-connection-"+mode+".png");
                 tabs.SelectedIndex=0;
             }
+            CheckActionButtons("settings", settings);
         }
         using(var add=new PresentationAddLinks()) {
             typeof(AddLinks).GetMethod("Translate",hidden).Invoke(add,null);
@@ -1625,6 +1627,7 @@ public partial class RegressionTests {
             foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
                 ThemeManager.ApplyTheme(add,mode);
                 DrawFeatureDialog(add,"add-links-"+mode+".png");
+                CheckActionButtons("add-links "+mode, add);
             }
             // Capture the actual second page inside its normal host, using
             // demonstration metadata without starting inspection or downloads.
@@ -1646,9 +1649,39 @@ public partial class RegressionTests {
                 step.Text=Language.GetText("AddLinks_StepSelection");
                 ThemeManager.ApplyTheme(add,ConfiguracionUI.ThemeModeType.Light);
                 DrawFeatureDialog(add,"add-preflight-Light.png");
+                CheckActionButtons("preflight", preview);
                 host.Controls.Remove(preview);
             }
         }
+    }
+    static IEnumerable<System.Windows.Forms.Control> ControlTree(System.Windows.Forms.Control root) {
+        yield return root;
+        foreach(System.Windows.Forms.Control c in root.Controls)
+            foreach(var d in ControlTree(c)) yield return d;
+    }
+    // Guards the RightToLeft action panels (AddLinks / Settings / pre-flight / schedule):
+    // a CommandButton whose MinimumSize widened it past its content used to overflow its
+    // flow slot and overlap the neighbouring button. Every visible button pair in such a
+    // panel must stay disjoint.
+    static void CheckActionButtons(string label, System.Windows.Forms.Control root) {
+        int panels=0;
+        foreach(var c in ControlTree(root)) {
+            var flow=c as System.Windows.Forms.FlowLayoutPanel;
+            if(flow==null || flow.FlowDirection!=System.Windows.Forms.FlowDirection.RightToLeft) continue;
+            // Collect by type, not Visible: after the fixture hides the form every child
+            // reports Visible=false, yet Bounds stay valid. Zero-width buttons are skipped
+            // by the Width>0 guard below.
+            var btns=new List<System.Windows.Forms.Button>();
+            foreach(System.Windows.Forms.Control k in flow.Controls)
+                if(k is System.Windows.Forms.Button) btns.Add((System.Windows.Forms.Button)k);
+            if(btns.Count>=2) panels++;
+            for(int i=0;i<btns.Count;i++)for(int j=i+1;j<btns.Count;j++){
+                var a=btns[i].Bounds;var b=btns[j].Bounds;
+                Check(!(a.Width>0&&b.Width>0&&a.IntersectsWith(b)),
+                    label+": action buttons '"+btns[i].Text+"' / '"+btns[j].Text+"' do not overlap");
+            }
+        }
+        Check(panels>0, label+": right-to-left action panel with buttons was inspected");
     }
     static void ApplyFeatureTheme(System.Windows.Forms.Control control,ConfiguracionUI.ThemeModeType mode) {
         var form=control as System.Windows.Forms.Form;

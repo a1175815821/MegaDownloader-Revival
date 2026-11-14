@@ -25,7 +25,11 @@ Friend Class CommandButton
         Dim gap As Integer = If(textWidth > 0 AndAlso imageWidth > 0, UiStyles.Px(Me, 7), 0)
         Dim contentWidth As Integer = textWidth + imageWidth + gap + Math.Max(Padding.Horizontal, UiStyles.Px(Me, 20))
         Dim contentHeight As Integer = Math.Max(If(Image Is Nothing, 0, Image.Height), Font.Height) + Padding.Vertical + UiStyles.Px(Me, 6)
-        Return New Size(contentWidth, Math.Max(contentHeight, UiStyles.Px(Me, 28)))
+        ' 按 MinimumSize 钳制:AutoSize 实际渲染会取 max(内容, MinimumSize),preferred 若只报
+        ' 内容宽,RTL 流式面板 / TableLayoutPanel 的 AutoSize 列会按偏小值分配槽位,被 MinimumSize
+        ' 撑宽的按钮溢出邻位 → 相邻按钮重叠(添加链接/设置/预检/定时对话框曾重叠 43px)。
+        ' MinimumSize 是固定下限而非当前宽度,因此不会复发浏览按钮被瞬态布局拉宽后缩不回的膨胀。
+        Return New Size(Math.Max(contentWidth, MinimumSize.Width), Math.Max(Math.Max(contentHeight, MinimumSize.Height), UiStyles.Px(Me, 28)))
     End Function
 
     Protected Overrides Sub OnMouseEnter(e As EventArgs)
