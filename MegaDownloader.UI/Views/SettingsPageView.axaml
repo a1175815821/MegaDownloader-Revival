@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels"
+             x:Class="MegaDownloader.UI.Views.SettingsPageView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+            <TextBlock Text="Settings" Classes="h1" />
+            <TextBlock Classes="muted"
+                       TextWrapping="Wrap"
+                       Text="Phase 0 exposes appearance only. The five WinForms settings tabs (General, Advanced, Pre-Shared Keys, Streaming, ELC accounts) are ported in Phase 3." />
+
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Appearance" Classes="h2" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="Theme" VerticalAlignment="Center" Width="120" />
+                        <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                  SelectedIndex="{Binding SelectedThemeIndex}"
+                                  Width="220" />
+                    </StackPanel>
+                    <TextBlock Classes="caption" Text="Auto follows the operating system light/dark setting." />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Storage" Classes="h2" />
+                    <TextBlock Text="Application data" Classes="muted" />
+                    <TextBox Text="{Binding AppDataPath, Mode=OneWay}" IsReadOnly="True" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="About" Classes="h2" />
+                    <TextBlock Classes="muted" Text="{Binding VersionText, StringFormat='Version {0}'}" />
+                    <TextBlock Classes="caption"
+                               TextWrapping="Wrap"
+                               Text="The existing 11 XML language packs are reused once the resource layer moves into Core (Phase 1)." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32;
@@ -11,6 +12,7 @@ namespace MegaDownloader.Platform;
 /// integration. Compiled on every target so cross-compilation stays simple; methods
 /// no-op or throw PlatformNotSupportedException when invoked elsewhere.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsPlatformServices : IPlatformServices
 {
     private static readonly byte[] Entropy = SHA256.HashData(Encoding.Unicode.GetBytes("MegaDownloader"));

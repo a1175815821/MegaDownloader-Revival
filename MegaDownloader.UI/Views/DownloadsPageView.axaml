@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels"
+             x:Class="MegaDownloader.UI.Views.DownloadsPageView"
+             x:DataType="vm:DownloadsPageViewModel">
+
+    <Grid Margin="24">
+        <Border Classes="card"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Padding="40,32">
+            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                <TextBlock Text="No downloads yet"
+                           Classes="h1"
+                           HorizontalAlignment="Center" />
+                <TextBlock Classes="muted"
+                           TextWrapping="Wrap"
+                           MaxWidth="520"
+                           HorizontalAlignment="Center"
+                           Text="The download engine is ported into MegaDownloader.Core in Phase 1, then wired to this view in Phase 2." />
+                <TextBlock Classes="caption"
+                           TextWrapping="Wrap"
+                           MaxWidth="520"
+                           HorizontalAlignment="Center"
+                           Text="Planned here: virtualized queue (TreeDataGrid), progress, speed, ETA, priority and context actions." />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

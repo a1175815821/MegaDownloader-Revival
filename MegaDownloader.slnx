@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MegaDownloader.Core/MegaDownloader.Core.csproj" />
+  <Project Path="MegaDownloader.Full/MegaDownloader.Full.csproj" />
+  <Project Path="MegaDownloader.Tests/MegaDownloader.Tests.csproj" />
+  <Project Path="MegaDownloader.UI/MegaDownloader.UI.csproj" />
+</Solution>

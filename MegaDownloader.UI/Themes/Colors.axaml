@@ -1,0 +1,82 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Design tokens ported 1:1 from the WinForms ThemeManager (src/Clases/ThemeManager.cs).
+        Names mirror the Md.* keys so later phases can swap a token without touching views.
+        Light and Dark live in ThemeDictionaries; the shell follows RequestedThemeVariant.
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="Md.Back" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.Fore" Color="#232934" />
+            <SolidColorBrush x:Key="Md.AltBack" Color="#FBFCFD" />
+            <SolidColorBrush x:Key="Md.ControlBack" Color="#F7F8FA" />
+            <SolidColorBrush x:Key="Md.Canvas" Color="#F1F3F6" />
+            <SolidColorBrush x:Key="Md.InputBack" Color="#F7F8FA" />
+            <SolidColorBrush x:Key="Md.Border" Color="#E5E8ED" />
+            <SolidColorBrush x:Key="Md.ButtonBack" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.ButtonBorder" Color="#CFD5DE" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledBack" Color="#EFF2F7" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledFore" Color="#667181" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledBorder" Color="#C1CAD6" />
+            <SolidColorBrush x:Key="Md.ButtonHover" Color="#F0F2F6" />
+            <SolidColorBrush x:Key="Md.ButtonPressed" Color="#E5E9EF" />
+            <SolidColorBrush x:Key="Md.Muted" Color="#657184" />
+            <SolidColorBrush x:Key="Md.Selection" Color="#FBECEF" />
+            <SolidColorBrush x:Key="Md.SelectionFore" Color="#9E2233" />
+            <SolidColorBrush x:Key="Md.Accent" Color="#C73548" />
+            <SolidColorBrush x:Key="Md.AccentFore" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.AccentHover" Color="#B32533" />
+            <SolidColorBrush x:Key="Md.AccentPressed" Color="#9A1E2B" />
+            <SolidColorBrush x:Key="Md.Link" Color="#245EAD" />
+            <SolidColorBrush x:Key="Md.ToolBack" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.ToolBorder" Color="#D8DEE7" />
+            <SolidColorBrush x:Key="Md.ErrorFore" Color="#C00000" />
+            <SolidColorBrush x:Key="Md.QuotaBack" Color="#B22222" />
+            <SolidColorBrush x:Key="Md.QuotaFore" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.SuccessFore" Color="#1A795A" />
+            <SolidColorBrush x:Key="Md.ProgressBack" Color="#E9EDF1" />
+            <SolidColorBrush x:Key="Md.ProgressFill" Color="#326EAA" />
+            <SolidColorBrush x:Key="Md.ProgressGradientStart" Color="#289471" />
+            <SolidColorBrush x:Key="Md.ProgressGradientEnd" Color="#289471" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="Md.Back" Color="#20252D" />
+            <SolidColorBrush x:Key="Md.Fore" Color="#E7EBF1" />
+            <SolidColorBrush x:Key="Md.AltBack" Color="#222831" />
+            <SolidColorBrush x:Key="Md.ControlBack" Color="#1A1F26" />
+            <SolidColorBrush x:Key="Md.Canvas" Color="#15191F" />
+            <SolidColorBrush x:Key="Md.InputBack" Color="#1A1F26" />
+            <SolidColorBrush x:Key="Md.Border" Color="#343C48" />
+            <SolidColorBrush x:Key="Md.ButtonBack" Color="#262C36" />
+            <SolidColorBrush x:Key="Md.ButtonBorder" Color="#495363" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledBack" Color="#252D3A" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledFore" Color="#99A9BF" />
+            <SolidColorBrush x:Key="Md.ButtonDisabledBorder" Color="#49576A" />
+            <SolidColorBrush x:Key="Md.ButtonHover" Color="#2A313C" />
+            <SolidColorBrush x:Key="Md.ButtonPressed" Color="#333D4B" />
+            <SolidColorBrush x:Key="Md.Muted" Color="#A4AFBF" />
+            <SolidColorBrush x:Key="Md.Selection" Color="#38272E" />
+            <SolidColorBrush x:Key="Md.SelectionFore" Color="#F49BA6" />
+            <SolidColorBrush x:Key="Md.Accent" Color="#E45C6C" />
+            <SolidColorBrush x:Key="Md.AccentFore" Color="#15191F" />
+            <SolidColorBrush x:Key="Md.AccentHover" Color="#EE7A87" />
+            <SolidColorBrush x:Key="Md.AccentPressed" Color="#DC5667" />
+            <SolidColorBrush x:Key="Md.Link" Color="#87B8FA" />
+            <SolidColorBrush x:Key="Md.ToolBack" Color="#20252D" />
+            <SolidColorBrush x:Key="Md.ToolBorder" Color="#343C48" />
+            <SolidColorBrush x:Key="Md.ErrorFore" Color="#F48771" />
+            <SolidColorBrush x:Key="Md.QuotaBack" Color="#7A1C1C" />
+            <SolidColorBrush x:Key="Md.QuotaFore" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Md.SuccessFore" Color="#4EC9B0" />
+            <SolidColorBrush x:Key="Md.ProgressBack" Color="#333C48" />
+            <SolidColorBrush x:Key="Md.ProgressFill" Color="#90B9E6" />
+            <SolidColorBrush x:Key="Md.ProgressGradientStart" Color="#43B892" />
+            <SolidColorBrush x:Key="Md.ProgressGradientEnd" Color="#43B892" />
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

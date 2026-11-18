@@ -33,6 +33,7 @@ The VB.NET project at `I:\v1.9` was converted to C# and placed in `I:\Mega Downl
 
 ```bash
 cd "I:/Mega Downloader"
+dotnet build MegaDownloader.slnx
 dotnet build MegaDownloader.Full/MegaDownloader.Full.csproj
 dotnet build MegaDownloader.Full/MegaDownloader.Full.csproj -c Release_MSD
 dotnet build MegaDownloader.Core/MegaDownloader.Core.csproj
@@ -65,7 +66,22 @@ Verified groups include:
 - Legacy `ObjectListView.dll` was replaced with the `ObjectListView.Repack.NET6Plus` net8 assembly (`ObjectListView2022NET.dll`) because the old DLL embedded BinaryFormatter resources, which .NET 10 removes. Public `BrightIdeasSoftware` APIs remain compatible; no application source changes were needed.
 - The stale legacy DLL is excluded from output copying.
 - Test reflection accessors were aligned with the migrated C# field/property shapes, and test resource paths now point to `src/Resources`.
-- Remaining build warnings are mostly platform annotations (`CA1416`) from Windows-only WinForms/P-Invoke code, plus package advisories.
+- `SharpCompress` was upgraded from 0.39.0 to 0.48.1 to clear GHSA-6c8g-7p36-r338 / CVE-2026-44788; SharpCompress API calls were migrated to `OpenArchive`/`OpenReader` and init-only `ReaderOptions.Password`.
+- `MegaDownloader.UI` targets Avalonia 12.1.6 (Avalonia, Desktop, Fluent theme, Inter fonts) with `CommunityToolkit.Mvvm` 8.4.2; `Avalonia.ReactiveUI` was removed in favor of plain MVVM and compiled bindings. `Avalonia.Diagnostics` has no 12.x build yet and is intentionally omitted.
+- `WindowsPlatformServices` is annotated `[SupportedOSPlatform("windows")]`; the composition root selects it behind `OperatingSystem.IsWindows()`, which clears the former `CA1416` noise for the platform layer.
+- Remaining build warnings come from the WinForms/P-Invoke code in `MegaDownloader.Full`.
+- Package advisories are tracked with `dotnet list package --vulnerable --include-transitive` and should be re-checked before each release.
+
+## Avalonia shell (Phase 0)
+
+The new UI is a fresh application, not a port of the WinForms forms:
+
+- `App.axaml.cs` owns the composition root (`Microsoft.Extensions.DependencyInjection`): platform services, logger, settings, theme, navigation and dialog services, page and shell view models.
+- `Themes/Colors.axaml` mirrors the 30+ `Md.*` tokens from the WinForms `ThemeManager` as `ThemeDictionaries` for Light and Dark; `Themes/Controls.axaml` adds the shared window/text/card/navigation styles and `Themes/Button.axaml` replaces the Fluent button theme so normal, hover, pressed, disabled and `.accent` states all come from the tokens.
+- `IThemeService` maps Auto/Light/Dark onto `Application.RequestedThemeVariant` and persists the choice to `ui-settings.json` under the app data directory.
+- `INavigationService` + `ViewLocator` host page view models in the shell; `MainWindow` provides the navigation rail, toolbar and status bar.
+- `IAppLogger`/`FileLogger` write a rolling daily log next to the settings file; `Program` also records unhandled exceptions to `crash-yyyyMMdd.log`.
+- Downloads and Settings pages are deliberately thin placeholders so the engine port in Phase 1 has a stable host to plug into.
 
 ## Cross-platform status
 
@@ -87,4 +103,5 @@ Major items still required before a full cross-platform release:
 ## Notes
 
 - The original `I:\v1.9` project remains untouched.
-- No Git repository or branch was created in `I:\Mega Downloader`; repository/branch work was explicitly cancelled.
+- Repository: <https://github.com/a1175815821/MegaDownloader-Revival>. Active work happens on `refactor/avalonia`; tag `winforms-baseline` marks the last state where only the WinForms application existed.
+- `tools/` (the 206 MB CodeConverter store) is intentionally ignored by Git and must be re-created locally if the conversion needs to be repeated.
