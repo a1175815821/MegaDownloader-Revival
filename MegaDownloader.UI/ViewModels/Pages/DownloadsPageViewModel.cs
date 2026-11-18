@@ -151,6 +151,12 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         Refresh();
     }
 
+    internal async Task ShowPropertiesAsync(object item)
+    {
+        if (await _dialogs.ShowPropertiesAsync(item))
+            Refresh();
+    }
+
     internal async Task RemoveItemAsync(object item, bool deleteFiles)
     {
         string name = item switch
@@ -404,7 +410,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         SelectedDownload = selected is not null && desired.Contains(selected) ? selected : null;
     }
 
-    private static string StateLabel(Estado state) => state switch
+    internal static string StateLabel(Estado state) => state switch
     {
         Estado.Verificando => "Checking",
         Estado.CreandoLocal => "Preparing",
@@ -526,6 +532,9 @@ public partial class DownloadItemViewModel : ObservableObject
         IsExpanded = !IsExpanded;
         _owner.Refresh();
     }
+
+    [RelayCommand]
+    private Task PropertiesAsync() => _owner.ShowPropertiesAsync(Item);
 
     [RelayCommand]
     private Task RemoveAsync() => _owner.RemoveItemAsync(Item, deleteFiles: false);

@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels"
+             x:Class="MegaDownloader.UI.Views.StreamingPageView"
+             x:DataType="vm:StreamingPageViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.status">
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+        </Style>
+        <Style Selector="TextBlock.status.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="ListBox.library">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.library ListBoxItem">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*" Margin="24">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Streaming library" Classes="h1" />
+                <TextBlock Classes="muted"
+                           TextWrapping="Wrap"
+                           Text="Manage the entries served by the streaming server. Playback URLs use the server port configured in Settings → Streaming." />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+                <Button Content="New entry" Classes="accent" Command="{Binding NewCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="340,*" ColumnSpacing="16">
+            <Border Classes="card" Padding="10">
+                <Grid RowDefinitions="*,Auto">
+                    <ListBox Classes="library"
+                             ItemsSource="{Binding Items}"
+                             SelectedItem="{Binding SelectedItem}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StreamingRowViewModel">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="caption" Text="{Binding LinkText}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Grid.Row="1"
+                               Classes="caption"
+                               Margin="8,8,8,2"
+                               Text="No entries yet. Use New entry to add one."
+                               IsVisible="{Binding !HasItems}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Classes="card" Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="{Binding EditorTitle}" Classes="h2" />
+
+                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                              RowSpacing="10" ColumnSpacing="12">
+                            <TextBlock Text="Name" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding Name}" Watermark="Display name" />
+
+                            <TextBlock Grid.Row="1" Text="Description" VerticalAlignment="Top" Margin="0,6,0,0" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Description}"
+                                     AcceptsReturn="True" TextWrapping="Wrap" Height="70" />
+
+                            <TextBlock Grid.Row="2" Text="Comments" VerticalAlignment="Top" Margin="0,6,0,0" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Comments}"
+                                     AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+
+                            <TextBlock Grid.Row="3" Text="Poster URL" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Poster}" Watermark="https://…" />
+
+                            <TextBlock Grid.Row="4" Text="Link" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Link}" Watermark="Mega link" />
+
+                            <TextBlock Grid.Row="5" Text="Visibility" VerticalAlignment="Center" />
+                            <CheckBox Grid.Row="5" Grid.Column="1"
+                                      Content="Show the link in the streaming library"
+                                      IsChecked="{Binding LinkVisible}" />
+
+                            <TextBlock Grid.Row="6" Text="IMDB" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Imdb}" Watermark="tt…" />
+
+                            <TextBlock Grid.Row="7" Text="Allociné" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Allocine}" />
+
+                            <TextBlock Grid.Row="8" Text="Filmaffinity" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding Filmaffinity}" />
+                        </Grid>
+
+                        <TextBlock Classes="status"
+                                   Classes.error="{Binding StatusIsError}"
+                                   Text="{Binding Status}"
+                                   IsVisible="{Binding HasStatus}"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
+                            <Button Content="Delete"
+                                    Command="{Binding DeleteCommand}"
+                                    IsEnabled="{Binding HasSelection}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

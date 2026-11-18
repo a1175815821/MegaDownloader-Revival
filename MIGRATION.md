@@ -125,7 +125,7 @@ The Avalonia shell now drives the shared engine instead of showing a placeholder
 Remaining queue work: drag-to-reorder priority, the error-retry policy UI, per-file speed
 limits, and the remaining dialogs.
 
-## Avalonia dialogs and settings (Phase 3, in progress)
+## Avalonia dialogs and settings (Phase 3)
 
 - `AddLinksWindow` / `AddLinksViewModel` reuse the Core preflight engine
   (`PreflightSession`, `BatchLinkPreflight`, `PreflightSelection`) instead of the WinForms
@@ -136,14 +136,27 @@ limits, and the remaining dialogs.
   queue snapshot (`GetQueuedLinkSnapshot`) is re-checked immediately before enqueueing.
 - The window carries the WinForms options (folder, package name, archive password,
   create-subfolder, extract, start-after-adding) and remembers the last used values.
-- The Settings page now edits the download defaults in `Configuration.xml` (default
-  folder, simultaneous downloads, connections per file, package defaults, start-on-launch)
-  in addition to the theme selector.
-- The shell toolbar's Start/Pause/Stop buttons are bound to the queue page commands and
-  live enabled state.
+- `PropertiesWindow` / `PropertiesViewModel` port `PropiedadesDescarga`: read-only
+  name/URL/MD5/size/status, editable path (locked after the file starts), speed limit,
+  automatic extraction and password. Package edits relocate only unstarted files through
+  `PathGuard.GetSafePathUnderRoot` and propagate extraction/password/limit to every child.
+- `SettingsPageViewModel` now covers the General, Advanced (HTTP proxy + daily schedule),
+  Language, Pre-shared-key and Streaming tabs. Saving writes `Configuration.xml`, applies
+  the language immediately and reconfigures `Conexion.SetProxy`.
+- `StreamingPageViewModel` is a native library manager over `StreamingLibraryManager`
+  (list, add, edit, delete, link visibility, IMDB/Allocine/Filmaffinity).
+- `EncodeLinksWindow` rewrites official links as `mega://enc` offline; sub-folder and
+  single-file links keep their original text, and the result can be copied.
+- The shell toolbar's Add links, Encode links and Start/Pause/Stop buttons are wired to
+  their commands and live enabled state.
 
-Still to port: the properties dialog, encode/ELC dialogs, streaming-library management,
-and the proxy/schedule/language/pre-shared-key/ELC-account settings tabs.
+- `ElcAccountsWindow` edits `ELCAccountHelper` accounts (add/edit/delete, default account,
+  `url:nick:apikey[:alias]` import) and persists them through `Configuracion.ELCAccounts`.
+- `ElcGenerateWindow` signs links through `ServerEncoderLinkHelper.ServerEncode`, with an
+  optional one-ELC-per-link mode, clipboard copy and save-to-file.
+
+Still to port: the Kestrel-based streaming server and the `mega://`/clipboard intake
+(Phase 4).
 
 ## Cross-platform status
 

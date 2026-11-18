@@ -130,9 +130,14 @@
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:DownloadItemViewModel">
-                            <Border Classes="row" Margin="{Binding RowMargin}">
+                            <Border Classes="row"
+                                    Margin="{Binding RowMargin}"
+                                    DoubleTapped="RowDoubleTapped">
                                 <Border.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Header="Properties…"
+                                                  Command="{Binding PropertiesCommand}" />
+                                        <Separator />
                                         <MenuItem Header="Remove from queue"
                                                   Command="{Binding RemoveCommand}" />
                                         <MenuItem Header="Remove and delete local files"

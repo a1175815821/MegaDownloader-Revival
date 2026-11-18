@@ -28,7 +28,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IThemeService theme,
         IDialogService dialogs,
         DownloadsPageViewModel downloadsPage,
-        SettingsPageViewModel settingsPage)
+        SettingsPageViewModel settingsPage,
+        StreamingPageViewModel streamingPage)
     {
         _navigation = navigation;
         _theme = theme;
@@ -38,6 +39,7 @@ public partial class MainWindowViewModel : ViewModelBase
         NavigationItems = new ObservableCollection<NavigationItemViewModel>
         {
             new("downloads", "Downloads", downloadsPage),
+            new("streaming", "Streaming", streamingPage),
             new("settings", "Settings", settingsPage)
         };
 
@@ -65,6 +67,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private Task AddLinksAsync() => _dialogs.ShowAddLinksAsync();
+
+    [RelayCommand]
+    private Task EncodeLinksAsync() => _dialogs.ShowEncodeLinksAsync();
+
+    [RelayCommand]
+    private Task GenerateElcAsync() => _dialogs.ShowElcGenerateAsync();
 
     [RelayCommand]
     private void CycleTheme()

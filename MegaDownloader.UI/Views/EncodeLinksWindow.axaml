@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels"
+        x:Class="MegaDownloader.UI.Views.EncodeLinksWindow"
+        x:DataType="vm:EncodeLinksViewModel"
+        Title="Encode links"
+        Width="760" Height="640"
+        MinWidth="620" MinHeight="520"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="Encode links" Classes="h1" />
+            <TextBlock Classes="muted"
+                       TextWrapping="Wrap"
+                       Text="Rewrites official Mega links as their encoded mega://enc form. Sub-folder and single-file links keep their original text." />
+        </StackPanel>
+
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,*" RowSpacing="10">
+            <StackPanel Grid.Row="0" Spacing="6">
+                <TextBlock Text="Original links" Classes="h2" />
+                <TextBox Text="{Binding InputText}"
+                         AcceptsReturn="True"
+                         TextWrapping="NoWrap"
+                         FontFamily="Consolas"
+                         Watermark="Paste Mega links or text containing them" />
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Button Content="Encode" Classes="accent" Command="{Binding EncodeCommand}" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Status}"
+                           Classes="caption"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="2" Content="Copy result" Command="{Binding CopyResultCommand}" />
+            </Grid>
+
+            <StackPanel Grid.Row="2" Spacing="6">
+                <TextBlock Text="Encoded links" Classes="h2" />
+                <TextBox Text="{Binding OutputText, Mode=OneWay}"
+                         AcceptsReturn="True"
+                         TextWrapping="NoWrap"
+                         FontFamily="Consolas"
+                         IsReadOnly="True" />
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="Close" Command="{Binding CloseCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>

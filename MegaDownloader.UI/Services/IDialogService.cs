@@ -13,4 +13,13 @@ public interface IDialogService
 
     /// <summary>Opens the link-intake window; returns true when a package was added.</summary>
     Task<bool> ShowAddLinksAsync();
+
+    /// <summary>Opens the properties window for a <see cref="Fichero"/> or <see cref="Paquete"/>.</summary>
+    Task<bool> ShowPropertiesAsync(object item);
+
+    /// <summary>Opens the offline link encoder.</summary>
+    Task ShowEncodeLinksAsync();
+
+    /// <summary>Opens the ELC generator (account picker, server encode, result).</summary>
+    Task ShowElcGenerateAsync();
 }

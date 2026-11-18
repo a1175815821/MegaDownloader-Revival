@@ -66,6 +66,7 @@ public partial class App : Application
         services.AddTransient<AddLinksViewModel>();
         services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
+        services.AddSingleton<StreamingPageViewModel>();
         services.AddSingleton<MainWindowViewModel>();
     }
 }

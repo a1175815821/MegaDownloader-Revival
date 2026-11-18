@@ -1,0 +1,103 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels"
+        x:Class="MegaDownloader.UI.Views.PropertiesWindow"
+        x:DataType="vm:PropertiesViewModel"
+        Title="Properties"
+        Width="660" Height="640"
+        MinWidth="560" MinHeight="560"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.notice">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+            <TextBlock Text="{Binding Header}" Classes="h1" />
+            <TextBlock Text="{Binding Name}" Classes="muted" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16">
+
+                <Border Classes="card" Padding="16">
+                    <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                          RowSpacing="10" ColumnSpacing="12">
+                        <TextBlock Text="Status" Classes="muted" />
+                        <TextBlock Grid.Column="1" Text="{Binding StatusText}" />
+
+                        <TextBlock Grid.Row="1" Text="Size" Classes="muted" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SizeText}" />
+
+                        <TextBlock Grid.Row="2" Text="URL" Classes="muted" />
+                        <TextBox Grid.Row="2" Grid.Column="1"
+                                 Text="{Binding Url, Mode=OneWay}"
+                                 IsReadOnly="True" />
+
+                        <TextBlock Grid.Row="3" Text="MD5" Classes="muted" />
+                        <TextBox Grid.Row="3" Grid.Column="1"
+                                 Text="{Binding Md5, Mode=OneWay}"
+                                 IsReadOnly="True" />
+                    </Grid>
+                </Border>
+
+                <Border Classes="card" Padding="16">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Location" Classes="h2" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Text="{Binding Path}"
+                                     IsEnabled="{Binding CanEditPath}"
+                                     Watermark="Download folder" />
+                            <Button Grid.Column="1"
+                                    Content="Browse…"
+                                    Command="{Binding BrowseCommand}"
+                                    IsEnabled="{Binding CanEditPath}" />
+                        </Grid>
+                        <TextBlock Classes="caption"
+                                   TextWrapping="Wrap"
+                                   Text="Files that have already started keep their current folder." />
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card" Padding="16">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Options" Classes="h2" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <CheckBox Content="Limit speed to" IsChecked="{Binding LimitSpeed}" />
+                            <TextBox Text="{Binding SpeedLimitText}"
+                                     IsEnabled="{Binding LimitSpeed}"
+                                     Watermark="e.g. 512 KB/s or 2 MB/s"
+                                     Width="220" />
+                        </StackPanel>
+
+                        <CheckBox Content="Extract archives automatically" IsChecked="{Binding ExtractArchives}" />
+                        <TextBox Text="{Binding Password}"
+                                 IsEnabled="{Binding ExtractArchives}"
+                                 PasswordChar="●"
+                                 Watermark="Archive password (optional)" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Classes="notice"
+                           Text="{Binding Notice}"
+                           IsVisible="{Binding HasNotice}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8"
+                    Margin="0,16,0,0">
+            <Button Content="Cancel" Command="{Binding CancelCommand}" />
+            <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>

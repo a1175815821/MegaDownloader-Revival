@@ -4,89 +4,268 @@
              x:Class="MegaDownloader.UI.Views.SettingsPageView"
              x:DataType="vm:SettingsPageViewModel">
 
-    <ScrollViewer>
-        <StackPanel Margin="24" Spacing="16" MaxWidth="820" HorizontalAlignment="Left">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.saveStatus">
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+        </Style>
+        <Style Selector="TextBlock.saveStatus.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="TabItem">
+            <Setter Property="Padding" Value="14,8" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
             <TextBlock Text="Settings" Classes="h1" />
             <TextBlock Classes="muted"
                        TextWrapping="Wrap"
-                       Text="Download defaults and appearance. Account, streaming and pre-shared-key tabs follow later in Phase 3." />
-
-            <Border Classes="card">
-                <StackPanel Spacing="14">
-                    <TextBlock Text="Downloads" Classes="h2" />
-
-                    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                          RowSpacing="12" ColumnSpacing="12">
-                        <TextBlock Text="Default folder" VerticalAlignment="Center" />
-                        <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBox Text="{Binding DefaultFolder}" Watermark="Folder used by the add-links window" />
-                            <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseFolderCommand}" />
-                        </Grid>
-
-                        <TextBlock Grid.Row="1" Text="Simultaneous downloads" VerticalAlignment="Center" />
-                        <NumericUpDown Grid.Row="1" Grid.Column="1"
-                                       Value="{Binding SimultaneousDownloads}"
-                                       Minimum="1" Maximum="20" Increment="1"
-                                       FormatString="0"
-                                       Width="140" HorizontalAlignment="Left" />
-
-                        <TextBlock Grid.Row="2" Text="Connections per file" VerticalAlignment="Center" />
-                        <NumericUpDown Grid.Row="2" Grid.Column="1"
-                                       Value="{Binding ConnectionsPerFile}"
-                                       Minimum="1" Maximum="16" Increment="1"
-                                       FormatString="0"
-                                       Width="140" HorizontalAlignment="Left" />
-
-                        <TextBlock Grid.Row="3" Text="Package defaults" VerticalAlignment="Top" Margin="0,6,0,0" />
-                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6">
-                            <CheckBox Content="Create a subfolder for each package"
-                                      IsChecked="{Binding CreateSubdirectory}" />
-                            <CheckBox Content="Extract archives automatically"
-                                      IsChecked="{Binding ExtractArchives}" />
-                            <CheckBox Content="Start downloads when the app opens"
-                                      IsChecked="{Binding StartOnLaunch}" />
-                            <CheckBox Content="Remember the last used add-links options"
-                                      IsChecked="{Binding KeepLastOptions}" />
-                        </StackPanel>
-                    </Grid>
-
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
-                        <TextBlock Text="{Binding SaveStatus}" Classes="caption" VerticalAlignment="Center" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Appearance" Classes="h2" />
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <TextBlock Text="Theme" VerticalAlignment="Center" Width="120" />
-                        <ComboBox ItemsSource="{Binding ThemeOptions}"
-                                  SelectedIndex="{Binding SelectedThemeIndex}"
-                                  Width="220" />
-                    </StackPanel>
-                    <TextBlock Classes="caption" Text="Auto follows the operating system light/dark setting." />
-                </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Storage" Classes="h2" />
-                    <TextBlock Text="Application data" Classes="muted" />
-                    <TextBox Text="{Binding AppDataPath, Mode=OneWay}" IsReadOnly="True" />
-                </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="About" Classes="h2" />
-                    <TextBlock Classes="muted" Text="{Binding VersionText, StringFormat='Version {0}'}" />
-                    <TextBlock Classes="caption"
-                               TextWrapping="Wrap"
-                               Text="The 11 XML language packs and the remaining WinForms tabs are ported as Phase 3 continues." />
-                </StackPanel>
-            </Border>
+                       Text="Download defaults, network, schedule, language and streaming. Changes apply when you press Save." />
         </StackPanel>
-    </ScrollViewer>
+
+        <TabControl Grid.Row="1" Padding="0,8,0,0">
+            <TabItem Header="General">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="Downloads" Classes="h2" />
+
+                                <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                                      RowSpacing="12" ColumnSpacing="12">
+                                    <TextBlock Text="Default folder" VerticalAlignment="Center" />
+                                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding DefaultFolder}" Watermark="Folder used by the add-links window" />
+                                        <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseFolderCommand}" />
+                                    </Grid>
+
+                                    <TextBlock Grid.Row="1" Text="Simultaneous downloads" VerticalAlignment="Center" />
+                                    <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                                   Value="{Binding SimultaneousDownloads}"
+                                                   Minimum="1" Maximum="20" Increment="1"
+                                                   FormatString="0"
+                                                   Width="140" HorizontalAlignment="Left" />
+
+                                    <TextBlock Grid.Row="2" Text="Connections per file" VerticalAlignment="Center" />
+                                    <NumericUpDown Grid.Row="2" Grid.Column="1"
+                                                   Value="{Binding ConnectionsPerFile}"
+                                                   Minimum="1" Maximum="16" Increment="1"
+                                                   FormatString="0"
+                                                   Width="140" HorizontalAlignment="Left" />
+
+                                    <TextBlock Grid.Row="3" Text="Package defaults" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6">
+                                        <CheckBox Content="Create a subfolder for each package"
+                                                  IsChecked="{Binding CreateSubdirectory}" />
+                                        <CheckBox Content="Extract archives automatically"
+                                                  IsChecked="{Binding ExtractArchives}" />
+                                        <CheckBox Content="Start downloads when the app opens"
+                                                  IsChecked="{Binding StartOnLaunch}" />
+                                        <CheckBox Content="Remember the last used add-links options"
+                                                  IsChecked="{Binding KeepLastOptions}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Appearance" Classes="h2" />
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="Theme" VerticalAlignment="Center" Width="120" />
+                                    <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                              SelectedIndex="{Binding SelectedThemeIndex}"
+                                              Width="220" />
+                                </StackPanel>
+                                <TextBlock Classes="caption" Text="Auto follows the operating system light/dark setting." />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Storage" Classes="h2" />
+                                <TextBlock Text="Application data" Classes="muted" />
+                                <TextBox Text="{Binding AppDataPath, Mode=OneWay}" IsReadOnly="True" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="About" Classes="h2" />
+                                <TextBlock Classes="muted" Text="{Binding VersionText, StringFormat='Version {0}'}" />
+                                <TextBlock Classes="caption"
+                                           TextWrapping="Wrap"
+                                           Text="The 11 XML language packs are shared with the WinForms application through MegaDownloader.Core." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Advanced">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="HTTP proxy" Classes="h2" />
+                                <CheckBox Content="Use an HTTP proxy" IsChecked="{Binding UseProxy}" />
+
+                                <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                                      RowSpacing="10" ColumnSpacing="12"
+                                      IsEnabled="{Binding UseProxy}">
+                                    <TextBlock Text="Host" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding ProxyHost}" Watermark="proxy.example.com" />
+
+                                    <TextBlock Grid.Row="1" Text="Port" VerticalAlignment="Center" />
+                                    <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                                   Value="{Binding ProxyPort}"
+                                                   Minimum="0" Maximum="65535" Increment="1"
+                                                   FormatString="0"
+                                                   Width="140" HorizontalAlignment="Left" />
+
+                                    <TextBlock Grid.Row="2" Text="User" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ProxyUser}" Watermark="Optional" />
+
+                                    <TextBlock Grid.Row="3" Text="Password" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="3" Grid.Column="1"
+                                             Text="{Binding ProxyPassword}"
+                                             PasswordChar="●"
+                                             Watermark="Optional" />
+                                </Grid>
+
+                                <TextBlock Classes="caption"
+                                           IsVisible="{Binding ProxyPasswordNeedsReentry}"
+                                           TextWrapping="Wrap"
+                                           Text="The saved proxy password could not be decrypted on this machine. Enter it again." />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Download schedule" Classes="h2" />
+                                <CheckBox Content="Only download inside a scheduled window"
+                                          IsChecked="{Binding ScheduleEnabled}" />
+
+                                <StackPanel Spacing="10" IsEnabled="{Binding ScheduleEnabled}">
+                                    <CheckBox Content="Daily window" IsChecked="{Binding ScheduleDaily}" />
+
+                                    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto"
+                                          RowSpacing="10" ColumnSpacing="12"
+                                          IsEnabled="{Binding ScheduleDaily}">
+                                        <TextBlock Text="Start" VerticalAlignment="Center" />
+                                        <TimePicker Grid.Column="1"
+                                                    SelectedTime="{Binding ScheduleStart}"
+                                                    ClockIdentifier="24HourClock"
+                                                    HorizontalAlignment="Left" />
+
+                                        <TextBlock Grid.Row="1" Text="End" VerticalAlignment="Center" />
+                                        <TimePicker Grid.Row="1" Grid.Column="1"
+                                                    SelectedTime="{Binding ScheduleEnd}"
+                                                    ClockIdentifier="24HourClock"
+                                                    HorizontalAlignment="Left" />
+                                    </Grid>
+
+                                    <TextBlock Classes="caption"
+                                               TextWrapping="Wrap"
+                                               Text="Times are local. The end is exclusive; a window may cross midnight." />
+                                    <TextBlock Classes="caption"
+                                               IsVisible="{Binding !ScheduleDaily}"
+                                               TextWrapping="Wrap"
+                                               Text="A one-off window keeps its saved dates. Enabling the daily window here applies the times above." />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Language">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Interface language" Classes="h2" />
+                                <ComboBox ItemsSource="{Binding Languages}"
+                                          SelectedItem="{Binding SelectedLanguage}"
+                                          Width="300"
+                                          HorizontalAlignment="Left" />
+                                <TextBlock Classes="caption"
+                                           TextWrapping="Wrap"
+                                           Text="Language packs are loaded from MegaDownloader.Core and apply to engine messages, dialogs and logs. The new Avalonia shell's own labels are English for now." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Pre-shared keys">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Keys" Classes="h2" />
+                                <TextBox Text="{Binding PreSharedKeysText}"
+                                         AcceptsReturn="True"
+                                         Height="240"
+                                         TextWrapping="NoWrap"
+                                         FontFamily="Consolas"
+                                         Watermark="One key per line" />
+                                <TextBlock Classes="caption"
+                                           TextWrapping="Wrap"
+                                           Text="Used to decrypt links protected by a pre-shared key. One key per line; empty lines are ignored." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Streaming">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Streaming server" Classes="h2" />
+                                <CheckBox Content="Enable the streaming server" IsChecked="{Binding StreamingEnabled}" />
+
+                                <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto"
+                                      RowSpacing="10" ColumnSpacing="12"
+                                      IsEnabled="{Binding StreamingEnabled}">
+                                    <TextBlock Text="Port" VerticalAlignment="Center" />
+                                    <NumericUpDown Grid.Column="1"
+                                                   Value="{Binding StreamingPort}"
+                                                   Minimum="0" Maximum="65535" Increment="1"
+                                                   FormatString="0"
+                                                   Width="140" HorizontalAlignment="Left" />
+
+                                    <TextBlock Grid.Row="1" Text="Password" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding StreamingPassword}"
+                                             PasswordChar="●"
+                                             Watermark="Optional" />
+                                </Grid>
+
+                                <TextBlock Classes="caption"
+                                           IsVisible="{Binding StreamingPasswordNeedsReentry}"
+                                           TextWrapping="Wrap"
+                                           Text="The saved streaming password could not be decrypted on this machine. Enter it again." />
+                                <TextBlock Classes="caption"
+                                           TextWrapping="Wrap"
+                                           Text="The embedded HTTP server is replaced with Kestrel in Phase 4. These values are persisted now so the new server can pick them up." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <TextBlock Classes="saveStatus"
+                       Classes.error="{Binding SaveStatusIsError}"
+                       Text="{Binding SaveStatus}"
+                       IsVisible="{Binding HasSaveStatus}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
+        </Grid>
+    </Grid>
 </UserControl>

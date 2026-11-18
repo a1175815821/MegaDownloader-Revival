@@ -16,7 +16,7 @@
 | Phase 0 | Git 基线 + Avalonia 骨架（DI、主题 token、导航、日志） | ✅ 完成（`f1b0aa5`，已推送） |
 | Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成（`2b4e778`，已推送） |
 | Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
-| Phase 3 | 迁移剩余对话框与设置页 | 🔄 进行中（添加链接 + 设置第一块） |
+| Phase 3 | 迁移剩余对话框与设置页 | ✅ 完成（添加链接、属性、编码/ELC、流媒体库、设置标签） |
 | Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ⬜ 未开始 |
 | Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
 
@@ -152,17 +152,23 @@
   - 复用 `DownloadPackageBuilder.Build` 在后台构建包，`DownloadEngineService.AddPackage` 原子入队；入队前再次按 `BatchLinkPreflight.Identity` 去重。
   - 记住上次选项（`UltimaConfiguracionUsada`），默认目录取 `Configuracion.RutaDefecto`。
 - [x] **`DownloadEngineService` 入队接口**：`GetQueuedLinkSnapshot()`、`AddPackage()`、`IsLoaded`；`AddPackage` 与调度/删除共用 `_scheduleGate`。
-- [x] **设置页第一块**：默认下载目录、同时下载数、每文件连接数、创建子目录 / 自动解压 / 启动时开始下载 / 记住上次选项，保存到 `Configuration.xml`；外观主题保留。
+- [x] **设置页标签**：General（默认目录、同时下载数、每文件连接数、包默认项、主题）、Advanced（HTTP 代理、每日下载时段）、Language（跟随系统 + 语言包）、Pre-shared keys（每行一个密钥）、Streaming（启用/端口/密码）；保存写入 `Configuration.xml`，语言与代理即时应用。
+- [x] **属性对话框**（`PropertiesWindow` + `PropertiesViewModel`）：文件/包信息、路径（已开始的文件锁定）、限速、自动解压与密码；包编辑按 `RutaRelativa` 搬移未开始文件，限速/解压/密码下发到全部子文件。队列行右键或双击打开。
+- [x] **流媒体库管理页**：原生列表 + 新增/编辑/删除，复用 `StreamingLibraryManager`（名称、描述、评论、海报、链接可见性、IMDB/Allocine/Filmaffinity）。
+- [x] **编码链接窗口**：离线把官方 Mega 链接改写为 `mega://enc`，子文件夹/单文件链接保持原文，支持复制结果；主工具栏新增入口。
+- [x] **ELC 账户与生成**：
+  - `ElcAccountsWindow` / `ElcAccountsViewModel`：账户列表、增删改、默认账户、`url:nick:apikey[:alias]` 批量导入；通过 `ELCAccountHelper` 写回 `Configuracion.ELCAccounts` 并保存。
+  - `ElcGenerateWindow` / `ElcGenerateViewModel`：选择账户、粘贴链接、可选“每条链接一个 ELC”，后台调用 `ServerEncoderLinkHelper.ServerEncode`，结果支持复制/保存为文件。
+  - 主工具栏新增 “ELC” 入口；账户管理也可从生成窗口打开。
 - [x] **主工具栏**：Start / Pause / Stop 绑定到队列页命令与可用状态，不再是无动作占位按钮。
-- [x] 冒烟验证：UI Automation 打开 Add links、填入无效链接并预检，结果行显示 `Unavailable`；Settings 页正常渲染。
+- [x] 冒烟验证：Add links 打开与无效链接预检（`Unavailable` 行）、Settings 标签页、Streaming 页、Encode links 窗口、ELC 生成与账户窗口均正常渲染。
 
-### 5.2 待办
+### 5.2 后续（非阻塞）
 
-- [ ] 属性对话框（单任务/包：路径、限速、密码、优先级）。
-- [ ] 编码链接 / ELC 对话框。
-- [ ] 流媒体库管理页（依赖 Phase 4 的 HTTP 服务器替换）。
-- [ ] 设置页剩余标签：代理、调度、语言、预共享密钥、ELC 账户、高级选项。
-- [ ] 添加链接：剪贴板监听、`mega://` 协议入口、文件夹分享的完整路径展示。
+- [ ] 流媒体服务器本体（Phase 4 用 Kestrel 替换内嵌 HttpServer；当前只持久化设置并提供媒体库管理）。
+- [ ] 添加链接：剪贴板监听、`mega://` 协议入口、文件夹分享的完整路径展示（Phase 4 平台层）。
+- [ ] 流媒体库导入/导出与播放链接复制。
+- [ ] 队列拖拽排序、错误重试策略界面、单文件限速的快捷入口。
 
 ---
 
@@ -193,7 +199,7 @@
 
 运行验证：Avalonia 壳启动后加载 `DownloadList.xml` 并按 5 秒周期回写（最后一次启动 19:33:31，队列文件 19:33:32 回写，日志无异常）；无头冒烟测试确认 `DownloadEngineService` 的加载与状态切换（Stopped → Running → Paused → Stopped）正常。以上结果均为最后一次修改（保存锁策略、删除移出 UI 线程）之后重新构建并复测。
 
-Git 工作区：Phase 3 的修改尚未提交（分支 `refactor/avalonia`，最新提交 `74997a3`）。
+Git 工作区：Phase 3 的后续修改尚未提交（分支 `refactor/avalonia`，最新提交 `b58bd2a`）。
 
 ---
 

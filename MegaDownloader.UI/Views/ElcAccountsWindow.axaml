@@ -1,0 +1,124 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels"
+        x:Class="MegaDownloader.UI.Views.ElcAccountsWindow"
+        x:DataType="vm:ElcAccountsViewModel"
+        Title="ELC accounts"
+        Width="860" Height="720"
+        MinWidth="720" MinHeight="600"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.status">
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+        </Style>
+        <Style Selector="TextBlock.status.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="ListBox.accounts">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.accounts ListBoxItem">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+            <TextBlock Text="ELC accounts" Classes="h1" />
+            <TextBlock Classes="muted"
+                       TextWrapping="Wrap"
+                       Text="Accounts used to sign ELC links on the encoder server. Credentials are stored encrypted in Configuration.xml." />
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="16">
+            <Border Classes="card" Padding="10">
+                <Grid RowDefinitions="*,Auto" RowSpacing="8">
+                    <ListBox Classes="accounts"
+                             ItemsSource="{Binding Accounts}"
+                             SelectedItem="{Binding SelectedAccount}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ElcAccountRow">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Display}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="caption" Text="{Binding Url}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="New account" Command="{Binding NewCommand}" />
+                        <Button Content="Delete" Command="{Binding DeleteCommand}" IsEnabled="{Binding HasSelection}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Classes="card" Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="{Binding EditorTitle}" Classes="h2" />
+
+                        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                              RowSpacing="10" ColumnSpacing="12">
+                            <TextBlock Text="Alias" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding Alias}" Watermark="Friendly name" />
+
+                            <TextBlock Grid.Row="1" Text="Server URL" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Url}" Watermark="https://…" />
+
+                            <TextBlock Grid.Row="2" Text="User" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding User}" />
+
+                            <TextBlock Grid.Row="3" Text="API key" VerticalAlignment="Center" />
+                            <Grid Grid.Row="3" Grid.Column="1">
+                                <TextBox Text="{Binding Key}" PasswordChar="●" IsVisible="{Binding !ShowKey}" />
+                                <TextBox Text="{Binding Key}" IsVisible="{Binding ShowKey}" />
+                            </Grid>
+
+                            <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
+                                <CheckBox Content="Show API key" IsChecked="{Binding ShowKey}" />
+                                <CheckBox Content="Use as the default account" IsChecked="{Binding IsDefault}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Save account" Classes="accent" Command="{Binding SaveCommand}" />
+                        </StackPanel>
+
+                        <Border Classes="card" Padding="12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Import accounts" Classes="h2" />
+                                <TextBox Text="{Binding ImportText}"
+                                         AcceptsReturn="True"
+                                         Height="90"
+                                         TextWrapping="NoWrap"
+                                         FontFamily="Consolas"
+                                         Watermark="url:nick:apikey[:alias] — one per line" />
+                                <Button Content="Import" Command="{Binding ImportCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Classes="status"
+                                   Classes.error="{Binding StatusIsError}"
+                                   Text="{Binding Status}"
+                                   IsVisible="{Binding HasStatus}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="Close" Command="{Binding CloseCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -41,6 +41,40 @@ public sealed class DialogService : IDialogService
         return false;
     }
 
+    public async Task<bool> ShowPropertiesAsync(object item)
+    {
+        var window = new PropertiesWindow(item);
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+        if (owner is { IsVisible: true })
+            return await window.ShowDialog<bool>(owner);
+
+        window.Show();
+        return false;
+    }
+
+    public async Task ShowEncodeLinksAsync()
+    {
+        var window = new EncodeLinksWindow();
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+        if (owner is { IsVisible: true })
+            await window.ShowDialog(owner);
+        else
+            window.Show();
+    }
+
+    public async Task ShowElcGenerateAsync()
+    {
+        var window = new ElcGenerateWindow();
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+        if (owner is { IsVisible: true })
+            await window.ShowDialog(owner);
+        else
+            window.Show();
+    }
+
     private static Window BuildWindow(
         string title,
         string message,
