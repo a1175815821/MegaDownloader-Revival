@@ -123,7 +123,27 @@ The Avalonia shell now drives the shared engine instead of showing a placeholder
   queue and disposes the engine when the desktop app exits.
 
 Remaining queue work: drag-to-reorder priority, the error-retry policy UI, per-file speed
-limits, and the link-intake dialog that feeds new packages into the service (Phase 3).
+limits, and the remaining dialogs.
+
+## Avalonia dialogs and settings (Phase 3, in progress)
+
+- `AddLinksWindow` / `AddLinksViewModel` reuse the Core preflight engine
+  (`PreflightSession`, `BatchLinkPreflight`, `PreflightSelection`) instead of the WinForms
+  `BatchPreflightView`: link parsing, folder expansion, per-file metadata, duplicate and
+  already-queued detection, progress, filtering, select-all/clear, and selection totals.
+- Selected entries are rebuilt into a `Paquete` with `DownloadPackageBuilder.Build` on a
+  background thread and appended through the new `DownloadEngineService.AddPackage`; the
+  queue snapshot (`GetQueuedLinkSnapshot`) is re-checked immediately before enqueueing.
+- The window carries the WinForms options (folder, package name, archive password,
+  create-subfolder, extract, start-after-adding) and remembers the last used values.
+- The Settings page now edits the download defaults in `Configuration.xml` (default
+  folder, simultaneous downloads, connections per file, package defaults, start-on-launch)
+  in addition to the theme selector.
+- The shell toolbar's Start/Pause/Stop buttons are bound to the queue page commands and
+  live enabled state.
+
+Still to port: the properties dialog, encode/ELC dialogs, streaming-library management,
+and the proxy/schedule/language/pre-shared-key/ELC-account settings tabs.
 
 ## Cross-platform status
 

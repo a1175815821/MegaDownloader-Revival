@@ -5,11 +5,57 @@
              x:DataType="vm:SettingsPageViewModel">
 
     <ScrollViewer>
-        <StackPanel Margin="24" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+        <StackPanel Margin="24" Spacing="16" MaxWidth="820" HorizontalAlignment="Left">
             <TextBlock Text="Settings" Classes="h1" />
             <TextBlock Classes="muted"
                        TextWrapping="Wrap"
-                       Text="Phase 0 exposes appearance only. The five WinForms settings tabs (General, Advanced, Pre-Shared Keys, Streaming, ELC accounts) are ported in Phase 3." />
+                       Text="Download defaults and appearance. Account, streaming and pre-shared-key tabs follow later in Phase 3." />
+
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Downloads" Classes="h2" />
+
+                    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                          RowSpacing="12" ColumnSpacing="12">
+                        <TextBlock Text="Default folder" VerticalAlignment="Center" />
+                        <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Text="{Binding DefaultFolder}" Watermark="Folder used by the add-links window" />
+                            <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseFolderCommand}" />
+                        </Grid>
+
+                        <TextBlock Grid.Row="1" Text="Simultaneous downloads" VerticalAlignment="Center" />
+                        <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                       Value="{Binding SimultaneousDownloads}"
+                                       Minimum="1" Maximum="20" Increment="1"
+                                       FormatString="0"
+                                       Width="140" HorizontalAlignment="Left" />
+
+                        <TextBlock Grid.Row="2" Text="Connections per file" VerticalAlignment="Center" />
+                        <NumericUpDown Grid.Row="2" Grid.Column="1"
+                                       Value="{Binding ConnectionsPerFile}"
+                                       Minimum="1" Maximum="16" Increment="1"
+                                       FormatString="0"
+                                       Width="140" HorizontalAlignment="Left" />
+
+                        <TextBlock Grid.Row="3" Text="Package defaults" VerticalAlignment="Top" Margin="0,6,0,0" />
+                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6">
+                            <CheckBox Content="Create a subfolder for each package"
+                                      IsChecked="{Binding CreateSubdirectory}" />
+                            <CheckBox Content="Extract archives automatically"
+                                      IsChecked="{Binding ExtractArchives}" />
+                            <CheckBox Content="Start downloads when the app opens"
+                                      IsChecked="{Binding StartOnLaunch}" />
+                            <CheckBox Content="Remember the last used add-links options"
+                                      IsChecked="{Binding KeepLastOptions}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
+                        <TextBlock Text="{Binding SaveStatus}" Classes="caption" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
             <Border Classes="card">
                 <StackPanel Spacing="10">
@@ -38,7 +84,7 @@
                     <TextBlock Classes="muted" Text="{Binding VersionText, StringFormat='Version {0}'}" />
                     <TextBlock Classes="caption"
                                TextWrapping="Wrap"
-                               Text="The existing 11 XML language packs are reused once the resource layer moves into Core (Phase 1)." />
+                               Text="The 11 XML language packs and the remaining WinForms tabs are ported as Phase 3 continues." />
                 </StackPanel>
             </Border>
         </StackPanel>

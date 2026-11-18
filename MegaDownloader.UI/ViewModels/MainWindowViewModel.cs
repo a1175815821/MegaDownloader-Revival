@@ -33,6 +33,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _navigation = navigation;
         _theme = theme;
         _dialogs = dialogs;
+        DownloadsPage = downloadsPage;
 
         NavigationItems = new ObservableCollection<NavigationItemViewModel>
         {
@@ -49,6 +50,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavigationItemViewModel> NavigationItems { get; }
 
+    /// <summary>The queue page owns the live start/pause/stop state used by the toolbar.</summary>
+    public DownloadsPageViewModel DownloadsPage { get; }
+
     public string VersionText => AppInfo.Version;
 
     public string RuntimeText => AppInfo.Runtime;
@@ -60,9 +64,7 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private Task AddLinksAsync() => _dialogs.ShowMessageAsync(
-        "Add links",
-        "Link intake and preflight arrive in Phase 3 of the Avalonia refactor. The queue page already runs the shared download engine.");
+    private Task AddLinksAsync() => _dialogs.ShowAddLinksAsync();
 
     [RelayCommand]
     private void CycleTheme()

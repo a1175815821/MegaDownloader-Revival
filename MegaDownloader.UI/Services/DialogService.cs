@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using MegaDownloader.UI.Views;
 
 namespace MegaDownloader.UI.Services;
 
@@ -26,6 +27,18 @@ public sealed class DialogService : IDialogService
 
         await ShowAsync(window);
         return await result.Task;
+    }
+
+    public async Task<bool> ShowAddLinksAsync()
+    {
+        var window = new AddLinksWindow();
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+        if (owner is { IsVisible: true })
+            return await window.ShowDialog<bool>(owner);
+
+        window.Show();
+        return false;
     }
 
     private static Window BuildWindow(

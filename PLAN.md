@@ -16,7 +16,7 @@
 | Phase 0 | Git 基线 + Avalonia 骨架（DI、主题 token、导航、日志） | ✅ 完成（`f1b0aa5`，已推送） |
 | Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成（`2b4e778`，已推送） |
 | Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
-| Phase 3 | 迁移剩余对话框与设置页 | ⬜ 未开始 |
+| Phase 3 | 迁移剩余对话框与设置页 | 🔄 进行中（添加链接 + 设置第一块） |
 | Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ⬜ 未开始 |
 | Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
 
@@ -142,7 +142,31 @@
 
 ---
 
-## 五、架构边界（Phase 1）
+## 五、Phase 3 详细清单
+
+### 5.1 已完成
+
+- [x] **添加链接窗口**（`AddLinksWindow` + `AddLinksViewModel`）：
+  - 链接文本、下载目录（Browse）、包名、压缩密码、创建子目录 / 自动解压 / 添加后开始下载。
+  - 复用 Core 的 `PreflightSession` / `BatchLinkPreflight` / `PreflightSelection`：进度、结果列表、状态（Ready / Already queued / Duplicate / Invalid / Unavailable）、按名称过滤、全选/清空、选择计数与总大小。
+  - 复用 `DownloadPackageBuilder.Build` 在后台构建包，`DownloadEngineService.AddPackage` 原子入队；入队前再次按 `BatchLinkPreflight.Identity` 去重。
+  - 记住上次选项（`UltimaConfiguracionUsada`），默认目录取 `Configuracion.RutaDefecto`。
+- [x] **`DownloadEngineService` 入队接口**：`GetQueuedLinkSnapshot()`、`AddPackage()`、`IsLoaded`；`AddPackage` 与调度/删除共用 `_scheduleGate`。
+- [x] **设置页第一块**：默认下载目录、同时下载数、每文件连接数、创建子目录 / 自动解压 / 启动时开始下载 / 记住上次选项，保存到 `Configuration.xml`；外观主题保留。
+- [x] **主工具栏**：Start / Pause / Stop 绑定到队列页命令与可用状态，不再是无动作占位按钮。
+- [x] 冒烟验证：UI Automation 打开 Add links、填入无效链接并预检，结果行显示 `Unavailable`；Settings 页正常渲染。
+
+### 5.2 待办
+
+- [ ] 属性对话框（单任务/包：路径、限速、密码、优先级）。
+- [ ] 编码链接 / ELC 对话框。
+- [ ] 流媒体库管理页（依赖 Phase 4 的 HTTP 服务器替换）。
+- [ ] 设置页剩余标签：代理、调度、语言、预共享密钥、ELC 账户、高级选项。
+- [ ] 添加链接：剪贴板监听、`mega://` 协议入口、文件夹分享的完整路径展示。
+
+---
+
+## 六、架构边界（Phase 1）
 
 | 归属 | 内容 |
 |---|---|
@@ -158,7 +182,7 @@
 
 ---
 
-## 六、当前构建状态
+## 七、当前构建状态
 
 | 工程 | 状态 |
 |---|---|
@@ -169,11 +193,11 @@
 
 运行验证：Avalonia 壳启动后加载 `DownloadList.xml` 并按 5 秒周期回写（最后一次启动 19:33:31，队列文件 19:33:32 回写，日志无异常）；无头冒烟测试确认 `DownloadEngineService` 的加载与状态切换（Stopped → Running → Paused → Stopped）正常。以上结果均为最后一次修改（保存锁策略、删除移出 UI 线程）之后重新构建并复测。
 
-Git 工作区：Phase 2 的修改尚未提交（分支 `refactor/avalonia`，最新提交 `2b4e778`）。
+Git 工作区：Phase 3 的修改尚未提交（分支 `refactor/avalonia`，最新提交 `74997a3`）。
 
 ---
 
-## 七、验证命令
+## 八、验证命令
 
 ```bash
 cd "I:/Mega Downloader"
@@ -200,7 +224,7 @@ dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj --no-build
 
 ---
 
-## 八、后续阶段要点
+## 九、后续阶段要点
 
 - **Phase 3**：迁移添加链接、预检树、属性、设置各标签页、编码/ELC、流媒体库管理等对话框。添加链接后把新 `Paquete` 写入 `DownloadEngineService` 的队列。
 - **Phase 4**：用 ASP.NET Core/Kestrel 替换内嵌 `HttpServer.dll`；替换 `ObjectListView`；处理 `7zr.exe` 的 RID 分发或转为纯 SharpCompress；DPAPI 调用点全部走 `IPlatformServices`。

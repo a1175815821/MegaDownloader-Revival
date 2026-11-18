@@ -10,4 +10,7 @@ public interface IDialogService
     Task ShowMessageAsync(string title, string message, string okText = "OK");
 
     Task<bool> ConfirmAsync(string title, string message, string okText = "OK", string cancelText = "Cancel");
+
+    /// <summary>Opens the link-intake window; returns true when a package was added.</summary>
+    Task<bool> ShowAddLinksAsync();
 }

@@ -52,6 +52,9 @@ namespace MegaDownloader
 
         public Configuracion Config => _config;
 
+        /// <summary>True once <see cref="LoadAsync"/> has read the saved queue.</summary>
+        public bool IsLoaded => Volatile.Read(ref _loaded) != 0;
+
         public DownloadEngineState State
         {
             get
@@ -67,6 +70,56 @@ namespace MegaDownloader
         {
             lock (Mutex.ListaDescargas)
                 return _packages.ToArray();
+        }
+
+        /// <summary>Identity → display metadata for every file already queued, used by
+        /// link preflight to flag duplicates (WinForms Main.GetQueuedLinkSnapshot).</summary>
+        public Dictionary<string, URLProcessor.FileURL> GetQueuedLinkSnapshot()
+        {
+            var result = new Dictionary<string, URLProcessor.FileURL>(StringComparer.Ordinal);
+            foreach (Paquete package in SnapshotPackages())
+            {
+                foreach (Fichero file in package.SnapshotFicheros())
+                {
+                    try
+                    {
+                        string key = BatchLinkPreflight.Identity(file.FileID, file.FileKey);
+                        if (key is null)
+                            continue;
+                        result[key] = new URLProcessor.FileURL("", "")
+                        {
+                            DisplayName = file.DescargaProcesada ? file.NombreFichero : null,
+                            SizeBytes = file.DescargaProcesada ? file.TamanoBytes : default(long?)
+                        };
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // A task can be removed after the reference snapshot.
+                    }
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Append a package built by <see cref="DownloadPackageBuilder"/> to the
+        /// queue. The caller owns the package until this returns true.</summary>
+        public bool AddPackage(Paquete package)
+        {
+            if (package is null || !IsLoaded)
+                return false;
+
+            lock (_scheduleGate)
+            {
+                lock (Mutex.ListaDescargas)
+                {
+                    _packages.Add(package);
+                    RenumberPrioritiesLocked();
+                }
+            }
+
+            _saveRequested = true;
+            RefreshAggregates();
+            return true;
         }
 
         public async Task LoadAsync(CancellationToken cancellationToken = default)

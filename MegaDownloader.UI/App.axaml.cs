@@ -63,6 +63,7 @@ public partial class App : Application
         services.AddSingleton<INavigationService, NavigationService>();
 
         services.AddSingleton<DownloadEngineService>();
+        services.AddTransient<AddLinksViewModel>();
         services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainWindowViewModel>();

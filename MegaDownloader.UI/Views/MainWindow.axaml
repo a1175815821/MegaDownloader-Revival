@@ -58,15 +58,19 @@
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
                     <Button Classes="accent" Content="Add links" Command="{Binding AddLinksCommand}" />
-                    <Button Content="Start" IsEnabled="False" ToolTip.Tip="Wired to the engine in Phase 2" />
-                    <Button Content="Pause" IsEnabled="False" ToolTip.Tip="Wired to the engine in Phase 2" />
-                    <Button Content="Stop" IsEnabled="False" ToolTip.Tip="Wired to the engine in Phase 2" />
+                    <Button Content="Start"
+                            Command="{Binding DownloadsPage.StartAllCommand}"
+                            IsEnabled="{Binding DownloadsPage.CanStartAll}"
+                            ToolTip.Tip="Start or resume the queue" />
+                    <Button Content="Pause"
+                            Command="{Binding DownloadsPage.PauseAllCommand}"
+                            IsEnabled="{Binding DownloadsPage.CanPauseAll}"
+                            ToolTip.Tip="Pause the queue" />
+                    <Button Content="Stop"
+                            Command="{Binding DownloadsPage.StopAllCommand}"
+                            IsEnabled="{Binding DownloadsPage.CanStopAll}"
+                            ToolTip.Tip="Stop active downloads" />
                 </StackPanel>
-                <TextBox DockPanel.Dock="Right"
-                         Width="240"
-                         PlaceholderText="Search downloads…"
-                         IsEnabled="False"
-                         VerticalAlignment="Center" />
             </DockPanel>
         </Border>
 

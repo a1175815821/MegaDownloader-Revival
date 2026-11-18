@@ -18,11 +18,12 @@ Repository: <https://github.com/a1175815821/MegaDownloader-Revival>
 
 ## Status
 
-**Phase 2 — download queue (complete).** The download engine, settings and localization
-live in `MegaDownloader.Core`, and the Avalonia shell now runs the shared queue through
-`DownloadEngineService`: virtualized package/file list, live progress, speed and ETA,
-start/pause/stop for the whole queue or single items, status filters, and removal with
-optional local-file deletion. Link intake and the remaining dialogs are Phase 3.
+**Phase 3 — dialogs and settings (in progress).** The Avalonia shell runs the shared
+queue through `DownloadEngineService` and now has a working **Add links** window: link
+preflight with per-file selection, duplicate detection, package options and enqueue into
+the same queue. The Settings page writes the download defaults (folder, simultaneous
+downloads, connections, package options) to the shared configuration. Properties,
+encoding/ELC, streaming-library management and the remaining settings tabs are next.
 
 ## Build
 
@@ -47,7 +48,7 @@ dotnet run --project MegaDownloader.Full/MegaDownloader.Full.csproj
 0. Git baseline + Avalonia skeleton (DI, theme tokens, navigation, logging)
 1. Extract the download engine and settings into `MegaDownloader.Core`
 2. Rebuild the download queue in Avalonia (virtualized list, live progress) — done
-3. Port the remaining dialogs and settings tabs
+3. Port the remaining dialogs and settings tabs — in progress (add links, settings defaults)
 4. Replace the embedded HTTP server and remaining Windows-only helpers
 5. Package for Windows, macOS and Linux
 
