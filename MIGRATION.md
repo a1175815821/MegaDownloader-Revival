@@ -44,7 +44,7 @@ dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj --no-build
 
 ## Functional validation
 
-The .NET 10 regression harness executes the original behavioral assertions against the C# assembly. Full suite result: **PASS: 1121 assertions**.
+The .NET 10 regression harness executes the original behavioral assertions against the C# assembly. Full suite result: **PASS: 1143 assertions**.
 
 Verified groups include:
 
@@ -59,6 +59,7 @@ Verified groups include:
 - process resource monitoring and 100k preflight selection
 - native UI first-open, settings, workbench, theme, and feature dialog checks
 - final release cases (queue backup, extraction transaction, multipart lifecycle, stop race, update reminder, proxy)
+- Avalonia shell cases (extraction worker, download-schedule guard, web-server reconfiguration, single-instance spool, session lifecycle)
 
 ## .NET 10 notes
 
@@ -226,6 +227,67 @@ Secret storage on macOS and Linux:
   stay readable afterwards, because both protectors are tried on read.
 - `PlatformServicesFactory.CreateSecretProtector` is the single place that chooses:
   DPAPI on Windows (with its legacy entropy chain), the keychain elsewhere.
+
+## Deep review round (post-Phase 4)
+
+A full pass over the Avalonia shell and the shared engine turned up the faults that made
+the new build feel broken. They are fixed and covered by the regression harness
+(`MegaDownloader.Tests/AvaloniaShellRegressionTests.cs`, 22 new assertions).
+
+Engine (`MegaDownloader.Core`):
+
+- The Avalonia shell never started the `DescompresorController` background worker, so
+  every finished archive stayed on "Extracting" forever. `DownloadEngineService.LoadAsync`
+  now starts the worker (process-wide singleton, guarded by a flag) and `Dispose` only
+  cancels it — it deliberately does not touch the process-wide `RequestCancel` flag.
+- Starting a download ignored the configured schedule window and the MEGA quota
+  cool-down. Both now flow through `StartBlockedReason(config, quotaQuarantined)`, and
+  the new public `TryStartAll(out string reason)` reports why a start was refused.
+- `PauseAll` / `PauseActiveFiles` no longer clear `PausaIndividual`, matching
+  `PonerFicherosEnPausa` in the WinForms shell.
+- Removing a file waited for a `CancellationComplete` event that a dead downloader never
+  raised, so the file was never disposed and the partial download stayed on disk.
+  `RemoveFile` waits up to five seconds and then performs the cleanup itself.
+- `ControlRemotoAgregarLinks` starts the queue after adding, and `ApplyScheduleSettings`
+  makes an edited schedule effective immediately.
+
+Servers and single instance:
+
+- Changing the port or the password did not rebind the running listener. `WebServerHost`
+  now compares a configuration signature and stops/restarts the affected listener.
+- The remote-control and streaming-library session tables grew without bound. Both now
+  prune timed-out sessions, and the CSRF token is rotated on login and on logout so a
+  pre-login token dies immediately.
+- A second launch without arguments was dropped, so the running window never came
+  forward. The spool now carries zero-length argument batches.
+- The macOS keychain wrote the secret on the command line; it is passed through the
+  environment instead.
+
+Avalonia shell (`MegaDownloader.UI`):
+
+- A `mega://` activation that arrived during cold start was dropped: intake ran before
+  the queue finished loading and the spool was truncated before it was processed.
+  `ActivationService` keeps a pending queue and only consumes the spool once the engine
+  is loaded.
+- Activation results were invisible; the status bar now reports added / failed / not
+  ready / all duplicates.
+- A failed clipboard intake poisoned that clipboard text forever; failures are now
+  retried on the next poll.
+- The settings page applies the theme on save and follows the toolbar's theme switch;
+  it also gained the global speed limit, start-with-Windows and VLC folder options.
+- Engine warnings reached only the log. `App.axaml.cs` installs a `UserNotification.Sink`
+  that surfaces them in the UI.
+- The streaming library page had no playback action; it now resolves the stream URL off
+  the UI thread and opens it with the system player.
+- Saving ELC accounts reported success even when the write failed, and a failing save
+  dialog could take the window down; both are fixed.
+- Deleting an output without a checksum asks for confirmation once (matching the
+  WinForms `Delete_UnverifiedOutputConfirm` behaviour) and deletes nothing on cancel.
+- The web and streaming servers now start even when loading the queue fails.
+
+Packaging: `dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release -r win-x64
+--self-contained true -p:PublishSingleFile=true` produces `dist/win-x64/MegaDownloader.exe`
+(a single self-contained file, about 67 MB).
 
 ## Cross-platform status
 

@@ -13,6 +13,8 @@ x64/
 x86/
 TestResults/
 artifacts/
+dist/
+publish/
 *.pdb
 *.cache
 *.log

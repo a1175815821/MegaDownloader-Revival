@@ -10,7 +10,11 @@ namespace MegaDownloader.UI.ViewModels;
 public partial class StreamingPageViewModel : ViewModelBase
 {
     private readonly IDialogService _dialogs;
+    private readonly DownloadEngineService _engine;
     private string? _editingId;
+
+    /// <summary>Set by the view so playback can open the stream URL.</summary>
+    public Func<string, Task>? OpenStreamAsync { get; set; }
 
     [ObservableProperty]
     private StreamingRowViewModel? selectedItem;
@@ -54,9 +58,10 @@ public partial class StreamingPageViewModel : ViewModelBase
     [ObservableProperty]
     private bool hasSelection;
 
-    public StreamingPageViewModel(IDialogService dialogs)
+    public StreamingPageViewModel(IDialogService dialogs, DownloadEngineService engine)
     {
         _dialogs = dialogs;
+        _engine = engine;
         Refresh();
     }
 
@@ -209,6 +214,73 @@ public partial class StreamingPageViewModel : ViewModelBase
         {
             Log.WriteError("Deleting a streaming library entry failed: " + Log.SafeException(ex));
             SetStatus("Could not delete the entry: " + ex.Message, true);
+        }
+    }
+
+    /// <summary>
+    /// Plays the selected entry: the MEGA link is resolved to a local streaming URL and
+    /// handed to the player. The WinForms shell offers the same action.
+    /// </summary>
+    [RelayCommand]
+    private async Task PlayAsync()
+    {
+        if (SelectedItem is null)
+            return;
+
+        string link = SafeLink(SelectedItem.Element);
+        if (string.IsNullOrWhiteSpace(link))
+        {
+            SetStatus("This entry has no link to play.", true);
+            return;
+        }
+
+        var config = _engine.Config;
+        if (!config.ServidorStreamingActivo)
+        {
+            SetStatus("Enable the streaming server in Settings → Streaming to play this entry.", true);
+            return;
+        }
+
+        SetStatus("Resolving the stream…", false);
+        string streamUrl = string.Empty;
+        try
+        {
+            // The resolution talks to the MEGA API, so it must not block the UI.
+            streamUrl = await Task.Run(() =>
+            {
+                if (!string.IsNullOrEmpty(SelectedItem?.Id))
+                    return StreamingHelper.CreateStreamingLinkFromLibrary(SelectedItem.Id, link, ref config);
+                return StreamingHelper.CreateStreamingLink(link, config.ServidorStreamingPuerto, ref config);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Resolving the streaming URL failed: " + Log.SafeException(ex));
+            SetStatus("The stream could not be resolved: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(streamUrl))
+        {
+            SetStatus("The stream could not be resolved for this link.", true);
+            return;
+        }
+
+        if (OpenStreamAsync is null)
+        {
+            SetStatus(streamUrl, false);
+            return;
+        }
+
+        try
+        {
+            await OpenStreamAsync(streamUrl);
+            SetStatus("Playing " + streamUrl, false);
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Starting the player failed: " + Log.SafeException(ex));
+            SetStatus("The player could not be started: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
         }
     }
 

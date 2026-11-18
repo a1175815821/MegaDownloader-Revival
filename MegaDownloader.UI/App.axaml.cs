@@ -20,6 +20,12 @@ public partial class App : Application
     private static SingleInstanceCoordinator? _instance;
 
     /// <summary>
+    /// The arguments this process was started with (without the executable path), so
+    /// the activation service sees exactly what the user passed.
+    /// </summary>
+    public static IReadOnlyList<string> LaunchArguments { get; private set; } = Array.Empty<string>();
+
+    /// <summary>
     /// Claims the running instance. Returns false when another copy already owns the
     /// queue; in that case the launch arguments have been forwarded to it.
     /// </summary>
@@ -32,9 +38,12 @@ public partial class App : Application
         // two can run side by side.
         _instance = new SingleInstanceCoordinator(appData, "MegaDownloader-Avalonia");
         if (_instance.TryAcquire())
+        {
+            LaunchArguments = args ?? Array.Empty<string>();
             return true;
+        }
 
-        _instance.SendArguments(args);
+        _instance.SendArguments(args ?? Array.Empty<string>());
         _instance.Dispose();
         _instance = null;
         return false;
@@ -68,10 +77,37 @@ public partial class App : Application
             };
             desktop.MainWindow = mainWindow;
 
+            // The engine reports problems (a file that could not be deleted, a quota
+            // cooldown) through this seam. Without a sink they only reached the log and
+            // the user never saw them.
+            var dialogs = Services.GetRequiredService<IDialogService>();
+            var logger = Services.GetRequiredService<IAppLogger>();
+            UserNotification.Sink = (kind, title, message) =>
+            {
+                if (kind == UserNotificationKind.Error)
+                    logger.Error(title + ": " + message);
+                else
+                    logger.Warn(title + ": " + message);
+
+                // The sink is called from worker threads; the dialog has to be shown
+                // on the UI thread.
+                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                {
+                    try
+                    {
+                        await dialogs.ShowMessageAsync(title, message);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn("Showing the notification failed: " + ex.Message);
+                    }
+                });
+            };
+
             // mega:// activations and second launches are delivered through the spool the
             // single-instance gate owns.
             ActivationService activation = Services.GetRequiredService<ActivationService>();
-            activation.Start(Environment.GetCommandLineArgs());
+            activation.Start(LaunchArguments);
 
             desktop.Exit += (_, _) =>
             {

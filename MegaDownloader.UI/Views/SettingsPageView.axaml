@@ -148,7 +148,6 @@
                                 <TextBlock Text="Download schedule" Classes="h2" />
                                 <CheckBox Content="Only download inside a scheduled window"
                                           IsChecked="{Binding ScheduleEnabled}" />
-
                                 <StackPanel Spacing="10" IsEnabled="{Binding ScheduleEnabled}">
                                     <CheckBox Content="Daily window" IsChecked="{Binding ScheduleDaily}" />
 
@@ -176,6 +175,35 @@
                                                TextWrapping="Wrap"
                                                Text="A one-off window keeps its saved dates. Enabling the daily window here applies the times above." />
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Speed and startup" Classes="h2" />
+
+                                <Grid ColumnDefinitions="170,*" RowSpacing="10" ColumnSpacing="12">
+                                    <TextBlock Text="Global speed limit" VerticalAlignment="Center" />
+                                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <NumericUpDown Value="{Binding GlobalSpeedLimitKBs}"
+                                                       Minimum="0" Maximum="1048576" Increment="64"
+                                                       FormatString="0"
+                                                       HorizontalAlignment="Left" />
+                                        <TextBlock Grid.Column="1" Classes="caption"
+                                                   Text="KB/s — 0 means unlimited"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+
+                                    <TextBlock Grid.Row="1" Text="Start with Windows" VerticalAlignment="Center" />
+                                    <CheckBox Grid.Row="1" Grid.Column="1"
+                                              Content="Launch Mega Downloader when I sign in"
+                                              IsChecked="{Binding StartWithWindows}" />
+
+                                    <TextBlock Grid.Row="2" Text="VLC folder" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1"
+                                             Text="{Binding VlcPath}"
+                                             Watermark="Folder that contains vlc.exe" />
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>

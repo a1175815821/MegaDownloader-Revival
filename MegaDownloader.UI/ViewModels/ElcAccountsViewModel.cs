@@ -133,7 +133,8 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Persist();
+        if (!Persist())
+            return;
         Reload();
         SetStatus("Account saved.", false);
     }
@@ -150,7 +151,8 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Persist();
+        if (!Persist())
+            return;
         New();
         Reload();
         SetStatus("Account deleted.", false);
@@ -173,7 +175,8 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Persist();
+        if (!Persist())
+            return;
         Reload();
         ImportText = string.Empty;
         SetStatus("Accounts imported.", false);
@@ -195,10 +198,20 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
               Accounts.FirstOrDefault();
     }
 
-    private void Persist()
+    /// <summary>Writes the accounts to disk. Returns false when the file could not be
+    /// written; the accounts are then only in memory and the caller must say so.</summary>
+    private bool Persist()
     {
         _helper.SaveToConfig(ref _config);
         _config.GuardarXML(true);
+        if (_config.ErrorConfig != Configuracion.ErrorConfigClass.SinErrores)
+        {
+            // The accounts are in memory but not on disk. Saying "saved" here would
+            // lose them on the next restart without a word of warning.
+            SetStatus("The accounts could not be written to disk: " + _config.ErrorConfig + ".", true);
+            return false;
+        }
+        return true;
     }
 
     private static string SafePlain(System.Security.SecureString value)

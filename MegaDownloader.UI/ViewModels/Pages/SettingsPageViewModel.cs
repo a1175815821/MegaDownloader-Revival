@@ -11,6 +11,7 @@ namespace MegaDownloader.UI.ViewModels;
 public partial class SettingsPageViewModel : ViewModelBase
 {
     private readonly IThemeService _theme;
+    private readonly IPlatformServices _platform;
     private readonly DownloadEngineService _engine;
 
     [ObservableProperty]
@@ -70,6 +71,16 @@ public partial class SettingsPageViewModel : ViewModelBase
     [ObservableProperty]
     private TimeSpan? scheduleEnd;
 
+    /// <summary>Global speed limit in KB/s (0 = unlimited).</summary>
+    [ObservableProperty]
+    private int globalSpeedLimitKBs;
+
+    [ObservableProperty]
+    private bool startWithWindows;
+
+    [ObservableProperty]
+    private string vlcPath = string.Empty;
+
     [ObservableProperty]
     private bool streamingEnabled;
 
@@ -112,9 +123,15 @@ public partial class SettingsPageViewModel : ViewModelBase
     public SettingsPageViewModel(IThemeService theme, IPlatformServices platform, DownloadEngineService engine)
     {
         _theme = theme;
+        _platform = platform;
         _engine = engine;
         AppDataPath = platform.GetAppDataDirectory("MegaDownloader");
         selectedThemeIndex = (int)theme.Mode;
+
+        // The toolbar button and this page both change the theme. Without this the
+        // page kept showing the old selection after the toolbar cycled it, and
+        // picking the stale entry did nothing.
+        _theme.ModeChanged += (_, _) => SyncThemeFromService();
 
         var config = engine.Config;
         DefaultFolder = config.RutaDefecto ?? string.Empty;
@@ -148,6 +165,10 @@ public partial class SettingsPageViewModel : ViewModelBase
         ScheduleDaily = schedule.Daily;
         ScheduleStart = TimeSpan.FromMinutes(Math.Clamp(schedule.StartMinute, 0, 1439));
         ScheduleEnd = TimeSpan.FromMinutes(Math.Clamp(schedule.EndMinute, 0, 1439));
+
+        GlobalSpeedLimitKBs = Math.Clamp(config.LimiteVelocidadKBs, 0, int.MaxValue);
+        StartWithWindows = config.IniciarConWindows;
+        VlcPath = config.VLCPath ?? string.Empty;
 
         StreamingEnabled = config.ServidorStreamingActivo;
         StreamingPort = Math.Clamp(config.ServidorStreamingPuerto, 0, 65535);
@@ -189,18 +210,26 @@ public partial class SettingsPageViewModel : ViewModelBase
 
     public string VersionText => AppInfo.Version;
 
-    public bool ProxyPasswordNeedsReentry { get; }
+    public bool ProxyPasswordNeedsReentry { get; private set; }
 
-    public bool StreamingPasswordNeedsReentry { get; }
+    public bool StreamingPasswordNeedsReentry { get; private set; }
 
     public bool HasSaveStatus => !string.IsNullOrWhiteSpace(SaveStatus);
 
     /// <summary>Set by the view so Browse can use the platform folder picker.</summary>
     public Func<Task<string?>>? PickFolderAsync { get; set; }
 
-    partial void OnSelectedThemeIndexChanged(int value)
+    /// <summary>
+    /// Reflects a theme change that came from another surface (the toolbar). The page
+    /// stages its own selection and applies it on Save, so the two never fight.
+    /// </summary>
+    private void SyncThemeFromService()
     {
-        _theme.SetMode((ThemeMode)value);
+        int index = (int)_theme.Mode;
+        if (SelectedThemeIndex == index)
+            return;
+
+        SelectedThemeIndex = index;
     }
 
     partial void OnSaveStatusChanged(string value) => OnPropertyChanged(nameof(HasSaveStatus));
@@ -245,6 +274,10 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.MantenerUltimaConfiguracion = KeepLastOptions;
         config.AnalizarPortapapeles = WatchClipboard;
 
+        // The theme is staged on this page and applied here, like every other setting.
+        if (_theme.Mode != (ThemeMode)SelectedThemeIndex)
+            _theme.SetMode((ThemeMode)SelectedThemeIndex);
+
         string language = SelectedLanguage?.Code ?? Language.FollowSystemLanguageCode;
         config.Idioma = language;
         try
@@ -261,6 +294,10 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.ProxyPort = (int)Math.Clamp(ProxyPort, 0, 65535);
         config.ProxyUser = ProxyUser.Trim();
         config.ProxyPassword = ProxyPassword;
+        // The user just typed the password, so the "cannot be decrypted" warning is
+        // resolved. Leaving it up would keep nagging after a successful save.
+        config.ProxyPasswordNeedsReentry = false;
+        ProxyPasswordNeedsReentry = false;
         Conexion.SetProxy(config);
 
         var schedule = config.DownloadSchedule;
@@ -272,9 +309,18 @@ public partial class SettingsPageViewModel : ViewModelBase
             schedule.EndMinute = ToMinutes(ScheduleEnd);
         }
 
+        // The global limit is applied to the running transfers, not only stored.
+        config.LimiteVelocidadKBs = Math.Clamp(GlobalSpeedLimitKBs, 0, int.MaxValue);
+        ThrottledStreamController.GetController().SetMaxGlobalSpeed(config.LimiteVelocidadKBs * 1024L);
+
+        config.IniciarConWindows = StartWithWindows;
+        config.VLCPath = VlcPath.Trim();
+
         config.ServidorStreamingActivo = StreamingEnabled;
         config.ServidorStreamingPuerto = (int)Math.Clamp(StreamingPort, 0, 65535);
         config.ServidorStreamingPassword = StreamingPassword;
+        config.ServidorStreamingPasswordNeedsReentry = false;
+        StreamingPasswordNeedsReentry = false;
 
         config.ServidorWebActivo = WebServerEnabled;
         config.ServidorWebPuerto = (int)Math.Clamp(WebServerPort, 0, 65535);
@@ -297,6 +343,26 @@ public partial class SettingsPageViewModel : ViewModelBase
         if (config.ErrorConfig != Configuracion.ErrorConfigClass.SinErrores)
         {
             SetSaveStatus("Configuration could not be saved: " + config.ErrorConfig + ".", true);
+            return;
+        }
+
+        // The schedule controller caches the window it last saw, so an edited
+        // schedule only took effect when the window changed by itself.
+        _engine.ApplyScheduleSettings();
+
+        // Start with Windows is applied by the platform layer (registry on Windows,
+        // autostart entries elsewhere). A failure here must not lose the rest of
+        // the settings, so it is reported but not fatal.
+        try
+        {
+            string executable = Environment.ProcessPath ?? string.Empty;
+            if (executable.Length > 0)
+                _platform.SetAutoStart(StartWithWindows, executable, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Log.WriteWarning("Could not update the start-with-Windows entry: " + Log.SafeException(ex));
+            SetSaveStatus("Saved, but the start-with-Windows entry could not be updated.", true);
             return;
         }
 

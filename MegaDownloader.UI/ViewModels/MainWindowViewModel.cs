@@ -11,6 +11,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
     private readonly ClipboardMonitor _clipboard;
+    private readonly ActivationService _activation;
 
     [ObservableProperty]
     private NavigationItemViewModel? selectedNavigationItem;
@@ -29,6 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IThemeService theme,
         IDialogService dialogs,
         ClipboardMonitor clipboard,
+        ActivationService activation,
         DownloadsPageViewModel downloadsPage,
         SettingsPageViewModel settingsPage,
         StreamingPageViewModel streamingPage)
@@ -37,6 +39,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _theme = theme;
         _dialogs = dialogs;
         _clipboard = clipboard;
+        _activation = activation;
         DownloadsPage = downloadsPage;
 
         // Clipboard monitoring is opt-in through the configuration; the monitor itself
@@ -47,6 +50,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 StatusText = result.Message;
         };
         _clipboard.Start();
+
+        // A mega:// activation (or a second launch) is reported in the status bar too:
+        // without this the user sees no feedback at all when a link arrives.
+        _activation.IntakeCompleted += result =>
+        {
+            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed
+                or LinkIntakeStatus.NotReady or LinkIntakeStatus.AllDuplicates)
+                StatusText = result.Message;
+        };
+
+        // The settings page can change the theme too; the toolbar label follows.
+        _theme.ModeChanged += (_, _) => UpdateThemeLabel();
 
         NavigationItems = new ObservableCollection<NavigationItemViewModel>
         {

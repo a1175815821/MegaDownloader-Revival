@@ -81,16 +81,6 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         {
             await _engine.LoadAsync();
             Status = "Queue loaded";
-
-            // The queue is loaded, so the browser remote control and the streaming
-            // server have something to act on. Starting them is a no-op unless the
-            // configuration enables them.
-            await Task.Run(() =>
-            {
-                string error = WebServerHost.Start(_engine, _engine.Config);
-                if (!string.IsNullOrEmpty(error))
-                    Log.WriteError("Web server did not start: " + error);
-            });
         }
         catch (Exception ex)
         {
@@ -101,6 +91,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             IsBusy = false;
         }
 
+        // The servers are started even when the queue failed to load: they are
+        // configured separately, and a broken DownloadList.xml must not keep the
+        // browser remote control down until the next settings save.
+        await Task.Run(() =>
+        {
+            string error = WebServerHost.Start(_engine, _engine.Config);
+            if (!string.IsNullOrEmpty(error))
+                Log.WriteError("Web server did not start: " + error);
+        });
+
         Refresh();
         _refreshTimer.Start();
     }
@@ -108,7 +108,10 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void StartAll()
     {
-        _engine.StartAll();
+        // The engine refuses to start outside the download schedule or during a
+        // quota cooldown, and explains why.
+        if (!_engine.TryStartAll(out string reason))
+            Status = reason;
         Refresh();
     }
 
@@ -189,10 +192,67 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         if (!confirmed)
             return;
 
+        if (deleteFiles && !await ConfirmUnverifiedOutputsAsync(item))
+            return;
+
         // Stop() can wait up to five seconds for an in-flight write; keep it off the UI thread.
         await Task.Run(() => _engine.Remove(item, deleteFiles));
         Status = deleteFiles ? $"Deleted {name}" : $"Removed {name}";
         Refresh();
+    }
+
+    /// <summary>
+    /// Files from older links without an integrity checksum cannot be attributed
+    /// automatically. The WinForms shell asks once and keeps the files when the user
+    /// declines; without this the task disappears while its output stays on disk.
+    /// </summary>
+    private async Task<bool> ConfirmUnverifiedOutputsAsync(object item)
+    {
+        var candidates = new List<Fichero>();
+        switch (item)
+        {
+            case Fichero file:
+                candidates.Add(file);
+                break;
+            case Paquete package:
+                candidates.AddRange(package.SnapshotFicheros());
+                break;
+        }
+
+        if (candidates.Count == 0)
+            return true;
+
+        // Ownership can require reading the whole file to compute its checksum, so it
+        // must not run on the UI thread.
+        await Task.Run(() =>
+        {
+            foreach (Fichero file in candidates)
+                file.PrepareOutputOwnership();
+        });
+
+        var unverified = candidates
+            .Where(file => file.OutputNeedsConfirmation && !string.IsNullOrEmpty(file.OutputConfirmationPath))
+            .ToList();
+        if (unverified.Count == 0)
+            return true;
+
+        bool confirmed = await _dialogs.ConfirmAsync(
+            "Delete download",
+            unverified.Count == 1
+                ? "This file comes from an older link without an integrity checksum, so it cannot be verified automatically. Delete it anyway?"
+                : $"{unverified.Count} files come from older links without an integrity checksum, so they cannot be verified automatically. Delete them anyway?",
+            "Delete anyway",
+            "Cancel");
+
+        if (!confirmed)
+        {
+            Status = "Nothing was deleted.";
+            return false;
+        }
+
+        foreach (Fichero file in unverified)
+            file.ConfirmUnverifiedOutputDeletion = true;
+        return true;
     }
 
     internal void Refresh()

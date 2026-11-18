@@ -28,6 +28,8 @@ namespace MegaDownloader
         private static WebApplication _streaming;
         private static int _remotePort;
         private static int _streamingPort;
+        private static string _remoteSignature;
+        private static string _streamingSignature;
 
         /// <summary>
         /// Starts the servers the configuration asks for and returns one message per
@@ -66,22 +68,29 @@ namespace MegaDownloader
         {
             lock (Gate)
             {
-                if (_remote is null)
-                    return;
-                try
-                {
-                    RunBlocking(() => _remote.StopAsync(TimeSpan.FromSeconds(5)));
-                }
-                catch (Exception ex)
-                {
-                    Log.WriteError("Error stopping the web server: " + Log.SafeException(ex));
-                }
-                finally
-                {
-                    RunBlocking(() => _remote.DisposeAsync().AsTask());
-                    _remote = null;
-                    _remotePort = 0;
-                }
+                StopRemoteControlLocked();
+            }
+        }
+
+        /// <summary>Stops the remote-control listener. The caller holds <see cref="Gate"/>.</summary>
+        private static void StopRemoteControlLocked()
+        {
+            if (_remote is null)
+                return;
+            try
+            {
+                RunBlocking(() => _remote.StopAsync(TimeSpan.FromSeconds(5)));
+            }
+            catch (Exception ex)
+            {
+                Log.WriteError("Error stopping the web server: " + Log.SafeException(ex));
+            }
+            finally
+            {
+                RunBlocking(() => _remote.DisposeAsync().AsTask());
+                _remote = null;
+                _remotePort = 0;
+                _remoteSignature = null;
             }
         }
 
@@ -89,22 +98,29 @@ namespace MegaDownloader
         {
             lock (Gate)
             {
-                if (_streaming is null)
-                    return;
-                try
-                {
-                    RunBlocking(() => _streaming.StopAsync(TimeSpan.FromSeconds(5)));
-                }
-                catch (Exception ex)
-                {
-                    Log.WriteError("Error stopping the streaming server: " + Log.SafeException(ex));
-                }
-                finally
-                {
-                    RunBlocking(() => _streaming.DisposeAsync().AsTask());
-                    _streaming = null;
-                    _streamingPort = 0;
-                }
+                StopStreamingLocked();
+            }
+        }
+
+        /// <summary>Stops the streaming listener. The caller holds <see cref="Gate"/>.</summary>
+        private static void StopStreamingLocked()
+        {
+            if (_streaming is null)
+                return;
+            try
+            {
+                RunBlocking(() => _streaming.StopAsync(TimeSpan.FromSeconds(5)));
+            }
+            catch (Exception ex)
+            {
+                Log.WriteError("Error stopping the streaming server: " + Log.SafeException(ex));
+            }
+            finally
+            {
+                RunBlocking(() => _streaming.DisposeAsync().AsTask());
+                _streaming = null;
+                _streamingPort = 0;
+                _streamingSignature = null;
             }
         }
 
@@ -123,11 +139,24 @@ namespace MegaDownloader
         {
             lock (Gate)
             {
-                if (_remote is not null || !config.ServidorWebActivo)
+                if (!config.ServidorWebActivo)
                     return string.Empty;
 
                 if (config.ServidorWebPuerto < 1)
                     return "Server port is not configured (port must be between 1024 and 65535).";
+
+                // A running server keeps the port, bind address and password it was
+                // started with. When the settings change the old listener has to go,
+                // otherwise the new port is never bound and the old password stays in
+                // effect until the application restarts.
+                string signature = RemoteSignature(config);
+                if (_remote is not null)
+                {
+                    if (string.Equals(_remoteSignature, signature, StringComparison.Ordinal))
+                        return string.Empty;
+                    StopRemoteControlLocked();
+                }
+
                 if (IsPortBusy(config.ServidorWebPuerto))
                     return "Port " + config.ServidorWebPuerto + " is not valid or is in use.";
 
@@ -167,11 +196,13 @@ namespace MegaDownloader
                     RunBlocking(() => app.StartAsync());
                     _remote = app;
                     _remotePort = config.ServidorWebPuerto;
+                    _remoteSignature = signature;
                 }
                 catch (Exception ex)
                 {
                     _remote = null;
                     _remotePort = 0;
+                    _remoteSignature = null;
                     Log.WriteError("Error starting web server: " + Log.SafeException(ex));
                     return ex.Message;
                 }
@@ -180,15 +211,43 @@ namespace MegaDownloader
             }
         }
 
+        /// <summary>Effective settings of the remote-control server. A change means the
+        /// listener has to be recreated, because Kestrel binds its address and port once.</summary>
+        private static string RemoteSignature(Configuracion config)
+        {
+            string bind = config.ServidorWebPermitirLAN
+                ? (string.IsNullOrEmpty(config.ServidorWebBindIP) ? "any" : config.ServidorWebBindIP)
+                : "loopback";
+            return string.Join("|",
+                config.ServidorWebPuerto.ToString(),
+                bind,
+                config.ServidorWebPermitirLAN ? "lan" : "local",
+                config.ServidorWebPassword ?? "",
+                config.ServidorWebNombre ?? "",
+                config.ServidorWebTimeout.ToString(),
+                config.ServidorWebRutaPlantilla ?? "");
+        }
+
         private static string StartStreaming(Configuracion config)
         {
             lock (Gate)
             {
-                if (_streaming is not null || !config.ServidorStreamingActivo)
+                if (!config.ServidorStreamingActivo)
                     return string.Empty;
 
                 if (config.ServidorStreamingPuerto < 1)
                     return "Server port is not configured (port must be between 1024 and 65535).";
+
+                // Same rule as the remote-control server: a changed port or password
+                // only takes effect on a fresh listener.
+                string signature = StreamingSignature(config);
+                if (_streaming is not null)
+                {
+                    if (string.Equals(_streamingSignature, signature, StringComparison.Ordinal))
+                        return string.Empty;
+                    StopStreamingLocked();
+                }
+
                 if (IsPortBusy(config.ServidorStreamingPuerto))
                     return "Port " + config.ServidorStreamingPuerto + " is not valid or is in use.";
 
@@ -204,11 +263,13 @@ namespace MegaDownloader
                     RunBlocking(() => app.StartAsync());
                     _streaming = app;
                     _streamingPort = config.ServidorStreamingPuerto;
+                    _streamingSignature = signature;
                 }
                 catch (Exception ex)
                 {
                     _streaming = null;
                     _streamingPort = 0;
+                    _streamingSignature = null;
                     Log.WriteError("Error starting streaming web server: " + Log.SafeException(ex));
                     return ex.Message;
                 }
@@ -216,6 +277,11 @@ namespace MegaDownloader
                 return string.Empty;
             }
         }
+
+        private static string StreamingSignature(Configuracion config) =>
+            string.Join("|",
+                config.ServidorStreamingPuerto.ToString(),
+                config.ServidorStreamingPassword ?? "");
 
         private static WebApplication BuildApp(IPAddress address, int port, RequestDelegate handler)
         {

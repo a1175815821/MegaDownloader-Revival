@@ -147,6 +147,8 @@ namespace MegaDownloader
                 {
                     session.LoggedIn = true;
                     session.LoginDate = DateTime.Now;
+                    // Fresh token for the authenticated session.
+                    RotateCsrf(session);
                     context.Response.Redirect(StreamingLibraryRoutes.PaginaMain);
                     return false;
                 }
@@ -398,6 +400,8 @@ namespace MegaDownloader
 
         private Session GetSession(HttpContext context)
         {
+            PruneSessions();
+
             string id = context.Request.Cookies[WebServerHost.StreamingCookieName];
             if (string.IsNullOrEmpty(id))
             {
@@ -411,6 +415,26 @@ namespace MegaDownloader
             }
 
             return _sessions.GetOrAdd(id, _ => new Session());
+        }
+
+        /// <summary>Drops sessions that timed out. Without this, every anonymous visit to
+        /// the library page allocated a session that was never released.</summary>
+        private void PruneSessions()
+        {
+            if (_sessions.Count == 0)
+                return;
+
+            DateTime cutoff = DateTime.Now.AddSeconds(-SessionTimeoutSeconds);
+            foreach (KeyValuePair<string, Session> entry in _sessions.ToArray())
+            {
+                Session session = entry.Value;
+                if (session.LoginDate != default && session.LoginDate.AddSeconds(SessionTimeoutSeconds) > DateTime.Now)
+                    continue;
+                if (session.LoginDate == default && session.LastSeenUtc > cutoff)
+                    continue;
+                if (_sessions.TryRemove(entry.Key, out _))
+                    session.LoggedIn = false;
+            }
         }
 
         private bool IsLoggedIn(Session session)
@@ -432,6 +456,10 @@ namespace MegaDownloader
                 session.Csrf = Guid.NewGuid().ToString("N");
             return session.Csrf;
         }
+
+        /// <summary>Rotates the token so a pre-login token cannot be replayed.</summary>
+        private static void RotateCsrf(Session session) =>
+            session.Csrf = Guid.NewGuid().ToString("N");
 
         private static bool ValidateCsrf(Session session, string supplied) =>
             !string.IsNullOrEmpty(supplied) && string.Equals(supplied, EnsureCsrf(session), StringComparison.Ordinal);
@@ -456,6 +484,7 @@ namespace MegaDownloader
         {
             internal volatile bool LoggedIn;
             internal DateTime LoginDate;
+            internal DateTime LastSeenUtc = DateTime.Now;
             internal string Csrf;
             internal volatile string Error;
         }

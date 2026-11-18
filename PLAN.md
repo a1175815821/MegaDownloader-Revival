@@ -18,7 +18,7 @@
 | Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
 | Phase 3 | 迁移剩余对话框与设置页 | ✅ 完成（添加链接、属性、编码/ELC、流媒体库、设置标签） |
 | Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ✅ 完成（Kestrel、口令保护器、7z 托管回退、剪贴板、`mega://` 激活与单实例） |
-| Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
+| Phase 5 | Windows / macOS / Linux 打包发布 | 🔶 进行中（Windows 单文件自包含 EXE 已产出；macOS / Linux 与 CI 发布未开始） |
 
 说明：Avalonia UI 不受旧 WinForms 排布约束，允许重写视觉风格与整体布局，按现代桌面应用继续迭代优化。
 
@@ -227,6 +227,65 @@
 
 ---
 
+## 五之三、终极深度审查轮（2026-11-18，Phase 4 之后）
+
+针对「新 UI 跑起来一堆 bug」的反馈，对 Avalonia 壳 + 共享引擎做了一轮完整排查，逐条落地修复。
+
+### 5c.1 引擎侧修复
+
+- [x] **解压永不执行**：Avalonia 壳从未启动 `DescompresorController` 的 `BackgroundWorker`，下载完成的压缩包一直卡在「Descomprimiendo」。现在 `DownloadEngineService.LoadAsync` 末尾启动解压 worker（进程级单例 + 互斥标志），`Dispose` 时只 `CancelAsync`，不污染进程级的 `RequestCancel` 永久标志。
+- [x] **下载时段与配额冷却期被绕过**：`StartFile` / `StartAll` 现在统一走 `StartBlockedReason(config, quotaQuarantined)`，时段外或配额冷却中拒绝启动并给出人话提示；新增公开的 `TryStartAll(out string reason)`。
+- [x] **暂停误伤单文件暂停**：`PauseAll` / `PauseActiveFiles` 不再清掉 `PausaIndividual`，与 WinForms 的 `PonerFicherosEnPausa` 一致。
+- [x] **删除后文件不释放**：旧下载器失联时 `CancellationComplete` 不会触发，文件不释放、残留分片不删除。`RemoveFile` 现在最多等 5 秒，然后自己执行清理。
+- [x] **远程加链后不开始下载**：`ControlRemotoAgregarLinks` 现在调用 `TryStartAll`。
+- [x] **时段改动不生效**：新增 `ApplyScheduleSettings()`，设置保存后立即重置调度器。
+
+### 5c.2 服务器与单实例修复
+
+- [x] **改端口 / 改口令不生效**：之前监听器一直沿用旧配置。新增 `RemoteSignature` / `StreamingSignature`，配置变化时先停再绑。
+- [x] **会话无限增长**：远程控制与流媒体库的会话表加入 `PruneSessions()`，超时会话在 `GetSession` 时清理。
+- [x] **CSRF 令牌可跨登录复用**：登录成功与登出时轮换 CSRF 令牌，登录前拿到的旧令牌立即失效。
+- [x] **第二次启动没有参数就被丢弃**：运行中的窗口不再被唤起。`SendArguments` 现在也会写入空数组，`ReadPendingArguments` 保留零长度批次。
+- [x] **macOS 密钥泄漏到命令行**：`security add-generic-password` 的口令改为经环境变量传入。
+
+### 5c.3 Avalonia 壳修复
+
+- [x] **冷启动时 `mega://` 激活被吞**：入队发生在队列加载完成之前，spool 又被提前截断。`ActivationService` 改为把本进程启动参数和 spool 一起放进待处理队列，等 `_engine.IsLoaded` 之后再消费。
+- [x] **激活结果没有任何反馈**：状态栏现在显示「已添加 / 失败 / 未就绪 / 全部重复」。
+- [x] **剪贴板失败后永久失效**：失败的剪贴板文本不再记入 `_lastHandled`，下次轮询会重试。
+- [x] **设置页主题不生效 / 与工具栏不同步**：主题改为保存时统一应用，并用 `ModeChanged` 事件反向同步。
+- [x] **缺少的设置项**：新增全局限速（`ThrottledStreamController.SetMaxGlobalSpeed`）、开机自启（`IPlatformServices.SetAutoStart`）、VLC 目录；代理与流媒体口令「需要重新输入」的标记在保存后清除。
+- [x] **引擎告警只进日志**：`App.axaml.cs` 安装 `UserNotification.Sink`，把引擎的提示/错误弹到 UI 线程。
+- [x] **流媒体库没有播放入口**：新增 **Play** 按钮，后台解析流地址后用系统播放器打开（`TopLevel.Launcher.LaunchUriAsync`）。
+- [x] **ELC 账户保存失败却报成功**：`Persist()` 返回 `bool`，失败时如实提示；ELC 结果保存失败不再让窗口崩溃。
+- [x] **删除未校验输出的确认**：无校验和的旧链接产物在删除前询问一次「仍然删除」，取消则不删（对齐 WinForms 的 `Delete_UnverifiedOutputConfirm`）。
+- [x] **队列加载失败时服务器也不启动**：远程控制 / 流媒体服务器改为独立于队列加载启动。
+
+### 5c.4 回归测试
+
+新增 `MegaDownloader.Tests/AvaloniaShellRegressionTests.cs`（22 条断言）：
+
+- `ExtractionWorkerRegression`：解压 worker 存在、启动入口存在、真实压缩包能被解出。
+- `ScheduleGuardRegression`：`StartBlockedReason` 在时段外 / 配额冷却 / 正常三种情况下返回正确结果。
+- `WebServerReconfigurationRegression`：改端口后监听器真的换绑。
+- `SingleInstanceArgumentRegression`：空参数与非空参数的 spool 往返。
+- `SessionLifecycleRegression`：`PruneSessions` / `RotateCsrf` / `EnsureCsrf` 行为。
+
+回归总数从 1121 提升到 **1143 assertions**，连续 3 次全绿。
+
+### 5c.5 交付物
+
+```bash
+dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release -r win-x64 \
+  --self-contained true -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+  -o dist/win-x64
+```
+
+产物：`dist/win-x64/MegaDownloader.exe`（单文件、自包含、约 67 MB）。冒烟验证：窗口正常显示、第二次启动不新开进程且参数通过 spool 转发（spool 最终清空）、无崩溃日志。
+
+---
+
 ## 六、架构边界（Phase 1）
 
 | 归属 | 内容 |
@@ -250,11 +309,11 @@
 | `MegaDownloader.Core` | ✅ 0 错误（110 个既有引擎警告） |
 | `MegaDownloader.Full` | ✅ 0 错误（5791 个既有 CA1416 警告） |
 | `MegaDownloader.UI` | ✅ 0 错误（警告均来自 Core） |
-| `MegaDownloader.Tests` | ✅ 0 错误，运行 `PASS: 1121 assertions` |
+| `MegaDownloader.Tests` | ✅ 0 错误，运行 `PASS: 1143 assertions` |
 
 运行验证：Avalonia 壳启动后加载 `DownloadList.xml` 并按 5 秒周期回写（最后一次启动 19:33:31，队列文件 19:33:32 回写，日志无异常）；无头冒烟测试确认 `DownloadEngineService` 的加载与状态切换（Stopped → Running → Paused → Stopped）正常。以上结果均为最后一次修改（保存锁策略、删除移出 UI 线程）之后重新构建并复测。
 
-Git 工作区：Phase 3 的后续修改尚未提交（分支 `refactor/avalonia`，最新提交 `b58bd2a`）。
+Git 工作区：深度审查轮的修复已提交（分支 `refactor/avalonia`）。
 
 ---
 
@@ -281,7 +340,7 @@ dotnet build MegaDownloader.Tests/MegaDownloader.Tests.csproj
 dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj --no-build -- "I:/Mega Downloader" "I:/Mega Downloader/MegaDownloader.Full/bin/Debug/net10.0-windows"
 ```
 
-期望最后一条输出 `PASS: 1121 assertions`。
+期望最后一条输出 `PASS: 1143 assertions`。
 
 ---
 

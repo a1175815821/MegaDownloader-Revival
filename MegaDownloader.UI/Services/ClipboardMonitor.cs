@@ -79,10 +79,19 @@ public sealed class ClipboardMonitor : IDisposable
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
             return;
 
-        _lastHandled = text;
         try
         {
             LinkIntakeResult result = await _intake.AddAsync(text);
+            // Only a settled attempt counts as handled. A queue that was still loading
+            // (or a folder that was not configured yet) must be retried once the
+            // situation improves, otherwise the link is lost for the whole session.
+            if (result.Status == LinkIntakeStatus.Added ||
+                result.Status == LinkIntakeStatus.AllDuplicates ||
+                result.Status == LinkIntakeStatus.NoLinks)
+            {
+                _lastHandled = text;
+            }
+
             IntakeCompleted?.Invoke(result);
         }
         catch (Exception ex)

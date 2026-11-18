@@ -176,6 +176,7 @@ public partial class RegressionTests {
         ArchiveEdges();
         ConfirmedAuditFixes();
         FinalReleaseCases();
+        AvaloniaShellRegressionCases();
         PreserveCompletedName(plain,key,encrypted);
         // Cross multiple streaming buffers and end in a partial AES block.
         byte[] large=Enumerable.Range(0,65539).Select(i=>(byte)(i%251+1)).ToArray();

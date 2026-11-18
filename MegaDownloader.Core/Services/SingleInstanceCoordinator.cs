@@ -86,6 +86,10 @@ namespace MegaDownloader
         /// Appends this launch's arguments to the spool the running instance polls. Safe to
         /// call from a short-lived process; retries briefly while the owner drains the file.
         /// </summary>
+        /// <remarks>
+        /// An empty payload is written as well: it tells the running instance that the
+        /// application was launched again, so it can bring its window to the front.
+        /// </remarks>
         public void SendArguments(IEnumerable<string> arguments)
         {
             var payload = new List<string>();
@@ -94,9 +98,6 @@ namespace MegaDownloader
                 if (!string.IsNullOrEmpty(argument))
                     payload.Add(argument);
             }
-
-            if (payload.Count == 0)
-                return;
 
             string line = JsonSerializer.Serialize(payload);
             for (int attempt = 0; attempt < 20; attempt++)
@@ -164,7 +165,10 @@ namespace MegaDownloader
                 try
                 {
                     string[]? parts = JsonSerializer.Deserialize<string[]>(trimmed);
-                    if (parts is not null && parts.Length > 0)
+                    // An empty array is a valid entry: it means the application was
+                    // launched again without arguments, so the running window is
+                    // brought to the front.
+                    if (parts is not null)
                         result.Add(parts);
                 }
                 catch (JsonException ex)

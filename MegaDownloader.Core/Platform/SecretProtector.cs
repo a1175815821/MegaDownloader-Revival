@@ -326,7 +326,14 @@ namespace MegaDownloader.Platform
             if (OperatingSystem.IsMacOS())
             {
                 // -U updates an existing entry instead of failing.
-                Run("security", $"add-generic-password -U -s {ServiceName} -a {AccountName} -w {encoded}");
+                //
+                // The key is handed over through an environment variable, not through
+                // the command line: `ps` shows the arguments of every process on the
+                // machine, so a key passed as an argument would be readable by any
+                // local process for the lifetime of the call.
+                RunWithEnvironment("/bin/sh",
+                    "-c \"security add-generic-password -U -s " + ServiceName + " -a " + AccountName + " -w \\\"$MEGADOWNLOADER_KEY\\\"\"",
+                    "MEGADOWNLOADER_KEY", encoded);
                 return DecodeKey(Run("security", $"find-generic-password -s {ServiceName} -a {AccountName} -w")) is not null;
             }
 
@@ -398,6 +405,34 @@ namespace MegaDownloader.Platform
                     return;
                 process.StandardInput.WriteLine(input);
                 process.StandardInput.Close();
+                process.WaitForExit(5000);
+            }
+            catch (Exception ex)
+            {
+                Log.WriteDebug("Keychain command failed (" + file + "): " + Log.SafeException(ex));
+            }
+        }
+
+        /// <summary>
+        /// Runs a command with one environment variable set. The variable keeps a secret
+        /// out of the process arguments, which every local process can read.
+        /// </summary>
+        private static void RunWithEnvironment(string file, string arguments, string name, string value)
+        {
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo(file, arguments)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                };
+                startInfo.Environment[name] = value;
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process is null)
+                    return;
+                process.StandardOutput.ReadToEnd();
+                process.StandardError.ReadToEnd();
                 process.WaitForExit(5000);
             }
             catch (Exception ex)

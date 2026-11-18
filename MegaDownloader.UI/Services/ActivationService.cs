@@ -22,6 +22,13 @@ public sealed class ActivationService : IDisposable
     private readonly DownloadEngineService _engine;
     private readonly SingleInstanceCoordinator _instance;
     private readonly DispatcherTimer _pollTimer;
+
+    /// <summary>
+    /// Argument batches that were received but not queued yet. A batch stays here until
+    /// the queue can take it, so a link handed to a starting application is not lost.
+    /// </summary>
+    private readonly List<IReadOnlyList<string>> _pending = new();
+
     private bool _disposed;
 
     public ActivationService(
@@ -67,7 +74,11 @@ public sealed class ActivationService : IDisposable
 
         RegisterProtocolHandler();
         _pollTimer.Start();
-        _ = HandleAsync(arguments);
+
+        // The queue is loaded asynchronously, so this launch's own arguments are queued
+        // like any other activation and processed once the queue is ready.
+        if (arguments is not null && arguments.Count > 0)
+            _pending.Add(arguments);
     }
 
     private void RegisterProtocolHandler()
@@ -91,38 +102,75 @@ public sealed class ActivationService : IDisposable
         if (_disposed)
             return;
 
-        IReadOnlyList<IReadOnlyList<string>> pending;
-        try
+        // The spool is only read once the queue can take the links. Reading it earlier
+        // would truncate the file and drop the links of a second launch that arrived
+        // while the queue was still loading.
+        if (_engine.IsLoaded)
         {
-            pending = _instance.ReadPendingArguments();
-        }
-        catch (Exception ex)
-        {
-            Log.WriteWarning("Reading pending activations failed: " + Log.SafeException(ex));
-            return;
+            IReadOnlyList<IReadOnlyList<string>> pending;
+            try
+            {
+                pending = _instance.ReadPendingArguments();
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Reading pending activations failed: " + Log.SafeException(ex));
+                pending = Array.Empty<IReadOnlyList<string>>();
+            }
+
+            foreach (IReadOnlyList<string> arguments in pending)
+                _pending.Add(arguments);
         }
 
-        foreach (IReadOnlyList<string> arguments in pending)
+        while (_pending.Count > 0)
         {
-            await HandleAsync(arguments);
+            IReadOnlyList<string> arguments = _pending[0];
+
+            // A launch without arguments only asks the running window to come forward.
+            if (arguments.Count == 0)
+            {
+                _pending.RemoveAt(0);
+                ActivateWindow();
+                continue;
+            }
+
+            LinkIntakeResult? result = await HandleAsync(arguments);
+            if (result is null)
+            {
+                // The queue could not take the links yet: keep the batch and try again.
+                break;
+            }
+
+            _pending.RemoveAt(0);
             ActivateWindow();
         }
     }
 
-    private async Task HandleAsync(IReadOnlyList<string> arguments)
+    /// <summary>
+    /// Queues the links of one activation. Returns null when the queue could not take
+    /// them yet, so the caller can retry instead of losing them.
+    /// </summary>
+    private async Task<LinkIntakeResult?> HandleAsync(IReadOnlyList<string> arguments)
     {
-        if (arguments.Count == 0)
-            return;
+        if (arguments is null || arguments.Count == 0)
+            return null;
 
         try
         {
             LinkIntakeResult result = await _intake.AddFromArgumentsAsync(arguments);
+            // "Not ready" means the queue is still loading: the batch stays pending.
+            if (result.Status == LinkIntakeStatus.NotReady && !_engine.IsLoaded)
+                return null;
+
             if (result.Status != LinkIntakeStatus.NoLinks)
                 IntakeCompleted?.Invoke(result);
+            return result;
         }
         catch (Exception ex)
         {
             Log.WriteError("Handling an activation failed: " + Log.SafeException(ex));
+            return new LinkIntakeResult(LinkIntakeStatus.Failed, 0, 0,
+                DownloadAdvice.FirstLine(Log.Redact(ex.Message)));
         }
     }
 
@@ -141,6 +189,7 @@ public sealed class ActivationService : IDisposable
             return;
         _disposed = true;
         _pollTimer.Stop();
+        _pending.Clear();
         _instance.Dispose();
     }
 }

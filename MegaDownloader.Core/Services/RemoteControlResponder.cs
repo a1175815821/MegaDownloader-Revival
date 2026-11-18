@@ -177,6 +177,8 @@ namespace MegaDownloader
                 case PageLogout:
                     session.LoggedIn = false;
                     session.LoginDate = default;
+                    // The old token dies with the session.
+                    RotateCsrf(session);
                     context.Response.Redirect(PageLogin);
                     return false;
                 case PageAjaxAddLink:
@@ -225,7 +227,9 @@ namespace MegaDownloader
                 {
                     session.LoggedIn = true;
                     session.LoginDate = DateTime.Now;
-                    EnsureCsrf(session);
+                    // A fresh token for the authenticated session: a CSRF token that was
+                    // handed out on the pre-login page must not stay valid.
+                    RotateCsrf(session);
                     context.Response.Redirect(PageMain);
                     return false;
                 }
@@ -460,6 +464,8 @@ namespace MegaDownloader
 
         private Session GetSession(HttpContext context)
         {
+            PruneSessions();
+
             string id = context.Request.Cookies[WebServerHost.RemoteControlCookieName];
             if (string.IsNullOrEmpty(id))
             {
@@ -475,12 +481,34 @@ namespace MegaDownloader
             return _sessions.GetOrAdd(id, _ => new Session());
         }
 
+        /// <summary>
+        /// Drops sessions that are older than the timeout. Without this, every GET of the
+        /// login page with a fresh cookie allocated a session that was never released.
+        /// </summary>
+        private void PruneSessions()
+        {
+            if (_sessions.Count == 0)
+                return;
+
+            DateTime cutoff = DateTime.Now.AddMinutes(-Math.Max(1, _sessionTimeoutSeconds > 0 ? _sessionTimeoutSeconds : 300) / 60);
+            foreach (KeyValuePair<string, Session> entry in _sessions.ToArray())
+            {
+                Session session = entry.Value;
+                if (session.LoginDate != default && session.LoginDate.AddSeconds(_sessionTimeoutSeconds <= 0 ? 300 : _sessionTimeoutSeconds) > DateTime.Now)
+                    continue;
+                if (session.LoginDate == default && session.LastSeenUtc > cutoff)
+                    continue;
+                if (_sessions.TryRemove(entry.Key, out _))
+                    session.LoggedIn = false;
+            }
+        }
+
         private bool IsLoggedIn(Session session)
         {
             if (!session.LoggedIn)
                 return false;
-            if (_sessionTimeoutSeconds > 0 && session.LoginDate != default &&
-                session.LoginDate.AddSeconds(_sessionTimeoutSeconds) <= DateTime.Now)
+            int timeout = _sessionTimeoutSeconds > 0 ? _sessionTimeoutSeconds : 300;
+            if (session.LoginDate != default && session.LoginDate.AddSeconds(timeout) <= DateTime.Now)
             {
                 session.LoggedIn = false;
                 session.LoginDate = default;
@@ -489,12 +517,20 @@ namespace MegaDownloader
             return true;
         }
 
+        /// <summary>
+        /// Returns the session's CSRF token, creating one when needed. The token is
+        /// rotated on login and logout so a token handed out before the login cannot be
+        /// replayed afterwards.
+        /// </summary>
         private static string EnsureCsrf(Session session)
         {
             if (string.IsNullOrEmpty(session.Csrf))
                 session.Csrf = Guid.NewGuid().ToString("N");
             return session.Csrf;
         }
+
+        private static void RotateCsrf(Session session) =>
+            session.Csrf = Guid.NewGuid().ToString("N");
 
         private static bool ValidateCsrf(Session session, string supplied) =>
             !string.IsNullOrEmpty(supplied) && string.Equals(supplied, EnsureCsrf(session), StringComparison.Ordinal);
@@ -545,6 +581,7 @@ namespace MegaDownloader
         {
             internal volatile bool LoggedIn;
             internal DateTime LoginDate;
+            internal DateTime LastSeenUtc = DateTime.Now;
             internal string Csrf;
             internal volatile string Ajax;
             internal volatile string Error;

@@ -21,7 +21,7 @@ namespace MegaDownloader
 
     public sealed class LinkIntakeResult
     {
-        internal LinkIntakeResult(LinkIntakeStatus status, int linkCount, int addedCount, string message)
+        public LinkIntakeResult(LinkIntakeStatus status, int linkCount, int addedCount, string message)
         {
             Status = status;
             LinkCount = linkCount;
@@ -70,7 +70,7 @@ namespace MegaDownloader
         public async Task<LinkIntakeResult> AddAsync(
             string? text,
             string? packageName = null,
-            bool createSubdirectory = false,
+            bool? createSubdirectory = null,
             CancellationToken cancellationToken = default)
         {
             if (!_engine.IsLoaded)
@@ -87,6 +87,10 @@ namespace MegaDownloader
                 return new LinkIntakeResult(LinkIntakeStatus.NotReady, links.Count, 0,
                     "Set a default download folder in Settings before adding links from the clipboard.");
             }
+
+            // The clipboard path uses the same package defaults as the add-links
+            // window, so a copied link lands in the same place as a pasted one.
+            bool createDirectory = createSubdirectory ?? config.CrearDirectorioPaquete;
 
             try
             {
@@ -118,7 +122,7 @@ namespace MegaDownloader
                         filtered,
                         packageName ?? string.Empty,
                         destination,
-                        createSubdirectory,
+                        createDirectory,
                         config.ExtraerAutomaticamente,
                         string.Empty,
                         cancellationToken),
@@ -130,6 +134,11 @@ namespace MegaDownloader
                         file.Dispose();
                     return new LinkIntakeResult(LinkIntakeStatus.NotReady, links.Count, 0, "The download queue is not ready.");
                 }
+
+                // The user asked for these links, so the transfer starts right away —
+                // the same behaviour as the legacy shell, where the add-links dialog
+                // had "start download" enabled by default.
+                _engine.TryStartAll(out _);
 
                 return new LinkIntakeResult(
                     LinkIntakeStatus.Added,
@@ -168,7 +177,7 @@ namespace MegaDownloader
             if (links.Count == 0)
                 return new LinkIntakeResult(LinkIntakeStatus.NoLinks, 0, 0, "No MEGA links found.");
 
-            return await AddAsync(string.Join(Environment.NewLine, links), null, false, cancellationToken)
+            return await AddAsync(string.Join(Environment.NewLine, links), null, null, cancellationToken)
                 .ConfigureAwait(false);
         }
     }

@@ -321,8 +321,15 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             UltimaConfiguracionUsada.RutaDescarga = Destination;
             UltimaConfiguracionUsada.IniciarDescarga = StartDownload;
 
-            if (StartDownload)
-                _engine.StartAll();
+            if (StartDownload && !_engine.TryStartAll(out string reason))
+            {
+                // The tasks are queued but the queue refused to start (schedule window
+                // or quota cooldown). Say so instead of claiming they are running.
+                Status = string.Create(CultureInfo.InvariantCulture,
+                    $"Added {filtered.Count} file(s) to the queue. {reason}");
+                CloseRequested?.Invoke(true);
+                return;
+            }
 
             Status = string.Create(CultureInfo.InvariantCulture, $"Added {filtered.Count} file(s) to the queue.");
             CloseRequested?.Invoke(true);

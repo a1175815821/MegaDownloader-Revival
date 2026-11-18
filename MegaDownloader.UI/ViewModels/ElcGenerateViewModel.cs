@@ -124,7 +124,16 @@ public partial class ElcGenerateViewModel : ViewModelBase
     {
         if (SaveFileAsync is null || string.IsNullOrEmpty(ResultText))
             return;
-        await SaveFileAsync(ResultText);
+        try
+        {
+            await SaveFileAsync(ResultText);
+        }
+        catch (Exception ex)
+        {
+            // A cancelled picker or a read-only folder must not take the window down.
+            Log.WriteError("Saving the ELC result failed: " + Log.SafeException(ex));
+            SetStatus("The result could not be saved: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+        }
     }
 
     [RelayCommand]

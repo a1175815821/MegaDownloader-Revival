@@ -20,11 +20,15 @@ namespace MegaDownloader
     /// </summary>
     public sealed class DownloadEngineService : IDisposable, IDownloaderService
     {
+        private static readonly object ExtractionWorkerGate = new object();
+        private static bool _extractionWorkerRunning;
+
         private readonly object _stateGate = new object();
         private readonly object _scheduleGate = new object();
         private readonly List<Paquete> _packages = new List<Paquete>();
         private readonly DownloadScheduleController _scheduleController = new DownloadScheduleController();
         private readonly Timer _timer;
+        private readonly System.ComponentModel.BackgroundWorker _extractionWorker;
         private Configuracion _config;
         private DownloadEngineState _state = DownloadEngineState.Stopped;
         private int _disposed;
@@ -48,6 +52,16 @@ namespace MegaDownloader
             // Do not schedule before the queue is loaded: the first tick would
             // otherwise save an empty list over DownloadList.xml.
             _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
+
+            // Automatic archive extraction is driven by a worker, exactly like the
+            // WinForms shell does it. Without it, a completed archive stays in
+            // "Descomprimiendo" forever because nothing drains the extraction queue.
+            _extractionWorker = new System.ComponentModel.BackgroundWorker
+            {
+                WorkerSupportsCancellation = true,
+                WorkerReportsProgress = true
+            };
+            _extractionWorker.DoWork += DescompresorController.DescompresorController_DoWork;
         }
 
         public Configuracion Config => _config;
@@ -155,10 +169,60 @@ namespace MegaDownloader
             _lastSaveUtc = DateTime.UtcNow;
             if (Volatile.Read(ref _disposed) == 0)
                 _timer.Change(500, 500);
+
+            StartExtractionWorker();
+        }
+
+        /// <summary>
+        /// Starts the worker that drains the automatic-extraction queue. The WinForms
+        /// shell does this with its own BackgroundWorker; without an equivalent the
+        /// Avalonia shell leaves every completed archive in "Descomprimiendo".
+        /// </summary>
+        private void StartExtractionWorker()
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                return;
+            try
+            {
+                lock (ExtractionWorkerGate)
+                {
+                    // One worker per process: the controller is a process-wide
+                    // singleton, so a second worker would race with the first one.
+                    if (_extractionWorkerRunning)
+                        return;
+                    _extractionWorkerRunning = true;
+                }
+                if (!_extractionWorker.IsBusy)
+                    _extractionWorker.RunWorkerAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.WriteError("Starting the extraction worker failed: " + Log.SafeException(ex));
+            }
         }
 
         public void StartAll()
         {
+            TryStartAll(out _);
+        }
+
+        /// <summary>
+        /// Starts the queue unless a guard forbids it: an active download schedule
+        /// outside its window, or a MEGA quota quarantine. The WinForms shell refuses
+        /// the same way and tells the user why; without this the queue flipped to
+        /// "Running" and the next tick silently paused it again.
+        /// </summary>
+        /// <param name="reason">Empty when the queue was started; otherwise the reason.</param>
+        /// <returns>True when the queue was set to running.</returns>
+        public bool TryStartAll(out string reason)
+        {
+            reason = StartBlockedReason(_config, MegaQuotaManager.IsQuarantined());
+            if (reason.Length > 0)
+            {
+                UserNotification.ShowInfo(reason, "Download");
+                return false;
+            }
+
             _scheduleController.MarkManualStart();
             // WinForms parity (QuitarPausasIndividuales): "Start all" also resumes
             // files the user had paused one by one.
@@ -178,6 +242,34 @@ namespace MegaDownloader
                 _state = DownloadEngineState.Running;
                 ThrottledStreamController.GetController().Continuar();
             }
+            return true;
+        }
+
+        /// <summary>
+        /// Why a manual start must be refused, or an empty string when it may go ahead.
+        /// </summary>
+        /// <param name="config">The active configuration.</param>
+        /// <param name="quotaQuarantined">True while a MEGA quota cooldown is active.</param>
+        internal static string StartBlockedReason(Configuracion config, bool quotaQuarantined)
+        {
+            if (quotaQuarantined)
+                return "The MEGA quota is in a cooling-off period. The queue stays paused until it expires.";
+
+            if (config is null || !config.DownloadSchedule.AllowsDownload(DateTime.Now))
+                return "The download schedule does not allow downloads right now.";
+
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Re-reads the download schedule after the settings changed. The controller
+        /// caches the last window it saw, so an edited schedule would not take effect
+        /// until the window changed by itself.
+        /// </summary>
+        public void ApplyScheduleSettings()
+        {
+            _scheduleController.Reset();
+            ApplySchedule();
         }
 
         public void PauseAll()
@@ -193,7 +285,11 @@ namespace MegaDownloader
                 file.DescargaIndividual = false;
                 if (file.DescargaEstado() == Estado.Descargando || file.DescargaEstado() == Estado.CreandoLocal)
                 {
-                    file.PausaIndividual = false;
+                    // WinForms PonerFicherosEnPausa pauses the files that are not
+                    // individually paused and leaves PausaIndividual alone, so a file
+                    // the user paused on its own stays paused after "Pause all".
+                    if (file.PausaIndividual)
+                        continue;
                     file.Pause();
                 }
             }
@@ -216,6 +312,16 @@ namespace MegaDownloader
         {
             if (file is null)
                 return;
+
+            // A single file obeys the same schedule window as the whole queue: the
+            // WinForms shell refuses it with a toast instead of starting a transfer
+            // that the next tick would pause again.
+            if (!_config.DownloadSchedule.AllowsDownload(DateTime.Now))
+            {
+                UserNotification.ShowInfo("The download schedule does not allow downloads right now.", "Schedule");
+                return;
+            }
+
             lock (_stateGate)
                 _state = DownloadEngineState.Running;
 
@@ -498,7 +604,10 @@ namespace MegaDownloader
                     continue;
                 try
                 {
-                    file.PausaIndividual = false;
+                    // A file the user paused on its own keeps its marker, so it is not
+                    // restarted by the scheduler after the global pause.
+                    if (file.PausaIndividual)
+                        continue;
                     file.Pause();
                 }
                 catch (Exception ex)
@@ -661,6 +770,22 @@ namespace MegaDownloader
                 file.CancellationComplete += handler;
                 file.MarcadoParaBorrarFicheroLocal = deleteFiles;
                 file.Stop();
+
+                // Fichero.Stop() only reports the cancellation when the downloader was
+                // still startable or stoppable. A downloader that already ended (its
+                // Canceled event fired before this removal) never reports again, so the
+                // partial file would stay on disk and the task would leak. Wait briefly
+                // for the callback and clean up when it never arrives.
+                if (Volatile.Read(ref file.DisposalHandled) == 0)
+                {
+                    for (int i = 0; i < 100 && Volatile.Read(ref file.DisposalHandled) == 0; i++)
+                        Thread.Sleep(50);
+                    if (Volatile.Read(ref file.DisposalHandled) == 0)
+                    {
+                        file.CancellationComplete -= handler;
+                        handler(file, EventArgs.Empty);
+                    }
+                }
             }
             else
             {
@@ -750,6 +875,21 @@ namespace MegaDownloader
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             _timer.Dispose();
+            try
+            {
+                // Stop the extraction worker. Only the worker is cancelled: the
+                // controller's RequestCancel is a permanent, process-wide flag, so
+                // calling it here would block extraction for any later engine in the
+                // same process.
+                if (_extractionWorker.IsBusy)
+                    _extractionWorker.CancelAsync();
+                lock (ExtractionWorkerGate)
+                    _extractionWorkerRunning = false;
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Stopping the extraction worker failed: " + Log.SafeException(ex));
+            }
             try
             {
                 Save();
@@ -853,6 +993,11 @@ namespace MegaDownloader
                     file.Dispose();
                 return Language.GetText("Loading please wait");
             }
+
+            // The remote control adds links with the same intent as the browser: the
+            // transfer starts right away, unless the schedule or the quota stops it.
+            if (!TryStartAll(out string reason))
+                Log.WriteWarning("Remote links added but the queue did not start: " + reason);
 
             return string.Empty;
         }
