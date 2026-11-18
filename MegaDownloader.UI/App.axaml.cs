@@ -33,6 +33,14 @@ public partial class App : Application
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
             };
+
+            desktop.Exit += (_, _) =>
+            {
+                // Only dispose the page if it was actually created; resolving it here
+                // would construct the view model and start loading the queue at shutdown.
+                Services.GetService<DownloadsPageViewModel>()?.Dispose();
+                Services.GetRequiredService<DownloadEngineService>().Dispose();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -54,6 +62,7 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<INavigationService, NavigationService>();
 
+        services.AddSingleton<DownloadEngineService>();
         services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<MainWindowViewModel>();

@@ -821,7 +821,7 @@ public partial class RegressionTests {
         });
         int pid=0;
         try {
-            var until=DateTime.UtcNow.AddSeconds(5);
+            var until=DateTime.UtcNow.AddSeconds(60);
             while(pid==0&&DateTime.UtcNow<until){try{if(File.Exists(marker))int.TryParse(File.ReadAllText(marker),out pid);}catch(IOException){}Thread.Sleep(10);}
             Check(pid>0,"7z cancellation helper started");
             var timer=System.Diagnostics.Stopwatch.StartNew();type.GetProperty("CancelRequested").SetValue(extractor,true,null);

@@ -4,26 +4,218 @@
              x:Class="MegaDownloader.UI.Views.DownloadsPageView"
              x:DataType="vm:DownloadsPageViewModel">
 
-    <Grid Margin="24">
-        <Border Classes="card"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Padding="40,32">
-            <StackPanel Spacing="10" HorizontalAlignment="Center">
-                <TextBlock Text="No downloads yet"
-                           Classes="h1"
-                           HorizontalAlignment="Center" />
-                <TextBlock Classes="muted"
-                           TextWrapping="Wrap"
-                           MaxWidth="520"
-                           HorizontalAlignment="Center"
-                           Text="The download engine is ported into MegaDownloader.Core in Phase 1, then wired to this view in Phase 2." />
-                <TextBlock Classes="caption"
-                           TextWrapping="Wrap"
-                           MaxWidth="520"
-                           HorizontalAlignment="Center"
-                           Text="Planned here: virtualized queue (TreeDataGrid), progress, speed, ETA, priority and context actions." />
+    <UserControl.Styles>
+        <Style Selector="ListBox.queue">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style Selector="ListBox.queue ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+
+        <Style Selector="Border.row">
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Button.rowAction">
+            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="MinWidth" Value="30" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+        </Style>
+
+        <Style Selector="Button.rowAction:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource Md.Fore}" />
+        </Style>
+
+        <Style Selector="Button.chevron">
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinWidth" Value="20" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+
+        <Style Selector="ProgressBar.queue">
+            <Setter Property="Height" Value="4" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Background" Value="{DynamicResource Md.ProgressBack}" />
+            <Setter Property="Foreground" Value="{DynamicResource Md.ProgressFill}" />
+        </Style>
+
+        <Style Selector="TextBlock.state">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+
+        <Style Selector="TextBlock.state.completed">
+            <Setter Property="Foreground" Value="{DynamicResource Md.SuccessFore}" />
+        </Style>
+
+        <Style Selector="TextBlock.state.failed">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*" Margin="24">
+
+        <!-- Header and queue-wide controls -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Downloads" Classes="h1" />
+                <TextBlock Classes="muted" Text="{Binding Summary}" />
             </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+                <ComboBox ItemsSource="{Binding Filters}"
+                          SelectedItem="{Binding SelectedFilter}"
+                          MinWidth="132"
+                          VerticalAlignment="Center"
+                          ToolTip.Tip="Filter by status" />
+                <Button Content="Start all"
+                        Classes="accent"
+                        Command="{Binding StartAllCommand}"
+                        IsEnabled="{Binding CanStartAll}" />
+                <Button Content="Pause all"
+                        Command="{Binding PauseAllCommand}"
+                        IsEnabled="{Binding CanPauseAll}" />
+                <Button Content="Stop"
+                        Command="{Binding StopAllCommand}"
+                        IsEnabled="{Binding CanStopAll}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Live status line -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource Md.AltBack}"
+                BorderBrush="{DynamicResource Md.Border}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12,7"
+                Margin="0,0,0,12">
+            <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Text="●"
+                           Foreground="{DynamicResource Md.ProgressFill}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+                <TextBlock Grid.Column="1"
+                           Classes="caption"
+                           Text="{Binding Status}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+
+        <!-- Virtualized queue -->
+        <Border Grid.Row="2" Classes="card" Padding="8">
+            <Grid>
+                <ListBox Classes="queue"
+                         ItemsSource="{Binding Downloads}"
+                         SelectedItem="{Binding SelectedDownload}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DownloadItemViewModel">
+                            <Border Classes="row" Margin="{Binding RowMargin}">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Remove from queue"
+                                                  Command="{Binding RemoveCommand}" />
+                                        <MenuItem Header="Remove and delete local files"
+                                                  Command="{Binding DeleteCommand}" />
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                    <Button Classes="chevron"
+                                            Content="{Binding Chevron}"
+                                            Command="{Binding ToggleExpandedCommand}"
+                                            IsVisible="{Binding IsPackage}" />
+
+                                    <StackPanel Grid.Column="1" Spacing="5">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontWeight="{Binding TitleWeight}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <ProgressBar Classes="queue"
+                                                     Value="{Binding Progress}"
+                                                     IsVisible="{Binding !IsCompleted}" />
+                                        <TextBlock Classes="caption"
+                                                   Text="{Binding DetailText}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                Spacing="2"
+                                                VerticalAlignment="Center"
+                                                MinWidth="150">
+                                        <TextBlock Classes="state"
+                                                   Classes.completed="{Binding IsCompleted}"
+                                                   Classes.failed="{Binding IsFailed}"
+                                                   Text="{Binding StateText}" />
+                                        <TextBlock Classes="caption"
+                                                   HorizontalAlignment="Right"
+                                                   Text="{Binding SpeedText}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="3"
+                                                Orientation="Horizontal"
+                                                Spacing="2"
+                                                VerticalAlignment="Center">
+                                        <Button Classes="rowAction"
+                                                Content="▶"
+                                                Command="{Binding StartCommand}"
+                                                IsVisible="{Binding CanStart}"
+                                                ToolTip.Tip="Start or resume" />
+                                        <Button Classes="rowAction"
+                                                Content="⏸"
+                                                Command="{Binding PauseCommand}"
+                                                IsVisible="{Binding CanPause}"
+                                                ToolTip.Tip="Pause" />
+                                        <Button Classes="rowAction"
+                                                Content="✕"
+                                                Command="{Binding RemoveCommand}"
+                                                ToolTip.Tip="Remove from queue" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Empty state -->
+                <StackPanel IsVisible="{Binding IsEmpty}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8"
+                            Margin="24">
+                    <TextBlock Text="{Binding EmptyTitle}"
+                               Classes="h2"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Classes="muted"
+                               TextWrapping="Wrap"
+                               MaxWidth="420"
+                               TextAlignment="Center"
+                               Text="{Binding EmptyMessage}" />
+                    <TextBlock Classes="caption"
+                               IsVisible="{Binding IsBusy}"
+                               HorizontalAlignment="Center"
+                               Text="Loading saved queue…" />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

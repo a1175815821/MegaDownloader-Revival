@@ -14,8 +14,8 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | Phase 0 | Git 基线 + Avalonia 骨架（DI、主题 token、导航、日志） | ✅ 完成（`f1b0aa5`，已推送） |
-| Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成 |
-| Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ⬜ 未开始 |
+| Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成（`2b4e778`，已推送） |
+| Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
 | Phase 3 | 迁移剩余对话框与设置页 | ⬜ 未开始 |
 | Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ⬜ 未开始 |
 | Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
@@ -41,10 +41,10 @@
 ### 3.1 已完成
 
 - [x] `MegaDownloader.Core` 工程成型（`net10.0`，`RootNamespace=MegaDownloader`）。
-- [x] 确定边界（见第四节）。
+- [x] 确定边界（见第五节）。
 - [x] 用 `git mv` 迁移引擎到 `MegaDownloader.Core/Engine/`（41 个 `.cs`，含 `Cryptography/`、`StreamingLibrary/`）。
 - [x] 用 `git mv` 迁移设置与本地化到 `MegaDownloader.Core/Settings/`（5 个 `.cs`）。
-- [x] Core 编译通过：**0 警告 / 0 错误**（已复验）。
+- [x] Core 编译通过：**0 错误**。
 - [x] `MegaDownloader.Full` 添加对 Core 的 `ProjectReference`，源码通过编译通配符继续共享 `src/**`。
 - [x] 资源归属：Core 内嵌语言包（`*-Language.xml`）、`InternalConfig.xml`、`7zr.exe`；`InternalConfiguration` 与 `Language` 改为相对 `typeof(...).Assembly` 读取资源。
 - [x] 去除引擎中的 WinForms 依赖接缝：
@@ -89,23 +89,66 @@
 
 回归测试另需一处适配：测试通过 `typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile")` / `ProcessResourceMonitor` 反射查找已迁到 Core 的类型。新增 `EngineType(...)` 解析器（先查 `typeof(Log).Assembly`，再回退 Full），替换 4 处调用后测试恢复通过。
 
-### 3.3 待办
+### 3.3 已完成
 
 - [x] Full 重新编译通过（0 错误）。
 - [x] 重建并运行回归测试，`PASS: 1121 assertions`。
-- [ ] 提交并推送 Phase 1（提交信息带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`）。
+- [x] 提交并推送 Phase 1（`2b4e778`）。
 - [x] 更新 `README.md` 状态段与 `MIGRATION.md`（Phase 1 完成情况、Core 新职责）。
 - [x] 将「Avalonia 可自由重写风格与排布」的偏好写入长期记忆。
 
 ---
 
-## 四、Phase 1 架构边界
+## 四、Phase 2 详细清单
+
+### 4.1 已完成
+
+- [x] Core 新增公开门面 `MegaDownloader.Core/Services/DownloadEngineService.cs`：
+  - [x] 加载/保存队列（复用 `Paquete.CargarStartupQueue` / `GuardarEnFichero`，原子写入 + `.bak`）。
+  - [x] 500 ms 调度 tick：按 `DescargasSimultaneas` 限额启动 `EnCola` 文件，`MegaQuotaManager.IsQuarantined()` 期间不启动。
+  - [x] `DownloadEngineState`（Stopped / Running / Paused）与全局 `StartAll` / `PauseAll` / `StopAll`。
+  - [x] 复用 `DownloadScheduleController` 与 `DownloadSchedule`，并遵循 `ComenzarDescargando` 自动开始。
+  - [x] 单文件开始/暂停（`PausaIndividual`、`DescargaIndividual`、`ThrottledStreamController`）。
+  - [x] 删除条目：引用同一性查找、取消后清理、`MarcadoParaBorrarFicheroLocal`、`RemovePendingExtraction`、优先级重排。
+  - [x] 每 5 秒自动保存队列；退出时保存。
+- [x] `DownloadsPageViewModel` 重写：500 ms 轮询引擎、按引擎对象缓存行 ViewModel（选中项在刷新后保持）、包/文件两级行、展开/折叠、实时进度/速度/ETA、状态计数、状态筛选、工具栏开始/暂停/停止、行内开始/暂停/删除、右键「删除并删除本地文件」确认。
+- [x] `DownloadsPageView.axaml` 重新设计：虚拟化 `ListBox` 队列、状态条、空状态、主题 token 样式（未照搬 WinForms 布局）。
+- [x] `App.axaml.cs` 注册 `DownloadEngineService` 单例，并在应用退出时停止轮询计时器、保存并释放引擎。
+
+### 4.2 行为说明与后续项
+
+- 队列按包分组显示，状态「分组」以状态筛选（All / Active / Queued / Paused / Completed / Failed）+ 顶部计数实现。
+- 保存沿用引擎自身的锁策略：`Save()` 只在 `Mutex.ListaDescargas` 内复制包列表，XML 序列化与落盘在锁外执行（`Paquete.GuardarXML` 内部自行短锁快照文件列表，`GuardarEnRuta` 只在 `Mutex.GuardarDownloadList` 内做标记/写入），因此 5 秒周期保存不会阻塞调度 tick。
+- 删除条目在 UI 线程之外执行（`Fichero.Stop()` 最长等待 5 秒），避免界面冻结。
+- 尚未暴露：拖拽调整优先级、错误重试策略（`ResetearErrores`）的界面、单文件限速设置。
+- 「添加链接」入口仍是占位对话框；链接解析与预检属于 Phase 3。
+
+### 4.3 复核修正（2026-11-18）
+
+对照 WinForms 的调度/删除实现复核 `DownloadEngineService` 后，修正了以下行为差异：
+
+- [x] **启动期空队列覆盖**：定时器改为在 `LoadAsync` 成功后才启动，`Save()` 在 `_loaded` 置位前直接返回。原实现构造即启动 500 ms 定时器且 `_lastSaveUtc=MinValue`，第一次 tick 可能在队列读完前用空列表覆盖 `DownloadList.xml`。
+- [x] **全局恢复**：`StartAll` 清除所有 `PausaIndividual`；调度 tick 先 `Resume()` 暂停文件、再启动 `EnCola` 文件。原实现"暂停全部 → 开始全部"不会恢复已暂停下载（`FileDownloader.IsPaused` 未清除）。
+- [x] **连接数**：`file.Start` 传入 `ConexionesPorFichero`，不再把"剩余同时下载名额"当作每文件连接数。
+- [x] **停止语义**：`StopAll` 只置状态并中止限速流，真正的 `Fichero.Stop()` 由调度线程执行（与 `PararDescargaFicheros` 一致），避免 UI 线程被每文件最长 5 秒的等待卡住。
+- [x] **暂停补漏**：暂停状态下每个 tick 重新暂停仍处于 `Descargando`/`CreandoLocal` 的文件，覆盖暂停瞬间仍在启动的任务。
+- [x] **删除清理**：设置 `LimpiezaPaquete`，用 `DisposalHandled` 门闩防止取消回调重复执行，并在删除后清理空目录（含包目录），与 `Main.LimpiarDirectoriosVacios` 一致。
+- [x] **tick 重入**：新增 `_tickRunning` 互斥，避免慢 `Stop()`/保存导致 500 ms 定时器回调重叠。
+- [x] **并发名额**：调度计数只统计真正占用下载名额的状态（`Descargando`/`CreandoLocal`/`Verificando`），MD5 校验与解压不再阻塞后续排队文件。
+- [x] **UI**：行缓存只淘汰已离开队列的对象（筛选隐藏的行保留展开状态）；退出时仅在页面已创建时 Dispose。
+- [x] **回归稳定性**：`SevenZipCancelCase` 的子进程启动等待由 5 秒放宽到 60 秒；本机实测 `RegressionTests.exe` 启动并写 PID 文件需 6.1–6.3 秒，偶发更慢，原预算会导致该断言随机失败（与功能无关；取消本身的 5 秒断言未改动）。
+
+修正后解决方案 **0 错误**；20 秒预算版本连续 5 次通过，最终 60 秒预算版本再复测 3 次均 **`PASS: 1121 assertions`**。
+
+---
+
+## 五、架构边界（Phase 1）
 
 | 归属 | 内容 |
 |---|---|
-| `MegaDownloader.Core` | 下载引擎（网络、文件、包、调度、配额、校验、解压、流媒体库）、预检模型、设置与本地化、日志、更新器、`IPlatformServices` 平台抽象、`UserNotification`、`StreamingLibraryRoutes` |
+| `MegaDownloader.Core` | 下载引擎（网络、文件、包、调度、配额、校验、解压、流媒体库）、预检模型、设置与本地化、日志、更新器、`IPlatformServices` 平台抽象、`UserNotification`、`StreamingLibraryRoutes`、`DownloadEngineService` |
 | `MegaDownloader.Full`（保留） | WinForms 界面与窗体、`HttpModule`、Stegano、剪贴板/单实例管理、主题与 `UiStyles`、`PreflightTree`（视图模型，依赖 WinForms `CheckState`）、`ResourceHelper`（内嵌 DLL 加载）、`MegaURIProtocol`、`SettingsLayout`、`StartupRegistration` |
-| `MegaDownloader.UI` | Avalonia 外壳；Phase 2 起直接消费 Core 的公开 API |
+| `MegaDownloader.UI` | Avalonia 外壳；消费 Core 的公开 API（`DownloadEngineService`） |
 
 已引入的跨平台接缝：
 
@@ -115,20 +158,22 @@
 
 ---
 
-## 五、当前构建状态
+## 六、当前构建状态
 
 | 工程 | 状态 |
 |---|---|
-| `MegaDownloader.Core` | ✅ 0 警告 / 0 错误 |
+| `MegaDownloader.Core` | ✅ 0 错误（110 个既有引擎警告） |
 | `MegaDownloader.Full` | ✅ 0 错误（5791 个既有 CA1416 警告） |
-| `MegaDownloader.UI` | ✅ 0 警告 / 0 错误 |
+| `MegaDownloader.UI` | ✅ 0 错误（警告均来自 Core） |
 | `MegaDownloader.Tests` | ✅ 0 错误，运行 `PASS: 1121 assertions` |
 
-Git 工作区：Phase 1 的 `git mv` 与修改尚未提交（分支 `refactor/avalonia`，最新提交 `f1b0aa5`）。
+运行验证：Avalonia 壳启动后加载 `DownloadList.xml` 并按 5 秒周期回写（最后一次启动 19:33:31，队列文件 19:33:32 回写，日志无异常）；无头冒烟测试确认 `DownloadEngineService` 的加载与状态切换（Stopped → Running → Paused → Stopped）正常。以上结果均为最后一次修改（保存锁策略、删除移出 UI 线程）之后重新构建并复测。
+
+Git 工作区：Phase 2 的修改尚未提交（分支 `refactor/avalonia`，最新提交 `2b4e778`）。
 
 ---
 
-## 六、验证命令
+## 七、验证命令
 
 ```bash
 cd "I:/Mega Downloader"
@@ -137,6 +182,10 @@ dotnet build MegaDownloader.Core/MegaDownloader.Core.csproj -c Debug
 
 ```bash
 dotnet build MegaDownloader.Full/MegaDownloader.Full.csproj -c Debug
+```
+
+```bash
+dotnet build MegaDownloader.UI/MegaDownloader.UI.csproj -c Debug
 ```
 
 ```bash
@@ -151,9 +200,8 @@ dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj --no-build
 
 ---
 
-## 七、后续阶段要点
+## 八、后续阶段要点
 
-- **Phase 2**：在 Avalonia 中实现虚拟化下载队列（树/网格）、实时进度、暂停/继续/删除、状态分组；复用 Core 的 `Paquete` / `Fichero` / `IDescarga` / `DownloadEstadoFilter`。允许重新设计视觉与布局，不照搬 WinForms。
-- **Phase 3**：迁移添加链接、预检树、属性、设置各标签页、编码/ELC、流媒体库管理等对话框。
+- **Phase 3**：迁移添加链接、预检树、属性、设置各标签页、编码/ELC、流媒体库管理等对话框。添加链接后把新 `Paquete` 写入 `DownloadEngineService` 的队列。
 - **Phase 4**：用 ASP.NET Core/Kestrel 替换内嵌 `HttpServer.dll`；替换 `ObjectListView`；处理 `7zr.exe` 的 RID 分发或转为纯 SharpCompress；DPAPI 调用点全部走 `IPlatformServices`。
 - **Phase 5**：三平台打包、CI 发布、更新器适配。

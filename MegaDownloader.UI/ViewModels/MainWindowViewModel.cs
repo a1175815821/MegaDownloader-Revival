@@ -62,7 +62,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private Task AddLinksAsync() => _dialogs.ShowMessageAsync(
         "Add links",
-        "Link intake, preflight and the download engine wiring arrive in Phase 2–3 of the Avalonia refactor.");
+        "Link intake and preflight arrive in Phase 3 of the Avalonia refactor. The queue page already runs the shared download engine.");
 
     [RelayCommand]
     private void CycleTheme()

@@ -104,6 +104,27 @@ The download engine and settings were moved out of the WinForms shell into
 - Result: `MegaDownloader.Full` builds with 0 errors and the regression harness still
   reports **PASS: 1121 assertions**.
 
+## Avalonia download queue (Phase 2)
+
+The Avalonia shell now drives the shared engine instead of showing a placeholder page:
+
+- `MegaDownloader.Core/Services/DownloadEngineService.cs` is the public façade over the
+  internal engine: it loads and saves `DownloadList.xml` (atomic write + `.bak`), runs a
+  500 ms scheduling tick, enforces `DescargasSimultaneas`, respects quota quarantine and
+  the configured download schedule, and exposes whole-queue and per-file start/pause/stop
+  plus reference-identity removal with optional local-file deletion.
+- `DownloadsPageViewModel` polls the service on the UI thread and reconciles a stable row
+  set keyed by the engine's `Paquete`/`Fichero` instances, so selection and expansion
+  survive refreshes. Package rows can be expanded/collapsed, filtered by status, and each
+  row offers start/pause/remove; a context menu adds “remove and delete local files”.
+- `DownloadsPageView.axaml` is a fresh design (virtualized `ListBox`, status strip, empty
+  states, token-based styles), not a port of the WinForms `ObjectListView` layout.
+- `App.axaml.cs` registers the service as a singleton and stops the page timer, saves the
+  queue and disposes the engine when the desktop app exits.
+
+Remaining queue work: drag-to-reorder priority, the error-retry policy UI, per-file speed
+limits, and the link-intake dialog that feeds new packages into the service (Phase 3).
+
 ## Cross-platform status
 
 - Platform-neutral service interface: `MegaDownloader.Core/Platform/IPlatformServices.cs`
