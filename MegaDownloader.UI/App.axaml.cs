@@ -13,6 +13,33 @@ public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
 
+    /// <summary>
+    /// The single-instance gate, created before Avalonia starts so a second launch can
+    /// exit without building a window. Held for the process lifetime.
+    /// </summary>
+    private static SingleInstanceCoordinator? _instance;
+
+    /// <summary>
+    /// Claims the running instance. Returns false when another copy already owns the
+    /// queue; in that case the launch arguments have been forwarded to it.
+    /// </summary>
+    public static bool BecomePrimaryInstance(string[] args)
+    {
+        IPlatformServices platform = PlatformServicesFactory.Create();
+        string appData = platform.GetAppDataDirectory("MegaDownloader");
+
+        // The Avalonia shell and the WinForms reference app keep separate gates so the
+        // two can run side by side.
+        _instance = new SingleInstanceCoordinator(appData, "MegaDownloader-Avalonia");
+        if (_instance.TryAcquire())
+            return true;
+
+        _instance.SendArguments(args);
+        _instance.Dispose();
+        _instance = null;
+        return false;
+    }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -29,28 +56,33 @@ public partial class App : Application
             Services.GetRequiredService<IThemeService>().Initialize();
             Services.GetRequiredService<IAppLogger>().Info("Avalonia shell starting");
 
-            // Secrets at rest use the platform scheme: DPAPI on Windows, an AES-GCM key
-            // file elsewhere. The Windows protector keeps the legacy entropy chain so
-            // existing configuration files keep working.
+            // Secrets at rest use the platform scheme: DPAPI on Windows, the OS keychain
+            // (with an encrypted key file as fallback) elsewhere. The Windows protector
+            // keeps the legacy entropy chain so existing configuration files keep working.
             Criptografia.SetSecretProtector(
-                OperatingSystem.IsWindows()
-                    ? new WindowsDpapiSecretProtector()
-                    : new AesFileSecretProtector(
-                        Services.GetRequiredService<IPlatformServices>().GetAppDataDirectory("MegaDownloader")));
+                PlatformServicesFactory.CreateSecretProtector(Services.GetRequiredService<IPlatformServices>()));
 
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
             };
+            desktop.MainWindow = mainWindow;
+
+            // mega:// activations and second launches are delivered through the spool the
+            // single-instance gate owns.
+            ActivationService activation = Services.GetRequiredService<ActivationService>();
+            activation.Start(Environment.GetCommandLineArgs());
 
             desktop.Exit += (_, _) =>
             {
                 // Only dispose the page if it was actually created; resolving it here
                 // would construct the view model and start loading the queue at shutdown.
+                activation.Dispose();
                 Services.GetService<ClipboardMonitor>()?.Dispose();
                 Services.GetService<DownloadsPageViewModel>()?.Dispose();
                 WebServerHost.Stop();
                 Services.GetRequiredService<DownloadEngineService>().Dispose();
+                _instance?.Dispose();
             };
         }
 
@@ -76,6 +108,12 @@ public partial class App : Application
         services.AddSingleton<DownloadEngineService>();
         services.AddSingleton<LinkIntakeService>();
         services.AddSingleton<ClipboardMonitor>();
+
+        // The gate created before Avalonia started; a fresh one only when this process
+        // was started without going through Program (tests, designer).
+        services.AddSingleton(_ => _instance ?? new SingleInstanceCoordinator(
+            PlatformServicesFactory.Create().GetAppDataDirectory("MegaDownloader"), "MegaDownloader-Avalonia"));
+        services.AddSingleton<ActivationService>();
         services.AddTransient<AddLinksViewModel>();
         services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();

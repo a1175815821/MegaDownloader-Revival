@@ -205,6 +205,28 @@ Platform helpers:
 The WinForms shell uses the same `WebServerHost`, so both applications share one
 implementation.
 
+Link activation:
+
+- `SingleInstanceCoordinator` is a portable single-instance gate plus an argument spool.
+  Named kernel objects do not exist on Unix, so the gate is an exclusively locked file and
+  the spool is JSON lines; both are keyed by application name, so the Avalonia shell and
+  the WinForms reference app can run side by side.
+- `ActivationService` claims the gate at start-up. A second launch — a `mega://`
+  activation from the browser, or the user starting the app again — writes its arguments
+  to the spool and exits without creating a window; the running instance drains the spool
+  every 700 ms, queues the links through `LinkIntakeService` and activates its window.
+- The protocol handler is re-registered on every start, because a portable build that
+  moved would otherwise leave a command line pointing at a path that no longer exists.
+
+Secret storage on macOS and Linux:
+
+- `KeychainSecretProtector` stores the 32-byte key as a generic password item through the
+  macOS `security` tool or libsecret's `secret-tool`, and falls back to
+  `AesFileSecretProtector` when neither is available. Values written during a fallback
+  stay readable afterwards, because both protectors are tried on read.
+- `PlatformServicesFactory.CreateSecretProtector` is the single place that chooses:
+  DPAPI on Windows (with its legacy entropy chain), the keychain elsewhere.
+
 ## Cross-platform status
 
 - Platform-neutral service interface: `MegaDownloader.Core/Platform/IPlatformServices.cs`
@@ -214,13 +236,13 @@ implementation.
 
 Major items still required before a full cross-platform release:
 
-1. Replace `ObjectListView` with a virtualized Avalonia tree/grid (the Avalonia queue already is one).
-2. Replace registry/P-Invoke-dependent helpers (clipboard, theme, URI protocol, autostart) with service implementations.
-3. Update the Avalonia dependency set to address the current transitive `Tmds.DBus.Protocol` advisory.
+1. Replace `ObjectListView` with a virtualized Avalonia tree/grid — the Avalonia queue already is one; only the WinForms reference app still uses `ObjectListView`.
+2. Update the Avalonia dependency set to address the current transitive `Tmds.DBus.Protocol` advisory.
 
 Done in Phase 4: the embedded `HttpServer.dll` is replaced with Kestrel, `.7z` falls back
-to managed SharpCompress extraction, and DPAPI call sites go through `ISecretProtector`
-with an AES-GCM implementation for macOS/Linux.
+to managed SharpCompress extraction, DPAPI call sites go through `ISecretProtector`
+(keychain-backed on macOS/Linux), and `mega://` activations reach the running window
+through a portable single-instance gate.
 
 ## Notes
 

@@ -52,4 +52,28 @@ public static class PlatformServicesFactory
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return PlatformKind.Linux;
         return PlatformKind.Unknown;
     }
+
+    /// <summary>
+    /// Creates the platform implementation without a DI container. Used before the
+    /// composition root exists (single-instance gate, crash logging).
+    /// </summary>
+    public static IPlatformServices Create(string applicationName = "MegaDownloader")
+    {
+        PlatformKind kind = DetectPlatform();
+        return kind == PlatformKind.Windows
+            ? new WindowsPlatformServices()
+            : new UnixPlatformServices(kind, applicationName);
+    }
+
+    /// <summary>
+    /// The secret protector for this OS: DPAPI on Windows (with its legacy entropy
+    /// chain), the OS keychain on macOS/Linux with an encrypted key file as the fallback.
+    /// </summary>
+    public static ISecretProtector CreateSecretProtector(IPlatformServices platform)
+    {
+        if (platform.CurrentPlatform == PlatformKind.Windows)
+            return new WindowsDpapiSecretProtector();
+
+        return new KeychainSecretProtector(platform.GetAppDataDirectory("MegaDownloader"));
+    }
 }

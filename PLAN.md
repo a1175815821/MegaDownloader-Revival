@@ -17,7 +17,7 @@
 | Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成（`2b4e778`，已推送） |
 | Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
 | Phase 3 | 迁移剩余对话框与设置页 | ✅ 完成（添加链接、属性、编码/ELC、流媒体库、设置标签） |
-| Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | 🚧 进行中（Kestrel 服务器、DPAPI 抽象、7z 托管回退已完成；剪贴板/协议入口待做） |
+| Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ✅ 完成（Kestrel、口令保护器、7z 托管回退、剪贴板、`mega://` 激活与单实例） |
 | Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
 
 说明：Avalonia UI 不受旧 WinForms 排布约束，允许重写视觉风格与整体布局，按现代桌面应用继续迭代优化。
@@ -206,10 +206,24 @@
 - [x] 设置页 General 增加该开关；状态栏显示入库结果。
 - [x] `DownloadEngineService` 的 `ControlRemotoAgregarLinks` 与剪贴板路径共用同一套展开/去重/建包逻辑。
 
-### 5b.5 待做（Phase 4 剩余）
+### 5b.5 已完成：`mega://` 激活与单实例
 
-- [ ] `mega://` 协议激活参数在 Avalonia 壳中的入口（服务与解析已就绪，尚未接命令行/单实例转发）。
-- [ ] macOS/Linux 的 keychain/libsecret 后端（当前 AES key 文件是可用的过渡方案）。
+- [x] `SingleInstanceCoordinator`（Core）：跨平台单实例闸门 + 参数队列。命名内核对象在 Unix 上不存在，改用独占锁文件（`FileShare.None`）做闸门、JSON 行文本做队列，按应用名分目录，因此 Avalonia 壳与 WinForms 参考实现可并存。
+- [x] `ActivationService`（Avalonia）：启动时抢占单实例；抢不到就把本次参数写入队列并退出（不建窗口）；主实例每 700 ms 排空队列，交给 `LinkIntakeService.AddFromArgumentsAsync` 入队并激活窗口。
+- [x] 每次启动重新注册 `mega://` 处理程序（便携版移动位置后旧路径会失效），失败只记日志。
+- [x] `Program.Main` 在 Avalonia 启动前调用 `App.BecomePrimaryInstance`，第二实例直接返回。
+
+### 5b.6 已完成：macOS/Linux 的 keychain 后端
+
+- [x] `KeychainSecretProtector`：macOS 走 `security`（Keychain），Linux 走 `secret-tool`（libsecret），密钥 32 字节存为通用口令项。
+- [x] 工具缺失或无权限时自动回退到 `AesFileSecretProtector`，并记一条警告；回退期间写入的值仍可读回（两种信封都尝试）。
+- [x] `PlatformServicesFactory.CreateSecretProtector` 统一选择：Windows → DPAPI，其他 → keychain（带回退）。AES-GCM 信封抽成 `AesGcmEnvelope` 供两个保护器共用。
+
+### 5b.7 验证
+
+- 解决方案 0 错误。
+- 回归 `PASS: 1121 assertions`。
+- 独立冒烟：Kestrel 服务器 10/10；单实例与保护器 11/11；第二实例带 `mega://` 参数启动时立即退出且窗口数保持 1。
 
 ---
 
@@ -274,5 +288,5 @@ dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj --no-build
 ## 九、后续阶段要点
 
 - **Phase 3**：迁移添加链接、预检树、属性、设置各标签页、编码/ELC、流媒体库管理等对话框。添加链接后把新 `Paquete` 写入 `DownloadEngineService` 的队列。
-- **Phase 4**：用 ASP.NET Core/Kestrel 替换内嵌 `HttpServer.dll`；替换 `ObjectListView`；处理 `7zr.exe` 的 RID 分发或转为纯 SharpCompress；DPAPI 调用点全部走 `IPlatformServices`。
+- **Phase 4**：已完成——Kestrel 替换内嵌 `HttpServer.dll`、`ISecretProtector` 抽象 DPAPI 并加 keychain 后端、`.7z` 托管回退、剪贴板入库、`mega://` 激活与跨平台单实例。`ObjectListView` 只在 WinForms 参考实现中使用，Avalonia 队列已是虚拟化列表。
 - **Phase 5**：三平台打包、CI 发布、更新器适配。

@@ -14,6 +14,11 @@ internal static class Program
             e.SetObserved();
         };
 
+        // A mega:// activation (or a second launch) hands its arguments to the instance
+        // that is already running and exits, so there is one queue and one window.
+        if (!App.BecomePrimaryInstance(args))
+            return;
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
