@@ -1,31 +1,9 @@
 # =============================================================
-# MegaDownloader .gitignore (Visual Studio / VB.NET)
+# MegaDownloader .gitignore (C# / .NET 10 / Avalonia)
 # =============================================================
 
 # -------------------------------
-# Python 字节码(本地工具运行产生,不提交)
-# -------------------------------
-__pycache__/
-*.pyc
-
-# -------------------------------
-# Visual Studio 用户文件与临时文件
-# -------------------------------
-*.user
-*.userprefs
-*.suo
-*.userosscache
-*.sln.docstates
-*.vssscc
-*.vspscc
-
-# Visual Studio 工作区与索引文件
-.vs/
-*.vsidx
-*.lockbin
-
-# -------------------------------
-# 编译输出
+# Build output
 # -------------------------------
 [Bb]in/
 [Oo]bj/
@@ -33,119 +11,41 @@ __pycache__/
 [Rr]elease/
 x64/
 x86/
-*.dll.config
-*.exe.config
+TestResults/
+artifacts/
 *.pdb
-*.xml
 *.cache
-
-# 例外:以下 xml 是嵌入资源或构建必需文件,必须提交
-!Resources/InternalConfig.xml
-!Resources/Language/*.xml
-!HttpModule/Template/XmlTemplateData.xml
-!docs/version.xml
-
-# 项目特定编译产物
-MegaDownloader.xml
+*.log
 
 # -------------------------------
-# ReSharper / Rider / 其他 IDE
+# Visual Studio / Rider / VS Code
 # -------------------------------
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.userosscache
+*.sln.docstates
 _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
-*.dotCover
-.idea/
-*.swp
-*~
 
 # -------------------------------
-# 测试与覆盖率
+# Local-only tooling (CodeConverter CLI store, ~200 MB)
 # -------------------------------
-*.coverage
-*.coveragexml
-TestResults/
-[Bb]uild[Ll]og.*
+tools/
 
 # -------------------------------
-# NuGet
-# -------------------------------
-*.nupkg
-*.snupkg
-.nuget/
-packages/
-!packages/repositories.config
-
-# -------------------------------
-# 安装包与发布产物
-# -------------------------------
-*.msi
-*.wixpdb
-*.wixobj
-[Pp]ublish/
-Setup/Release/
-Installer Output/
-
-# mpress 压缩后的中间产物
-MegaSearchDesktop.exe
-
-# -------------------------------
-# 日志与运行时数据
-# -------------------------------
-*.log
-Logs/
-*.tmp
-*.bak
-*.old
-
-# -------------------------------
-# 操作系统生成文件
+# OS files
 # -------------------------------
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
 .DS_Store
+desktop.ini
 
 # -------------------------------
-# 项目内不便提交的资源
+# Misc
 # -------------------------------
-# PSD 源文件 (体积较大)
-Resources/plantilla botones.psd
-Resources/plantilla.psd
-
-# 安装器 WiX 编译中间文件
-Resources/Installer MSD/*.wixobj
-Resources/Installer MSD/*.wixpdb
-
-# -------------------------------
-# 本地配置文件 (含个人账号/路径)
-# -------------------------------
-# 运行时生成的用户配置
-MegaDownloader.config
-InternalConfig.local.xml
-
-# -------------------------------
-# 发布/构建临时文件(本地验证产物,不进仓库)
-# -------------------------------
-release-staging/
-release-stage/
-dist-rc2/
-# 本地一次性检查脚本
-_check.py
-
-# 内部评审笔记,不进仓库
-docs/UI-REVIEW-main-window.md
-docs/REVIEW-2.6.0.md
-docs/STAR-GROWTH-ANALYSIS.md
-
-# TRAE IDE 临时文件
-.trae/
-TODO/
-# 本地工作区工具状态
-.workbuddy/
-.workbuddy-ai/
-
-# Codebuff 本地工具标识
-.freebuff/
-
+*.tmp
+*.bak

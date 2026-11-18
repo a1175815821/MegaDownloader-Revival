@@ -1,0 +1,25 @@
+* text=auto
+
+*.cs        text diff=csharp
+*.axaml     text
+*.xaml      text
+*.csproj    text
+*.props     text
+*.targets   text
+*.sln       text eol=crlf
+*.md        text
+*.xml       text
+*.resx      text
+*.json      text
+*.yml       text
+*.ps1       text
+
+*.dll       binary
+*.exe       binary
+*.ico       binary
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.7z        binary
+*.zip       binary
+*.nupkg     binary

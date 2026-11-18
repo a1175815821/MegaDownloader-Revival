@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>MegaDownloader</RootNamespace>
+    <AssemblyName>MegaDownloader</AssemblyName>
+    <ApplicationIcon>../src/Resources/icono.ico</ApplicationIcon>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Version>2.6.3</Version>
+    <AssemblyVersion>2.6.3.0</AssemblyVersion>
+    <FileVersion>2.6.3.0</FileVersion>
+    <NoWarn>SYSLIB0003;CS0618;CS0612;CS0067;CS0169;CS0414;CS0649;CS0108;CS0114;CS1998;CS4014;CS8981;WFO1000</NoWarn>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Debug_MSD'">
+    <OutputPath>bin\Debug_MSD\</OutputPath>
+    <DefineConstants>TRACE;MSD=true</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release_MSD'">
+    <OutputPath>bin\Release_MSD\</OutputPath>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE;MSD=true</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="GlobalUsings.cs" />
+    <Compile Include="../src/**/*.cs" Exclude="../src/Tests/**/*.cs" />
+    <EmbeddedResource Include="../src/Forms/*.resx" LogicalName="MegaDownloader.%(Filename).resources" />
+    <EmbeddedResource Include="../src/Controls/*.resx" LogicalName="MegaDownloader.%(Filename).resources" />
+    <EmbeddedResource Include="../src/Stegano/*.resx" LogicalName="MegaDownloader.Stegano.%(Filename).resources" />
+    <EmbeddedResource Include="../src/Resources/Language/*-Language.xml" LogicalName="MegaDownloader.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/Resources/InternalConfig.xml" LogicalName="MegaDownloader.InternalConfig.xml" />
+    <EmbeddedResource Include="../src/Resources/Binaries/7zr.exe" LogicalName="MegaDownloader.7zr.exe" />
+    <EmbeddedResource Include="src/My Project/*.resx" LogicalName="MegaDownloader.%(Filename).resources" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Resources.Extensions" Version="10.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+    <PackageReference Include="SharpCompress" Version="0.48.1" />
+    <!-- Original source uses SharpCompress 0.17-era OpenArchive/IRarArchive APIs. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="F5Lib"><HintPath>../src/Resources/DLLs/F5Lib.dll</HintPath></Reference>
+    <Reference Include="Fadd"><HintPath>../src/Resources/DLLs/Fadd.dll</HintPath></Reference>
+    <Reference Include="HttpServer"><HintPath>../src/Resources/DLLs/HttpServer.dll</HintPath></Reference>
+    <Reference Include="ObjectListView2022NET"><HintPath>../src/Resources/DLLs/ObjectListView2022NET.dll</HintPath></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../src/Resources/**/*" Exclude="../src/Resources/DLLs/ObjectListView.dll;../src/Resources/DLLs/ObjectListView2022NET.dll" Link="Resources/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

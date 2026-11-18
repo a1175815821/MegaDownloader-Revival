@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<?define ProductVersion = "0.83.0"?>
+<?define ProductName = "MegaSearch Desktop v0.83"?>
+<?define ProductUpgradeCode = "A837D323-6728-4C99-AC52-6EE183E9D273"?>
+<?define FileName = "MegaSearchDesktop.exe"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+   <Product Id="*" UpgradeCode="$(var.ProductUpgradeCode)" 
+            Name="$(var.ProductName)" Version="$(var.ProductVersion)" Manufacturer="Andres_age" Language="1033">
+      <Package InstallerVersion="200" Compressed="yes" Comments="MegaSearch Desktop Installer Package"/>
+      <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
+      <Icon Id="ProductIcon" SourceFile="ico.ico"/>
+      <Property Id="ARPPRODUCTICON" Value="ProductIcon"/>
+      <Property Id="ARPHELPLINK" Value="http://megadownloaderapp.blogspot.com"/>
+      <Property Id="ARPURLINFOABOUT" Value="http://megadownloaderapp.blogspot.com"/>
+      <Property Id="ARPNOREPAIR" Value="0"/>
+
+      <Upgrade Id="$(var.ProductUpgradeCode)">
+         <UpgradeVersion Minimum="$(var.ProductVersion)" OnlyDetect="no" Property="NEWERVERSIONDETECTED"/>
+         <UpgradeVersion Minimum="0.0.0" Maximum="$(var.ProductVersion)" IncludeMinimum="yes" IncludeMaximum="no" 
+                         Property="OLDERVERSIONBEINGUPGRADED"/>	  
+      </Upgrade>
+      <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+ 
+
+ 
+      <Directory Id="TARGETDIR" Name="SourceDir">
+	  
+         <Directory Id="ProgramFilesFolder">
+            <Directory Id="INSTALLDIR" Name="MegaSearch Desktop">
+               <Component Id="ApplicationFiles" Guid="*">
+                  <File Id="ExeFile" Source="$(var.FileName)"/>
+               </Component>
+            </Directory>
+         </Directory>
+ 
+         <Directory Id="ProgramMenuFolder">
+            <Directory Id="ProgramMenuSubfolder" Name="MegaSearch">
+               <Component Id="ApplicationShortcuts" Guid="*">
+                  <Shortcut Id="ApplicationShortcut1" Name="MegaSearch Desktop" Description="Start MegaSearch Desktop" 
+                            Target="[INSTALLDIR]$(var.FileName)" WorkingDirectory="INSTALLDIR"/>
+                  <RegistryValue Root="HKCU" Key="Software\MegaSearch\MegaSearch Desktop" 
+                            Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                  <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall"/>
+               </Component>
+            </Directory>
+         </Directory>
+		 
+		  <Component Id="RegistryEntries" Guid="*">
+			<RegistryKey Root="HKCR"
+						 Key="mega">
+				<RegistryValue Type="string" Name="URL protocol" Value=""/>
+				<RegistryValue Type="string" Value="URL: mega Protocol"/>
+			</RegistryKey>
+			
+			<RegistryKey Root="HKCR"
+						 Key="mega\shell\open\command">
+				<RegistryValue Type="string" Value="&quot;[INSTALLDIR]$(var.FileName)&quot; %1"/>
+			</RegistryKey>
+			
+		</Component>
+		 
+      </Directory>
+ 
+ 	<Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+	<UI>
+	   <UIRef Id="WixUI_InstallDir" />
+	   <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2">1</Publish>
+	   <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
+	</UI>
+ 
+      <InstallExecuteSequence>
+         <RemoveExistingProducts After="InstallValidate"/>
+      </InstallExecuteSequence>
+ 
+      <Feature Id="DefaultFeature" Level="1">
+         <ComponentRef Id="ApplicationFiles"/>
+         <ComponentRef Id="ApplicationShortcuts"/>		 
+		 <ComponentRef Id="RegistryEntries" />
+      </Feature>
+   </Product>
+</Wix>

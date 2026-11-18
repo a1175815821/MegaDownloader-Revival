@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels"
+        x:Class="MegaDownloader.UI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Mega Downloader" Width="1100" Height="720"
+        MinWidth="800" MinHeight="500">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="+ Add links" Classes="accent"/>
+                <Button Content="Start"/>
+                <Button Content="Pause"/>
+                <Button Content="Stop"/>
+                <TextBlock Text="Drop MEGA links here" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.7"/>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Padding="8,6">
+            <TextBlock Text="{Binding Status}"/>
+        </Border>
+
+        <TextBlock Text="Cross-platform Avalonia shell ready. Core download features are in MegaDownloader.Full."
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"/>
+    </DockPanel>
+</Window>

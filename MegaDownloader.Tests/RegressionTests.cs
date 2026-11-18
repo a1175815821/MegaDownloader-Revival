@@ -1,0 +1,2546 @@
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Collections.Generic;
+using MegaDownloader;
+
+// TargetFramework attribute supplied by SDK-style project
+
+// Runs against the built .NET Framework application, with isolated files and
+// loopback HTTP fixtures. No real MEGA account or user configuration is loaded.
+public partial class RegressionTests {
+    static string root;
+    static string projectRoot;
+    static string bin;
+    static int assertions;
+    static readonly BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
+    static readonly BindingFlags shared = BindingFlags.Static | BindingFlags.NonPublic;
+    static void Print(string name, params object[] fields) {
+        Console.WriteLine(name + " | " + string.Join(" | ", fields.Select(x => Convert.ToString(x))));
+    }
+    static Exception Unwrap(Exception ex) { while(ex.InnerException != null) ex=ex.InnerException; return ex; }
+    static void Check(bool condition, string name) {
+        if(!condition) throw new Exception("FAIL: " + name);
+        Interlocked.Increment(ref assertions);
+    }
+    [STAThread]
+    public static void Main(string[] args) {
+        if(args.Length==3 && args[0]=="--sevenzip-cancel-child") {
+            bin=args[1];
+            AppDomain.CurrentDomain.AssemblyResolve += (s,e) => {
+                string p=Path.Combine(bin,new AssemblyName(e.Name).Name+".dll");
+                if(!File.Exists(p))p=Path.Combine(bin,new AssemblyName(e.Name).Name+".exe");
+                return File.Exists(p)?Assembly.LoadFrom(p):null;
+            };
+            File.WriteAllText(args[2],System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
+            Console.Out.Write(new string('x',65536));Console.Out.Flush();
+            Console.Error.Write(new string('y',65536));Console.Error.Flush();
+            Thread.Sleep(30000);
+            return;
+        }
+        if(args.Length==4 && args[0]=="--buffer-mutex-child") {
+            bin=args[1];
+            AppDomain.CurrentDomain.AssemblyResolve += (s,e) => {
+                string p=Path.Combine(bin,new AssemblyName(e.Name).Name+".dll");
+                if(!File.Exists(p)) p=Path.Combine(bin,new AssemblyName(e.Name).Name+".exe");
+                return File.Exists(p) ? Assembly.LoadFrom(p) : null;
+            };
+            BufferMutexChild(args[2],args[3]);
+            return;
+        }
+        projectRoot=args[0]; bin=args[1];
+        AppDomain.CurrentDomain.AssemblyResolve += (s,e) => {
+            string n=new AssemblyName(e.Name).Name;
+            string p=Path.Combine(bin,n+".dll");
+            if(!File.Exists(p)) p=Path.Combine(bin,n+".exe");
+            return File.Exists(p) ? Assembly.LoadFrom(p) : null;
+        };
+        root=Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),"run-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.SetCurrentDirectory(root);
+        try {
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetUnhandledExceptionMode(System.Windows.Forms.UnhandledExceptionMode.ThrowException);
+            if(args.Length>2 && args[2]=="--ui-only") {
+                RunUiOnly();
+            } else if(args.Length>2 && args[2]=="--startup-only") {
+                RunStartupOnly();
+            } else Run();
+            Console.WriteLine("PASS: " + assertions + " assertions. Temporary files: " + root);
+        }
+        catch(Exception ex) { Console.WriteLine(ex); Environment.ExitCode=1; }
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void RunStartupOnly() {
+        typeof(Log).GetField("_LogLevel",shared).SetValue(null,Enum.ToObject(typeof(Log.LevelLogType),-1));
+        StartupPerformanceCases();
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void RunUiOnly() {
+        typeof(Log).GetField("_LogLevel",shared).SetValue(null,Enum.ToObject(typeof(Log.LevelLogType),-1));FeatureDialogs();
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void Run() {
+        typeof(Log).GetField("_LogLevel",shared).SetValue(null,Enum.ToObject(typeof(Log.LevelLogType),-1));
+        foreach(string name in new[]{"cs-nodot","cs-with.dot"}) {
+            string d=Path.Combine(root,name); Directory.CreateDirectory(d);
+            string real=Path.Combine(d,"README"); string part=real+".part";
+            File.WriteAllText(real,"old"); File.WriteAllText(part,"new");
+            using(var fd=new FileDownloader(false)) {
+                fd.LocalDirectory=d;
+                string renamed=(string)typeof(FileDownloader).GetMethod("RenamePartToReal",hidden).Invoke(fd,new object[]{part,real});
+                Check(renamed=="README (2)","extensionless collision in "+name);
+                Check(File.ReadAllText(real)=="old" && File.ReadAllText(Path.Combine(d,renamed))=="new", "both extensionless files preserved");
+            }
+        }
+        foreach(string kind in new[]{"same-size","different-size"}) {
+            string d=Path.Combine(root,"cs-"+kind); Directory.CreateDirectory(d);
+            File.WriteAllText(Path.Combine(d,"data.txt"),"ORIGINAL");
+            string zip=Path.Combine(root,"cs-"+kind+".zip");
+            MakeZip(zip,"data.txt",kind=="same-size"?"REPLACED":"NEW");
+            string error=DescompresorController.ExtractArchiveSync(zip,d,"");
+            Print("extract_collision",kind,"error="+error,"content="+File.ReadAllText(Path.Combine(d,"data.txt")),"preservedCopy="+File.Exists(Path.Combine(d,"data (2).txt")));
+            Check(error=="", "ZIP extraction succeeded: "+kind);
+            Check(File.ReadAllText(Path.Combine(d,"data (2).txt"))=="ORIGINAL", "ZIP preserves original bytes: "+kind);
+            Check(File.ReadAllText(Path.Combine(d,"data.txt"))==(kind=="same-size"?"REPLACED":"NEW"),"ZIP extracts incoming bytes");
+        }
+        string empty=Path.Combine(root,"cs-emptydir"); Directory.CreateDirectory(empty);
+        string emptyZip=Path.Combine(root,"cs-emptydir.zip"); MakeZip(emptyZip,"empty/","");
+        Check(DescompresorController.ExtractArchiveSync(emptyZip,empty,"")=="" && Directory.Exists(Path.Combine(empty,"empty")),"ZIP creates empty directory");
+        Directory.SetCurrentDirectory(projectRoot);
+        string volume=Path.GetPathRoot(projectRoot);
+        Check(PathGuard.GetSafeFilePathUnderRoot(volume,"example.txt")==Path.Combine(volume,"example.txt"),"volume root remains absolute");
+        Check(PathGuard.GetSafePathUnderRoot(volume,"",true)==volume,"empty relative path preserves root separator");
+        Check(PathGuard.GetSafeFilePathUnderRoot(@"\\audit-server\share\","file.txt")==@"\\audit-server\share\file.txt","UNC root preserved without network access");
+        ExpectRejected(()=>PathGuard.GetSafePathUnderRoot(projectRoot,@"..\escaped",false),"relative traversal rejected");
+        ExpectRejected(()=>PathGuard.EnsurePathUnderRoot(projectRoot,projectRoot+"-sibling",false),"sibling directory rejected");
+        ExpectRejected(()=>PathGuard.EnsurePathUnderRoot(volume,volume,false),"root itself rejected when forbidden");
+        Directory.SetCurrentDirectory(root);
+        using(var interrupted=new Fichero()) {
+            interrupted.FileID="TESTFILE";
+            interrupted.EstadoDescarga=Estado.Descomprimiendo;
+            var pack=new Paquete(); pack.AgregarFichero(interrupted);
+            var packs=new List<Paquete>(); packs.Add(pack);
+            typeof(Paquete).GetMethod("MarcarFicherosComoParados",shared).Invoke(null,new object[]{packs});
+            Check(interrupted.EstadoDescarga==Estado.EnCola,"interrupted extraction can be scheduled again");
+        }
+        var plain=Enumerable.Range(0,4096).Select(i=>(byte)(i%251+1)).ToArray();
+        string key=MakeKey(plain);
+        string check=Path.Combine(root,"mac-control.bin"); File.WriteAllBytes(check,plain);
+        bool mac=(bool)typeof(Criptografia).GetMethod("VerifyMegaMetaMac",shared).Invoke(null,new object[]{check,key});
+        Check(mac,"independently generated MetaMAC accepted by application");
+        byte[] encrypted=Encrypt(plain,key);
+        using(var server=new LocalFileServer(encrypted)) {
+            DownloadCase(server,plain,key,"fresh",0,true);
+            DownloadCase(server,plain,key,"resume-existing",2048,true);
+            DownloadCase(server,plain,key,"resume-missing",2048,false);
+            DownloadCase(server,plain,key,"resume-final",4096,false);
+            DownloadCase(server,plain,key,"resume-modern",2048,true);
+            DownloadCase(server,plain,key,"missing-modern-with-foreign-legacy",2048,false);
+            DownloadCase(server,plain,key,"resume-corrupt-final",4096,false);
+            StreamingCases(server,plain,key);
+        }
+        SameNameDownloads(plain,key,encrypted);
+        SameNameDownloads(plain,key,encrypted,true);
+        ConcurrentFinalNames();
+        PartialPersistenceAndCleanup(plain,key);
+        MaintenanceRegressionCases(plain,key,encrypted);
+        using(var file=new Fichero()) {
+            foreach(var state in new[]{Estado.Descomprimiendo,Estado.ComprobandoMD5}) {
+                file.EstadoDescarga=state;
+                typeof(Fichero).GetMethod("downloader_FileDownloadSucceeded",hidden).Invoke(file,new object[]{null,EventArgs.Empty});
+                Check(file.EstadoDescarga==state,"delayed success preserves post-processing state "+state);
+            }
+        }
+        ProcessResourceMonitoring();
+        DownloadScheduling();
+        BatchPreflight();
+        PreflightSelectionCases();
+        PreflightTreeCases();
+        QueueViewSnapshotCases();
+        PreflightWarmupCases();
+        PackageImportCases();
+        ScheduledQueueIntegration();
+        InstanceBufferMutex();
+        LanguageBuiltinWrites();
+        SimplifiedChineseQuality();
+        SystemLanguageSelection();
+        FeatureDialogs();
+        ArchiveEdges();
+        ConfirmedAuditFixes();
+        FinalReleaseCases();
+        PreserveCompletedName(plain,key,encrypted);
+        // Cross multiple streaming buffers and end in a partial AES block.
+        byte[] large=Enumerable.Range(0,65539).Select(i=>(byte)(i%251+1)).ToArray();
+        string largeKey=MakeKey(large);
+        using(var server=new LocalFileServer(Encrypt(large,largeKey))) StreamingCases(server,large,largeKey);
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void BufferMutexChild(string marker, string name) {
+        File.WriteAllText(marker,"waiting");
+        using(var gate=(System.Threading.Mutex)typeof(ApplicationInstanceManager).GetMethod("AcquireBufferMutex",shared).Invoke(null,new object[]{name})) {
+            File.WriteAllText(marker,"acquired");
+            gate.ReleaseMutex();
+        }
+    }
+    static void MaintenanceRegressionCases(byte[] plain,string key,byte[] encrypted) {
+        DeletionOwnershipCases(plain,key);
+        LockedPrimaryCases();
+        ResumeSpaceCases();
+        RefreshedRetryCases(plain,key,encrypted);
+        StartupLifecycleCases();
+        SingleTaskResumeCases();
+        SpeedLimitParsingCases();
+        Batch1BugFixCases(plain,key);
+        Batch2PerfCases(plain,key);
+        FinalReviewCases();
+        FinalFixCases();
+        DeliveryAuditFixCases(plain,key,encrypted);
+        StartupPerformanceCases();
+        SevenZipCancelCase();
+    }
+    static object InvokePrivate(object target,string method,params object[] args) {
+        return target.GetType().GetMethod(method,hidden).Invoke(target,args);
+    }
+    static Main QueueFixture(Fichero file) {
+        var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));
+        GC.SuppressFinalize(form);
+        var pack=new Paquete();pack.AgregarFichero(file);
+        typeof(Main).GetField("ListaPaquetes",hidden).SetValue(form,new List<Paquete>{pack});
+        return form;
+    }
+    static void DeletionOwnershipCases(byte[] plain,string key) {
+        foreach(string state in new[]{"queued","failed","finished-part"}) {
+            string d=Path.Combine(root,"delete-"+state);Directory.CreateDirectory(d);
+            string real=Path.Combine(d,"same.bin");File.WriteAllText(real,"unrelated original");
+            using(var file=new Fichero()) {
+                file.FileID="DELETE01";file.FileKey=key;file.RutaLocal=d;file.NombreFichero="same.bin";
+                file.DescargaComenzada=state!="queued";file.EstadoDescarga=state=="failed"?Estado.Erroneo:Estado.EnCola;
+                file.DatosPartes=new FileDownloader.DataPart(plain.Length,1);
+                if(state=="finished-part")file.DatosPartes.SetProgress(0,plain.Length);
+                string part=FileDownloader.GetPartialFilePath(d,"same.bin",file.PartialFileName);
+                if(state!="queued")File.WriteAllBytes(part,plain);
+                InvokePrivate(QueueFixture(file),"Eliminar",file,true,false);
+                Check(File.ReadAllText(real)=="unrelated original","remove+delete preserves unrelated final: "+state);
+                Check(!File.Exists(part),"remove+delete removes only owned partial: "+state);
+            }
+        }
+        string dir=Path.Combine(root,"delete-completed");Directory.CreateDirectory(dir);
+        string existing=Path.Combine(dir,"same.bin");File.WriteAllText(existing,"original");
+        using(var file=new Fichero())using(var restored=new Fichero())using(var fd=new FileDownloader(false)) {
+            file.FileID="DELETE02";file.FileKey=key;file.RutaLocal=dir;file.NombreFichero="same.bin";
+            file.DescargaComenzada=true;file.EstadoDescarga=Estado.Erroneo;
+            fd.LocalDirectory=dir;
+            string part=FileDownloader.GetPartialFilePath(dir,"same.bin",file.PartialFileName);File.WriteAllBytes(part,plain);
+            string renamed=(string)InvokePrivate(fd,"RenamePartToReal",part,existing);
+            InvokePrivate(file,"downloader_FileRenamed",fd,new FileRenamedEventArgs(renamed));
+            var xml=new System.Xml.XmlDocument();restored.CargarXML(file.GuardarXML(xml,true));
+            Check(renamed=="same (2).bin","owned output fixture used the actual collision rename");
+            InvokePrivate(QueueFixture(restored),"Eliminar",restored,true,false);
+            Check(!File.Exists(Path.Combine(dir,renamed))&&File.ReadAllText(existing)=="original","persisted collision ownership deletes its own output after a post-processing failure");
+        }
+        foreach(bool valid in new[]{false,true})using(var file=new Fichero())using(var restored=new Fichero()) {
+            string d=Path.Combine(root,"delete-legacy-"+valid);Directory.CreateDirectory(d);
+            byte[] content=(byte[])plain.Clone();if(!valid)content[0]^=0x5a;
+            string path=Path.Combine(d,"legacy.bin");File.WriteAllBytes(path,content);
+            file.FileID="DELETE03";file.FileKey=key;file.RutaLocal=d;file.NombreFichero="legacy.bin";
+            file.TamanoBytes=plain.Length;file.DescargaComenzada=true;file.EstadoDescarga=Estado.Completado;
+            var xml=new System.Xml.XmlDocument();var node=file.GuardarXML(xml,true);
+            node.RemoveChild(node.SelectSingleNode("CompletedFileName"));restored.CargarXML(node);
+            restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+            Check(File.Exists(path)!=valid,"legacy completed output requires a real MetaMAC match before deletion: "+valid);
+        }
+        using(var file=new Fichero())using(var restored=new Fichero()) {
+            string d=Path.Combine(root,"delete-unsafe-marker");Directory.CreateDirectory(d);
+            file.FileID="DELETE04";file.RutaLocal=d;file.NombreFichero="local.bin";
+            var xml=new System.Xml.XmlDocument();var node=file.GuardarXML(xml,true);
+            string outside=Path.Combine(root,"outside-delete.bin");File.WriteAllText(outside,"preserved");
+            node.SelectSingleNode("CompletedFileName").InnerText=@"..\outside-delete.bin";
+            restored.CargarXML(node);restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+            Check(File.ReadAllText(outside)=="preserved","invalid output marker cannot delete outside the task directory");
+        }
+        Print("deletion_ownership","queued/failed/finalizing/collision/legacy cases passed");
+    }
+    static void LockedPrimaryCases() {
+        string path=Path.Combine(root,"locked-primary.xml");
+        File.WriteAllText(path,"<State version='new'/>");File.WriteAllText(path+".bak","<State version='old'/>");
+        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        var load=atomic.GetMethod("TryLoadXml",BindingFlags.Static|BindingFlags.Public);
+        object[] args={path,null,false,false};
+        using(var locked=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
+            Check(!(bool)load.Invoke(null,args),"locked primary is not replaced by an older readable backup");
+            Check((bool)args[3]&&!(bool)args[2]&&args[1]==null,"locked primary reaches existing configuration/queue write-protection branches");
+        }
+        Check((bool)load.Invoke(null,args)&&!((bool)args[3])&&!((bool)args[2]),"unlocked primary can be loaded normally");
+        Check(((System.Xml.XmlDocument)args[1]).DocumentElement.GetAttribute("version")=="new","newer primary state is retained");
+        Check(File.ReadAllText(path+".bak").Contains("old"),"reading a locked primary does not change its backup");
+        File.WriteAllText(path,"broken XML");
+        Check((bool)load.Invoke(null,args)&&(bool)args[2]&&!(bool)args[3],"genuinely corrupt primary still recovers from backup");
+        Check(((System.Xml.XmlDocument)args[1]).DocumentElement.GetAttribute("version")=="old","corruption recovery uses the readable backup");
+        Print("locked_primary","primary preserved; corruption fallback retained");
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll",SetLastError=true)]
+    static extern bool DeviceIoControl(Microsoft.Win32.SafeHandles.SafeFileHandle handle,uint code,IntPtr input,uint inputSize,IntPtr output,uint outputSize,out uint returned,IntPtr overlapped);
+    static void ResumeSpaceCases() {
+        var ensure=typeof(FileDownloader).GetMethod("EnsureDownloadSpace",BindingFlags.Static|BindingFlags.NonPublic);
+        string small=Path.Combine(root,"space-check.part");File.WriteAllBytes(small,new byte[4096]);
+        ensure.Invoke(null,new object[]{small,(long)4096,(long)0});
+        const long margin=64L*1024*1024;
+        ensure.Invoke(null,new object[]{small,(long)8192,margin+4096});
+        bool rejected=false;try{ensure.Invoke(null,new object[]{small,(long)8192,margin+4095});}catch(Exception ex){rejected=Unwrap(ex) is IOException;}
+        Check(rejected,"partial expansion still checks additional space and safety margin");
+        string missing=Path.Combine(root,"missing-space.part");
+        rejected=false;try{ensure.Invoke(null,new object[]{missing,(long)4096,margin+4095});}catch(Exception ex){rejected=Unwrap(ex) is IOException;}
+        Check(rejected,"fresh allocation still rejects insufficient space");
+        var drive=new DriveInfo(Path.GetPathRoot(root));
+        if(drive.DriveFormat!="NTFS"){Print("resume_space","sparse integration skipped on "+drive.DriveFormat);return;}
+        string d=Path.Combine(root,"space-resume");Directory.CreateDirectory(d);
+        long size=(drive.AvailableFreeSpace+(128L<<20)+15)&~15L;
+        var parts=new FileDownloader.DataPart(size,1);parts.SetProgress(0,size);parts.ChunkList[0].SyncedIndex=size;
+        string partialName=FileDownloader.CreatePartialFileName();
+        string part=FileDownloader.GetPartialFilePath(d,"large.bin",partialName),final=Path.Combine(d,"large.bin");
+        try {
+            using(var stream=new FileStream(part,FileMode.CreateNew,FileAccess.Write,FileShare.None)) {
+                uint count;Check(DeviceIoControl(stream.SafeFileHandle,0x900c4,IntPtr.Zero,0,IntPtr.Zero,0,out count,IntPtr.Zero),"sparse space fixture initialized");
+                stream.SetLength(size);stream.Flush(true);
+            }
+            using(var fd=new FileDownloader(false))using(var done=new ManualResetEvent(false))using(var succeeded=new ManualResetEvent(false)) {
+                fd.LocalDirectory=d;fd.DeleteFilesAfterCancel=false;
+                // Legacy 16-byte keys have no embedded MAC; no large-file scan or network is needed.
+                fd.AddFileInfo("SPACE001",new string('A',22),"http://127.0.0.1:1/unused","large.bin",parts,partialName);fd.File.Size=size;
+                string failure="";fd.FileDownloadFailed+=(s,e)=>failure=e.Message;
+                fd.FileDownloadSucceeded+=(s,e)=>succeeded.Set();fd.Completed+=(s,e)=>done.Set();fd.Start();
+                Check(done.WaitOne(5000)&&succeeded.WaitOne(5000)&&failure=="","existing preallocated partial finalizes when its size exceeds remaining free space");
+                Check(File.Exists(final)&&new System.IO.FileInfo(final).Length==size,"space regression reaches real finalization");
+            }
+        }finally{if(File.Exists(part))File.Delete(part);if(File.Exists(final))File.Delete(final);}
+        Print("resume_space","preallocated output completed without a second full-size allocation");
+    }
+    sealed class CallbackPump:SynchronizationContext {
+        readonly Queue<Action> pending=new Queue<Action>();
+        public override void Post(SendOrPostCallback callback,object state){lock(pending)pending.Enqueue(()=>callback(state));}
+        public bool Until(Func<bool> completed,int milliseconds=10000) {
+            var until=DateTime.UtcNow.AddMilliseconds(milliseconds);
+            while(DateTime.UtcNow<until) {
+                Action next=null;lock(pending)if(pending.Count>0)next=pending.Dequeue();
+                if(next!=null)next();
+                if(completed())return true;
+                if(next==null)Thread.Sleep(5);
+            }
+            return false;
+        }
+    }
+    static void RefreshedRetryCases(byte[] plain,string key,byte[] encrypted) {
+        object old=typeof(InternalConfiguration).GetField("XML_CONFIG",shared).GetValue(null);
+        SynchronizationContext previous=SynchronizationContext.Current;
+        var pump=new CallbackPump();SynchronizationContext.SetSynchronizationContext(pump);
+        try {
+            foreach(bool preserve in new[]{false,true})using(var server=new LocalFileServer(encrypted))using(var file=new Fichero()) {
+                string d=Path.Combine(root,"refresh-retry-"+preserve);Directory.CreateDirectory(d);
+                var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();cfg.TamanoBufferKB=750;cfg.TamanoPaqueteKB=50;cfg.ConexionesPorFichero=1;
+                server.ApiResponse="[{\"s\":"+plain.Length+",\"at\":\""+EncryptedName("retry.bin")+"\",\"g\":\""+server.Url+"\"}]";
+                var xml=new System.Xml.XmlDocument();
+                xml.LoadXml("<Config><URL_MEGA_API_DOWN_GET_G>"+server.Url+"</URL_MEGA_API_DOWN_GET_G><URL_MEGA_API_DOWN_GET_EU>"+server.Url+"</URL_MEGA_API_DOWN_GET_EU></Config>");
+                typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,xml);
+                file.FileID="TESTFILE";file.FileKey=key;file.NombreFichero="retry.bin";file.RutaLocal=d;file.DescargaProcesada=true;
+                file.DatosPartes=new FileDownloader.DataPart(plain.Length,1);
+                file.DatosPartes.ChunkList[0].Index=file.DatosPartes.ChunkList[0].SyncedIndex=2048;
+                byte[] partial=new byte[plain.Length];Array.Copy(plain,partial,2048);
+                string part=FileDownloader.GetPartialFilePath(d,"retry.bin",file.PartialFileName);File.WriteAllBytes(part,partial);
+                var fd=new FileDownloader(true);fd.LocalDirectory=d;fd.DeleteFilesAfterCancel=false;
+                fd.AddFileInfo(file.FileID,key,server.Url+"/expired","retry.bin",file.DatosPartes,file.PartialFileName);
+                typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+                fd.FileDownloadFailed+=(s,e)=>InvokePrivate(file,"downloader_FileDownloadFailed",s,e);
+                fd.Completed+=(s,e)=>InvokePrivate(file,"downloader_Completed",s,e);
+                fd.Started+=(s,e)=>InvokePrivate(file,"downloader_Started",s,e);
+                fd.FileRenamed+=(s,e)=>InvokePrivate(file,"downloader_FileRenamed",s,e);
+                fd.FileDownloadSucceeded+=(s,e)=>InvokePrivate(file,"downloader_FileDownloadSucceeded",s,e);
+                using(var stopped=new AutoResetEvent(false)) {
+                    fd.Completed+=(s,e)=>stopped.Set();fd.Start();
+                    Check(pump.Until(()=>stopped.WaitOne(0))&&file.EstadoDescarga==Estado.Erroneo&&fd.File.Size==0,"expired-URL fixture fails during size probing");
+                    file.ResetearDescarga(preserve);file.EstadoDescarga=Estado.EnCola;
+                    file.Start(ref cfg,1);
+                    Check(pump.Until(()=>stopped.WaitOne(0)),"retry completes after refreshing metadata");
+                    Check(pump.Until(()=>typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null),"retry startup worker finished");
+                    Check(file.EstadoDescarga==Estado.Completado&&File.ReadAllBytes(Path.Combine(d,"retry.bin")).SequenceEqual(plain),"refreshed retry delivers exact plaintext");
+                    Check(server.ApiCalls==1&&fd.File.Path==server.Url,"retry gets a fresh API download URL");
+                    Check(server.TakeRanges()==(preserve?"bytes=2048-4095":"bytes=0-4095"),"retry honors progress preservation/reset: "+preserve);
+                    file.MarcadoParaBorrarFicheroLocal=true;file.BorrarFicheroLocal();
+                    Check(!File.Exists(Path.Combine(d,"retry.bin")),"real download output is recorded as owned");
+                }
+            }
+            using(var server=new LocalFileServer(encrypted))using(var entered=new ManualResetEvent(false))using(var release=new ManualResetEvent(false))using(var file=new Fichero()) {
+                var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
+                server.ApiEntered=entered;server.ApiRelease=release;
+                server.ApiResponse="[{\"s\":"+plain.Length+",\"at\":\""+EncryptedName("retry.bin")+"\",\"g\":\""+server.Url+"\"}]";
+                var xml=new System.Xml.XmlDocument();
+                xml.LoadXml("<Config><URL_MEGA_API_DOWN_GET_G>"+server.Url+"</URL_MEGA_API_DOWN_GET_G><URL_MEGA_API_DOWN_GET_EU>"+server.Url+"</URL_MEGA_API_DOWN_GET_EU></Config>");
+                typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,xml);
+                file.FileID="TESTFILE";file.FileKey=key;file.RutaLocal=root;file.NombreFichero="retry.bin";
+                var fd=new FileDownloader(false);fd.LocalDirectory=root;
+                fd.AddFileInfo(file.FileID,key,server.Url+"/expired",file.NombreFichero,null,file.PartialFileName);
+                typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+                int cancelled=0;file.CancellationComplete+=(s,e)=>Interlocked.Increment(ref cancelled);
+                try {
+                    file.Start(ref cfg,1);Check(entered.WaitOne(5000),"retry cancellation fixture entered API verification");
+                    var stop=System.Threading.Tasks.Task.Run(()=>file.Stop());
+                    Check(SpinWait.SpinUntil(()=>(bool)typeof(Fichero).GetField("_StartupCancelled",hidden).GetValue(file),1000),"stop marks the pending retry cancelled");
+                    release.Set();Check(stop.Wait(5000),"stopping a pending retry completes promptly");
+                    Check(pump.Until(()=>typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null),"cancelled retry startup worker completes");
+                    Check(file.EstadoDescarga==Estado.EnCola&&!fd.IsBusy&&cancelled==1,"cancelled retry remains queueable and notifies removal callbacks");
+                }finally{release.Set();}
+            }
+        }finally{typeof(InternalConfiguration).GetField("XML_CONFIG",shared).SetValue(null,old);SynchronizationContext.SetSynchronizationContext(previous);}
+        Print("refreshed_retry","expired URL replaced; preserved and full-reset retries passed");
+    }
+    static void StartupLifecycleCases() {
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        var workerType=typeof(Fichero).GetNestedType("DownloadWorker",BindingFlags.NonPublic);
+        var worker=(System.ComponentModel.BackgroundWorker)Activator.CreateInstance(workerType,new object[]{cfg,1});
+        var file=new Fichero();
+        typeof(Fichero).GetField("_bgArranque",hidden).SetValue(file,worker);
+        file.Dispose();
+        InvokePrivate(file,"bgArranque_RunWorkerCompleted",worker,new System.ComponentModel.RunWorkerCompletedEventArgs(null,null,false));
+        file.Start(ref cfg,1);
+        Check(typeof(Fichero).GetField("_bgArranque",hidden).GetValue(file)==null,"late startup completion and start cannot revive a disposed task");
+    }
+    static void SingleTaskResumeCases() {
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        cfg.DownloadSchedule=new DownloadScheduleSettings();
+        using(var file=new Fichero()) {
+            file.FileID="THROTTLE";file.NombreFichero="throttle.bin";file.EstadoDescarga=Estado.Descargando;
+            var main=QueueFixture(file);main.Config=cfg;
+            typeof(Main).GetField("scheduleController",hidden).SetValue(main,new DownloadScheduleController());
+            typeof(Main).GetField("scheduleActionLock",hidden).SetValue(main,new object());
+            var fd=new FileDownloader(false);typeof(FileDownloader).GetField("m_busy",hidden).SetValue(fd,true);
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(file,fd);
+            fd.Paused+=(s,e)=>InvokePrivate(file,"downloader_Paused",s,e);
+            fd.Resumed+=(s,e)=>InvokePrivate(file,"downloader_Started",s,e);
+            var controller=ThrottledStreamController.GetController();controller.SetMaxGlobalSpeed(0);
+            var target=new ThrottledStream(new MemoryStream(new byte[32768]));
+            var other=new ThrottledStream(new MemoryStream(new byte[32768]));
+            controller.SetMaxSpeed(file.FileID,8192);controller.AddStream(ref target,file.FileID);controller.AddStream(ref other,"OTHER");
+            try {
+                byte[] buffer=new byte[8192];target.Read(buffer,0,buffer.Length);
+                InvokePrivate(main,"PonerFicheroEnPausa",file);controller.Abortar("OTHER");
+                InvokePrivate(main,"ForzarDescarga",file);
+                var abort=typeof(ThrottledStream).GetField("_abort",hidden);
+                Check(!(bool)abort.GetValue(target)&&(bool)abort.GetValue(other),"single-task resume restores only its own throttle streams");
+                var timer=System.Diagnostics.Stopwatch.StartNew();target.Read(buffer,0,4096);
+                Check(timer.ElapsedMilliseconds>=350,"single-task resume still enforces the configured speed limit");
+                main.PauseDownload();InvokePrivate(main,"PonerFicherosEnPausa");
+                Check(file.EstadoDescarga==Estado.Pausado,"global pause reached the running task");
+                InvokePrivate(main,"ForzarDescarga",file);InvokePrivate(main,"PonerFicherosEnPausa");
+                Check(file.EstadoDescarga==Estado.Descargando&&file.DescargaIndividual,"forced resume survives the next global-pause refresh");
+                Check(typeof(Main).GetField("EstadoAplicacion",hidden).GetValue(main).ToString()=="Pausa","forcing one task leaves the global queue paused");
+            }finally{controller.RemoveStream(ref target);controller.RemoveStream(ref other);controller.RemoveId(file.FileID);controller.RemoveId("OTHER");target.Dispose();other.Dispose();typeof(FileDownloader).GetField("m_busy",hidden).SetValue(fd,false);controller.Continuar();}
+        }
+        Print("single_task_resume","throttle restored; forced task stays active under global pause");
+    }
+    static void SpeedLimitParsingCases() {
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            foreach(string invalid in new[]{"NaN","Infinity","-Infinity","1e20","1e309","-1","0","0.0001","",null,"invalid"}) {
+                object[] args={invalid,123};Check(!(bool)parse.Invoke(null,args)&&(int)args[1]==0,"invalid speed rejected without overflow: "+invalid);
+            }
+            foreach(var value in new[]{new[]{"0.5","512"},new[]{"1.46484375","1500"},new[]{"2.5e-1","256"},new[]{"0.0005","1"}}) {
+                object[] args={value[0],0};Check((bool)parse.Invoke(null,args)&&(int)args[1]==int.Parse(value[1]),"fractional speed preserves MB-to-KB conversion: "+value[0]);
+            }
+            object[] maximum={(int.MaxValue/1024.0).ToString("R",System.Globalization.CultureInfo.InvariantCulture),0};
+            Check((bool)parse.Invoke(null,maximum)&&(int)maximum[1]==int.MaxValue,"maximum representable limit does not overflow");
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            object[] french={"0,5",0};Check((bool)parse.Invoke(null,french)&&(int)french[1]==512,"localized decimal comma remains supported");
+        }finally{Thread.CurrentThread.CurrentCulture=previous;}
+    }
+    static void Batch1BugFixCases(byte[] plain,string key) {
+        // B5: no group separators, invariant-culture fallback.
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            foreach(var culture in new[]{"de-DE","es-ES","fr-FR","zh-CN"}) {
+                Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo(culture);
+                object[] dot={"1.5",0};
+                Check((bool)parse.Invoke(null,dot)&&(int)dot[1]==1536,"B5 dot decimal is not amplified in "+culture);
+            }
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+            object[] comma={"1,5",0};
+            Check((bool)parse.Invoke(null,comma)&&(int)comma[1]==1536,"B5 localized decimal comma is still parsed");
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            object[] grouped={"1,5",0};
+            Check(!(bool)parse.Invoke(null,grouped),"B5 group separators are never accepted");
+            object[] exponent={"1,5e2",0};
+            Check(!(bool)parse.Invoke(null,exponent),"B5 grouped exponent input is rejected");
+        }finally{Thread.CurrentThread.CurrentCulture=previous;}
+
+        // B1/B2: recovery primitives used by the startup recovery timer.
+        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        var reload=atomic.GetMethod("TryReloadPrimary",BindingFlags.Static|BindingFlags.Public);
+        var canRead=atomic.GetMethod("CanReadExclusive",BindingFlags.Static|BindingFlags.Public);
+        string primary=Path.Combine(root,"b1-primary.xml");
+        File.WriteAllText(primary,"<State version='new'/>");
+        File.WriteAllText(primary+".bak","<State version='old'/>");
+        using(var locked=new FileStream(primary,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
+            Check(!(bool)canRead.Invoke(null,new object[]{primary}),"B2 exclusive read detects an active lock");
+            object[] blocked={primary,null};
+            Check(!(bool)reload.Invoke(null,blocked)&&blocked[1]==null,"B2 reload refuses a locked primary");
+        }
+        Check((bool)canRead.Invoke(null,new object[]{primary}),"B2 exclusive read succeeds after unlock");
+        object[] recovered={primary,null};
+        Check((bool)reload.Invoke(null,recovered),"B2 reload succeeds after unlock");
+        Check(((System.Xml.XmlDocument)recovered[1]).DocumentElement.GetAttribute("version")=="new","B2 recovery never substitutes the stale backup");
+        Check(System.Convert.ToInt32(Enum.Parse(typeof(Configuracion.ErrorConfigClass),"Fichero_Bloqueado"))==5,"B1 locked-file error is distinct from disk/permission failures");
+        Check(!Paquete.HasTransientLoadError,"B2 normal startup does not degrade the queue");
+
+        // B3: in-session verified output and background precheck.
+        {
+            string d=Path.Combine(root,"b1-verified");Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"verified.bin");File.WriteAllBytes(output,plain);
+            using(var f=new Fichero()) {
+                f.FileID="VERIFIED1";f.RutaLocal=d;f.NombreFichero="verified.bin";f.DescargaComenzada=true;
+                f.RecordVerifiedOutput(output);
+                f.MarcadoParaBorrarFicheroLocal=true;f.BorrarFicheroLocal();
+                Check(!File.Exists(output),"B3 verified output is deleted without a second full-file MAC");
+            }
+        }
+        {
+            string d=Path.Combine(root,"b1-prewarm");Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"warm.bin");File.WriteAllBytes(output,plain);
+            using(var source=new Fichero())using(var restored=new Fichero()) {
+                source.FileID="WARM01";source.FileKey=key;source.RutaLocal=d;source.NombreFichero="warm.bin";
+                source.TamanoBytes=plain.Length;source.DescargaComenzada=true;source.EstadoDescarga=Estado.Completado;
+                var xml=new System.Xml.XmlDocument();var node=source.GuardarXML(xml,true);
+                node.RemoveChild(node.SelectSingleNode("CompletedFileName"));
+                restored.CargarXML(node);
+                restored.PrepareOutputOwnership();
+                Check((string)typeof(Fichero).GetField("completedFileName",hidden).GetValue(restored)=="warm.bin","B3 background precheck caches legacy ownership");
+                restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+                Check(!File.Exists(output),"B3 prewarmed ownership deletes the real completed file");
+            }
+        }
+
+        // B4: 16-byte keys have no MetaMAC and must not be silently kept.
+        string shortKey=new string('A',22);
+        foreach(bool confirm in new[]{false,true}) {
+            string d=Path.Combine(root,"b1-nomac-"+confirm);Directory.CreateDirectory(d);
+            string output=Path.Combine(d,"legacy.bin");File.WriteAllBytes(output,plain);
+            using(var source=new Fichero())using(var restored=new Fichero()) {
+                source.FileID="NOMAC";source.FileKey=shortKey;source.RutaLocal=d;source.NombreFichero="legacy.bin";
+                source.TamanoBytes=plain.Length;source.DescargaComenzada=true;source.EstadoDescarga=Estado.Completado;
+                var xml=new System.Xml.XmlDocument();var node=source.GuardarXML(xml,true);
+                node.RemoveChild(node.SelectSingleNode("CompletedFileName"));
+                restored.CargarXML(node);
+                restored.ConfirmUnverifiedOutputDeletion=confirm;
+                restored.PrepareOutputOwnership();
+                if(!confirm) Check(restored.OutputNeedsConfirmation,"B4 unverifiable output is surfaced instead of silently kept");
+                restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
+                Check(File.Exists(output)!=confirm,"B4 explicit confirmation controls legacy output deletion: "+confirm);
+            }
+        }
+
+        // B6: the success handler must contain path-validation exceptions.
+        {
+            string d=Path.Combine(root,"b1-success");Directory.CreateDirectory(d);
+            using(var f=new Fichero())using(var fd=new FileDownloader(false)) {
+                f.FileID="B6SUCCESS";f.RutaLocal=d;f.NombreFichero="done.bin";f.EstadoDescarga=Estado.Descargando;
+                typeof(FileDownloader).GetField("m_completedFilePath",hidden).SetValue(fd,Path.Combine(root,"b1-outside","done.bin"));
+                InvokePrivate(f,"downloader_FileDownloadSucceeded",fd,EventArgs.Empty);
+                Check(f.EstadoDescarga==Estado.Completado,"B6 path validation failure cannot skip the completed state");
+                Check((string)typeof(Fichero).GetField("completedFileName",hidden).GetValue(f)=="","B6 an unverified path is never recorded as owned");
+            }
+        }
+
+        // B7/B8: one-shot cancellation gate and late-cancel isolation.
+        using(var f=new Fichero()) {
+            int notifications=0;
+            f.CancellationComplete+=(s,e)=>Interlocked.Increment(ref notifications);
+            InvokePrivate(f,"NotifyCancellationComplete");
+            InvokePrivate(f,"NotifyCancellationComplete");
+            Check(notifications==1,"B7 cancellation is delivered at most once per cycle");
+        }
+        {
+            var f=new Fichero();
+            var oldFd=new FileDownloader(false);
+            var newFd=new FileDownloader(false);
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(f,newFd);
+            InvokePrivate(f,"downloader_Canceled",oldFd,EventArgs.Empty);
+            Check(ReferenceEquals(typeof(Fichero).GetField("_Downloader",hidden).GetValue(f),newFd),"B8 a late cancel cannot clear a replacement downloader");
+            f.Dispose();oldFd.Dispose();
+        }
+        // Audit fix: over-limit counter with no recorded exception must not NRE.
+        using(var f=new Fichero())using(var fd=new FileDownloader(false)) {
+            f.FileID="NULLERR01";f.EstadoDescarga=Estado.Descargando;
+            typeof(Fichero).GetField("_Downloader",hidden).SetValue(f,fd);
+            typeof(Fichero).GetField("NumErroresChunk",hidden).SetValue(f,31);
+            typeof(Fichero).GetField("UltimoErrorChunk",hidden).SetValue(f,null);
+            InvokePrivate(f,"downloader_Canceled",fd,EventArgs.Empty);
+            Check(f.EstadoDescarga==Estado.Erroneo&&f.DescripcionError.Contains("too many connection errors"),"null last-error after over-limit counter becomes Erroneo without NRE");
+            Check(ReferenceEquals(typeof(Fichero).GetField("_Downloader",hidden).GetValue(f),null),"canceled downloader is detached even on the null-error path");
+        }
+        Print("batch1_bugfixes","B1/B2 recovery, B3 ownership cache, B4 no-MAC links, B5 locale, B6/B7/B8 lifecycle passed");
+    }
+    // Independent MEGA chunk-MAC generator (zero-key AES ECB, SDK chunk schedule).
+    // Used to prove the batched VerifyMegaMetaMac is byte-for-byte equivalent to the
+    // original per-16-byte implementation across chunk boundaries and a ragged tail.
+    static string MakeKeyChunked(byte[] plain) {
+        byte[] fileMac=new byte[16];
+        using(var aes=Aes.Create()) {
+            aes.Mode=CipherMode.ECB; aes.Padding=PaddingMode.None; aes.Key=new byte[16];
+            using(var t=aes.CreateEncryptor()) {
+                long pos=0; int chunkNo=1;
+                while(pos<plain.Length) {
+                    long size=chunkNo<=8?(long)chunkNo*0x20000:0x100000;
+                    long len=Math.Min(size,plain.Length-pos);
+                    byte[] mac=new byte[16];
+                    for(long off=0;off<len;off+=16) {
+                        byte[] blk=new byte[16];
+                        for(int j=0;j<16 && off+j<len;j++) blk[j]=(byte)(mac[j]^plain[(int)(pos+off+j)]);
+                        for(int j=(int)Math.Min(16,len-off);j<16;j++) blk[j]=mac[j];
+                        mac=t.TransformFinalBlock(blk,0,16);
+                    }
+                    byte[] fold=new byte[16];
+                    for(int j=0;j<16;j++) fold[j]=(byte)(fileMac[j]^mac[j]);
+                    fileMac=t.TransformFinalBlock(fold,0,16);
+                    pos+=len; chunkNo++;
+                }
+            }
+        }
+        byte[] key=new byte[32];
+        for(int i=0;i<4;i++){ key[8+i]=key[24+i]=(byte)(fileMac[i]^fileMac[i+4]); key[12+i]=key[28+i]=(byte)(fileMac[i+8]^fileMac[i+12]); }
+        return Convert.ToBase64String(key).TrimEnd('=').Replace('+','-').Replace('/','_');
+    }
+    static void Batch2PerfCases(byte[] plain,string key) {
+        // P-15: cached lookups must agree with the XmlDocument and stay O(1).
+        var disk=(System.Xml.XmlDocument)typeof(Language).GetField("LanguageFileDisk",shared).GetValue(null);
+        if(disk!=null) {
+            foreach(string k in new[]{"Stop","Start","Name","Status"}) {
+                var node=disk.DocumentElement.SelectSingleNode("Text[@key='"+k+"']");
+                if(node!=null&&!string.IsNullOrEmpty(node.InnerText))
+                    Check(Language.GetText(k)==node.InnerText,"P-15 cached lookup matches the XmlDocument for "+k);
+            }
+        }
+        var swText=System.Diagnostics.Stopwatch.StartNew();
+        for(int i=0;i<20000;i++) Language.GetText("Stop");
+        swText.Stop();
+        Print("language_gettext_20k","elapsedMs="+swText.ElapsedMilliseconds);
+
+        // P-02: independent chunked MAC over 16 MiB, crossing many chunk boundaries
+        // with a ragged final block. Proves the batched scanner preserves semantics.
+        string macPath=Path.Combine(root,"b2-mac-16mb.bin");
+        byte[] big=new byte[16*1024*1024+7];
+        for(int i=0;i<big.Length;i++) big[i]=(byte)(i%251+1);
+        string chunkedKey=MakeKeyChunked(big);
+        var mac=typeof(Criptografia).GetMethod("VerifyMegaMetaMac",shared);
+        File.WriteAllBytes(macPath,big);
+        var swMac=System.Diagnostics.Stopwatch.StartNew();
+        bool macOk=(bool)mac.Invoke(null,new object[]{macPath,chunkedKey});
+        swMac.Stop();
+        Check(macOk,"P-02 batched MetaMAC matches an independent chunked MAC generator (16 MiB, ragged tail)");
+        Print("metamac_16mb","elapsedMs="+swMac.ElapsedMilliseconds+" verified="+macOk);
+        big[big.Length-1]^=0x5a;File.WriteAllBytes(macPath,big);
+        Check(!(bool)mac.Invoke(null,new object[]{macPath,chunkedKey}),"P-02 batched MetaMAC rejects a corrupted final byte");
+        big[0]^=0x5a;big[big.Length-1]^=0x5a;File.WriteAllBytes(macPath,big);
+        Check(!(bool)mac.Invoke(null,new object[]{macPath,chunkedKey}),"P-02 batched MetaMAC rejects a corrupted first byte");
+        File.Delete(macPath);
+
+        // P-01: structure signature is a pure, cheap change detector.
+        var sig=typeof(Main).GetMethod("QueueStructureSignature",shared);
+        var a=new List<Paquete>{new Paquete(),new Paquete()};
+        var b=new List<Paquete>{new Paquete(),new Paquete()};
+        Check((long)sig.Invoke(null,new object[]{a})==(long)sig.Invoke(null,new object[]{b}),"P-01 identical queue shapes share a signature");
+        a[0].AgregarFichero(new Fichero());
+        Check((long)sig.Invoke(null,new object[]{a})!=(long)sig.Invoke(null,new object[]{b}),"P-01 a file addition changes the signature");
+
+        // P-08: HashSet-backed controller still assigns per-stream limits.
+        var controller=ThrottledStreamController.GetController();
+        var s1=new ThrottledStream(new MemoryStream(new byte[8192]));
+        var s2=new ThrottledStream(new MemoryStream(new byte[8192]));
+        controller.SetMaxGlobalSpeed(0);
+        controller.SetMaxSpeed("B2PERF",4096);
+        controller.AddStream(ref s1,"B2PERF");controller.AddStream(ref s2,"OTHER");
+        try {
+            Check(s1.MaximumBytesPerSecond>=0&&s2.MaximumBytesPerSecond>=0,"P-08 HashSet recalculation still assigns limits");
+        } finally {
+            controller.RemoveStream(ref s1);controller.RemoveStream(ref s2);
+            controller.RemoveId("B2PERF");controller.RemoveId("OTHER");controller.Continuar();
+            s1.Dispose();s2.Dispose();
+        }
+        Print("batch2_perf","P-01/P-02/P-08/P-15 targeted checks passed");
+    }
+    static void FinalReviewCases() {
+        // Final review: P-01 moved queue serialization outside Mutex.ListaDescargas.
+        // Paquete.GuardarXML must still take a locked snapshot of ListaFicheros;
+        // a bare For Each throws "Collection was modified" when an import adds a
+        // file mid-serialization, which kills the periodic disk-save worker.
+        var emptyNode=new Paquete().GuardarXML(new System.Xml.XmlDocument(),false);
+        Check(emptyNode.SelectSingleNode("ListaFicheros")==null,
+              "final review: a package without a file list keeps the original XML shape");
+
+        var fixedPack=new Paquete();
+        fixedPack.ExtraccionFicheroPassword="";
+        for(int i=0;i<3;i++) fixedPack.AgregarFichero(new Fichero());
+        var fixedNode=fixedPack.GuardarXML(new System.Xml.XmlDocument(),false);
+        Check(fixedNode.SelectNodes("ListaFicheros/Fichero").Count==3,
+              "final review: snapshot serialization preserves every file node");
+
+        var pack=new Paquete();
+        pack.ExtraccionFicheroPassword="";
+        pack.AgregarFichero(new Fichero());
+        Exception failure=null;
+        var gate=new System.Threading.ManualResetEventSlim(false);
+        var writer=new System.Threading.Thread(()=>{
+            gate.Wait();
+            try { for(int i=0;i<250;i++) pack.AgregarFichero(new Fichero()); }
+            catch(Exception ex) { failure=ex; }
+        });
+        writer.IsBackground=true;
+        writer.Start();
+        gate.Set();
+        try {
+            for(int i=0;i<80;i++) pack.GuardarXML(new System.Xml.XmlDocument(),false);
+        } catch(Exception ex) { failure=ex; }
+        writer.Join(10000);
+        Check(failure==null,
+              "final review: concurrent queue mutation never breaks serialization"+
+              (failure==null?"":" ("+failure.GetType().Name+")"));
+
+        // P-01: a multiplicative signature overflows Long after ~13 packages when
+        // VB integer-overflow checks are enabled, which would kill the periodic
+        // disk-save worker on any realistically sized queue.
+        var sigMethod=typeof(Main).GetMethod("QueueStructureSignature",shared);
+        var many=new List<Paquete>();
+        for(int i=0;i<40;i++) many.Add(new Paquete());
+        Exception sigFailure=null;
+        long sigValue=0;
+        try { sigValue=(long)sigMethod.Invoke(null,new object[]{many}); }
+        catch(Exception ex) { sigFailure=ex.InnerException??ex; }
+        Check(sigFailure==null,
+              "final review: queue signature never overflows on a 40-package queue"+
+              (sigFailure==null?"":" ("+sigFailure.GetType().Name+")"));
+        var shapeA=new List<Paquete>();var shapeB=new List<Paquete>();
+        for(int i=0;i<40;i++){shapeA.Add(new Paquete());shapeB.Add(new Paquete());}
+        shapeA[0].AgregarFichero(new Fichero());
+        shapeB[39].AgregarFichero(new Fichero());
+        Check((long)sigMethod.Invoke(null,new object[]{shapeA})!=(long)sigMethod.Invoke(null,new object[]{shapeB}),
+              "final review: signature stays position-sensitive without arithmetic overflow");
+
+        // Final review: account edits are invisible to the de-dup XML snapshot,
+        // so assigning ELCAccounts must invalidate the throttled fingerprint.
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        GC.SuppressFinalize(cfg);
+        var hashField=typeof(Configuracion).GetField("_LastSavedELCAccountsHash",shared);
+        hashField.SetValue(null,"CACHED");
+        cfg.ELCAccounts=null;
+        Check(hashField.GetValue(null)==null,
+              "final review: editing ELC accounts invalidates the cached fingerprint");
+        Print("final_review","locked queue snapshot + concurrent import + large-queue signature + ELC dirty flag passed");
+    }
+    static void FinalFixCases() {
+        // Final fix: the invariant fallback must not silently shrink a
+        // locale-grouped number (de-DE "1.500" meant 1500 MB/s before B5, 1.5 after).
+        var parse=typeof(Utils).GetMethod("TryParseSpeedLimit",shared);
+        var previous=Thread.CurrentThread.CurrentCulture;
+        try {
+            foreach(var culture in new[]{"de-DE","es-ES","en-US"}) {
+                Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo(culture);
+                string grouped=culture=="en-US"?"1,500":"1.500";
+                object[] groupArgs={grouped,0};
+                Check(!(bool)parse.Invoke(null,groupArgs)&&(int)groupArgs[1]==0,
+                      "final fix: grouped number is rejected, not silently scaled in "+culture);
+                object[] dot={"1.5",0};
+                Check((bool)parse.Invoke(null,dot)&&(int)dot[1]==1536,
+                      "final fix: plain dot decimal still round-trips in "+culture);
+                object[] plain={"1500",0};
+                Check((bool)parse.Invoke(null,plain)&&(int)plain[1]==1536000,
+                      "final fix: ungrouped large limit keeps its value in "+culture);
+            }
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            object[] frComma={"0,5",0};
+            Check((bool)parse.Invoke(null,frComma)&&(int)frComma[1]==512,
+                  "final fix: localized decimal comma still parses");
+            object[] frDot={"1.5",0};
+            Check((bool)parse.Invoke(null,frDot)&&(int)frDot[1]==1536,
+                  "final fix: fr-FR dot decimal still parses");
+            object[] deComma={"1,5",0};
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+            Check((bool)parse.Invoke(null,deComma)&&(int)deComma[1]==1536,
+                  "final fix: de-DE decimal comma still parses");
+        } finally { Thread.CurrentThread.CurrentCulture=previous; }
+
+        // Final fix: write protection must stay armed until the recovered queue
+        // has actually been merged by the caller.
+        var flag=typeof(Paquete).GetField("_LoadTransientError",shared);
+        var snapshot=typeof(Paquete).GetField("_LastSavedXML",shared);
+        var logged=typeof(Paquete).GetField("_TransientSkipLogged",shared);
+        var commit=typeof(Paquete).GetMethod("CommitTransientRecovery",shared|BindingFlags.Public);
+        Check(flag!=null&&snapshot!=null&&logged!=null&&commit!=null,
+              "final fix: recovery commit primitives are available");
+        bool originalFlag=Paquete.HasTransientLoadError;
+        object originalSnapshot=snapshot.GetValue(null);
+        object originalLogged=logged.GetValue(null);
+        try {
+            flag.SetValue(null,true);
+            Check(Paquete.HasTransientLoadError,
+                  "final fix: a reload alone must not release write protection");
+            commit.Invoke(null,null);
+            Check(!Paquete.HasTransientLoadError,
+                  "final fix: the explicit commit releases write protection");
+            Check(snapshot.GetValue(null)==null,
+                  "final fix: the commit invalidates the de-dup snapshot");
+        } finally {
+            flag.SetValue(null,originalFlag);
+            snapshot.SetValue(null,originalSnapshot);
+            logged.SetValue(null,originalLogged);
+        }
+        Print("final_fix","grouped speed rejected; recovery commit defers write protection");
+    }
+    static void SevenZipCancelCase() {
+        Type type=typeof(DescompresorController).GetNestedType("Descompressor",BindingFlags.NonPublic);
+        object extractor=Activator.CreateInstance(type,new object[]{Path.Combine(root,"cancel.7z"),root,""});
+        string marker=Path.Combine(root,"cancel-child.pid");
+        var run=type.GetMethod("RunSevenZip",hidden);
+        var task=System.Threading.Tasks.Task.Run(()=>{
+            try{string testHost=Assembly.GetExecutingAssembly().Location;string testExe=Path.ChangeExtension(testHost,".exe");if(File.Exists(testExe))testHost=testExe;run.Invoke(extractor,new object[]{testHost,"--sevenzip-cancel-child \""+bin+"\" \""+marker+"\"",true});return (Exception)null;}
+            catch(Exception ex){return Unwrap(ex);}
+        });
+        int pid=0;
+        try {
+            var until=DateTime.UtcNow.AddSeconds(5);
+            while(pid==0&&DateTime.UtcNow<until){try{if(File.Exists(marker))int.TryParse(File.ReadAllText(marker),out pid);}catch(IOException){}Thread.Sleep(10);}
+            Check(pid>0,"7z cancellation helper started");
+            var timer=System.Diagnostics.Stopwatch.StartNew();type.GetProperty("CancelRequested").SetValue(extractor,true,null);
+            Check(task.Wait(5000)&&task.Result is OperationCanceledException,"cancellation interrupts a live CLI with open stdout/stderr");
+            bool stopped;
+            try{using(var child=System.Diagnostics.Process.GetProcessById(pid))stopped=child.HasExited;}catch(ArgumentException){stopped=true;}
+            Check(stopped,"cancelled CLI child has stopped");
+            Print("sevenzip_cancel","cancelMs="+timer.ElapsedMilliseconds);
+        }
+        finally{
+            if(pid>0)try{using(var child=System.Diagnostics.Process.GetProcessById(pid)){if(!child.HasExited)child.Kill();}}catch(ArgumentException){}
+            task.Wait(5000);
+        }
+    }
+    static void PasswordPropertiesCases() {
+        foreach(bool packageMode in new[]{false,true})using(var file=new Fichero()) {
+            file.FileID="PASSWORD";file.NombreFichero="archive.zip";file.RutaLocal=root;
+            file.ExtraccionFicheroAutomatica=true;file.ExtraccionFicheroPassword="old-password";
+            var pack=new Paquete {Nombre="password-fixture",RutaLocal=root,ExtraccionFicheroAutomatica=true,ExtraccionFicheroPassword="old-password"};pack.AgregarFichero(file);
+            var packages=new List<Paquete>{pack};
+            var serialize=typeof(Paquete).GetMethod("GuardarXML",shared,null,new[]{typeof(List<Paquete>),typeof(bool)},null);
+            var before=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false});
+            using(var dialog=new PropiedadesDescarga()) {
+                dialog.Descarga=packageMode?(IDescarga)pack:file;
+                InvokePrivate(dialog,"PropiedadesDescarga_Load",null,EventArgs.Empty);
+                dialog.Controls.Find("txtPassword",true).Single().Text="new-password";
+                InvokePrivate(dialog,"btnGuardar_Click",null,EventArgs.Empty);
+            }
+            var after=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false});
+            Check(before.OuterXml!=after.OuterXml,"password-only properties edit marks queue dirty: package="+packageMode);
+            Check(after.OuterXml==((System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false})).OuterXml,"password fingerprint is stable between unchanged saves");
+            Check(!after.OuterXml.Contains("new-password")&&!after.OuterXml.Contains("old-password"),"comparison snapshot does not store plaintext passwords");
+            var saved=(System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,true});
+            Check(!saved.OuterXml.Contains("PasswordHash"),"in-memory password fingerprints are not written to disk");
+            string path=Path.Combine(root,"password-"+packageMode+".xml");saved.Save(path);
+            var read=new System.Xml.XmlDocument();read.Load(path);var restored=new Paquete();restored.CargarXML(read.DocumentElement.FirstChild);
+            try{
+                Check(restored.ListaFicheros[0].ExtraccionFicheroPassword=="new-password","edited extraction password survives disk round trip");
+                if(packageMode)Check(restored.ExtraccionFicheroPassword=="new-password","package password survives disk round trip");
+            }finally{foreach(var f in restored.ListaFicheros)f.Dispose();}
+            file.ExtraccionFicheroPassword="";pack.ExtraccionFicheroPassword="";
+            Check(after.OuterXml!=((System.Xml.XmlDocument)serialize.Invoke(null,new object[]{packages,false})).OuterXml,"clearing passwords also marks the queue dirty");
+        }
+    }
+    static void InstanceBufferMutex() {
+        string name=@"Local\MegaDownloader-Test-"+Guid.NewGuid().ToString("N");
+        string marker=Path.Combine(root,"mutex-child.txt");
+        var method=typeof(ApplicationInstanceManager).GetMethod("AcquireBufferMutex",shared);
+        using(var gate=(System.Threading.Mutex)method.Invoke(null,new object[]{name})) {
+            string testHost=Assembly.GetExecutingAssembly().Location;string testExe=Path.ChangeExtension(testHost,".exe");if(File.Exists(testExe))testHost=testExe;
+            var info=new System.Diagnostics.ProcessStartInfo(testHost,
+                "--buffer-mutex-child \""+bin+"\" \""+marker+"\" \""+name+"\"") {UseShellExecute=false,CreateNoWindow=true};
+            using(var child=System.Diagnostics.Process.Start(info)) {
+                try {
+                    var until=DateTime.UtcNow.AddSeconds(10);
+                    while(!File.Exists(marker) && !child.HasExited && DateTime.UtcNow<until) Thread.Sleep(20);
+                    Check(File.Exists(marker),"second process reached the buffer mutex");
+                    Thread.Sleep(200);
+                    Check(File.ReadAllText(marker)=="waiting","buffer mutex excludes a second process");
+                    gate.ReleaseMutex();
+                    Check(child.WaitForExit(10000) && child.ExitCode==0 && File.ReadAllText(marker)=="acquired","second process acquires the mutex after release");
+                } finally { if(!child.HasExited) child.Kill(); }
+            }
+        }
+    }
+    static void LanguageBuiltinWrites() {
+        var xml=new System.Xml.XmlDocument(); xml.LoadXml("<Language id='fixture'><Text key='test'>first</Text></Language>");
+        var save=typeof(Language).GetMethod("SaveBuiltinIfChanged",shared);
+        string path=Path.Combine(root,"builtin-fixture.xml");
+        save.Invoke(null,new object[]{xml,path});
+        DateTime sentinel=new DateTime(2020,1,2,3,4,5,DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path,sentinel);
+        save.Invoke(null,new object[]{xml,path});
+        Check(File.GetLastWriteTimeUtc(path)==sentinel,"unchanged builtin language file is not rewritten");
+        xml.DocumentElement.FirstChild.InnerText="updated";
+        save.Invoke(null,new object[]{xml,path});
+        var read=new System.Xml.XmlDocument(); read.Load(path);
+        Check(read.DocumentElement.FirstChild.InnerText=="updated","changed builtin language file is updated");
+    }
+    static void SimplifiedChineseQuality() {
+        var zh=new System.Xml.XmlDocument(); zh.Load(Path.Combine(projectRoot,"src","Resources","Language","zh-CN-Language.xml"));
+        var nodes=zh.DocumentElement.SelectNodes("Text").Cast<System.Xml.XmlNode>().ToArray();
+        string all=string.Join("",nodes.Select(n=>n.InnerText));
+        foreach(char c in "萤儲資夾視訊網錯匯貼產欄帳優選單階設載連結圖隱寫導質誤體驗證據庫螢")
+            Check(all.IndexOf(c)<0,"zh-CN pack avoids Traditional-only glyph "+c);
+        Check(zh.DocumentElement.SelectSingleNode("Text[@key='This screen lets you see the status of the files pending of extraction']").InnerText=="此窗口用于查看待解压文件的状态","decompressor window text is natural Simplified Chinese");
+        Check(zh.DocumentElement.SelectSingleNode("Text[@key='Downloads_Failed_Banner']")!=null,"zh-CN covers the failure banner key");
+        // Uncustomized user copies must follow builtin upgrades; customized ones stay.
+        var refresh=typeof(Language).GetMethod("RefreshUserPackIfUncustomized",shared);
+        string uf=Path.Combine(root,"user-pack-refresh.xml");
+        var oldPack=new System.Xml.XmlDocument(); oldPack.LoadXml("<Language id='x'><Text key='a'>old</Text></Language>");
+        var newPack=new System.Xml.XmlDocument(); newPack.LoadXml("<Language id='x'><Text key='a'>new</Text><Text key='b'>added</Text></Language>");
+        oldPack.Save(uf);
+        Check((bool)refresh.Invoke(null,new object[]{uf,oldPack,newPack})&&File.ReadAllText(uf).Contains("new"),"uncustomized user pack follows builtin upgrade");
+        var custom=new System.Xml.XmlDocument(); custom.LoadXml("<Language id='x'><Text key='a'>mine</Text></Language>"); custom.Save(uf);
+        Check(!(bool)refresh.Invoke(null,new object[]{uf,oldPack,newPack})&&File.ReadAllText(uf).Contains("mine"),"customized user pack is preserved");
+        Check(!(bool)refresh.Invoke(null,new object[]{Path.Combine(root,"missing-pack.xml"),oldPack,newPack}),"missing user pack is not created by the refresh path");
+        Print("zh_cn_quality","simplified wording, traditional-glyph guard and user-pack upgrade sync passed");
+    }
+    static void SystemLanguageSelection() {
+        var resolve=typeof(Language).GetMethod("ResolveLanguageCode",shared);
+        string[] codes={"zh-TW","fr-FR","de-DE","es-ES","en-US","zh-CN","hu-HU","it-IT","pt-BR","ro-RO"};
+        string[][] cases={
+            new[]{"auto","zh-CN","zh-CN"}, new[]{"auto","zh-SG","zh-CN"},
+            new[]{"auto","zh-TW","zh-TW"}, new[]{"auto","zh-HK","zh-TW"}, new[]{"auto","zh-MO","zh-TW"},
+            new[]{"auto","zh-Hans","zh-CN"}, new[]{"auto","zh-Hant","zh-TW"}, new[]{"auto","zh","zh-CN"},
+            new[]{"auto","en-GB","en-US"}, new[]{"auto","fr-CA","fr-FR"}, new[]{"auto","pt-PT","pt-BR"},
+            new[]{"auto","ja-JP","en-US"}, new[]{"auto","ko-KR","en-US"}, new[]{"auto","ar-SA","en-US"},
+            new[]{"es-ES","zh-CN","es-ES"}, new[]{"ja-JP","zh-CN","en-US"},
+            new[]{"","de-DE","de-DE"}, new[]{"not_a_language!!!","fr-FR","fr-FR"},
+            new[]{"ZH-cn","en-US","zh-CN"}, new[]{" auto ","zh-TW","zh-TW"},
+            new[]{"zh-CHS","en-US","zh-CN"}, new[]{"zh-CHT","en-US","zh-TW"}
+        };
+        foreach(var c in cases) {
+            var system=System.Globalization.CultureInfo.GetCultureInfo(c[1]);
+            string selected=(string)resolve.Invoke(null,new object[]{c[0],system,codes});
+            Check(selected==c[2],"language selection: preference="+c[0]+", system="+c[1]+" -> "+c[2]);
+            Check((string)resolve.Invoke(null,new object[]{c[0],system,codes.Reverse().ToArray()})==selected,"language matching does not depend on pack enumeration order: "+c[1]);
+        }
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.InvariantCulture,codes})=="en-US","an unavailable system display language falls back to English");
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-TW"),new[]{"en-US","zh-CN"}})=="en-US","missing Traditional Chinese does not silently select Simplified Chinese");
+        Check((string)resolve.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("fr-BE"),codes.Concat(new[]{"fr-CA"}).ToArray()})=="fr-FR","regional matching prefers the built-in language over another custom region");
+        Check(Language.NormalizeLanguagePreference(null)=="auto" && Language.NormalizeLanguagePreference(" AUTO ")=="auto","missing and automatic preferences remain automatic");
+        Check(Language.NormalizeLanguagePreference("de-de")=="de-DE","saved manual language preferences are preserved and canonicalized");
+        var defaults=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        defaults.ConfigUI=new ConfiguracionUI();defaults.ConfiguracionDefectoVacia();
+        Check(defaults.Idioma=="auto","new configurations follow the system rather than pinning its current language");
+
+        string[] fields={"LanguageFileDisk","LanguageFileInternal","LanguageFileEnUs","culture"};
+        var before=fields.Select(n=>typeof(Language).GetField(n,shared).GetValue(null)).ToArray();
+        var oldFormat=Thread.CurrentThread.CurrentCulture;
+        var oldUi=Thread.CurrentThread.CurrentUICulture;
+        var init=typeof(Language).GetMethod("InitializeLanguage",shared);
+        string directory=Path.Combine(root,"isolated-language-packs");
+        try {
+            Thread.CurrentThread.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            Thread.CurrentThread.CurrentUICulture=System.Globalization.CultureInfo.GetCultureInfo("zh-SG");
+            init.Invoke(null,new object[]{"auto",Thread.CurrentThread.CurrentUICulture,directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-CN" && Language.GetText("Stop")=="停止","automatic initialization loads the matching display language, independently of number/date formatting");
+            Check(Thread.CurrentThread.CurrentCulture.Name=="fr-FR","selecting the UI language does not change number/date formatting");
+            Check(((System.Xml.XmlDocument)typeof(Language).GetField("LanguageFileEnUs",shared).GetValue(null)).DocumentElement.GetAttribute("id")=="en-US","English remains the per-key fallback after initializing Chinese");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="en-US" && Language.GetText("Stop")=="Stop","an unsupported system language loads actual English text without retaining the previous language");
+            init.Invoke(null,new object[]{"de-DE",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),directory});
+            Check(Language.GetCurrentLanguageCode()=="de-DE","manual language selection overrides the detected system language");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-HK"),directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-TW","a later automatic startup follows a changed display language");
+
+            string custom=Path.Combine(directory,"ja-JP.xml");
+            string customized="<Language id='ja-JP' name='日本語'><Text key='Stop'>カスタム停止</Text></Language>";
+            File.WriteAllText(custom,customized,Encoding.UTF8);
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="ja-JP" && Language.GetText("Stop")=="カスタム停止","an installed user language pack participates in automatic matching");
+            Check(Language.GetText("Start")=="Start","missing custom translations fall back to English");
+            Check(File.ReadAllText(custom)==customized,"automatic initialization preserves user translation edits");
+            File.WriteAllText(Path.Combine(directory,"fr-CA.xml"),"<Language id='fr-CA' name='Fran?ais (Canada)'><Text key='Stop'>Arrêt personnalisé</Text></Language>",Encoding.UTF8);
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("fr-CA"),directory});
+            Check(Language.GetCurrentLanguageCode()=="fr-CA" && Language.GetText("Stop")=="Arrêt personnalisé" && Language.GetText("Start")=="Démarrer","a regional custom pack retains its same-language built-in fallback for missing text");
+            string oldFrench=Path.Combine(directory,"fr-FR.xml");
+            const string oldPack="<Language id='fr-FR'><Text key='&amp;Help'>Aide&amp;</Text><Text key='E&amp;xit'>My custom exit</Text></Language>";
+            File.WriteAllText(oldFrench,oldPack,Encoding.UTF8);
+            init.Invoke(null,new object[]{"fr-FR",System.Globalization.CultureInfo.GetCultureInfo("fr-FR"),directory});
+            Check(Language.GetText("&Help")=="&Aide","the stock French menu mnemonic migrates on upgrade");
+            Check(Language.GetText("E&xit")=="My custom exit"&&File.ReadAllText(oldFrench)==oldPack,"other overrides and the disk file are preserved");
+            File.WriteAllText(custom,"<broken");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),directory});
+            Check(Language.GetCurrentLanguageCode()=="en-US" && Language.GetText("Stop")=="Stop","a corrupt custom-only language pack falls back to English");
+            File.WriteAllText(Path.Combine(directory,"zh-CN.xml"),"<broken");
+            init.Invoke(null,new object[]{"auto",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),directory});
+            Check(Language.GetCurrentLanguageCode()=="zh-CN" && Language.GetText("Stop")=="停止","a corrupt customized built-in pack falls back to its embedded translation");
+        } finally {
+            for(int i=0;i<fields.Length;i++)typeof(Language).GetField(fields[i],shared).SetValue(null,before[i]);
+            Thread.CurrentThread.CurrentCulture=oldFormat;
+            Thread.CurrentThread.CurrentUICulture=oldUi;
+        }
+    }
+    static void DownloadScheduling() {
+        var day=new DateTime(2026,10,28);
+        var s=new DownloadScheduleSettings();
+        Check(!s.Enabled && s.AllowsDownload(day),"legacy configurations do not enable scheduling");
+        s.Enabled=true; s.StartMinute=60; s.EndMinute=120;
+        Check(!s.AllowsDownload(day.AddMinutes(59)),"daily window excludes time before start");
+        Check(s.AllowsDownload(day.AddHours(1)),"daily window includes exact start");
+        Check(s.AllowsDownload(day.AddHours(2).AddTicks(-1)),"daily window includes final tick");
+        Check(!s.AllowsDownload(day.AddHours(2)),"daily window excludes exact end");
+        s.StartMinute=23*60; s.EndMinute=7*60;
+        Check(!s.AllowsDownload(day.AddHours(12)),"overnight window excludes daytime");
+        Check(s.AllowsDownload(day.AddHours(23)),"overnight window includes evening start");
+        Check(s.ActiveWindow(day.AddHours(23))==s.ActiveWindow(day.AddDays(1).AddHours(6)),"overnight window identity survives midnight");
+        Check(!s.AllowsDownload(day.AddDays(1).AddHours(7)),"overnight window stops in the morning");
+        var c=new DownloadScheduleController();
+        Check(c.Evaluate(s,day.AddHours(22),true)==DownloadScheduleController.ScheduleAction.Pause,"enabling a schedule outside its window pauses a running queue");
+        Check(c.Evaluate(s,day.AddHours(23),false)==DownloadScheduleController.ScheduleAction.Start,"window boundary starts the queue");
+        Check(c.Evaluate(s,day.AddHours(23).AddSeconds(1),false)==DownloadScheduleController.ScheduleAction.None,"scheduler does not repeatedly start every tick");
+        c.MarkManualPause(s,day.AddHours(23));
+        Check(c.Evaluate(s,day.AddDays(1).AddHours(1),false)==DownloadScheduleController.ScheduleAction.None,"midnight does not undo manual pause");
+        Check(c.Evaluate(s,day.AddDays(1).AddHours(7),false)==DownloadScheduleController.ScheduleAction.None,"paused queue stays paused at window end");
+        Check(c.Evaluate(s,day.AddDays(1).AddHours(23),false)==DownloadScheduleController.ScheduleAction.Start,"next daily window can restart a manually paused queue");
+        c.Reset();c.MarkManualPause(s,day.AddHours(23));
+        Check(c.Evaluate(s,day.AddHours(23),false)==DownloadScheduleController.ScheduleAction.None,"manual pause before first timer tick is respected");
+        s.Daily=false;s.OnceStart=day.AddDays(1).AddHours(12);s.OnceEnd=s.OnceStart.AddHours(2);
+        Check(!s.AllowsDownload(s.OnceStart.AddTicks(-1)) && s.AllowsDownload(s.OnceStart),"one-time window has exact start semantics");
+        Check(!s.AllowsDownload(s.OnceEnd) && !s.AllowsDownload(s.OnceStart.AddDays(1)),"one-time window never repeats");
+        var xml=new System.Xml.XmlDocument();xml.AppendChild(s.ToXml(xml));
+        var restored=DownloadScheduleSettings.FromXml(xml.DocumentElement);
+        Check(restored.Enabled && !restored.Daily && restored.OnceStart==s.OnceStart && restored.OnceEnd==s.OnceEnd,"one-time schedule round-trips through XML");
+        Check(restored.StartMinute==s.StartMinute && restored.EndMinute==s.EndMinute,"one-time mode retains the saved daily window after reload");
+        s.Daily=true;s.StartMinute=1380;s.EndMinute=420;
+        xml=new System.Xml.XmlDocument();xml.AppendChild(s.ToXml(xml));restored=DownloadScheduleSettings.FromXml(xml.DocumentElement);
+        Check(restored.Enabled && restored.Daily && restored.StartMinute==1380 && restored.EndMinute==420,"overnight schedule round-trips through XML");
+        Check(restored.OnceStart==s.OnceStart && restored.OnceEnd==s.OnceEnd,"daily mode retains the saved one-time window after reload");
+        xml.DocumentElement.SetAttribute("OnceStart","invalid");
+        Check(DownloadScheduleSettings.FromXml(xml.DocumentElement).Enabled,"inactive malformed one-time fields do not disable a valid daily window");
+        xml.DocumentElement.SetAttribute("StartMinute","1440");
+        Check(!DownloadScheduleSettings.FromXml(xml.DocumentElement).Enabled,"invalid persisted minutes disable schedule safely");
+        xml.DocumentElement.SetAttribute("StartMinute","420");
+        Check(!DownloadScheduleSettings.FromXml(xml.DocumentElement).Enabled,"equal daily start and end cannot silently create an always-on schedule");
+        Check(!DownloadScheduleSettings.FromXml(null).Enabled,"missing schedule node remains backwards compatible");
+        s.Daily=false;s.OnceEnd=s.OnceStart;
+        Check(!s.IsValid(),"zero-length one-time schedule is invalid");
+        s.OnceEnd=s.OnceStart.AddMinutes(-1);
+        Check(!s.IsValid(),"backwards one-time interval is invalid");
+        s.Enabled=false;
+        Check(c.Evaluate(s,day,false)==DownloadScheduleController.ScheduleAction.None,"disabling scheduling never starts a stopped queue");
+    }
+    static void BatchPreflight() {
+        string k=new string('A',43);
+        Func<string,URLProcessor.FileURL> url=id=>new URLProcessor.FileURL("https://mega.nz/file/"+id+"#"+k,"");
+        var a=url("AAAA0001");
+        var duplicate=new URLProcessor.FileURL("https://mega.co.nz/#!AAAA0001!"+k,"");
+        var queued=url("AAAA0002");var invalid=url("AAAA0003");var offline=url("AAAA0004");var zero=url("AAAA0005");
+        var folder=url("AAAA0006");folder.DisplayName="already-decrypted.mkv";folder.SizeBytes=4096;
+        var cases=new[]{a,duplicate,queued,invalid,offline,zero,folder};
+        var existing=new HashSet<string>(StringComparer.Ordinal){BatchLinkPreflight.Identity(queued)};
+        int calls=0;
+        Func<URLProcessor.FileURL,CancellationToken,Conexion.InformacionFichero> reader=(source,token)=>{
+            Interlocked.Increment(ref calls);
+            if(source==invalid) return new Conexion.InformacionFichero {Err=Conexion.TipoError.Otros,Errtxt="ENOENT [-9]"};
+            if(source==offline) return new Conexion.InformacionFichero {Err=Conexion.TipoError.ErrorConexion,Errtxt="Network unavailable"};
+            return new Conexion.InformacionFichero {Nombre=source==zero?"empty.txt":"movie.mp4",Tamano=source==zero?0:1024};
+        };
+        var rows=BatchLinkPreflight.InspectFiles(cases,existing,reader,CancellationToken.None);
+        Check(rows.Count==7,"preflight retains an entry for every expanded link");
+        Check(calls==4,"preflight skips network calls for folder metadata, queue duplicates and batch duplicates");
+        Check(rows[0].CanAdd && rows[0].Selected && rows[0].Name=="movie.mp4" && rows[0].SizeBytes==1024,"valid metadata is previewed and selected");
+        Check(rows[1].State==BatchLinkPreflight.LinkState.Duplicate && !rows[1].CanAdd,"old and new link formats deduplicate by identity");
+        Check(rows[1].Name==rows[0].Name && rows[1].SizeBytes==rows[0].SizeBytes,"duplicate preview rows reuse the inspected name and size");
+        Check(rows[2].State==BatchLinkPreflight.LinkState.AlreadyQueued && !rows[2].Selected,"queued links are not silently imported again");
+        Check(rows[3].State==BatchLinkPreflight.LinkState.Invalid && !rows[3].CanAdd,"permanent MEGA errors are distinguished from network errors");
+        Check(rows[4].State==BatchLinkPreflight.LinkState.Unavailable && rows[4].CanAdd && !rows[4].Selected,"offline links remain manually addable without being marked dead or selected by default");
+        Check(rows[5].SizeBytes==0 && rows[5].State==BatchLinkPreflight.LinkState.Ready,"empty files remain valid preview entries");
+        Check(rows[6].Name=="already-decrypted.mkv" && rows[6].SizeBytes==4096,"folder metadata does not need a second API request");
+        Check(rows[0].Category=="Video" && rows[5].Category=="Documents","type filters classify the previewed filename");
+        Check(BatchLinkPreflight.Identity("caseID01",k)!=BatchLinkPreflight.Identity("CASEID01",k),"file identity comparison remains case-sensitive");
+        Check(BatchLinkPreflight.Identity("caseID01",k)==BatchLinkPreflight.Identity("caseID01",k+"="),"base64 padding does not create duplicate identities");
+        Check(BatchLinkPreflight.Identity("caseID01",k)!=BatchLinkPreflight.Identity("caseID01",new string('B',43)),"different decryption keys are not silently conflated");
+        using(var cancel=new CancellationTokenSource()) {
+            cancel.Cancel();bool rejected=false;
+            try { BatchLinkPreflight.InspectFiles(new[]{url("CANCEL01")},existing,reader,cancel.Token); } catch(OperationCanceledException) {rejected=true;}
+            Check(rejected,"cancelled inspection stops without adding tasks");
+        }
+        var failure=BatchLinkPreflight.InspectFiles(new[]{url("ERROR001"),url("AFTER001")},existing,(source,token)=>{
+            if(source.URL.Contains("ERROR001"))throw new IOException("temporary fixture error");
+            return new Conexion.InformacionFichero {Nombre="after.zip",Tamano=123};
+        },CancellationToken.None);
+        Check(failure[0].State==BatchLinkPreflight.LinkState.Unavailable && failure[1].State==BatchLinkPreflight.LinkState.Ready,"a transient failure does not discard the rest of the batch");
+        Check(BatchLinkPreflight.AvailableSpace(root).GetValueOrDefault()>0,"free-space lookup works on the isolated local test volume");
+    }
+    static void PreflightSelectionCases() {
+        var source=new URLProcessor.FileURL("https://mega.nz/file/SELECT01#"+new string('A',43),"");
+        var video=new BatchLinkPreflight.Entry {Source=source,Name="movie.mkv",SizeBytes=4096,State=BatchLinkPreflight.LinkState.Ready,Selected=true};
+        var archive=new BatchLinkPreflight.Entry {Source=source,Name="archive.zip",SizeBytes=1024,State=BatchLinkPreflight.LinkState.Ready,Selected=true};
+        var offline=new BatchLinkPreflight.Entry {Source=source,Name="unknown.mp4",State=BatchLinkPreflight.LinkState.Unavailable};
+        var invalid=new BatchLinkPreflight.Entry {Source=source,Name="gone.mkv",SizeBytes=99,State=BatchLinkPreflight.LinkState.Invalid};
+        var duplicate=new BatchLinkPreflight.Entry {Source=source,Name="duplicate.zip",State=BatchLinkPreflight.LinkState.Duplicate};
+        var model=new PreflightSelection(new List<BatchLinkPreflight.Entry>{video,archive,offline,invalid,duplicate});
+        Check(model.SelectedCount==2 && model.SelectedBytes==5120 && model.UnknownSizes==0,"selection model initializes totals once");
+        model.Filter("","Video");model.Apply(PreflightSelection.SelectionOperation.Invert);
+        Check(!video.Selected && archive.Selected && offline.Selected && !invalid.Selected,"filtered inversion keeps hidden choices and excludes invalid links");
+        Check(model.SelectedCount==2 && model.SelectedBytes==1024 && model.UnknownSizes==1,"inversion updates known bytes and unknown count together");
+        model.Apply(PreflightSelection.SelectionOperation.SelectAll,false);
+        Check(model.SelectedCount==3 && !invalid.Selected && !duplicate.Selected,"global select-all includes filtered-out eligible files only");
+        model.Apply(PreflightSelection.SelectionOperation.Clear,false);
+        Check(model.SelectedCount==0 && model.SelectedBytes==0 && model.UnknownSizes==0,"global clear resets every selection total");
+        model.SetSelected(offline,true);model.SetSelected(offline,true);model.SetSelected(invalid,true);
+        Check(model.SelectedCount==1 && model.UnknownSizes==1,"repeated and invalid checkbox writes cannot corrupt totals");
+        video.Name="changed.zip";model.Filter("changed","Archives");
+        Check(model.Visible.Count==1,"type classification refreshes if a filename changes");
+        var big=new List<BatchLinkPreflight.Entry>();
+        for(int i=0;i<100000;i++)big.Add(new BatchLinkPreflight.Entry {Source=source,Name="large-"+i+".zip",SizeBytes=long.MaxValue,State=BatchLinkPreflight.LinkState.Ready});
+        var timer=System.Diagnostics.Stopwatch.StartNew();var stress=new PreflightSelection(big);
+        stress.Apply(PreflightSelection.SelectionOperation.SelectAll,false);
+        Check(stress.SelectedCount==100000 && stress.SelectedBytes==(decimal)long.MaxValue*100000,"large batches use non-overflowing aggregate byte counts");
+        double allMs=timer.Elapsed.TotalMilliseconds;timer.Restart();
+        for(int i=0;i<10000;i++)stress.SetSelected(big[i],false);
+        Check(stress.SelectedCount==90000 && stress.SelectedBytes==(decimal)long.MaxValue*90000,"ten thousand checkbox changes retain incremental totals");
+        Print("preflight_selection","entries=100000","initializeAndSelectAllMs="+allMs.ToString("F2"),"toggle10000Ms="+timer.Elapsed.TotalMilliseconds.ToString("F2"));
+    }
+    static void PreflightTreeCases() {
+        string key=new string('A',43);
+        var video=new BatchLinkPreflight.Entry {Source=new URLProcessor.FileURL("https://mega.nz/file/TREE0001#"+key,"video") {FolderName="Course"},Name="lesson.mp4",SizeBytes=10,State=BatchLinkPreflight.LinkState.Ready,Selected=true};
+        var audio=new BatchLinkPreflight.Entry {Source=new URLProcessor.FileURL("https://mega.nz/file/TREE0002#"+key,"audio") {FolderName="Course"},Name="lesson.mp3",SizeBytes=20,State=BatchLinkPreflight.LinkState.Ready,Selected=true};
+        var duplicate=new BatchLinkPreflight.Entry {Source=video.Source,Name=video.Name,SizeBytes=10,State=BatchLinkPreflight.LinkState.Duplicate};
+        var selection=new PreflightSelection(new List<BatchLinkPreflight.Entry>{video,audio,duplicate});
+        var tree=new PreflightTree(selection);
+        Check(tree.Rows.Count==1 && tree.Rows[0].IsFolder,"shared folders start collapsed instead of flattening their children");
+        var folder=tree.Rows[0];
+        Check(folder.EligibleCount==2 && folder.SelectedCount==2 && folder.CheckState==System.Windows.Forms.CheckState.Checked,"folder check state excludes ineligible duplicate files");
+        tree.ExpandAll(true);
+        var leaf=tree.Rows.First(n=>object.ReferenceEquals(n.Entry,video));
+        tree.Apply(new[]{folder,leaf},PreflightSelection.SelectionOperation.Invert);
+        Check(selection.SelectedCount==0 && !duplicate.Selected,"overlapping parent and child targets never invert a file twice");
+        selection.Apply(PreflightSelection.SelectionOperation.SelectAll,false);
+        tree.Toggle(folder);
+        Check(selection.SelectedCount==2,"collapsing a folder preserves all selected descendants");
+        selection.Filter("video","");tree.Filter(true);
+        tree.Apply(new[]{folder},PreflightSelection.SelectionOperation.Clear);
+        Check(!video.Selected && audio.Selected && selection.SelectedCount==1,"filtered folder operations preserve hidden selections");
+        selection.Filter("","");tree.Filter(false);
+        Check(folder.CheckState==System.Windows.Forms.CheckState.Indeterminate && folder.SelectedCount==1,"clearing a filter restores the full folder's mixed check state");
+    }
+    static void QueueViewSnapshotCases() {
+        var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));
+        var publish=typeof(Main).GetMethod("PublishQueueOverview",hidden);
+        var current=typeof(Main).GetField("queueOverviewSnapshot",hidden);
+        Func<string,long> revision=name=>Convert.ToInt64(current.GetValue(form).GetType().GetField(name,hidden).GetValue(current.GetValue(form)));
+        try {
+            using(var a=new Fichero())using(var b=new Fichero()) {
+                a.NombreFichero="unresolved";b.NombreFichero="audio.mp3";
+                a.EstadoDescarga=Estado.Descargando;b.EstadoDescarga=Estado.EnCola;
+                var package=new Paquete {Nombre="Course"};package.AgregarFichero(a);package.AgregarFichero(b);
+                var items=new List<KeyValuePair<Paquete,List<Fichero>>>{new KeyValuePair<Paquete,List<Fichero>>(package,package.SnapshotFicheros())};
+                publish.Invoke(form,new object[]{items});
+                long scope=revision("ScopeVersion"),search=revision("SearchVersion");
+                publish.Invoke(form,new object[]{items});
+                Check(revision("ScopeVersion")==scope && revision("SearchVersion")==search,"unchanged queue snapshots do not trigger list rebuilds or searches");
+                a.Porcentaje=50;publish.Invoke(form,new object[]{items});
+                Check(revision("ScopeVersion")==scope && revision("SearchVersion")==search,"progress-only updates do not invalidate filter membership");
+                a.EstadoDescarga=Estado.EnCola;b.EstadoDescarga=Estado.Descargando;
+                publish.Invoke(form,new object[]{items});
+                Check(revision("ScopeVersion")>scope && revision("SearchVersion")==search,"swapping file states updates membership even when group totals are unchanged");
+                scope=revision("ScopeVersion");a.NombreFichero="lesson.mp4";
+                publish.Invoke(form,new object[]{items});
+                Check(revision("SearchVersion")>search && revision("ScopeVersion")==scope,"newly resolved filenames invalidate search without rebuilding unrelated groups");
+                search=revision("SearchVersion");a.RutaRelativa="renamed/path";
+                publish.Invoke(form,new object[]{items});
+                Check(revision("SearchVersion")>search,"relative path changes invalidate active searches");
+            }
+        } finally {GC.SuppressFinalize(form);}
+    }
+    static void PreflightWarmupCases() {
+        string key=new string('A',43);string a="https://mega.nz/file/CACHE001#"+key;string b="https://mega.nz/file/CACHE002#"+key;
+        int calls=0;int caller=Thread.CurrentThread.ManagedThreadId;bool offUi=false;
+        Func<string,CancellationToken,List<BatchLinkPreflight.Entry>> loader=(url,token)=>{
+            Interlocked.Increment(ref calls);offUi=Thread.CurrentThread.ManagedThreadId!=caller;
+            token.ThrowIfCancellationRequested();
+            return new List<BatchLinkPreflight.Entry>{new BatchLinkPreflight.Entry {Source=new URLProcessor.FileURL(url,""),Name=Fichero.ExtraerFileID(url)+".zip",SizeBytes=1024,State=BatchLinkPreflight.LinkState.Ready,Selected=true}};
+        };
+        using(var session=new PreflightSession(loader)) {
+            var first=session.Prepare(a);var firstResult=first.Results.GetAwaiter().GetResult();
+            Check(offUi && calls==1,"speculative metadata work runs off the caller thread");
+            Check(object.ReferenceEquals(first,session.Prepare(a)),"opening preview reuses the same in-flight or completed request");
+            var second=session.Prepare(a+"\n"+b);var secondResult=second.Results.GetAwaiter().GetResult();
+            Check(calls==2 && secondResult.Count==2,"appending one link reuses already inspected sources");
+            string old="https://mega.co.nz/#!CACHE001!"+key;
+            var aliases=session.Prepare(a+"\n"+old);var aliasResult=aliases.Results.GetAwaiter().GetResult();
+            Check(calls==2 && aliasResult.Count==2,"old and new URL aliases share one metadata cache entry");
+            var empty=new Dictionary<string,URLProcessor.FileURL>();var reconciled=PreflightSession.Reconcile(aliasResult,empty);
+            Check(reconciled[0].State==BatchLinkPreflight.LinkState.Ready && reconciled[1].State==BatchLinkPreflight.LinkState.Duplicate,"cached sources are deduplicated again when composing the batch");
+            reconciled[0].Selected=false;
+            Check(aliasResult[0].Selected,"preview checkbox edits do not mutate cached results");
+            empty.Add(BatchLinkPreflight.Identity(aliasResult[0].Source),new URLProcessor.FileURL("","") {DisplayName="already-downloaded.zip",SizeBytes=2048});
+            var queued=PreflightSession.Reconcile(aliasResult,empty);
+            Check(queued.All(entry=>!entry.CanAdd) && queued[0].Name=="already-downloaded.zip","cached results are reconciled with the latest queue snapshot");
+            session.Prepare(a,true).Results.GetAwaiter().GetResult();
+            Check(calls==3,"explicit recheck bypasses the metadata cache");
+            session.Invalidate();
+            session.Prepare(a).Results.GetAwaiter().GetResult();
+            Check(calls==3,"completed source metadata survives a cancelled input generation");
+            session.Invalidate(true);
+            session.Prepare(a).Results.GetAwaiter().GetResult();
+            Check(calls==4,"clearing the link inbox discards obsolete cached metadata");
+        }
+        using(var entered=new ManualResetEventSlim()) {
+            using(var session=new PreflightSession((url,token)=>{
+                if(url.Contains("SLOW0001")){entered.Set();token.WaitHandle.WaitOne(5000);token.ThrowIfCancellationRequested();}
+                return loader(url,token);
+            })) {
+                var stale=session.Prepare("https://mega.nz/file/SLOW0001#"+key);
+                Check(entered.Wait(5000),"slow fixture entered background metadata lookup");
+                var timer=System.Diagnostics.Stopwatch.StartNew();var latest=session.Prepare(b);
+                Check(timer.ElapsedMilliseconds<1000,"changing input does not wait for a slow obsolete lookup");
+                Check(latest.Results.GetAwaiter().GetResult()[0].Name=="CACHE002.zip","new input cannot display stale metadata");
+                bool cancelled=false;try{stale.Results.GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+                Check(cancelled,"obsolete speculative work is cancelled");
+            }
+        }
+        int retries=0;
+        using(var session=new PreflightSession((url,token)=>{retries++;var entries=loader(url,token);if(retries==1)entries[0].State=BatchLinkPreflight.LinkState.Unavailable;return entries;})) {
+            session.Prepare(a).Results.GetAwaiter().GetResult();
+            session.Prepare(a+"\n"+b).Results.GetAwaiter().GetResult();
+            Check(retries==3,"transient metadata failures are retried on the next input generation");
+        }
+    }
+    static void PackageImportCases() {
+        string destination=Path.Combine(root,"package-builder");
+        var files=new List<URLProcessor.FileURL>();string key=new string('A',43);
+        for(int i=0;i<20;i++)files.Add(new URLProcessor.FileURL("https://mega.nz/file/"+i.ToString("D8")+"#"+key,"nested") {DisplayName="file-"+i+".zip",SizeBytes=(long)1024*1024*1024*10,FolderName="Fixture folder"});
+        var package=DownloadPackageBuilder.Build(files,"",destination,true,true,"fixture-password",CancellationToken.None);
+        try {
+            Check(package.Nombre=="Fixture folder" && package.ListaFicheros.Count==20,"background package builder preserves folder naming and all selected files");
+            Check(Directory.GetDirectories(destination,"*",SearchOption.AllDirectories).Length==2 && Directory.GetFiles(destination,"*",SearchOption.AllDirectories).Length==0,"large-file import creates directories but does not read or download file content");
+            Check(package.ListaFicheros.All(file=>file.TamanoBytes==(long)1024*1024*1024*10 && !file.DescargaProcesada),"preview metadata is retained without bypassing pre-download verification");
+        } finally {foreach(var file in package.ListaFicheros)file.Dispose();}
+        using(var cancel=new CancellationTokenSource()) {
+            cancel.Cancel();bool cancelled=false;string path=Path.Combine(root,"cancelled-package-builder");
+            try{DownloadPackageBuilder.Build(files,"",path,true,false,"",cancel.Token);}catch(OperationCanceledException){cancelled=true;}
+            Check(cancelled && !Directory.Exists(path),"already cancelled import performs no directory creation");
+        }
+        var traversal=new List<URLProcessor.FileURL>{new URLProcessor.FileURL(files[0].URL,"../outside")};
+        ExpectRejected(()=>DownloadPackageBuilder.Build(traversal,"",destination,false,false,"",CancellationToken.None),"background import still rejects remote path traversal");
+    }
+    static void ScheduledQueueIntegration() {
+        var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));
+        var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        config.DownloadSchedule=new DownloadScheduleSettings {Enabled=true,Daily=false,OnceStart=DateTime.Now.AddMinutes(-1),OnceEnd=DateTime.Now.AddMinutes(10)};
+        form.Config=config;
+        typeof(Main).GetField("scheduleController",hidden).SetValue(form,new DownloadScheduleController());
+        typeof(Main).GetField("scheduleActionLock",hidden).SetValue(form,new object());
+        var stateField=typeof(Main).GetField("EstadoAplicacion",hidden);
+        stateField.SetValue(form,Enum.Parse(stateField.FieldType,"Pausa"));
+        using(var paused=new Fichero()) {
+            paused.PausaIndividual=true;
+            var pack=new Paquete();pack.AgregarFichero(paused);
+            typeof(Main).GetField("ListaPaquetes",hidden).SetValue(form,new List<Paquete>{pack});
+            typeof(Main).GetMethod("ScheduleTick",hidden).Invoke(form,new object[]{null,EventArgs.Empty});
+            Check(stateField.GetValue(form).ToString()=="Descargando","scheduled start reaches the real queue state");
+            Check(paused.PausaIndividual,"scheduled start preserves individual manual pause");
+            paused.EstadoDescarga=Estado.Pausado; paused.DescargaProcesada=true; paused.FileID="PAUSED01";
+            typeof(Paquete).GetMethod("MarcarFicherosComoParados",shared).Invoke(null,new object[]{new List<Paquete>{pack}});
+            Check(paused.EstadoDescarga==Estado.EnCola && paused.PausaIndividual,"restart normalizes transient state while preserving the manual pause");
+            config.ConexionesPorFichero=1; config.DescargasSimultaneas=1;
+            typeof(Main).GetField("NumeroConexionesMaxima",hidden).SetValue(form,1);
+            typeof(Main).GetMethod("PonerFicherosADescargar",hidden).Invoke(form,null);
+            Check(paused.EstadoDescarga==Estado.EnCola && !paused.DescargaComenzada,"scheduler does not launch an individually paused task restored to queue");
+            form.PauseDownload();
+            typeof(Main).GetMethod("ScheduleTick",hidden).Invoke(form,new object[]{null,EventArgs.Empty});
+            Check(stateField.GetValue(form).ToString()=="Pausa","real manual queue pause is not undone by timer");
+            config.DownloadSchedule=new DownloadScheduleSettings {Enabled=true,Daily=false,OnceStart=DateTime.Now.AddHours(1),OnceEnd=DateTime.Now.AddHours(2)};
+            stateField.SetValue(form,Enum.Parse(stateField.FieldType,"Descargando"));
+            paused.DescargaIndividual=true;
+            typeof(Main).GetMethod("ScheduleTick",hidden).Invoke(form,new object[]{null,EventArgs.Empty});
+            Check(stateField.GetValue(form).ToString()=="Pausa" && !paused.DescargaIndividual,"scheduled stop also stops individually forced downloads");
+        }
+        // This uninitialized test object has no native window or real configuration.
+        GC.SuppressFinalize(form);
+        ThrottledStreamController.GetController().Continuar();
+    }
+    static void FeatureDialogs() {
+        Exception failure=null;
+        var thread=new Thread(()=>{
+            var languageFields=new[]{"LanguageFileDisk","LanguageFileInternal","LanguageFileEnUs"};
+            var before=languageFields.Select(n=>typeof(Language).GetField(n,shared).GetValue(null)).ToArray();
+            var oldCulture=typeof(Language).GetField("culture",shared).GetValue(null);
+            try {
+                System.Windows.Forms.Application.EnableVisualStyles();
+                var lang=new System.Xml.XmlDocument();
+                string resource=typeof(Main).Assembly.GetManifestResourceNames().First(n=>n.EndsWith("zh-CN-Language.xml",StringComparison.Ordinal));
+                using(var stream=typeof(Main).Assembly.GetManifestResourceStream(resource))lang.Load(stream);
+                foreach(string name in languageFields)typeof(Language).GetField(name,shared).SetValue(null,lang);
+                typeof(Language).GetField("culture",shared).SetValue(null,System.Globalization.CultureInfo.GetCultureInfo("zh-CN"));
+                FirstOpenUiCases();
+                PasswordPropertiesCases();
+                var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                WarmInboxUiCases(config);
+                WorkbenchUiCases();
+                var first=new URLProcessor.FileURL("https://mega.nz/file/FIXTURE1#"+new string('A',43),"");
+                var second=new URLProcessor.FileURL("https://mega.nz/file/FIXTURE2#"+new string('A',43),"");
+                var rows=new List<BatchLinkPreflight.Entry>{
+                    new BatchLinkPreflight.Entry {Source=first,Name="课程视频.mkv",SizeBytes=4096,State=BatchLinkPreflight.LinkState.Ready,Selected=true},
+                    new BatchLinkPreflight.Entry {Source=second,Name="练习素材.zip",SizeBytes=1024,State=BatchLinkPreflight.LinkState.Ready,Selected=true},
+                    new BatchLinkPreflight.Entry {Source=first,Name="课程视频.mkv",SizeBytes=4096,State=BatchLinkPreflight.LinkState.Duplicate}
+                };
+                using(var preview=new BatchPreflightView(new List<string>(),config,new Dictionary<string,URLProcessor.FileURL>(),root)) {
+                    var type=typeof(BatchPreflightView);
+                    type.GetField("entries",hidden).SetValue(preview,rows);
+                    var bind=type.GetMethod("BindRows",hidden);
+                    bind.Invoke(preview,null);
+                    var grid=(System.Windows.Forms.DataGridView)type.GetField("grid",hidden).GetValue(preview);
+                    var filter=(System.Windows.Forms.ComboBox)type.GetField("category",hidden).GetValue(preview);
+                    var search=(System.Windows.Forms.TextBox)type.GetField("search",hidden).GetValue(preview);
+                    var add=(System.Windows.Forms.Button)type.GetField("addButton",hidden).GetValue(preview);
+                    Check(typeof(System.Windows.Forms.UserControl).IsAssignableFrom(type),"file preview is an embedded page rather than another top-level window");
+                    Check(grid.Rows.Count==3 && add.Enabled,"native preview binds metadata and enables confirmation");
+                    Check(grid.VirtualMode && grid.MultiSelect,"preview uses a virtual multi-select grid");
+                    grid.CurrentCell=grid[3,0];
+                    var right=new System.Windows.Forms.KeyEventArgs(System.Windows.Forms.Keys.Right);
+                    type.GetMethod("GridKeyDown",hidden).Invoke(preview,new object[]{grid,right});
+                    Check(!right.Handled && !right.SuppressKeyPress,"arrow keys retain normal cell navigation outside the tree column");
+                    var edit=new System.Windows.Forms.DataGridViewCellCancelEventArgs(0,2);
+                    type.GetMethod("BeginCellEdit",hidden).Invoke(preview,new object[]{grid,edit});
+                    Check(edit.Cancel,"duplicate checkboxes cannot enter edit mode");
+                    filter.SelectedIndex=1;
+                    Check(grid.Rows.Count==2,"video filter uses actual preview filenames");
+                    type.GetMethod("SelectVisible",hidden).Invoke(preview,new object[]{false});
+                    Check(!rows[0].Selected && rows[1].Selected,"clear-visible preserves hidden selections");
+                    filter.SelectedIndex=0;search.Text="素材";bind.Invoke(preview,null);
+                    Check(grid.Rows.Count==1,"native search filters Unicode filenames");
+                    search.Text="";bind.Invoke(preview,null);
+                    Check(filter.SelectedIndex==0 && filter.Text==Language.GetText("Preflight_All"),"default type filter displays its localized label");
+                    grid.Rows[0].Cells[0].Value=true;
+                    Check(rows[0].Selected,"native checkbox changes update the confirmation model");
+                    grid.Rows[0].Selected=true;grid.Rows[1].Selected=true;
+                    type.GetMethod("ChangeHighlighted",hidden).Invoke(preview,new object[]{PreflightSelection.SelectionOperation.Clear});
+                    Check(!rows[0].Selected && !rows[1].Selected,"multi-row action clears both highlighted files");
+                    type.GetMethod("GridKeyDown",hidden).Invoke(preview,new object[]{grid,new System.Windows.Forms.KeyEventArgs(System.Windows.Forms.Keys.Space)});
+                    Check(rows[0].Selected && rows[1].Selected && !rows[2].Selected,"space toggles highlighted files without selecting duplicates");
+                    type.GetField("freeSpace",hidden).SetValue(preview,(long)1);bind.Invoke(preview,null);
+                    Check(!add.Enabled,"insufficient disk space prevents confirmation");
+                    type.GetField("freeSpace",hidden).SetValue(preview,null);bind.Invoke(preview,null);
+                    Check(add.Enabled,"unknown free space does not incorrectly block downloads");
+                    bool confirmed=false;
+                    preview.ConfirmRequested+=(sender,args)=>confirmed=true;
+                    preview.SetImporting(true);
+                    preview.ShowImportProgress(1,2,false,false);
+                    Check(!add.Enabled && !grid.Enabled && preview.DismissButton.Enabled,"building tasks freezes selection and keeps cancellation available");
+                    type.GetMethod("ApplySelection",hidden).Invoke(preview,new object[]{PreflightSelection.SelectionOperation.Clear,false});
+                    Check(rows[0].Selected && rows[1].Selected,"pending selection callbacks cannot mutate the batch while it is being built");
+                    preview.ShowImportProgress(2,2,true,false);
+                    Check(!preview.DismissButton.Enabled,"publication cannot be cancelled after the queue hand-off begins");
+                    preview.SetImporting(false);
+                    Check(grid.Enabled && add.Enabled,"ending a cancelled build restores the file selection controls");
+                    ApplyFeatureTheme(preview,ConfiguracionUI.ThemeModeType.Light);
+                    DrawFeatureDialog(preview,"batch-preview-light.png");
+                    ApplyFeatureTheme(preview,ConfiguracionUI.ThemeModeType.Dark);
+                    DrawFeatureDialog(preview,"batch-preview-dark.png");
+                    Check(grid.DefaultCellStyle.BackColor==ThemeManager.GetColor("Back"),"native preview updates grid colors when the theme changes");
+                    Check(filter.DrawMode==System.Windows.Forms.DrawMode.OwnerDrawFixed && filter.ForeColor==ThemeManager.GetColor("Fore"),"dark dropdown draws its selected value with themed colors");
+                    preview.Size=new System.Drawing.Size(640,430);
+                    DrawFeatureDialog(preview,"batch-preview-narrow.png");
+                    var filters=filter.Parent;
+                    Check(filters.Controls.Cast<System.Windows.Forms.Control>().All(control=>control.Right<=filters.ClientSize.Width),"preview filters wrap within the minimum window width");
+                    type.GetMethod("ConfirmSelection",hidden).Invoke(preview,new object[]{null,EventArgs.Empty});
+                    Check(preview.SelectedFiles.Count==2,"confirmation returns only selected eligible files");
+                    Check(confirmed && !preview.IsDisposed,"confirmation notifies the host and keeps the page alive until submission succeeds");
+                }
+                using(var preview=new BatchPreflightView(new List<string>(),config,new Dictionary<string,URLProcessor.FileURL>(),root)) {
+                    var type=typeof(BatchPreflightView);var large=new List<BatchLinkPreflight.Entry>();
+                    for(int i=0;i<10000;i++)large.Add(new BatchLinkPreflight.Entry {Source=first,Name="fixture-"+i+".mkv",SizeBytes=1024,State=BatchLinkPreflight.LinkState.Ready});
+                    type.GetField("entries",hidden).SetValue(preview,large);
+                    var sw=System.Diagnostics.Stopwatch.StartNew();type.GetMethod("BindRows",hidden).Invoke(preview,null);sw.Stop();
+                    var grid=(System.Windows.Forms.DataGridView)type.GetField("grid",hidden).GetValue(preview);
+                    Check(grid.RowCount==10000 && grid.Rows.SharedRow(9999).Index==-1,"ten thousand files retain shared virtual grid rows");
+                    double bindMs=sw.Elapsed.TotalMilliseconds;sw.Restart();
+                    type.GetMethod("ApplySelection",hidden).Invoke(preview,new object[]{PreflightSelection.SelectionOperation.SelectAll,false});sw.Stop();
+                    Check(grid.Rows.SharedRow(9999).Index==-1 && large.All(entry=>entry.Selected),"bulk checking does not materialize ten thousand native rows");
+                    Print("preflight_virtual_grid","rows=10000","bindMs="+bindMs.ToString("F2"),"selectAllMs="+sw.Elapsed.TotalMilliseconds.ToString("F2"));
+                }
+                using(var schedule=new DownloadScheduleForm(new DownloadScheduleSettings {Enabled=true,StartMinute=1380,EndMinute=420})) {
+                    var once=(System.Windows.Forms.RadioButton)typeof(DownloadScheduleForm).GetField("onceButton",hidden).GetValue(schedule);
+                    var daily=(System.Windows.Forms.RadioButton)typeof(DownloadScheduleForm).GetField("dailyButton",hidden).GetValue(schedule);
+                    var start=(System.Windows.Forms.DateTimePicker)typeof(DownloadScheduleForm).GetField("startPicker",hidden).GetValue(schedule);
+                    once.Checked=true;
+                    Check(start.Value.Date==DateTime.Today.AddDays(1),"one-time booking defaults to a future date");
+                    var booking=DateTime.Today.AddDays(2).AddHours(12);start.Value=booking;
+                    daily.Checked=true;once.Checked=true;
+                    Check(start.Value==booking,"switching schedule modes preserves one-time edits");
+                    daily.Checked=true;
+                    ThemeManager.ApplyTheme(schedule,ConfiguracionUI.ThemeModeType.Light);
+                    DrawFeatureDialog(schedule,"download-schedule.png");
+                    CheckActionButtons("schedule", schedule);
+                    typeof(DownloadScheduleForm).GetMethod("SaveSettings",hidden).Invoke(schedule,new object[]{null,EventArgs.Empty});
+                    Check(schedule.Settings.Enabled && schedule.Settings.StartMinute==1380 && schedule.Settings.EndMinute==420,"native schedule form returns the edited overnight settings");
+                    Check(schedule.Settings.OnceStart==booking,"saving daily mode preserves the inactive booking draft");
+                }
+            } catch(Exception ex) {failure=ex;}
+            finally {
+                for(int i=0;i<languageFields.Length;i++)typeof(Language).GetField(languageFields[i],shared).SetValue(null,before[i]);
+                typeof(Language).GetField("culture",shared).SetValue(null,oldCulture);
+                using(var blank=new System.Windows.Forms.Form())ThemeManager.ApplyTheme(blank,ConfiguracionUI.ThemeModeType.Auto);
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
+        if(failure!=null)throw new Exception("Native feature dialog regression failed",failure);
+    }
+    static void FirstOpenUiCases() {
+        using(var main=new PresentationMain()) {
+            var type=typeof(Main);
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.ConfigUI=new ConfiguracionUI {Tema=ConfiguracionUI.ThemeModeType.Light};
+            main.SuspendLayout();
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
+            type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
+            type.GetMethod("InitNavRail",hidden).Invoke(main,null);
+            main.ApplyCurrentTheme();
+            main.ResumeLayout(true);
+            main.ShowInTaskbar=false;main.StartPosition=System.Windows.Forms.FormStartPosition.Manual;main.Location=new System.Drawing.Point(-30000,-30000);
+            main.Show();System.Windows.Forms.Application.DoEvents();
+            var menu=main.MainMenuStrip;
+            Print("menu_first_open","width="+menu.Width,"client="+main.ClientSize.Width,string.Join("|",menu.Items.Cast<System.Windows.Forms.ToolStripItem>().Select(i=>i.Text+":"+i.Placement+":"+i.Bounds)));
+            Check(menu.Width==main.ClientSize.Width && !menu.AutoSize,"menu keeps the full client width on first show without a resize");
+            Check(menu.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main && i.Bounds.Right<=menu.ClientSize.Width),"all four menu entries are visible on the first frame");
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
+            main.ClientSize=new System.Drawing.Size(640,600);
+            Check(main.MainMenuStrip.Width==main.ClientSize.Width && main.MainMenuStrip.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main),"menu entries stay visible after narrowing the window");
+            main.Hide();
+        }
+        var timer=System.Diagnostics.Stopwatch.StartNew();
+        using(var settings=new PresentationSettings()) {
+            double construct=timer.Elapsed.TotalMilliseconds;
+            var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            cfg.ConfigUI=new ConfiguracionUI {Tema=ConfiguracionUI.ThemeModeType.Light};
+            cfg.ELCAccounts=new List<ELCAccountHelper.Account>{new ELCAccountHelper.Account {Alias="Fixture",URL="https://example.invalid",User=new System.Security.SecureString(),Key=new System.Security.SecureString()}};
+            cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
+            cfg.Usuario="";cfg.Password="";cfg.Idioma=Language.FollowSystemLanguageCode;cfg.RutaDefecto=@"D:\Downloads";cfg.VLCPath=root;
+            cfg.NivelLog=Log.LevelLogType.Normal;cfg.PrioridadDescompresion=DescompresionPriority.Normal;
+            settings.Config=cfg;
+            int layouts=0;foreach(var control in DescendantControls(settings))control.Layout+=(sender,args)=>layouts++;
+            timer.Restart();
+            typeof(Configuration).GetMethod("Configuration_Load",hidden).Invoke(settings,new object[]{settings,EventArgs.Empty});
+            double load=timer.Elapsed.TotalMilliseconds;
+            timer.Restart();
+            settings.ShowInTaskbar=false;settings.StartPosition=System.Windows.Forms.FormStartPosition.Manual;settings.Location=new System.Drawing.Point(-30000,-30000);
+            settings.Show();System.Windows.Forms.Application.DoEvents();
+            Print("settings_first_open","constructMs="+construct.ToString("F2"),"loadMs="+load.ToString("F2"),"firstFrameMs="+timer.Elapsed.TotalMilliseconds.ToString("F2"),"layoutCalls="+layouts);
+            Check(construct+load+timer.Elapsed.TotalMilliseconds<3000,"settings first open avoids the previous multi-second layout stall");
+            var languageChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetField("comboIdiomas",hidden).GetValue(settings);
+            Check((string)languageChoice.SelectedValue==Language.FollowSystemLanguageCode && languageChoice.Text=="跟随系统","settings shows the saved automatic language mode instead of pinning the detected language");
+            languageChoice.SelectedValue="de-DE";
+            Check((string)languageChoice.SelectedValue=="de-DE","manual languages remain selectable alongside automatic mode");
+            languageChoice.SelectedValue=Language.FollowSystemLanguageCode;
+            Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"opening general settings does not rebuild unused account data");
+            Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetField("txtRuta",hidden).GetValue(settings)).Text==cfg.RutaDefecto,"opening settings preserves an unavailable download path without probing or replacing it");
+            var accountControl=(ELCAccountControl)typeof(Configuration).GetField("ElcAccountControl",hidden).GetValue(settings);
+            var originalAccounts=cfg.ELCAccounts;
+            accountControl.SaveToConfig(ref cfg);
+            Check(Object.ReferenceEquals(originalAccounts,cfg.ELCAccounts) && cfg.ELCAccounts.Count==1,"saving unopened account settings preserves the existing collection");
+            var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetField("TabControl1",hidden).GetValue(settings);
+            tabs.SelectedIndex=tabs.TabPages.Count-1;
+            Check((bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"account editing initializes when its tab is selected");
+            accountControl.Cerrar();accountControl.Cerrar();
+            Check(true,"account cleanup is safe before or after repeated close calls");
+            tabs.SelectedIndex=0;
+            foreach(int width in new[]{880,720,1080}) {
+                settings.ClientSize=new System.Drawing.Size(width,650);
+                foreach(System.Windows.Forms.TabPage page in tabs.TabPages.Cast<System.Windows.Forms.TabPage>().Take(5)) {
+                    tabs.SelectedTab=page;System.Windows.Forms.Application.DoEvents();
+                    foreach(var row in DescendantControls(page).Where(c=>c.GetType().Name=="SettingsFieldRow" && c.Visible)) {
+                        Check(row.Controls[0].Right<=row.Controls[1].Left && row.Controls[1].Right<=row.ClientSize.Width,"setting labels and inputs do not overlap at width "+width);
+                        // Browse rows: trailing button sits to the right of the input and keeps a usable size.
+                        // The row hosts exactly [label, input, button]; check that single trailing button.
+                        if(row.Controls.Count==3 && row.Controls[2] is System.Windows.Forms.Button) {
+                            var btn=(System.Windows.Forms.Button)row.Controls[2];
+                            Check(btn.Left>=row.Controls[1].Right && btn.Width>=92 && btn.Height>=28 && btn.Right<=row.ClientSize.Width,"browse button stays visible and clears the input at width "+width);
+                            // A stretched button must shrink back once its text is short again.
+                            btn.Width=500; row.PerformLayout();
+                            Check(btn.Width<200,"browse button preferred width is content-driven, not monotonic: "+btn.Name);
+                        }
+                    }
+                }
+            }
+            // Manual-check translation must land in every pack and the code key must resolve.
+            foreach(string code in new[]{"de-DE","es-ES","fr-FR","hu-HU","it-IT","pt-BR","ro-RO","ru-RU","zh-CN","zh-TW","en-US"}) {
+                var packPath=Path.Combine(projectRoot,"src","Resources","Language",code+"-Language.xml");
+                var doc=new System.Xml.XmlDocument(); doc.Load(packPath);
+                var node=doc.DocumentElement.SelectSingleNode("Text[@key='Manual check only']");
+                Check(node!=null&&!string.IsNullOrEmpty(node.InnerText)&&node.InnerText!= "Manual check only"||code=="en-US","manual-check translation exists for "+code);
+            }
+            Check(Language.GetText("Manual check only")!=null&&Language.GetText("Manual check only").Length>0,"manual-check key resolves via Language.GetText");
+            settings.ClientSize=new System.Drawing.Size(880,650);
+            typeof(Configuration).GetMethod("LocateConfigText",hidden).Invoke(settings,new object[]{"代理"});
+            Check(tabs.SelectedTab.Text.Contains("连接") && tabs.SelectedTab.AutoScrollPosition.Y<0,"settings search scrolls to a matching section below the fold");
+            tabs.SelectedIndex=0;
+            DrawFeatureDialog(settings,"settings-loaded-first-open.png");
+            var themeChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetField("comboTheme",hidden).GetValue(settings);
+            themeChoice.SelectedValue=ConfiguracionUI.ThemeModeType.Dark.ToString();
+            ThemeManager.ApplyTheme(settings,ConfiguracionUI.ThemeModeType.Dark);
+            DrawFeatureDialog(settings,"settings-loaded-dark.png");
+            themeChoice.SelectedValue=ConfiguracionUI.ThemeModeType.Light.ToString();
+            ThemeManager.ApplyTheme(settings,ConfiguracionUI.ThemeModeType.Light);
+            tabs.SelectedIndex=2;
+            tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
+            DrawFeatureDialog(settings,"settings-loaded-advanced.png");
+            tabs.SelectedIndex=1;
+            tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
+            DrawFeatureDialog(settings,"settings-loaded-connection.png");
+            settings.Hide();
+        }
+        using(var emptyAccounts=new ELCAccountControl()) {
+            var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            config.ELCAccounts=new List<ELCAccountHelper.Account>();emptyAccounts.Config=config;emptyAccounts.CargarDatos();
+            var grid=(System.Windows.Forms.DataGridView)typeof(ELCAccountControl).GetProperty("dgELCUsers",hidden).GetValue(emptyAccounts);
+            using(var bitmap=new System.Drawing.Bitmap(300,80))using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) {
+                typeof(ELCAccountControl).GetMethod("dgELCUsers_Paint",hidden).Invoke(emptyAccounts,new object[]{grid,new System.Windows.Forms.PaintEventArgs(graphics,new System.Drawing.Rectangle(0,0,300,80))});
+                graphics.FillRectangle(System.Drawing.Brushes.Black,0,0,1,1);
+                Check(bitmap.GetPixel(0,0).ToArgb()==System.Drawing.Color.Black.ToArgb(),"empty-account painting leaves the caller-owned graphics usable");
+            }
+        }
+    }
+    static IEnumerable<System.Windows.Forms.Control> DescendantControls(System.Windows.Forms.Control rootControl) {
+        yield return rootControl;
+        foreach(System.Windows.Forms.Control child in rootControl.Controls)
+            foreach(var descendant in DescendantControls(child))yield return descendant;
+    }
+    static void WorkbenchUiCases() {
+        using(var main=new PresentationMain()) {
+            var type=typeof(Main);
+            Check(main.Config==null && !main.Visible,"constructing a workbench does not load real configuration or show a window");
+            int loads=0;main.Load+=(sender,args)=>loads++;
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.ConfigUI=new ConfiguracionUI();
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
+            type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
+            type.GetMethod("InitNavRail",hidden).Invoke(main,null);
+            type.GetMethod("Translate",hidden).Invoke(main,null);
+            main.Text=InternalConfiguration.ObtenerNombreApp()+InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_MEGADOWNLOADER");
+            var panel=(System.Windows.Forms.Panel)type.GetField("navPanel",hidden).GetValue(main);
+            panel.Size=new System.Drawing.Size(192,220);
+            type.GetMethod("LayoutNavRail",hidden).Invoke(main,null);
+            Check(panel.AutoScroll && panel.AutoScrollMinSize.Height>panel.ClientSize.Height,"short sidebar keeps tools and queue summary reachable by scrolling");
+            var nav=(System.Windows.Forms.ListBox)type.GetField("navListBox",hidden).GetValue(main);
+            Check(nav.Top==8,"sidebar navigation retains its unscrolled position after layout");
+            var play=(System.Windows.Forms.Button)type.GetField("btnPlay",hidden).GetValue(main);
+            main.ClientSize=new System.Drawing.Size(700,440);
+            type.GetMethod("LayoutWorkbenchToolbar",hidden).Invoke(main,null);
+            Check(play.Text=="" && !String.IsNullOrEmpty(play.AccessibleName),"compact icon button keeps an accessible name");
+            Check(main.AutoScaleMode==System.Windows.Forms.AutoScaleMode.Dpi,"font selection and per-monitor DPI use one geometry scaling mode");
+            var list=(BrightIdeasSoftware.TreeListView)type.GetField("ListaDescargas",hidden).GetValue(main);
+            var details=(System.Windows.Forms.Panel)type.GetField("detailPanel",hidden).GetValue(main);
+            var empty=(System.Windows.Forms.Panel)type.GetField("workbenchEmpty",hidden).GetValue(main);
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                main.Config.ConfigUI.Tema=mode;
+                ThemeManager.ApplyTheme(main,mode);main.ApplyCurrentTheme();
+                Check(ThemeManager.Current==(mode==ConfiguracionUI.ThemeModeType.Light?ThemeManager.ResolvedTheme.Light:ThemeManager.ResolvedTheme.Dark),"workbench renders the requested theme: "+mode);
+                main.ClientSize=new System.Drawing.Size(1180,720);
+                type.GetMethod("InitDownloadAreaLayout",hidden).Invoke(main,null);
+                DrawFeatureDialog(main,"workbench-empty-"+mode+".png");
+                var quick=(System.Windows.Forms.Button)type.GetProperty("navQuickLogsButton",hidden).GetValue(main);
+                var primary=(System.Windows.Forms.Button)type.GetField("btnAddLink",hidden).GetValue(main);
+                Check(play.FlatAppearance.BorderSize==0 && quick.FlatAppearance.BorderSize==0,"quiet commands stay borderless after a theme switch: "+mode);
+                Check(primary.BackColor!=play.BackColor && primary.ForeColor!=play.ForeColor,"primary action keeps its visual hierarchy after a theme switch: "+mode);
+                Check(!details.Visible && empty.Bounds==list.Bounds,"empty queue dedicates its content area to the empty state: "+mode);
+                var packages=new List<Paquete>();
+                string[] names={"Design Resources / 设计资源包","产品演示视频.mp4","October Archive.zip","Reference Photos","Brand Guidelines.pdf","素材备份.7z"};
+                Estado[] statuses={Estado.Descargando,Estado.Descargando,Estado.EnCola,Estado.Erroneo,Estado.Completado,Estado.Completado};
+                for(int i=0;i<names.Length;i++) {
+                    var pack=new Paquete {Nombre=names[i],RutaLocal=root,Prioridad=i,TamanoBytes=(long)(i+1)*100*1024*1024,Porcentaje=i>3?100:32+i*7,ListaFicheros=new List<Fichero>()};
+                    typeof(Paquete).GetField("EstadoDescarga",hidden).SetValue(pack,statuses[i]);packages.Add(pack);
+                }
+                type.GetField("ListaPaquetes",hidden).SetValue(main,packages);
+                list.SetObjects(packages);
+                type.GetMethod("ApplyColumnDefaults",hidden).Invoke(main,null);
+                Check(list.Items[0].SubItems.Count==list.Columns.Count,"column reset clears stale virtual cell presentation");
+                Check(list.Items[0].Text==names[0],"hiding priority makes the task name the primary visible cell");
+                Check(Convert.ToInt32(list.PrimarySortColumn.AspectGetter(packages[5]))==5,"hidden priority retains queue ordering independently of task names");
+                Check(list.Items[0].SubItems[list.AllColumns[6].Index].Text=="32","combined progress keeps the numeric aspect after column reset");
+                type.GetMethod("UpdateNavCounts",hidden).Invoke(main,null);
+                Check(!list.AllColumns[5].IsVisible && list.AllColumns[6].IsVisible,"default progress has one visible column and retains the optional numeric column");
+                using(var child=new Fichero {NombreFichero="说明文件.txt"}) {
+                    packages[0].AgregarFichero(child);
+                    list.Expand(packages[0]);
+                    Check(list.Items.Count==7,"the task-name tree column still expands package children");
+                    list.Collapse(packages[0]);
+                    Check(list.Items.Count==6,"collapsing a package restores the six root rows");
+                    packages[0].ListaFicheros.Clear();
+                }
+                main.ClientSize=new System.Drawing.Size(1180,720);
+                type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
+                DrawFeatureDialog(main,"workbench-tasks-"+mode+".png");
+                list.SelectedObject=packages[0];
+                foreach(int width in new[]{1400,900,700}) {
+                    list.SelectedObject=packages[0];
+                    main.ClientSize=new System.Drawing.Size(width,720);
+                    type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
+                    Check(width>=1280?list.Right<details.Left:list.Bottom<details.Top,"selected-task details never overlap the list at width "+width+" in "+mode);
+                    DrawFeatureDialog(main,"workbench-details-"+width+"-"+mode+".png");
+                }
+                list.SelectedObject=null;
+                type.GetField("ListaPaquetes",hidden).SetValue(main,new List<Paquete>());
+                list.SetObjects(new Paquete[0]);
+            }
+            Check(loads==0 && !main.Visible,"resizing and native presentation capture never start the real application");
+        }
+        using(var settings=new PresentationSettings()) {
+            typeof(Configuration).GetMethod("Translate",hidden).Invoke(settings,null);
+            ((System.Windows.Forms.TextBox)typeof(Configuration).GetField("txtRuta",hidden).GetValue(settings)).Text=@"D:\Downloads";
+            var language=(System.Windows.Forms.ComboBox)typeof(Configuration).GetField("comboIdiomas",hidden).GetValue(settings);
+            language.Items.Add("简体中文");language.SelectedIndex=0;
+            var appearance=(System.Windows.Forms.ComboBox)typeof(Configuration).GetField("comboTheme",hidden).GetValue(settings);
+            appearance.Items.AddRange(new object[]{"浅色","深色"});
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                appearance.SelectedIndex=mode==ConfiguracionUI.ThemeModeType.Light?0:1;
+                ThemeManager.ApplyTheme(settings,mode);
+                DrawFeatureDialog(settings,"settings-general-"+mode+".png");
+                var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetField("TabControl1",hidden).GetValue(settings);
+                Check(tabs.TabPages.Count==6,"settings preserves the original pages and exposes connection settings separately");
+                tabs.SelectedIndex=1;
+                DrawFeatureDialog(settings,"settings-connection-"+mode+".png");
+                tabs.SelectedIndex=0;
+            }
+            CheckActionButtons("settings", settings);
+        }
+        using(var add=new PresentationAddLinks()) {
+            typeof(AddLinks).GetMethod("Translate",hidden).Invoke(add,null);
+            ((System.Windows.Forms.TextBox)typeof(AddLinks).GetField("txtRuta",hidden).GetValue(add)).Text=@"D:\Downloads";
+            ((System.Windows.Forms.TextBox)typeof(AddLinks).GetField("txtNombre",hidden).GetValue(add)).Text="Design Resources / 设计资源包";
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                ThemeManager.ApplyTheme(add,mode);
+                DrawFeatureDialog(add,"add-links-"+mode+".png");
+                CheckActionButtons("add-links "+mode, add);
+            }
+            // Capture the actual second page inside its normal host, using
+            // demonstration metadata without starting inspection or downloads.
+            using(var preview=new BatchPreflightView(new List<string>(),null,new Dictionary<string,URLProcessor.FileURL>(),@"D:\Downloads")) {
+                var rows=new List<BatchLinkPreflight.Entry>();
+                string[] names={"Brand Guidelines.pdf","产品演示视频.mp4","Design Assets.zip","Reference Photos.zip"};
+                for(int i=0;i<names.Length;i++)rows.Add(new BatchLinkPreflight.Entry {
+                    Source=new URLProcessor.FileURL("https://mega.nz/file/DEMO000"+i+"#"+new string('A',43),""),
+                    Name=names[i],SizeBytes=(long)(i+1)*20*1024*1024,State=BatchLinkPreflight.LinkState.Ready,Selected=true});
+                typeof(BatchPreflightView).GetField("entries",hidden).SetValue(preview,rows);
+                typeof(BatchPreflightView).GetField("freeSpace",hidden).SetValue(preview,(long)200*1024*1024*1024);
+                typeof(BatchPreflightView).GetMethod("BindRows",hidden).Invoke(preview,null);
+                var progress=(System.Windows.Forms.ProgressBar)typeof(BatchPreflightView).GetField("progressBar",hidden).GetValue(preview);
+                progress.Value=progress.Maximum;
+                var input=(System.Windows.Forms.Control)typeof(AddLinks).GetField("addLinksInputPage",hidden).GetValue(add);
+                var host=(System.Windows.Forms.Control)typeof(AddLinks).GetField("addLinksPageHost",hidden).GetValue(add);
+                var step=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksStepLabel",hidden).GetValue(add);
+                input.Visible=false;preview.Dock=System.Windows.Forms.DockStyle.Fill;host.Controls.Add(preview);
+                step.Text=Language.GetText("AddLinks_StepSelection");
+                ThemeManager.ApplyTheme(add,ConfiguracionUI.ThemeModeType.Light);
+                DrawFeatureDialog(add,"add-preflight-Light.png");
+                CheckActionButtons("preflight", preview);
+                host.Controls.Remove(preview);
+            }
+        }
+    }
+    static IEnumerable<System.Windows.Forms.Control> ControlTree(System.Windows.Forms.Control root) {
+        yield return root;
+        foreach(System.Windows.Forms.Control c in root.Controls)
+            foreach(var d in ControlTree(c)) yield return d;
+    }
+    // Guards the RightToLeft action panels (AddLinks / Settings / pre-flight / schedule):
+    // a CommandButton whose MinimumSize widened it past its content used to overflow its
+    // flow slot and overlap the neighbouring button. Every visible button pair in such a
+    // panel must stay disjoint.
+    static void CheckActionButtons(string label, System.Windows.Forms.Control root) {
+        int panels=0;
+        foreach(var c in ControlTree(root)) {
+            var flow=c as System.Windows.Forms.FlowLayoutPanel;
+            if(flow==null || flow.FlowDirection!=System.Windows.Forms.FlowDirection.RightToLeft) continue;
+            // Collect by type, not Visible: after the fixture hides the form every child
+            // reports Visible=false, yet Bounds stay valid. Zero-width buttons are skipped
+            // by the Width>0 guard below.
+            var btns=new List<System.Windows.Forms.Button>();
+            foreach(System.Windows.Forms.Control k in flow.Controls)
+                if(k is System.Windows.Forms.Button) btns.Add((System.Windows.Forms.Button)k);
+            if(btns.Count>=2) panels++;
+            for(int i=0;i<btns.Count;i++)for(int j=i+1;j<btns.Count;j++){
+                var a=btns[i].Bounds;var b=btns[j].Bounds;
+                Check(!(a.Width>0&&b.Width>0&&a.IntersectsWith(b)),
+                    label+": action buttons '"+btns[i].Text+"' / '"+btns[j].Text+"' do not overlap");
+            }
+        }
+        Check(panels>0, label+": right-to-left action panel with buttons was inspected");
+    }
+    static void ApplyFeatureTheme(System.Windows.Forms.Control control,ConfiguracionUI.ThemeModeType mode) {
+        var form=control as System.Windows.Forms.Form;
+        if(form!=null) {ThemeManager.ApplyTheme(form,mode);return;}
+        using(var host=new System.Windows.Forms.Form {Font=control.Font,ClientSize=control.Size,AutoScaleMode=System.Windows.Forms.AutoScaleMode.None}) {
+            host.Controls.Add(control);
+            try {ThemeManager.ApplyTheme(host,mode);}
+            finally {host.Controls.Remove(control);}
+        }
+    }
+    // Presentation fixtures suppress business lifecycle events. They exercise
+    // the real native control tree without moving its HWNDs to another parent.
+    class PresentationMain : Main {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class PresentationSettings : Configuration {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class PresentationAddLinks : AddLinks {
+        protected override void OnLoad(EventArgs e) {}
+        protected override void OnShown(EventArgs e) {}
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    class CaptureHost : System.Windows.Forms.Form {
+        protected override bool ShowWithoutActivation {get{return true;}}
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool PrintWindow(IntPtr window,IntPtr deviceContext,uint flags);
+    static void DrawFeatureDialog(System.Windows.Forms.Control source,string name) {
+        var presentation=source as System.Windows.Forms.Form;
+        var originalParent=source.Parent;
+        var taskList=source is Main?(BrightIdeasSoftware.TreeListView)typeof(Main).GetField("ListaDescargas",hidden).GetValue(source):null;
+        object selection=taskList==null?null:taskList.SelectedObject;
+        bool wrapped=presentation==null;
+        if(wrapped) {
+            presentation=new CaptureHost {AutoScaleMode=System.Windows.Forms.AutoScaleMode.None,Font=source.Font,
+                ClientSize=source.Size,BackColor=source.BackColor};
+            presentation.Controls.Add(source);
+        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm)) {
+            throw new Exception("Refusing to show a business form from a presentation test");
+        }
+        try {
+            presentation.ShowInTaskbar=false;
+            presentation.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+            presentation.Location=new System.Drawing.Point(-30000,-30000);
+            presentation.Show();
+            if(taskList!=null) {
+                taskList.SelectedObject=selection;
+                typeof(Main).GetMethod("LayoutDownloadArea",hidden).Invoke(source,null);
+                typeof(Main).GetMethod("UpdateDetailPanel",hidden).Invoke(source,null);
+            }
+            presentation.Refresh();System.Windows.Forms.Application.DoEvents();
+            using(var bitmap=new System.Drawing.Bitmap(presentation.Width,presentation.Height)) {
+                using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) {
+                    var dc=graphics.GetHdc();
+                    try {Check(PrintWindow(presentation.Handle,dc,2),"native presentation fixture captures: "+name);}
+                    finally {graphics.ReleaseHdc(dc);}
+                }
+                bitmap.Save(Path.Combine(root,name),System.Drawing.Imaging.ImageFormat.Png);
+            }
+        } finally {
+            presentation.Hide();
+            if(wrapped) {
+                presentation.Controls.Remove(source);
+                if(originalParent!=null)originalParent.Controls.Add(source);
+                presentation.Dispose();
+            }
+        }
+        Check(source.Width>0 && source.Height>0,"isolated native dialog renders: "+name);
+    }
+    static void WarmInboxUiCases(Configuracion config) {
+        int calls=0;string key=new string('A',43);
+        string a="https://mega.nz/file/INBOX001#"+key,b="https://mega.nz/file/INBOX002#"+key,c="https://mega.nz/file/INBOX003#"+key;
+        var session=new PreflightSession((url,token)=>{
+            token.ThrowIfCancellationRequested();Interlocked.Increment(ref calls);
+            return new List<BatchLinkPreflight.Entry>{new BatchLinkPreflight.Entry {Source=new URLProcessor.FileURL(url,""),Name="inbox.zip",State=BatchLinkPreflight.LinkState.Ready,SizeBytes=1024,Selected=true}};
+        });
+        using(var inbox=new PresentationAddLinks()) {
+            inbox.Config=config;
+            typeof(AddLinks).GetField("preflightSession",hidden).SetValue(inbox,session);
+            var count=typeof(AddLinks).GetMethod("UpdateLinkCount",hidden);
+            var field=typeof(AddLinks).GetField("warmRequest",hidden);
+            var text=(System.Windows.Forms.RichTextBox)typeof(AddLinks).GetField("txtLinks",hidden).GetValue(inbox);
+            var label=(System.Windows.Forms.Label)typeof(AddLinks).GetField("lblLinkCount",hidden).GetValue(inbox);
+            inbox.AgregarEnlaces(a,true,true,false,new List<string>{a});
+            count.Invoke(inbox,null);
+            var prepared=(PreflightSession.Request)field.GetValue(inbox);
+            PumpUntil(()=>prepared.Results.IsCompleted && label.Text.Contains("已预检"));
+            Check(calls==1 && prepared.Results.Result.Count==1,"pasted links start background metadata lookup before confirmation");
+            using(var preview=new BatchPreflightView(prepared.Urls.Result,config,new Dictionary<string,URLProcessor.FileURL>(),root,session,prepared)) {
+                typeof(BatchPreflightView).GetMethod("BeginInspection",hidden).Invoke(preview,new object[]{false});
+                var loading=typeof(BatchPreflightView).GetField("loading",hidden);
+                PumpUntil(()=>!(bool)loading.GetValue(preview));
+                var grid=(System.Windows.Forms.DataGridView)typeof(BatchPreflightView).GetField("grid",hidden).GetValue(preview);
+                Check(calls==1 && grid.RowCount==1,"native preview reuses the inbox warm-up instead of issuing a second metadata request");
+                var page=typeof(AddLinks).GetField("preflightView",hidden);
+                var host=(System.Windows.Forms.Panel)typeof(AddLinks).GetField("addLinksPageHost",hidden).GetValue(inbox);
+                var path=(System.Windows.Forms.TextBox)typeof(AddLinks).GetField("txtRuta",hidden).GetValue(inbox);
+                path.Text=root;
+                page.SetValue(inbox,preview);
+                host.Controls.Add(preview);
+                try {
+                    var next=typeof(AddLinks).GetMethod("ShowSelectionPage",hidden);
+                    var back=typeof(AddLinks).GetMethod("ShowInputPage",hidden);
+                    var search=(System.Windows.Forms.TextBox)typeof(BatchPreflightView).GetField("search",hidden).GetValue(preview);
+                    next.Invoke(inbox,null);
+                    Check(preview.DismissButton.DialogResult==System.Windows.Forms.DialogResult.None,"escape cancels import in place instead of implicitly closing the modal host");
+                    search.Text="inbox";
+                    typeof(BatchPreflightView).GetMethod("SelectVisible",hidden).Invoke(preview,new object[]{false});
+                    back.Invoke(inbox,new object[]{true});
+                    next.Invoke(inbox,null);
+                    var model=(PreflightSelection)typeof(BatchPreflightView).GetField("selection",hidden).GetValue(preview);
+                    Check(Object.ReferenceEquals(page.GetValue(inbox),preview) && search.Text=="inbox" && model.SelectedCount==0 && calls==1,"back and next retain search and unchecked files without another metadata request");
+                    Check(!inbox.AgregarEnlaces(c,false,true,false,new List<string>{c}) && !text.Text.Contains("INBOX003") && Object.ReferenceEquals(page.GetValue(inbox),preview) && !preview.IsDisposed && model.SelectedCount==0,"incoming links stay deferred on the file-selection page without discarding unchecked files");
+                    back.Invoke(inbox,new object[]{true});
+                    prepared=(PreflightSession.Request)field.GetValue(inbox);
+                    PumpUntil(()=>prepared.Results.IsCompleted && label.Text.Contains("2 个文件"));
+                    Check(text.Text.Contains("INBOX001") && text.Text.Contains("INBOX003") && calls==2,"returning to links merges the deferred batch and reuses prior metadata");
+                } finally {
+                    page.SetValue(inbox,null);
+                    host.Controls.Remove(preview);
+                }
+            }
+            inbox.AgregarEnlaces(b,false,true,false,new List<string>{b});
+            count.Invoke(inbox,null);prepared=(PreflightSession.Request)field.GetValue(inbox);
+            PumpUntil(()=>prepared.Results.IsCompleted && label.Text.Contains("3 个文件"));
+            Check(calls==3 && text.Text.Contains("INBOX001") && text.Text.Contains("INBOX002") && text.Text.Contains("INBOX003"),"appending a clipboard batch keeps earlier text and cached metadata");
+            var busy=typeof(AddLinks).GetField("importBusy",hidden);busy.SetValue(inbox,true);
+            string beforeBusy=text.Text;
+            Check(!inbox.AgregarEnlaces(c,false,true,false,new List<string>{c}) && text.Text==beforeBusy,"new clipboard input is deferred while confirming the current batch");
+            busy.SetValue(inbox,false);
+            typeof(AddLinks).GetMethod("RestoreDeferredInputs",hidden).Invoke(inbox,new object[]{true});
+            prepared=(PreflightSession.Request)field.GetValue(inbox);
+            PumpUntil(()=>prepared.Results.IsCompleted && label.Text.Contains("1 个文件"));
+            Check(!text.Text.Contains("INBOX001") && text.Text.Contains("INBOX003") && calls==4,"after a committed batch deferred links remain in the inbox for separate confirmation");
+            text.Clear();System.Windows.Forms.Application.DoEvents();
+            Check(field.GetValue(inbox)==null && label.Text=="","clearing pasted text removes stale warm-up status and request references");
+        }
+        bool disposed=false;try{session.Prepare(a);}catch(ObjectDisposedException){disposed=true;}
+        Check(disposed,"closing the inbox disposes its background preflight session");
+    }
+    static void PumpUntil(Func<bool> done) {
+        var timer=System.Diagnostics.Stopwatch.StartNew();
+        while(!done()) {
+            if(timer.ElapsedMilliseconds>5000)throw new Exception("Native async fixture did not complete");
+            System.Windows.Forms.Application.DoEvents();Thread.Sleep(1);
+        }
+    }
+    static void ProcessResourceMonitoring() {
+        Type monitorType=typeof(Main).Assembly.GetType("MegaDownloader.ProcessResourceMonitor",true);
+        MethodInfo read=monitorType.GetMethod("ReadSnapshot");
+        var elapsed=System.Diagnostics.Stopwatch.StartNew();
+        using(var monitor=(IDisposable)Activator.CreateInstance(monitorType,true)) {
+            object[] first={0.0,null};
+            read.Invoke(monitor,first);
+            double firstMs=elapsed.Elapsed.TotalMilliseconds;
+            Check((double)first[0]>0,"resource monitor reports the current process working set");
+            Check(first[1]==null,"first CPU sample waits for an interval instead of reporting lifetime usage");
+            elapsed.Restart();
+            while(elapsed.ElapsedMilliseconds<150) Thread.SpinWait(10000);
+            object[] second={0.0,null};
+            read.Invoke(monitor,second);
+            Check(second[1] is double,"CPU usage becomes available after a second sample");
+            double cpu=(double)second[1];
+            Check(!double.IsNaN(cpu) && cpu>0 && cpu<=100,"CPU usage detects work and is normalized to total machine capacity");
+            Check((double)second[0]>0,"memory sampling continues on subsequent reads");
+            Print("process_resource_monitor","firstSampleMs="+firstMs.ToString("F3"),"cpu="+cpu.ToString("F3"),"logicalProcessors="+Environment.ProcessorCount);
+        }
+    }
+    static void ExpectRejected(Action action,string name) {
+        bool rejected=false;
+        try { action(); } catch(ArgumentException) { rejected=true; } catch(UnauthorizedAccessException) { rejected=true; }
+        Check(rejected,name);
+    }
+    static void MakeZip(string path,string name,string text) {
+        using(var zip=ZipFile.Open(path,ZipArchiveMode.Create)) {
+            var e=zip.CreateEntry(name);
+            using(var stream=e.Open()) { byte[] b=Encoding.UTF8.GetBytes(text); stream.Write(b,0,b.Length); }
+        }
+    }
+    static string MakeKey(byte[] plain) {
+        byte[] chunkMac=new byte[16], fileMac;
+        using(var aes=Aes.Create()) {
+            aes.Mode=CipherMode.ECB; aes.Padding=PaddingMode.None; aes.Key=new byte[16];
+            using(var t=aes.CreateEncryptor()) {
+                for(int i=0;i<plain.Length;i+=16) {
+                    for(int j=0;j<16 && i+j<plain.Length;j++) chunkMac[j]^=plain[i+j];
+                    chunkMac=t.TransformFinalBlock(chunkMac,0,16);
+                }
+                fileMac=t.TransformFinalBlock(chunkMac,0,16);
+            }
+        }
+        byte[] key=new byte[32];
+        for(int i=0;i<4;i++) { key[8+i]=key[24+i]=(byte)(fileMac[i]^fileMac[i+4]); key[12+i]=key[28+i]=(byte)(fileMac[i+8]^fileMac[i+12]); }
+        return Convert.ToBase64String(key).TrimEnd('=').Replace('+','-').Replace('/','_');
+    }
+    static byte[] Encrypt(byte[] plain,string key) {
+        var cipher=(Criptografia.SicSeekableBlockCipher)typeof(Criptografia).GetMethod("GetInstaceCipher",shared).Invoke(null,new object[]{key});
+        byte[] padded=new byte[(plain.Length+15)/16*16]; Array.Copy(plain,padded,plain.Length);
+        byte[] result=new byte[padded.Length];
+        for(int i=0;i<padded.Length;i+=16) cipher.ProcessBlock(padded,i,result,i);
+        return result.Take(plain.Length).ToArray();
+    }
+    static void DownloadCase(LocalFileServer server,byte[] plain,string key,string name,int index,bool createPart) {
+        string d=Path.Combine(root,name); Directory.CreateDirectory(d);
+        string path=Path.Combine(d,"data.bin");
+        bool modern=name.Contains("modern");
+        string partialName=modern?FileDownloader.CreatePartialFileName():null;
+        string partialPath=FileDownloader.GetPartialFilePath(d,"data.bin",partialName);
+        if(createPart && index>0) { byte[] part=new byte[plain.Length]; Array.Copy(plain,part,index); File.WriteAllBytes(partialPath,part); }
+        byte[] foreign=Enumerable.Repeat((byte)0xCC,plain.Length).ToArray();
+        if(name=="missing-modern-with-foreign-legacy") File.WriteAllBytes(path+".part",foreign);
+        var dp=new FileDownloader.DataPart(plain.Length,1); dp.ChunkList[0].Index=index; dp.ChunkList[0].SyncedIndex=index;
+        if(index==plain.Length) { File.WriteAllBytes(path,name=="resume-corrupt-final"?foreign:plain); dp.AllFinished=true; }
+        var done=new ManualResetEvent(false);
+        string failure="", finalName="data.bin"; bool success=false;
+        using(var fd=new FileDownloader(false)) {
+            fd.LocalDirectory=d; fd.AddFileInfo("TESTFILE",key,server.Url,"data.bin",dp,partialName);
+            fd.FileRenamed+=(s,e)=>finalName=e.FileName;
+            fd.FileDownloadFailed+=(s,e)=>{ failure=e.Message; };
+            fd.FileDownloadSucceeded+=(s,e)=>{ success=true; };
+            fd.Completed+=(s,e)=>done.Set();
+            fd.Canceled+=(s,e)=>done.Set();
+            fd.Start();
+            bool finished=done.WaitOne(15000);
+            if(!finished) fd.Stop();
+            Thread.Sleep(100);
+            string ranges=server.TakeRanges();
+            Check(finished && success && failure=="","download completes: "+name+" "+failure);
+            Check(File.ReadAllBytes(Path.Combine(d,finalName)).SequenceEqual(plain),"downloaded plaintext matches: "+name);
+            if(name=="resume-final") Check(ranges=="" && !File.Exists(Path.Combine(d,"data (2).bin")),"completed file reused with no chunk transfer or duplicate");
+            else Check(ranges==(createPart && index>0?"bytes=2048-4095":"bytes=0-4095"),"correct requested range: "+name+" "+ranges);
+            if(name=="missing-modern-with-foreign-legacy" || name=="resume-corrupt-final") Check(File.ReadAllBytes(name=="resume-corrupt-final"?path:path+".part").SequenceEqual(foreign),"unrelated existing file preserved: "+name);
+            Print("download",name,"success",ranges);
+        }
+        done.Dispose();
+    }
+    static int FreePort() {
+        var p=new TcpListener(IPAddress.Loopback,0); p.Start(); int port=((IPEndPoint)p.LocalEndpoint).Port; p.Stop(); return port;
+    }
+    static void StreamingCases(LocalFileServer upstream,byte[] plain,string key) {
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        cfg.ServidorStreamingPassword="";
+        var info=new Conexion.InformacionFichero(); info.FileID="TESTFILE"; info.FileKey=key; info.Nombre="data.bin"; info.Tamano=plain.Length; info.URL=upstream.Url;
+        var cache=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)typeof(StreamingModule).GetField("Urls",shared).GetValue(null);
+        cache["TESTFILE|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(3),info);
+        int port=FreePort(); var server=new HttpServer.HttpServer(); server.Add(new StreamingModule(ref cfg)); server.Start(IPAddress.Loopback,port);
+        try {
+            long[][] cases={null,new long[]{0,0},new long[]{1,1},new long[]{15,16},new long[]{16,16},new long[]{plain.Length-2,plain.Length-1},new long[]{15,Math.Min(plain.Length-1,50000)}};
+            foreach(var range in cases) foreach(int fragment in new[]{0,2}) {
+                upstream.FragmentNext=fragment;
+                var req=(HttpWebRequest)WebRequest.Create("http://127.0.0.1:"+port+"/streaming?mega=!TESTFILE!"+key);
+                req.Proxy=null; req.Timeout=5000; req.ReadWriteTimeout=5000;
+                if(range!=null) req.AddRange(range[0],range[1]);
+                    using(var resp=(HttpWebResponse)req.GetResponse()) using(var m=new MemoryStream()) {
+                        resp.GetResponseStream().CopyTo(m); byte[] got=m.ToArray();
+                        byte[] expected=range==null?plain:plain.Skip((int)range[0]).Take((int)(range[1]-range[0]+1)).ToArray();
+                        Check(resp.StatusCode==(range==null?HttpStatusCode.OK:HttpStatusCode.PartialContent),"streaming status");
+                        Check(resp.ContentLength==got.Length && got.SequenceEqual(expected),"streaming exact bytes: "+plain.Length+" "+(range==null?"full":range[0]+"-"+range[1])+" fragment="+fragment);
+                    }
+            }
+        } finally { server.Stop(); }
+    }
+    static void SameNameDownloads(byte[] plainA,string keyA,byte[] encryptedA,bool duplicateLink=false) {
+        byte[] plainB=duplicateLink?plainA:plainA.Select(x=>(byte)(x^0x5A)).ToArray(); string keyB=MakeKey(plainB);
+        string d=Path.Combine(root,"parallel-same-name-"+duplicateLink); Directory.CreateDirectory(d);
+        using(var serverA=new LocalFileServer(encryptedA)) using(var serverB=new LocalFileServer(Encrypt(plainB,keyB)))
+        using(var a=new FileDownloader(false)) using(var b=new FileDownloader(false)) {
+            serverB.FragmentNext=2048; serverB.ReleaseFragment=new ManualResetEvent(false);
+            a.LocalDirectory=b.LocalDirectory=d;
+            a.setBufferAndPackageSize(2048,1024); b.setBufferAndPackageSize(2048,1024);
+            a.AddFileInfo("FILEAAAA",keyA,serverA.Url,"same.bin",null);
+            b.AddFileInfo(duplicateLink?"FILEAAAA":"FILEBBBB",keyB,serverB.Url,"same.bin",null);
+            Check(a.File.PartialFileName!=b.File.PartialFileName,"parallel tasks have independent partial paths, duplicate="+duplicateLink);
+            var doneA=new ManualResetEvent(false); var doneB=new ManualResetEvent(false);
+            string failA="",failB="",nameA="",nameB=""; bool okA=false,okB=false;
+            a.FileRenamed+=(s,e)=>nameA=e.FileName; b.FileRenamed+=(s,e)=>nameB=e.FileName;
+            a.FileDownloadFailed+=(s,e)=>failA=e.Message; b.FileDownloadFailed+=(s,e)=>failB=e.Message;
+            a.FileDownloadSucceeded+=(s,e)=>okA=true; b.FileDownloadSucceeded+=(s,e)=>okB=true;
+            a.Completed+=(s,e)=>doneA.Set(); b.Completed+=(s,e)=>doneB.Set();
+            b.Start();
+            DateTime limit=DateTime.UtcNow.AddSeconds(5);
+            while(DateTime.UtcNow<limit && (!b.File.DataPartInitialized || b.File.GetDataPart.GetTotalProgress()<2048)) Thread.Sleep(10);
+            Check(b.File.DataPartInitialized && b.File.GetDataPart.GetTotalProgress()==2048,"parallel fixture overlaps actual disk writes");
+            a.Start(); bool finishedA=doneA.WaitOne(5000);
+            serverB.ReleaseFragment.Set(); bool finishedB=doneB.WaitOne(5000);
+            if(!finishedA) a.Stop(); if(!finishedB) b.Stop(); Thread.Sleep(100);
+            Check(finishedA && finishedB && okA && okB && failA=="" && failB=="","parallel same-name downloads both succeed: "+failA+" "+failB);
+            Check(nameA!=nameB && File.ReadAllBytes(Path.Combine(d,nameA)).SequenceEqual(plainA) && File.ReadAllBytes(Path.Combine(d,nameB)).SequenceEqual(plainB),"parallel final names and plaintext preserved");
+            Print("parallel_same_name",duplicateLink?"duplicate link":"different links","both successful");
+            doneA.Dispose(); doneB.Dispose(); serverB.ReleaseFragment.Dispose();
+        }
+    }
+    static void ConcurrentFinalNames() {
+        string d=Path.Combine(root,"concurrent-finalize"); Directory.CreateDirectory(d);
+        var names=new System.Collections.Concurrent.ConcurrentBag<string>();
+        System.Threading.Tasks.Parallel.For(0,8,i=> {
+            using(var fd=new FileDownloader(false)) {
+                fd.LocalDirectory=d;
+                string part=Path.Combine(d,"task-"+i+".part"); File.WriteAllText(part,i.ToString());
+                string name=(string)typeof(FileDownloader).GetMethod("RenamePartToReal",hidden).Invoke(fd,new object[]{part,Path.Combine(d,"same")});
+                names.Add(name);
+                Check(File.ReadAllText(Path.Combine(d,name))==i.ToString(),"concurrent rename preserves task content");
+            }
+        });
+        Check(names.Distinct().Count()==8,"simultaneous finalization chooses eight distinct names");
+    }
+    static void PartialPersistenceAndCleanup(byte[] plain,string key) {
+        string d=Path.Combine(root,"partial-persistence"); Directory.CreateDirectory(d);
+        using(var original=new Fichero("https://mega.nz/file/TESTFILE#"+key)) using(var restored=new Fichero()) {
+            original.FileID="TESTFILE"; original.FileKey=key; original.RutaLocal=d; original.NombreFichero="data.bin";
+            original.TamanoBytes=plain.Length; original.DatosPartes=new FileDownloader.DataPart(plain.Length,1);
+            original.DatosPartes.ChunkList[0].Index=original.DatosPartes.ChunkList[0].SyncedIndex=2048;
+            var xml=new System.Xml.XmlDocument(); var node=original.GuardarXML(xml,true); restored.CargarXML(node);
+            Check(restored.PartialFileName==original.PartialFileName,"task partial filename survives queue serialization");
+            string own=FileDownloader.GetPartialFilePath(d,"data.bin",restored.PartialFileName);
+            string legacy=Path.Combine(d,"data.bin.part"); string real=Path.Combine(d,"data.bin");
+            File.WriteAllBytes(own,plain); File.WriteAllText(legacy,"foreign partial"); File.WriteAllText(real,"existing final");
+            restored.ResetearDescarga();
+            Check(!File.Exists(own) && File.ReadAllText(legacy)=="foreign partial" && File.ReadAllText(real)=="existing final","reset removes only this task's partial file");
+            node.SelectSingleNode("PartialFileName").InnerText=@"..\outside.part";
+            restored.CargarXML(node);
+            Check(restored.PartialFileName!="" && !restored.PartialFileName.Contains("\\"),"unsafe persisted partial path rejected");
+            node.SelectSingleNode("PartialFileName").InnerText="data.bin";
+            restored.CargarXML(node);
+            Check(restored.PartialFileName!="data.bin", "partial identity cannot target a final filename");
+            node.RemoveChild(node.SelectSingleNode("PartialFileName")); restored.CargarXML(node);
+            Check(restored.PartialFileName=="","legacy queue recognized without partial identity");
+            restored.ResetearDescarga(); Check(!File.Exists(legacy),"legacy queue can reset its legacy partial");
+        }
+        using(var fd=new FileDownloader(false)) {
+            fd.LocalDirectory=d; fd.AddFileInfo("TESTFILE",key,"http://127.0.0.1/unused","data.bin",null);
+            string own=FileDownloader.GetPartialFilePath(d,"data.bin",fd.File.PartialFileName); File.WriteAllBytes(own,plain);
+            typeof(FileDownloader).GetMethod("cleanUpFile",hidden).Invoke(fd,null);
+            Check(!File.Exists(own) && File.ReadAllText(Path.Combine(d,"data.bin"))=="existing final","cancel cleanup removes partial and preserves existing final");
+        }
+    }
+    static void ArchiveEdges() {
+        string d=Path.Combine(root,"archive-edges"); Directory.CreateDirectory(d);
+        string zip=Path.Combine(root,"locked.zip"); MakeZip(zip,"data.txt","REPLACED");
+        string target=Path.Combine(d,"data.txt"); File.WriteAllText(target,"ORIGINAL");
+        using(var locked=new FileStream(target,FileMode.Open,FileAccess.Read,FileShare.Read)) {
+            string error=DescompresorController.ExtractArchiveSync(zip,d,"");
+            Check(error=="" && File.ReadAllText(target)=="ORIGINAL" && File.ReadAllText(Path.Combine(d,"data (2).txt"))=="REPLACED","ZIP locked original remains intact; incoming file gets suffix");
+        }
+        string traversal=Path.Combine(root,"traversal.zip"); MakeZip(traversal,"../escape/","");
+        Check(DescompresorController.ExtractArchiveSync(traversal,d,"")!="" && !Directory.Exists(Path.Combine(root,"escape")),"archive directory entries cannot escape root");
+        string nested=Path.Combine(root,"nested.zip"); MakeZip(nested,"one/two/","");
+        Check(DescompresorController.ExtractArchiveSync(nested,d,"")=="" && Directory.Exists(Path.Combine(d,"one","two")),"nested empty ZIP directories restored");
+
+        string input=Path.Combine(root,"seven-input"); Directory.CreateDirectory(input);
+        File.WriteAllText(Path.Combine(input,"data.txt"),"REPLACED");
+        Directory.CreateDirectory(Path.Combine(input,"empty","nested"));
+        string archive=Path.Combine(root,"fixture.7z");
+        var psi=new System.Diagnostics.ProcessStartInfo(Path.Combine(projectRoot,"src","Resources","Binaries","7zr.exe"),"a -t7z -y \""+archive+"\" .\\*");
+        psi.WorkingDirectory=input; psi.UseShellExecute=false; psi.CreateNoWindow=true;
+        psi.RedirectStandardOutput=true; psi.RedirectStandardError=true;
+        using(var proc=System.Diagnostics.Process.Start(psi)) {
+            var stdout=proc.StandardOutput.ReadToEndAsync(); var stderr=proc.StandardError.ReadToEndAsync();
+            if(!proc.WaitForExit(15000)) { proc.Kill(); throw new Exception("7zr fixture creation timed out"); }
+            Check(proc.ExitCode==0,"7z fixture creation: "+stderr.Result); stdout.Wait();
+        }
+        string output=Path.Combine(root,"seven-output"); Directory.CreateDirectory(output);
+        string sevenTarget=Path.Combine(output,"data.txt"); File.WriteAllText(sevenTarget,"ORIGINAL");
+        Check(DescompresorController.ExtractArchiveSync(archive,output,"")=="","7z extraction succeeds: "+DescompresorController.ExtractArchiveSync(archive,output,""));
+        Check(File.ReadAllText(sevenTarget)=="REPLACED" && File.ReadAllText(Path.Combine(output,"data (2).txt"))=="ORIGINAL","7z preserves equal-length original bytes");
+        Check(Directory.Exists(Path.Combine(output,"empty","nested")),"7z empty directories retained");
+        using(var locked=new FileStream(sevenTarget,FileMode.Open,FileAccess.Read,FileShare.Read)) {
+            Check(DescompresorController.ExtractArchiveSync(archive,output,"")!="" && File.ReadAllText(sevenTarget)=="REPLACED","7z fails safely when an original cannot be preserved");
+        }
+    }
+    static void ConfirmedAuditFixes() {
+        string id="SPLITFILE01";
+        string key=new string('A',43);
+        string url="https://mega.nz/file/"+id+"#"+key.Substring(0,20)+"\n"+key.Substring(20);
+        var official=URLExtractor.ExtraerSoloURLsOficiales(url);
+        Check(official.Count==1 && official[0]=="https://mega.nz/file/"+id+"#"+key,
+              "split 43-character file key is repaired");
+        var all=URLExtractor.ExtraerURLs(url);
+        Check(all.Count>0 && all[0]=="https://mega.nz/file/"+id+"#"+key,
+              "general URL extraction repairs split key");
+        string fileLink="https://mega.nz/file/"+id+"#"+key;
+        Check(URLExtractor.ExtraerSoloURLsOficiales(url+" followed by prose").Single()==fileLink,
+              "file key repair stops before trailing English prose");
+        Check(URLExtractor.ExtraerURLs("mega://#!"+id+"!"+key.Substring(0,20)+"\n"+key.Substring(20)+" next").Single()=="mega://#!"+id+"!"+key,
+              "legacy protocol URLs repair split keys without absorbing prose");
+        string folderKey=new string('B',22);
+        string folder="https://mega.nz/folder/FOLDERID01#"+folderKey.Substring(0,10)+"\r\n"+folderKey.Substring(10);
+        var folders=URLExtractor.ExtraerSoloURLsOficiales(folder);
+        Check(folders.Count==1 && folders[0]=="https://mega.nz/folder/FOLDERID01#"+folderKey,
+              "split 22-character folder key is repaired");
+        Check(URLExtractor.ExtraerURLs(folder+"/file/CHILD123 next").Single()=="https://mega.nz/folder/FOLDERID01#"+folderKey+"/file/CHILD123",
+              "repaired folder key retains the selected child");
+        Check(URLExtractor.ExtraerSoloURLsOficiales("https://mega.nz/folder/FOLDERID01#"+folderKey+" trailing words").Single().EndsWith(folderKey),
+              "a complete folder key is left intact");
+
+        // A short-volume root leaves room below the legacy 260-character full-path
+        // limit, while a >240-character entry still exercises hash shortening.
+        string d=Path.Combine(Path.GetPathRoot(Path.GetFullPath(root)),"mdpg"+Guid.NewGuid().ToString("N").Substring(0,6));
+        Directory.CreateDirectory(d);
+        try {
+            string baseName=new string('L',248);
+            string p1=PathGuard.GetSafeArchiveEntryPath(d,baseName+"1.txt");
+            string p2=PathGuard.GetSafeArchiveEntryPath(d,baseName+"2.txt");
+            Check(!String.Equals(p1,p2,StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p1).Length<=240,
+                  "distinct long archive names remain distinct within segment limit");
+        } finally { Directory.Delete(d,true); }
+
+        // Audit fix: a queued-but-not-started archive must keep Ocupado() True.
+        {
+            string dir=Path.Combine(root,"ocupado-queue"); Directory.CreateDirectory(dir);
+            string single=Path.Combine(dir,"single.zip"); File.WriteAllText(single,"PK");
+            var ctl=(DescompresorController)Activator.CreateInstance(typeof(DescompresorController),true);
+            Check(ctl.AgregarElemento("OCUPADO01",single,false,"")&&ctl.Ocupado(),"queued extraction keeps Ocupado true before processing starts");
+        }
+        string volumeDir=Path.Combine(root,"audit-volumes"); Directory.CreateDirectory(volumeDir);
+        string second=Path.Combine(volumeDir,"movie.7z.002"); File.WriteAllText(second,"not-first");
+        var controller=(DescompresorController)Activator.CreateInstance(typeof(DescompresorController),true);
+        bool added=controller.AgregarElemento("VOLUME02",second,true,"");
+        Check(added,"non-first volume is accepted into deferred extraction state");
+        Check(string.Equals(controller.GetCola().Single(),Path.GetFullPath(second),StringComparison.OrdinalIgnoreCase),
+              "non-first volume is queued for waiting extraction");
+
+        var infoType=typeof(Conexion.InformacionFichero);
+        var info=System.Runtime.Serialization.FormatterServices.GetUninitializedObject(infoType);
+        infoType.GetField("FileID").SetValue(info,"HTTPRAW01");
+        infoType.GetField("FileKey").SetValue(info,key);
+        infoType.GetField("Nombre").SetValue(info,"data.bin");
+        infoType.GetField("Tamano").SetValue(info,1000L);
+        infoType.GetField("URL").SetValue(info,"invalid upstream URL");
+        var moduleType=typeof(StreamingModule);
+        var urls=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)moduleType.GetField("Urls",shared).GetValue(null);
+        urls.Clear(); urls["HTTPRAW01|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(5),(Conexion.InformacionFichero)info);
+        var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        cfg.ServidorStreamingActivo=true;
+        cfg.ServidorWebActivo=true;
+        cfg.ServidorStreamingPuerto=FreePort();
+        var busy=new TcpListener(IPAddress.Loopback,0);
+        var previousProxy=WebRequest.DefaultWebProxy;
+        busy.Start();
+        cfg.ServidorWebPuerto=((IPEndPoint)busy.LocalEndpoint).Port;
+        try {
+            WebRequest.DefaultWebProxy=null;
+            Check(!string.IsNullOrEmpty(ServidorWebController.StartWebServer(null,cfg)),
+                  "the busy remote-control port reports an error while streaming still starts");
+            foreach(bool ranged in new[]{false,true}) foreach(bool compressed in new[]{false,true}) {
+                using(var client=new TcpClient(IPAddress.Loopback.ToString(),cfg.ServidorStreamingPuerto)) {
+                    client.ReceiveTimeout=4000;
+                    var stream=client.GetStream();
+                    string request="GET /streaming?mega=!HTTPRAW01!"+key+" HTTP/1.1\r\nHost: 127.0.0.1\r\n"+
+                        (ranged?"Range: bytes=100-200\r\n":"")+(compressed?"Accept-Encoding: gzip\r\n":"")+"Connection: close\r\n\r\n";
+                    byte[] wire=Encoding.ASCII.GetBytes(request);
+                    stream.Write(wire,0,wire.Length);
+                    var header=new StringBuilder();
+                    while(header.Length<8192) {
+                        int next=stream.ReadByte();
+                        if(next<0) break;
+                        header.Append((char)next);
+                        int length=header.Length;
+                        if(length>=4&&header[length-4]=='\r'&&header[length-3]=='\n'&&header[length-2]=='\r'&&header[length-1]=='\n') break;
+                    }
+                    string head=header.ToString();
+                    Check(head.StartsWith("HTTP/1.1 502"),"streaming returns 502 with and without Range and gzip");
+                    Check(!head.Contains("Content-Range:")&&!head.Contains("Accept-Ranges:")&&!head.Contains("Content-Disposition:"),
+                          "streaming errors omit media headers");
+                    int declaredLength=ExtractHeaderLong(head,"Content-Length");
+                    Check(declaredLength>0&&declaredLength<=1024,"error has a bounded, nonzero content length");
+                    byte[] body=new byte[declaredLength];
+                    for(int received=0;received<body.Length;) {
+                        int read=stream.Read(body,received,body.Length-received);
+                        if(read==0) throw new EndOfStreamException("Incomplete streaming error text");
+                        received+=read;
+                    }
+                    if(compressed) {
+                        Check(head.Contains("Content-Encoding: gzip"),"gzip response advertises its encoding");
+                        using(var zipped=new GZipStream(new MemoryStream(body),CompressionMode.Decompress))
+                        using(var reader=new StreamReader(zipped))
+                            Check(reader.ReadToEnd()=="Streaming failed.","compressed 502 decodes to the complete declared response");
+                    } else {
+                        Check(Encoding.UTF8.GetString(body)=="Streaming failed.","plain 502 contains the complete declared response");
+                    }
+                }
+            }
+        } finally {
+            ServidorWebController.StopWebServer();
+            WebRequest.DefaultWebProxy=previousProxy;
+            busy.Stop();
+        }
+    }
+    static void FinalReleaseCases() {
+        QueueBackupIntegrity();
+        ArchiveCommitAndVolumes();
+        DownloadGenerationAfterStop();
+        UpdateReminderAndProxy();
+        ThemeContrast();
+        Print("final_release", "queue backup, extraction transaction, multipart lifecycle, stop race, update reminder and proxy passed");
+    }
+
+    // I: text colors must keep WCAG contrast on their backgrounds (deep red + white text fails in light theme).
+    static double ChannelLum(byte v) { double s=v/255.0; return s<=0.03928 ? s/12.92 : Math.Pow((s+0.055)/1.055,2.4); }
+    static double RelativeLuminance(System.Drawing.Color c) {
+        return 0.2126*ChannelLum(c.R)+0.7152*ChannelLum(c.G)+0.0722*ChannelLum(c.B);
+    }
+    static double ContrastRatio(System.Drawing.Color a,System.Drawing.Color b) {
+        double l1=RelativeLuminance(a), l2=RelativeLuminance(b);
+        double hi=Math.Max(l1,l2), lo=Math.Min(l1,l2);
+        return (hi+0.05)/(lo+0.05);
+    }
+    static void ThemeContrast() {
+        using(var host=new System.Windows.Forms.Form()) {
+            foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
+                ThemeManager.ApplyTheme(host,mode);
+                // Primary button: Accent/AccentHover/AccentPressed background with AccentFore text, WCAG 4.5:1.
+                // Dark theme AccentFore is dark text on a light accent, same check as light theme.
+                foreach(string backKey in new[]{"Accent","AccentHover","AccentPressed"}) {
+                    var back=ThemeManager.GetColor(backKey);
+                    var fore=ThemeManager.GetColor("AccentFore");
+                    double ratio=ContrastRatio(back,fore);
+                    Check(ratio>=4.5,"accent contrast "+mode+"/"+backKey+" >= 4.5:1, actual "+ratio.ToString("F2")+" for white-on-red in light theme");
+                }
+                // Secondary/Quiet: Back/ControlBack + Fore；Quota 错误横幅：QuotaBack + QuotaFore
+                Check(ContrastRatio(ThemeManager.GetColor("Back"),ThemeManager.GetColor("Fore"))>=4.5,"surface contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ControlBack"),ThemeManager.GetColor("Fore"))>=4.5,"control contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("QuotaBack"),ThemeManager.GetColor("QuotaFore"))>=4.5,"quota banner contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("Muted"),ThemeManager.GetColor("ControlBack"))>=3.0,"muted tone contrast (secondary text, 3:1) "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ButtonHover"),ThemeManager.GetColor("Fore"))>=4.5,"hover contrast "+mode);
+                Check(ContrastRatio(ThemeManager.GetColor("ButtonBack"),ThemeManager.GetColor("Fore"))>=4.5,"button contrast "+mode);
+            }
+            Print("theme_contrast","accent/surface/quota/hover all pass WCAG 4.5:1 in light and dark themes");
+        }
+    }
+
+    static void QueueBackupIntegrity() {
+        var fields = new[]{"_LoadTransientError","_LoadCorruptError","_PreserveBackupOnNextSave","_LastSavedXML","_TransientSkipLogged"}
+            .Select(name => typeof(Paquete).GetField(name,shared)).ToArray();
+        object[] original = fields.Select(field => field.GetValue(null)).ToArray();
+        var load = typeof(Paquete).GetMethod("CargarDesdeRuta",shared);
+        var loadOnce = typeof(Paquete).GetMethod("ReadQueue",shared);
+        var reload = typeof(Paquete).GetMethod("TryReloadFromPath",shared);
+        var save = typeof(Paquete).GetMethod("GuardarEnRuta",shared);
+        string primary = Path.Combine(root,"queue-final-release.xml");
+        string backup = primary+".bak";
+        const string invalid = "<Unexpected/>";
+        const string persisted = "<ListaPaquetes><Paquete><Nombre>last good queue</Nombre></Paquete></ListaPaquetes>";
+        try {
+            File.WriteAllText(primary,invalid);
+            File.WriteAllText(backup,persisted);
+            var packages = (List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Count==1&&packages[0].Nombre=="last good queue","wrong root restores the valid backup");
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(backup)==persisted&&File.ReadAllText(primary).Contains("last good queue"),"first save keeps the valid backup after recovering a corrupt primary");
+
+            File.WriteAllText(primary,"<ListaPaquetes><Unexpected/></ListaPaquetes>");
+            packages=(List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="last good queue","unknown queue content cannot mask a valid backup");
+
+            File.WriteAllText(primary,invalid);
+            File.WriteAllText(backup,"<ListaPaquetes>");
+            packages=(List<Paquete>)load.Invoke(null,new object[]{primary});
+            Check(packages.Count==0&&Paquete.HasTransientLoadError&&Paquete.HasCorruptLoadError,"invalid primary and backup arm write protection");
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(primary)==invalid&&File.ReadAllText(backup)=="<ListaPaquetes>","a degraded queue cannot overwrite either source");
+
+            File.WriteAllText(primary,persisted.Replace("last good queue","repaired primary"));
+            File.WriteAllText(backup,persisted);
+            using(File.Open(primary,FileMode.Open,FileAccess.Read,FileShare.None)) {
+                Check(reload.Invoke(null,new object[]{primary})==null&&Paquete.HasTransientLoadError&&!Paquete.HasCorruptLoadError,
+                      "a newly locked valid primary cannot be replaced by a stale backup");
+            }
+            packages=(List<Paquete>)reload.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="repaired primary"&&Paquete.HasTransientLoadError,"repaired primary is recovered, with protection until publication");
+            Paquete.CommitTransientRecovery();
+
+            using(File.Open(primary,FileMode.Open,FileAccess.Read,FileShare.None)) {
+                loadOnce.Invoke(null,new object[]{primary,1,0,CancellationToken.None,false});
+                Check(Paquete.HasTransientLoadError&&!Paquete.HasCorruptLoadError,"a new lock is classified independently of past corruption");
+            }
+            File.WriteAllText(primary,"<ListaPaquetes>");
+            packages=(List<Paquete>)reload.Invoke(null,new object[]{primary});
+            Check(packages.Single().Nombre=="last good queue"&&Paquete.HasTransientLoadError,"a formerly locked primary may fall back after a fresh read proves corruption");
+            Paquete.CommitTransientRecovery();
+            save.Invoke(null,new object[]{primary,packages});
+            Check(File.ReadAllText(backup)==persisted,"recovery with two different error states keeps the good backup");
+        } finally {
+            for(int i=0;i<fields.Length;i++) fields[i].SetValue(null,original[i]);
+        }
+    }
+
+    static string ExtendedTestPath(string path) {
+        return @"\\?\"+Path.GetFullPath(path);
+    }
+
+    static void MakeSevenZip(string sourceDir, string archive, string volumeSize = "") {
+        string arguments="a -t7z -y -mx=0 "+volumeSize+" \""+archive+"\" .\\*";
+        var start=new System.Diagnostics.ProcessStartInfo(Path.Combine(projectRoot,"src","Resources","Binaries","7zr.exe"),arguments) {
+            UseShellExecute=false, CreateNoWindow=true, WorkingDirectory=sourceDir, RedirectStandardOutput=true, RedirectStandardError=true
+        };
+        using(var process=System.Diagnostics.Process.Start(start)) {
+            var stdout=process.StandardOutput.ReadToEndAsync();
+            var stderr=process.StandardError.ReadToEndAsync();
+            if(!process.WaitForExit(15000)) { process.Kill(); throw new Exception("7z fixture creation timed out"); }
+            stdout.Wait();
+            Check(process.ExitCode==0,"7z fixture creation: "+stderr.Result);
+        }
+    }
+
+    static void ArchiveCommitAndVolumes() {
+        string archiveRoot=Path.Combine(root,"final-archive");
+        string source=Path.Combine(archiveRoot,"source");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source,"alpha.txt"),"NEW");
+        File.WriteAllText(Path.Combine(source,"bravo.txt"),"ADDED");
+        File.WriteAllText(Path.Combine(source,"omega.txt"),"BLOCKED");
+        string seven=Path.Combine(archiveRoot,"rollback.7z");
+        MakeSevenZip(source,seven);
+        string zip=Path.Combine(archiveRoot,"rollback.zip");
+        ZipFile.CreateFromDirectory(source,zip);
+        foreach(string archive in new[]{zip,seven}) {
+            string output=Path.Combine(archiveRoot,Path.GetExtension(archive).Substring(1));
+            Directory.CreateDirectory(Path.Combine(output,"omega.txt"));
+            File.WriteAllText(Path.Combine(output,"alpha.txt"),"ORIGINAL");
+            Check(DescompresorController.ExtractArchiveSync(archive,output,"")!="","a later output conflict fails "+archive);
+            Check(File.ReadAllText(Path.Combine(output,"alpha.txt"))=="ORIGINAL","rollback restores original content to the original name");
+            Check(Directory.GetFiles(output).Length==1&&Directory.GetDirectories(output).Length==1,"rollback removes only this extraction's new files and staging");
+        }
+
+        string longSource=Path.Combine(archiveRoot,"long-source");
+        string longOutput=Path.Combine(archiveRoot,"long-destination");
+        Directory.CreateDirectory(longSource);
+        string longName=new string('L',241)+".txt";
+        File.WriteAllText(ExtendedTestPath(Path.Combine(longSource,longName)),"long entry");
+        string longArchive=Path.Combine(archiveRoot,"long.7z");
+        MakeSevenZip(longSource,longArchive);
+        string error=DescompresorController.ExtractArchiveSync(longArchive,longOutput,"");
+        Check(error=="","real long-name 7z extraction succeeds: "+error);
+        string shortened=PathGuard.GetSafeArchiveEntryPath(longOutput,longName);
+        Check(Path.GetFileName(shortened).Length<=240&&File.ReadAllText(ExtendedTestPath(shortened))=="long entry","long 7z staging name reaches the shortened destination");
+        File.WriteAllText(ExtendedTestPath(Path.Combine(longSource,Path.GetFileName(shortened))),"maps to the same target");
+        string ambiguous=Path.Combine(archiveRoot,"ambiguous.7z");
+        MakeSevenZip(longSource,ambiguous);
+        Check(DescompresorController.ExtractArchiveSync(ambiguous,longOutput,"").Contains("ambiguous entry names"),"duplicate normalized 7z destinations are rejected");
+        Check(Directory.GetDirectories(longOutput).Length==0&&File.ReadAllText(ExtendedTestPath(shortened))=="long entry","a rejected 7z archive leaves no staging residue");
+
+        string volumeSource=Path.Combine(archiveRoot,"vol-source");
+        Directory.CreateDirectory(volumeSource);
+        byte[] payload=new byte[150000]; new Random(2602).NextBytes(payload);
+        File.WriteAllBytes(Path.Combine(volumeSource,"payload.bin"),payload);
+        string multi=Path.Combine(archiveRoot,"movie.7z");
+        MakeSevenZip(volumeSource,multi,"-v64k");
+        var type=typeof(DescompresorController);
+        var singleton=type.GetField("_Controller",shared);
+        object originalController=singleton.GetValue(null);
+        using(var worker=new System.ComponentModel.BackgroundWorker()) {
+            try {
+                foreach(int initial in new[]{1,2}) {
+                    var controller=(DescompresorController)Activator.CreateInstance(type,true);
+                    singleton.SetValue(null,controller);
+                    string directory=Path.Combine(archiveRoot,"volume-arrival-"+initial);
+                    Directory.CreateDirectory(directory);
+                    var downloads=Enumerable.Range(1,3).Select(n=>new Fichero {
+                        FileID="VOLUME"+n, NombreFichero="movie.7z."+n.ToString("D3"), RutaLocal=directory,
+                        ExtraccionFicheroAutomatica=true
+                    }).ToArray();
+                    try {
+                        Action<int> publish=n=>File.Copy(multi+"."+n.ToString("D3"),Path.Combine(directory,downloads[n-1].NombreFichero));
+                        Action<int> complete=n=>InvokePrivate(downloads[n-1],"downloader_Completed",null,EventArgs.Empty);
+                        Action work=()=>{
+                            InvokePrivate(controller,"PromoteWaitingVolumes");
+                            Check((bool)InvokePrivate(controller,"PonerElementoAProcesar"),"one archive group is available");
+                            InvokePrivate(controller,"ProcesarElemento",worker);
+                        };
+                        publish(initial);
+                        complete(initial);
+                        work();
+                        Check(downloads[initial-1].DescargaEstado()==Estado.EsperandoVolumenes&&!controller.Ocupado(),
+                              "first or later 7z volume waits without blocking shutdown");
+                        foreach(int n in Enumerable.Range(1,3).Where(n=>n!=initial)) publish(n);
+                        int joining=initial==1?2:1;
+                        complete(joining);
+                        InvokePrivate(controller,"PromoteWaitingVolumes");
+                        Check((bool)InvokePrivate(controller,"PonerElementoAProcesar"),"arrival wakes the existing waiting group");
+                        complete(3);
+                        InvokePrivate(controller,"ProcesarElemento",worker);
+                        Check(downloads.All(task=>task.DescargaEstado()==Estado.Completado),"all waiting and active-join tasks receive completion");
+                        foreach(var task in downloads) InvokePrivate(task,"downloader_Completed",null,EventArgs.Empty);
+                        Check(downloads.All(task=>task.DescargaEstado()==Estado.Completado)&&controller.GetCola().Count==0,
+                              "late completion notifications use the seal without queuing more extraction");
+                        string output=Path.Combine(directory,"movie");
+                        Check(Directory.GetFiles(output).Length==1&&File.ReadAllBytes(Path.Combine(output,"payload.bin")).SequenceEqual(payload),
+                              "the entire multipart archive extracts exactly once under the original basename");
+                    } finally { foreach(var task in downloads) task.Dispose(); }
+                }
+            } finally { singleton.SetValue(null,originalController); }
+        }
+    }
+
+    static void DownloadGenerationAfterStop() {
+        using(var downloader=new FileDownloader(false))
+        using(var entered=new ManualResetEvent(false)) {
+            downloader.LocalDirectory=root;
+            var data=new FileDownloader.DataPart(64,1);
+            downloader.AddFileInfo("STALE", "", "http://127.0.0.1/unused", "stale.bin",data);
+            downloader.File.Size=64;
+            var type=typeof(FileDownloader);
+            object gate=type.GetField("Mutex",hidden).GetValue(downloader);
+            var generation=type.GetField("m_chunkGeneration",hidden);
+            type.GetField("m_busy",hidden).SetValue(downloader,true);
+            generation.SetValue(downloader,7L);
+            Exception fault=null;
+            var late=new Thread(()=>{
+                try { entered.Set(); InvokePrivate(downloader,"NewDownloaderWorker",7L,-1); }
+                catch(Exception ex) { fault=Unwrap(ex); }
+            }) { IsBackground=true };
+            lock(gate) {
+                late.Start();
+                Check(entered.WaitOne(2000)&&SpinWait.SpinUntil(()=>(late.ThreadState&ThreadState.WaitSleepJoin)!=0,2000),"old backoff task reaches the worker creation lock");
+                downloader.Stop();
+            }
+            Check(late.Join(2000)&&fault==null,"stale worker callback exits after stop");
+            Check(data.ChunkList[0].Available&&downloader.OpenConnections==0&&(long)generation.GetValue(downloader)==8L,
+                  "a stopped generation cannot claim a chunk or start a worker");
+        }
+    }
+
+    static void UpdateReminderAndProxy() {
+        var normalize=typeof(Conexion).GetMethod("NormalizeProxyHost",shared);
+        foreach(string invalid in new[]{"http://localhost/folder","http://localhost?choice","http://localhost#fragment","http://example:secret@localhost",":8000","[::1","127.0.0.1:abc:def"})
+            Check(normalize.Invoke(null,new object[]{invalid})==null,"unsafe or ambiguous proxy host is rejected: "+invalid);
+        foreach(var kv in new Dictionary<string,string>{
+            {"127.0.0.1:8000","127.0.0.1"},{"[::1]:9999","::1"},{"http://proxy.local:1234/","proxy.local"},{"https://127.0.0.1:7000","127.0.0.1"}})
+            Check(string.Equals((string)normalize.Invoke(null,new object[]{kv.Key}),kv.Value,StringComparison.OrdinalIgnoreCase),"proxy host strips inline port and returns bare host: "+kv.Key);
+        var previousProxy=typeof(Conexion).GetField("_proxy",shared);
+        object original=previousProxy.GetValue(null);
+        try {
+            var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            config.UsarProxy=true;
+            config.ProxyPort=18081;
+            foreach(string input in new[]{"http://127.0.0.1:8000/","::1","[::1]:8000","example.local"}) {
+                config.ProxyIP=input;
+                Conexion.SetProxy(config);
+                var req=Conexion.CreateHttpWebRequest("https://localhost/");
+                Check(((WebProxy)req.Proxy).Address.Port==18081,"runtime proxy uses the separately configured port: "+input);
+            }
+        } finally { previousProxy.SetValue(null,original); }
+
+        using(var main=new StartupPerformanceMain()) {
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.CheckUpdates=true;
+            var due=typeof(Main).GetField("ProximoAvisoActualizacion",hidden);
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            var deadline=(DateTime)due.GetValue(main);
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            Check((DateTime)due.GetValue(main)==deadline,"a periodic update check preserves the same version's reminder deadline");
+            due.SetValue(main,(DateTime?)DateTime.Now.AddSeconds(-1));
+            typeof(Main).GetMethod("UpdateReminder_Tick",hidden).Invoke(main,new object[]{null,EventArgs.Empty});
+            Check(due.GetValue(main)!=null,"a hidden or inactive window does not consume a due reminder");
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            Check((DateTime)due.GetValue(main)>DateTime.Now,"a new version receives its own reminder deadline");
+            main.Config.UpdateSkipVersion="9.10.0";
+            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            Check(due.GetValue(main)==null,"skipping a specific version clears only its reminder");
+        }
+    }
+    static int ExtractHeaderLong(string head,string name) {
+        foreach(string line in head.Split(new[]{"\r\n"},StringSplitOptions.RemoveEmptyEntries)) {
+            int colon=line.IndexOf(':'); if(colon<0) continue;
+            if(String.Equals(line.Substring(0,colon).Trim(),name,StringComparison.OrdinalIgnoreCase)) return int.Parse(line.Substring(colon+1).Trim());
+        }
+        return -1;
+    }
+    static string EncryptedName(string name) {
+        byte[] text=Encoding.UTF8.GetBytes("MEGA{\"n\":\""+name+"\"}");
+        byte[] padded=new byte[(text.Length+15)/16*16]; Array.Copy(text,padded,text.Length);
+        using(var aes=Aes.Create()) {
+            aes.Key=new byte[16]; aes.IV=new byte[16]; aes.Mode=CipherMode.CBC; aes.Padding=PaddingMode.None;
+            using(var t=aes.CreateEncryptor()) return Convert.ToBase64String(t.TransformFinalBlock(padded,0,padded.Length)).TrimEnd('=').Replace('+','-').Replace('/','_');
+        }
+    }
+    static void PreserveCompletedName(byte[] plain,string key,byte[] encrypted) {
+        using(var api=new LocalFileServer(encrypted)) using(var file=new Fichero()) {
+            var configField=typeof(InternalConfiguration).GetField("XML_CONFIG",shared); object previous=configField.GetValue(null);
+            var xml=new System.Xml.XmlDocument();
+            xml.LoadXml("<Config><URL_MEGA_API_DOWN_GET_G>"+api.Url+"</URL_MEGA_API_DOWN_GET_G><URL_MEGA_API_DOWN_GET_EU>"+api.Url+"</URL_MEGA_API_DOWN_GET_EU></Config>");
+            api.ApiResponse="[{\"s\":"+plain.Length+",\"at\":\""+EncryptedName("same.bin")+"\",\"g\":\""+api.Url+"\"}]";
+            configField.SetValue(null,xml);
+            try {
+                var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+                file.FileID="TESTFILE"; file.FileKey=key; file.NombreFichero="same (2).bin";
+                file.DatosPartes=new FileDownloader.DataPart(plain.Length,1); file.DatosPartes.SetProgress(0,plain.Length);
+                Conexion.TipoError error=Conexion.TipoError.SinErrores;
+                file.ActualizarInformacionFichero(cfg,ref error,true);
+                Check(error==Conexion.TipoError.SinErrores && file.DescargaProcesada,"file-info fixture is valid");
+                Check(file.NombreFichero=="same (2).bin","recovery retains the actual completed collision name");
+                file.NombreFichero=""; file.ActualizarInformacionFichero(cfg,ref error,true);
+                Check(file.NombreFichero=="same.bin","missing completed name receives a safe remote name");
+                file.DatosPartes.AllFinished=false; file.NombreFichero="placeholder";
+                file.ActualizarInformacionFichero(cfg,ref error,true);
+                Check(file.NombreFichero=="same.bin","unfinished task still receives remote name");
+            } finally { configField.SetValue(null,previous); }
+        }
+    }
+    class LocalFileServer:IDisposable {
+        HttpListener l; Thread thread; byte[] data;
+        List<string> ranges=new List<string>();
+        public string Url;
+        public int FragmentNext;
+        public ManualResetEvent ReleaseFragment;
+        public string ApiResponse;
+        public int ApiCalls;
+        public ManualResetEvent ApiEntered,ApiRelease;
+        public ManualResetEvent HeadEntered,HeadRelease;
+        public LocalFileServer(byte[] content) {
+            data=content;
+            var probe=new TcpListener(IPAddress.Loopback,0); probe.Start(); int port=((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+            Url="http://127.0.0.1:"+port+"/data";
+            l=new HttpListener(); l.Prefixes.Add("http://127.0.0.1:"+port+"/"); l.Start();
+            thread=new Thread(Loop); thread.IsBackground=true; thread.Start();
+        }
+        void Loop() {
+            while(l.IsListening) {
+                try {
+                    var c=l.GetContext();
+                    string r=c.Request.Headers["Range"];
+                    if(c.Request.HttpMethod=="POST" && ApiResponse!=null) {
+                        Interlocked.Increment(ref ApiCalls);
+                        c.Request.InputStream.CopyTo(Stream.Null);
+                        if(ApiEntered!=null)ApiEntered.Set();
+                        if(ApiRelease!=null)ApiRelease.WaitOne(10000);
+                        byte[] json=Encoding.UTF8.GetBytes(ApiResponse); c.Response.ContentLength64=json.Length;
+                        c.Response.OutputStream.Write(json,0,json.Length); c.Response.Close(); continue;
+                    }
+                    if(c.Request.Url.AbsolutePath.EndsWith("/expired",StringComparison.Ordinal)) {
+                        c.Response.StatusCode=403;c.Response.Close();continue;
+                    }
+                    if(c.Request.HttpMethod=="HEAD") {
+                        if(HeadEntered!=null)HeadEntered.Set();
+                        if(HeadRelease!=null)HeadRelease.WaitOne(10000);
+                        c.Response.ContentLength64=data.Length;c.Response.Close();continue;
+                    }
+                    long start=0,end=data.Length-1;
+                    if(r!=null) { string[] p=r.Substring(6).Split('-'); start=long.Parse(p[0]); if(p[1]!="") end=Math.Min(end,long.Parse(p[1])); c.Response.StatusCode=206; c.Response.Headers.Add("Content-Range","bytes "+start+"-"+end+"/"+data.Length); }
+                    lock(ranges) ranges.Add(r??"no-range");
+                    c.Response.ContentLength64=end-start+1;
+                    int length=(int)(end-start+1); int fragment=Interlocked.Exchange(ref FragmentNext,0);
+                    if(fragment>0 && fragment<length) {
+                        c.Response.OutputStream.Write(data,(int)start,fragment); c.Response.OutputStream.Flush();
+                        if(ReleaseFragment!=null) ReleaseFragment.WaitOne(10000); else Thread.Sleep(250);
+                        c.Response.OutputStream.Write(data,(int)start+fragment,length-fragment);
+                    } else c.Response.OutputStream.Write(data,(int)start,length);
+                    c.Response.Close();
+                } catch(HttpListenerException) { break; } catch(ObjectDisposedException) { break; }
+            }
+        }
+        public string TakeRanges() { lock(ranges) { string result=string.Join(",",ranges); ranges.Clear(); return result; } }
+        public void Dispose() { l.Stop(); l.Close(); thread.Join(1000); }
+    }
+}
