@@ -35,14 +35,14 @@ public sealed class PreflightProgress
         FilesFound = found;
     }
 
-    internal sealed class Reporter : IProgress<PreflightProgress>
+    public sealed class Reporter : IProgress<PreflightProgress>
     {
         private readonly Action<PreflightProgress> callback;
         public Reporter(Action<PreflightProgress> action) => callback = action;
         public void Report(PreflightProgress value) => callback(value);
     }
 
-    internal sealed class ItemReporter : IProgress<int>
+    public sealed class ItemReporter : IProgress<int>
     {
         private readonly Action<int> callback;
         public ItemReporter(Action<int> action) => callback = action;

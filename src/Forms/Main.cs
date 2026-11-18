@@ -460,7 +460,7 @@ namespace MegaDownloader
 
             if (Config.IniciarConWindows)
             {
-                Configuracion.RegisterInStartup(true); // Actualizamos con la ruta actual (por si hemos movido el ejecutable de sitio)
+                StartupRegistration.RegisterInStartup(true); // Actualizamos con la ruta actual (por si hemos movido el ejecutable de sitio)
             }
 
             if (!Silent)

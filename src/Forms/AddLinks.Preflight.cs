@@ -37,7 +37,7 @@ namespace MegaDownloader
                 return;
             displayedProgress = snapshot;
             displayedProgressSecond = second;
-            PreflightProgress.Display(snapshot, lblLinkCount, preflightProgressBar, warmRequest.Started);
+            PreflightProgressDisplay.Display(snapshot, lblLinkCount, preflightProgressBar, warmRequest.Started);
         }
 
         private PreflightSession.Request CurrentPreflightRequest()

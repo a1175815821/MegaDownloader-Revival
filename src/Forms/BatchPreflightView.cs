@@ -594,7 +594,7 @@ namespace MegaDownloader
                 return;
             displayedProgress = snapshot;
             displayedProgressSecond = second;
-            PreflightProgress.Display(snapshot, summary, progressBar, request.Started);
+            PreflightProgressDisplay.Display(snapshot, summary, progressBar, request.Started);
         }
 
         private void ApplyGridTheme()

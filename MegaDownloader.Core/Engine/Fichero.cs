@@ -520,7 +520,7 @@ namespace MegaDownloader
                 if (errorException is not null)
                 {
                     Log.WriteError("Error deleting local files - Path: " + Ruta + " - Error: " + errorException.ToString());
-                    MessageBox.Show(Language.GetText("Error deleting local files - Path: %PATH% - Error: %ERROR%").Replace("%PATH%", Ruta).Replace("%ERROR%", errorException.Message), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    UserNotification.ShowError(Language.GetText("Error deleting local files - Path: %PATH% - Error: %ERROR%").Replace("%PATH%", Ruta).Replace("%ERROR%", errorException.Message), Language.GetText("Error"));
                 }
             }
             catch (Exception e)

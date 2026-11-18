@@ -11,17 +11,18 @@ Repository: <https://github.com/a1175815821/MegaDownloader-Revival>
 | Path | Purpose |
 |---|---|
 | `src/` | Converted C# source, resources, language packs, bundled binaries |
-| `MegaDownloader.Core/` | Platform abstractions and shared models (cross-platform, net10.0) |
+| `MegaDownloader.Core/` | Download engine, settings, localization and platform abstractions (cross-platform, net10.0) |
 | `MegaDownloader.UI/` | Avalonia shell — the new cross-platform UI (net10.0) |
 | `MegaDownloader.Full/` | Migrated WinForms application (net10.0-windows), feature-complete |
 | `MegaDownloader.Tests/` | Regression harness (1121 assertions) against the migrated code |
 
 ## Status
 
-**Phase 0 — Avalonia skeleton (in progress).** The shell boots with dependency
-injection, a ported light/dark token set, page navigation, file logging and persisted
-theme selection. Download features are not wired into the new UI yet; they still live in
-`MegaDownloader.Full`.
+**Phase 1 — engine extraction (complete).** The download engine, settings and
+localization now live in `MegaDownloader.Core`; the WinForms app and the Avalonia shell
+both consume that shared core. The shell still boots with dependency injection, a ported
+light/dark token set, page navigation, file logging and persisted theme selection, but
+the download queue is not wired into the new UI yet (Phase 2).
 
 ## Build
 
@@ -51,4 +52,5 @@ dotnet run --project MegaDownloader.Full/MegaDownloader.Full.csproj
 5. Package for Windows, macOS and Linux
 
 The WinForms-only state is preserved as tag `winforms-baseline` on the original
-history. See [MIGRATION.md](MIGRATION.md) for conversion details and known gaps.
+history. See [MIGRATION.md](MIGRATION.md) for conversion details and known gaps, and
+[PLAN.md](PLAN.md) for the live phase checklist and current progress.

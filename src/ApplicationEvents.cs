@@ -35,6 +35,30 @@ namespace MegaDownloader.My
 
             StartupClock.Start();
 
+            // The engine reports a handful of user-facing messages (e.g. a file that
+            // could not be deleted). It lives in MegaDownloader.Core and must not
+            // reference WinForms, so the shell installs the actual MessageBox here.
+            MegaDownloader.UserNotification.Sink = (kind, title, message) =>
+            {
+                var form = _mainFrm;
+                Action show = () => System.Windows.Forms.MessageBox.Show(
+                    form,
+                    message,
+                    title,
+                    System.Windows.Forms.MessageBoxButtons.OK,
+                    kind == MegaDownloader.UserNotificationKind.Error
+                        ? System.Windows.Forms.MessageBoxIcon.Error
+                        : System.Windows.Forms.MessageBoxIcon.Information);
+                if (form is not null && !form.IsDisposed && form.InvokeRequired)
+                {
+                    form.BeginInvoke(show);
+                }
+                else
+                {
+                    show();
+                }
+            };
+
             if (!ApplicationInstanceManager.CreateSingleInstance("MegaDownloader", SingleInstanceCallback))
             {
                 return;

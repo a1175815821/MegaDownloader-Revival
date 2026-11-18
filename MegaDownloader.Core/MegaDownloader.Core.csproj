@@ -20,12 +20,38 @@
     <Compile Include="Platform/**/*.cs" />
     <Compile Include="Services/**/*.cs" />
     <Compile Include="Models/**/*.cs" />
+    <Compile Include="Engine/**/*.cs" />
+    <Compile Include="Settings/**/*.cs" />
+  </ItemGroup>
+
+  <!--
+    Engine-owned resources. Language packs, the internal configuration and the
+    7zr.exe extraction helper belong to the download engine, so they travel with
+    MegaDownloader.Core instead of only being embedded in the WinForms shell.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="../src/Resources/Language/*-Language.xml" LogicalName="MegaDownloader.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../src/Resources/InternalConfig.xml" LogicalName="MegaDownloader.InternalConfig.xml" />
+    <EmbeddedResource Include="../src/Resources/Binaries/7zr.exe" LogicalName="MegaDownloader.7zr.exe" />
+  </ItemGroup>
+
+  <!--
+    The WinForms shell (assembly name "MegaDownloader") was split out of the engine,
+    but still consumes many engine members that are intentionally not part of the
+    public surface. Keep that access working without making the whole engine public;
+    the Avalonia UI only uses the public API.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MegaDownloader" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+    <PackageReference Include="SharpCompress" Version="0.48.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>

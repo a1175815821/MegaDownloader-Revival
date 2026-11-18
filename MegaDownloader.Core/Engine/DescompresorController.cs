@@ -1143,7 +1143,11 @@ namespace MegaDownloader
             {
                 try
                 {
-                    foreach (Microsoft.Win32.RegistryView view in new[] { Microsoft.Win32.RegistryView.Registry64, Microsoft.Win32.RegistryView.Default })
+                    // The registry probe only exists on Windows; elsewhere the
+                    // well-known install folders below are checked instead.
+                    foreach (Microsoft.Win32.RegistryView view in OperatingSystem.IsWindows()
+                        ? new[] { Microsoft.Win32.RegistryView.Registry64, Microsoft.Win32.RegistryView.Default }
+                        : Array.Empty<Microsoft.Win32.RegistryView>())
                     {
                         using (var @base = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, view))
                         {

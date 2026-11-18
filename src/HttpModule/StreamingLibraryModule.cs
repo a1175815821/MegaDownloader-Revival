@@ -23,8 +23,8 @@ namespace MegaDownloader
         public Configuracion Config;
 
 
-        public const string PaginaMain = "/library";
-        public const string PaginaManagement = "/manage";
+        public const string PaginaMain = StreamingLibraryRoutes.PaginaMain;
+        public const string PaginaManagement = StreamingLibraryRoutes.PaginaManagement;
         public const string PaginaAjax = "/ajax";
         public const string PaginaLogin = "/login";
 

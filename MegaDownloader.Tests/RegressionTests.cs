@@ -209,6 +209,12 @@ public partial class RegressionTests {
     static object InvokePrivate(object target,string method,params object[] args) {
         return target.GetType().GetMethod(method,hidden).Invoke(target,args);
     }
+    static Type EngineType(string name,bool throwOnError=false) {
+        Type type=typeof(Log).Assembly.GetType(name);
+        if(type==null)type=typeof(Main).Assembly.GetType(name);
+        if(type==null&&throwOnError)throw new TypeLoadException(name);
+        return type;
+    }
     static Main QueueFixture(Fichero file) {
         var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));
         GC.SuppressFinalize(form);
@@ -271,7 +277,7 @@ public partial class RegressionTests {
     static void LockedPrimaryCases() {
         string path=Path.Combine(root,"locked-primary.xml");
         File.WriteAllText(path,"<State version='new'/>");File.WriteAllText(path+".bak","<State version='old'/>");
-        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        Type atomic=EngineType("MegaDownloader.AtomicFile");
         var load=atomic.GetMethod("TryLoadXml",BindingFlags.Static|BindingFlags.Public);
         object[] args={path,null,false,false};
         using(var locked=new FileStream(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None)) {
@@ -484,7 +490,7 @@ public partial class RegressionTests {
         }finally{Thread.CurrentThread.CurrentCulture=previous;}
 
         // B1/B2: recovery primitives used by the startup recovery timer.
-        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        Type atomic=EngineType("MegaDownloader.AtomicFile");
         var reload=atomic.GetMethod("TryReloadPrimary",BindingFlags.Static|BindingFlags.Public);
         var canRead=atomic.GetMethod("CanReadExclusive",BindingFlags.Static|BindingFlags.Public);
         string primary=Path.Combine(root,"b1-primary.xml");
@@ -1836,7 +1842,7 @@ public partial class RegressionTests {
         }
     }
     static void ProcessResourceMonitoring() {
-        Type monitorType=typeof(Main).Assembly.GetType("MegaDownloader.ProcessResourceMonitor",true);
+        Type monitorType=EngineType("MegaDownloader.ProcessResourceMonitor",true);
         MethodInfo read=monitorType.GetMethod("ReadSnapshot");
         var elapsed=System.Diagnostics.Stopwatch.StartNew();
         using(var monitor=(IDisposable)Activator.CreateInstance(monitorType,true)) {

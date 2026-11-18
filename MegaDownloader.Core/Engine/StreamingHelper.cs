@@ -77,7 +77,7 @@ namespace MegaDownloader
             var listaURLs2 = URLProcessor.ProcessURLs(listaURLs, ref Config);
             if (listaURLs2.Count > 1)
             {
-                MessageBox.Show(Language.GetText("The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library.").Replace("%NUM", listaURLs2.Count.ToString()), Language.GetText("Note"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UserNotification.ShowInfo(Language.GetText("The link is a folder with %NUM files. Now only the first will be used, if you want to use all, import the link into the streaming library.").Replace("%NUM", listaURLs2.Count.ToString()), Language.GetText("Note"));
 
             }
             else if (listaURLs2.Count == 0)
@@ -142,11 +142,11 @@ namespace MegaDownloader
             string URL = "http://127.0.0.1:" + StreamingPort.ToString();
             if (Manage)
             {
-                URL += StreamingLibraryModule.PaginaManagement;
+                URL += StreamingLibraryRoutes.PaginaManagement;
             }
             else
             {
-                URL += StreamingLibraryModule.PaginaMain;
+                URL += StreamingLibraryRoutes.PaginaMain;
             }
             return URL;
         }

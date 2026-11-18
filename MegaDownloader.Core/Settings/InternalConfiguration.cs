@@ -37,12 +37,21 @@ namespace MegaDownloader
 
         private static XmlDocument GetXmlConfig()
         {
-            string ResName = ResourceHelper.GetResourceName(".InternalConfig.xml");
+            var assembly = typeof(InternalConfiguration).Assembly;
+            string ResName = "";
+            foreach (string resource in assembly.GetManifestResourceNames())
+            {
+                if (resource.EndsWith(".InternalConfig.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    ResName = resource;
+                    break;
+                }
+            }
             if (string.IsNullOrEmpty(ResName))
             {
                 throw new ApplicationException("InternalConfig could not be loaded");
             }
-            var @file = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(ResName);
+            var @file = assembly.GetManifestResourceStream(ResName);
 
             string xml = string.Empty;
             using (var reader = new System.IO.StreamReader(@file))

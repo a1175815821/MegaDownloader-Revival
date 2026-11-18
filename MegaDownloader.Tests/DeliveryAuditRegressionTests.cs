@@ -195,7 +195,7 @@ public partial class RegressionTests {
     }
 
     static void RecoverLockedBackups() {
-        Type atomic=typeof(Main).Assembly.GetType("MegaDownloader.AtomicFile");
+        Type atomic=EngineType("MegaDownloader.AtomicFile");
         var load=atomic.GetMethod("TryLoadXmlWithRecoveryInfo",shared);
         var reload=atomic.GetMethod("TryReloadAfterTransientFailure",shared);
         foreach(bool missingPrimary in new[]{false,true}) {

@@ -470,11 +470,11 @@ namespace MegaDownloader
 
 
             // First we retrieve the base language
-            foreach (string resname in System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            foreach (string resname in typeof(Language).Assembly.GetManifestResourceNames())
             {
                 if (resname.ToUpper().EndsWith("-Language.xml".ToUpper()))
                 {
-                    var @file = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname);
+                    var @file = typeof(Language).Assembly.GetManifestResourceStream(resname);
 
                     if (@file is null)
                         continue;
@@ -503,11 +503,11 @@ namespace MegaDownloader
             }
 
             // Then we compare with the rest of languages
-            foreach (string resname in System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            foreach (string resname in typeof(Language).Assembly.GetManifestResourceNames())
             {
                 if (resname.ToUpper().EndsWith("-Language.xml".ToUpper()))
                 {
-                    var @file = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resname);
+                    var @file = typeof(Language).Assembly.GetManifestResourceStream(resname);
 
                     if (@file is null)
                         continue;

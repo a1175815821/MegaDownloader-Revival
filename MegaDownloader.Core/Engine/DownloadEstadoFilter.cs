@@ -9,7 +9,7 @@ namespace MegaDownloader
 /// 故改用 Roots 子集 + ChildrenGetter 包裹,本类不再实现 IModelFilter。
 /// 过滤在列表重建时生效(切换分组/增删/启停等);导航计数一侧永远实时。
 /// </summary>
-    internal class DownloadEstadoFilter
+    public class DownloadEstadoFilter
     {
 
         public enum NavScope

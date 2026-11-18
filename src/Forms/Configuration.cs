@@ -851,7 +851,7 @@ namespace MegaDownloader
 
             Conexion.SetProxy(Config);
             MegaQuotaManager.SetBreakthroughMode(Config.QuotaBreakthroughMode);
-            Configuracion.RegisterInStartup(Config.IniciarConWindows);
+            StartupRegistration.RegisterInStartup(Config.IniciarConWindows);
 
             // ③:同 Configuracion,全局限速 KB→B。
             ThrottledStreamController.GetController().SetMaxGlobalSpeed(Config.LimiteVelocidadKBs * 1024L);

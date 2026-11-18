@@ -6,7 +6,7 @@ The VB.NET project at `I:\v1.9` was converted to C# and placed in `I:\Mega Downl
 
 - `src/` — all 114 converted C# source files, resources, language packs, DLLs, binaries
 - `MegaDownloader.Full/` — full C# application (WinForms, .NET 10) with all UI/business features preserved
-- `MegaDownloader.Core/` — cross-platform foundation: `IPlatformServices`, Windows DPAPI/registry implementation, Unix key/autostart/protocol implementation, shared models (.NET 10)
+- `MegaDownloader.Core/` — cross-platform foundation: download engine (network, files, packages, scheduling, quota, verification, extraction, streaming library), settings and localization, `IPlatformServices`, Windows DPAPI/registry implementation, Unix key/autostart/protocol implementation, shared models (.NET 10)
 - `MegaDownloader.UI/` — Avalonia cross-platform UI shell (.NET 10, Windows/macOS/Linux capable)
 - `MegaDownloader.Tests/` — regression suite ported to .NET 10
 - `tools/` — CodeConverter CLI used for the initial VB → C# conversion
@@ -82,6 +82,27 @@ The new UI is a fresh application, not a port of the WinForms forms:
 - `INavigationService` + `ViewLocator` host page view models in the shell; `MainWindow` provides the navigation rail, toolbar and status bar.
 - `IAppLogger`/`FileLogger` write a rolling daily log next to the settings file; `Program` also records unhandled exceptions to `crash-yyyyMMdd.log`.
 - Downloads and Settings pages are deliberately thin placeholders so the engine port in Phase 1 has a stable host to plug into.
+
+## Engine extraction (Phase 1)
+
+The download engine and settings were moved out of the WinForms shell into
+`MegaDownloader.Core` without changing behavior:
+
+- `Engine/` holds the 41 engine files (download, packages, scheduling, quota, MD5/MetaMAC,
+  extraction, streaming library, logging, updater) plus `Cryptography/` and
+  `StreamingLibrary/`.
+- `Settings/` holds `Configuracion`, `ConfiguracionUI`, `InternalConfiguration`,
+  `Language` and `UltimaConfiguracionUsada`.
+- Engine-owned resources (language packs, `InternalConfig.xml`, `7zr.exe`) are embedded
+  in Core and read relative to `typeof(...).Assembly`; Full keeps its own copies for the
+  existing tests.
+- WinForms seams were replaced with `UserNotification.Sink`, `StreamingLibraryRoutes`,
+  `StartupRegistration` (moved back to Full) and an `OperatingSystem.IsWindows()` guard
+  around the 7-Zip registry probe.
+- Core grants `InternalsVisibleTo("MegaDownloader")` so the WinForms shell keeps using
+  engine members that stay internal; the Avalonia UI only consumes the public surface.
+- Result: `MegaDownloader.Full` builds with 0 errors and the regression harness still
+  reports **PASS: 1121 assertions**.
 
 ## Cross-platform status
 
