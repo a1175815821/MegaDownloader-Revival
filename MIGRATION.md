@@ -158,6 +158,53 @@ limits, and the remaining dialogs.
 Still to port: the Kestrel-based streaming server and the `mega://`/clipboard intake
 (Phase 4).
 
+## Kestrel servers and platform helpers (Phase 4)
+
+The embedded `HttpServer.dll` is gone; both servers run on Kestrel from
+`MegaDownloader.Core/Services`:
+
+- `WebServerHost` owns the two optional listeners (browser remote control and streaming),
+  binds them independently, reports one message per failure, and starts/stops without
+  capturing the caller's synchronization context (a UI-thread `StartAsync().GetResult()`
+  deadlocked the WinForms shell and the test harness).
+- `RemoteControlResponder` is the remote-control page: `/main`, `/login`, `/logout`,
+  `/style.css`, `/favicon.ico` and the four AJAX endpoints. The PBKDF2 login hash, the
+  concurrent-attempt cap, the sliding-window lockout, the CSRF token on every mutating
+  POST and the gzip response path are unchanged.
+- `StreamingMediaResponder` serves `/streaming`: password check, `mega=`/`id=`/`t=` link
+  resolution, RFC 7233 range handling (416, suffix and open-ended ranges, unparseable
+  headers ignored), upstream range alignment for CTR decryption and the early-EOF guard.
+  `HttpWebRequest.AddRange` accepts `long`, so the old reflection hack for >2 GB files is
+  gone, and the client-liveness reflection into `HttpServer` internals is replaced by
+  request-abort cancellation tokens.
+- `StreamingLibraryResponder` serves `/library`, `/manage`, `/login` and the `/ajax` JSON
+  API (load, save, delete, import/export, open-in-VLC) with the same contract, so the
+  existing jQuery page works unchanged.
+- `WebTemplates` embeds the four page templates. They were missing from this repository
+  entirely — `HttpModule\Template\` existed only in `I:\v1.9`, so the WinForms build
+  failed at server start-up with "Error template not found". They now live in
+  `src/Resources/Web/` and are embedded by `MegaDownloader.Core`.
+
+Platform helpers:
+
+- `ISecretProtector` replaces the direct DPAPI calls. `WindowsDpapiSecretProtector` keeps
+  the original entropy chain so existing configuration files keep working;
+  `AesFileSecretProtector` (AES-256-GCM, random nonce, user-only key file) is used on
+  macOS and Linux, where DPAPI does not exist and every configuration save used to fail
+  with a platform exception. `Criptografia.SetSecretProtector` swaps the implementation;
+  the default is chosen from the OS.
+- `DownloadEngineService` now implements `IDownloaderService`, so the Avalonia shell can
+  host the browser remote control without the WinForms `Main` window.
+- `.7z` extraction prefers a system 7-Zip, then the embedded `7zr.exe`, and otherwise
+  falls back to SharpCompress's managed 7z decoder (LZMA/LZMA2/BCJ/AES). Multipart
+  `.7z.001` sets still require the CLI and now say so instead of failing with a generic
+  "no executable" error.
+- The Avalonia Settings page gained a **Web remote** tab (enable, port, page title,
+  session timeout, password, LAN access and bind IP); saving restarts both servers.
+
+The WinForms shell uses the same `WebServerHost`, so both applications share one
+implementation.
+
 ## Cross-platform status
 
 - Platform-neutral service interface: `MegaDownloader.Core/Platform/IPlatformServices.cs`
@@ -167,13 +214,13 @@ Still to port: the Kestrel-based streaming server and the `mega://`/clipboard in
 
 Major items still required before a full cross-platform release:
 
-1. Port WinForms-specific forms/designers to Avalonia views and view models.
-2. Replace embedded `HttpServer.dll` with ASP.NET Core/Kestrel.
-3. Replace `ObjectListView` with a virtualized Avalonia tree/grid.
-4. Handle `7zr.exe` per RID or migrate to managed SharpCompress-only extraction.
-5. Move DPAPI call sites to `IPlatformServices` and add keychain-backed secret storage on macOS/Linux.
-6. Replace registry/P-Invoke-dependent helpers (clipboard, theme, URI protocol, autostart) with service implementations.
-7. Update the Avalonia dependency set to address the current transitive `Tmds.DBus.Protocol` advisory.
+1. Replace `ObjectListView` with a virtualized Avalonia tree/grid (the Avalonia queue already is one).
+2. Replace registry/P-Invoke-dependent helpers (clipboard, theme, URI protocol, autostart) with service implementations.
+3. Update the Avalonia dependency set to address the current transitive `Tmds.DBus.Protocol` advisory.
+
+Done in Phase 4: the embedded `HttpServer.dll` is replaced with Kestrel, `.7z` falls back
+to managed SharpCompress extraction, and DPAPI call sites go through `ISecretProtector`
+with an AES-GCM implementation for macOS/Linux.
 
 ## Notes
 

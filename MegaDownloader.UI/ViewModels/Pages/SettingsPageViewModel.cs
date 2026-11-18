@@ -38,6 +38,9 @@ public partial class SettingsPageViewModel : ViewModelBase
     private bool keepLastOptions;
 
     [ObservableProperty]
+    private bool watchClipboard;
+
+    [ObservableProperty]
     private LanguageOption? selectedLanguage;
 
     [ObservableProperty]
@@ -80,6 +83,27 @@ public partial class SettingsPageViewModel : ViewModelBase
     private string preSharedKeysText = string.Empty;
 
     [ObservableProperty]
+    private bool webServerEnabled;
+
+    [ObservableProperty]
+    private decimal webServerPort;
+
+    [ObservableProperty]
+    private string webServerPassword = string.Empty;
+
+    [ObservableProperty]
+    private bool webServerAllowLan;
+
+    [ObservableProperty]
+    private string webServerBindIp = string.Empty;
+
+    [ObservableProperty]
+    private string webServerTitle = string.Empty;
+
+    [ObservableProperty]
+    private decimal webServerTimeout;
+
+    [ObservableProperty]
     private string saveStatus = string.Empty;
 
     [ObservableProperty]
@@ -100,6 +124,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         ExtractArchives = config.ExtraerAutomaticamente;
         StartOnLaunch = config.ComenzarDescargando;
         KeepLastOptions = config.MantenerUltimaConfiguracion;
+        WatchClipboard = config.AnalizarPortapapeles;
 
         Languages = new ObservableCollection<LanguageOption>
         {
@@ -128,6 +153,14 @@ public partial class SettingsPageViewModel : ViewModelBase
         StreamingPort = Math.Clamp(config.ServidorStreamingPuerto, 0, 65535);
         StreamingPassword = config.ServidorStreamingPassword ?? string.Empty;
         StreamingPasswordNeedsReentry = config.ServidorStreamingPasswordNeedsReentry;
+
+        WebServerEnabled = config.ServidorWebActivo;
+        WebServerPort = Math.Clamp(config.ServidorWebPuerto, 0, 65535);
+        WebServerPassword = config.ServidorWebPassword ?? string.Empty;
+        WebServerAllowLan = config.ServidorWebPermitirLAN;
+        WebServerBindIp = config.ServidorWebBindIP ?? string.Empty;
+        WebServerTitle = config.ServidorWebNombre ?? string.Empty;
+        WebServerTimeout = Math.Clamp(config.ServidorWebTimeout, 0, 99);
 
         var keys = new StringBuilder();
         if (config.ListaPreSharedKeys is not null)
@@ -183,7 +216,7 @@ public partial class SettingsPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Save()
+    private async Task SaveAsync()
     {
         if (ScheduleEnabled && ScheduleDaily)
         {
@@ -210,6 +243,7 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.ExtraerAutomaticamente = ExtractArchives;
         config.ComenzarDescargando = StartOnLaunch;
         config.MantenerUltimaConfiguracion = KeepLastOptions;
+        config.AnalizarPortapapeles = WatchClipboard;
 
         string language = SelectedLanguage?.Code ?? Language.FollowSystemLanguageCode;
         config.Idioma = language;
@@ -242,6 +276,14 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.ServidorStreamingPuerto = (int)Math.Clamp(StreamingPort, 0, 65535);
         config.ServidorStreamingPassword = StreamingPassword;
 
+        config.ServidorWebActivo = WebServerEnabled;
+        config.ServidorWebPuerto = (int)Math.Clamp(WebServerPort, 0, 65535);
+        config.ServidorWebPassword = WebServerPassword;
+        config.ServidorWebPermitirLAN = WebServerAllowLan;
+        config.ServidorWebBindIP = WebServerBindIp.Trim();
+        config.ServidorWebNombre = WebServerTitle.Trim();
+        config.ServidorWebTimeout = (int)Math.Clamp(WebServerTimeout, 0, 99);
+
         var keys = new List<SecureString>();
         foreach (string line in PreSharedKeysText.Split('\n'))
         {
@@ -255,6 +297,17 @@ public partial class SettingsPageViewModel : ViewModelBase
         if (config.ErrorConfig != Configuracion.ErrorConfigClass.SinErrores)
         {
             SetSaveStatus("Configuration could not be saved: " + config.ErrorConfig + ".", true);
+            return;
+        }
+
+        // Restart the servers so port/password changes take effect immediately. The
+        // streaming server and the remote controller are independent, so a failure in
+        // one is reported without hiding the other. Off the UI thread: starting Kestrel
+        // must not freeze the window.
+        string serverError = await Task.Run(() => WebServerHost.Start(_engine, config));
+        if (!string.IsNullOrEmpty(serverError))
+        {
+            SetSaveStatus("Saved, but the web server could not start: " + serverError, true);
             return;
         }
 

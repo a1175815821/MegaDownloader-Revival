@@ -18,12 +18,14 @@ Repository: <https://github.com/a1175815821/MegaDownloader-Revival>
 
 ## Status
 
-**Phase 3 — dialogs and settings (complete).** The Avalonia shell runs the shared queue
-through `DownloadEngineService` and has the **Add links** window (preflight, selection,
-duplicate detection, enqueue), a **Properties** dialog for files and packages, **Encode
-links**, **ELC** generation with account management, a native **Streaming library** page,
-and a Settings page with General, Advanced (proxy/schedule), Language, Pre-shared-key and
-Streaming tabs. The streaming server itself is replaced with Kestrel in Phase 4.
+**Phase 4 — servers and platform helpers (in progress).** The embedded `HttpServer.dll`
+is gone: the browser remote control and the streaming library both run on **Kestrel**
+inside `MegaDownloader.Core`, with the same page contract, login throttling, CSRF rules
+and RFC 7233 range handling. Secrets go through `ISecretProtector` (DPAPI on Windows,
+AES-GCM on macOS/Linux), `.7z` falls back to managed SharpCompress extraction when no
+7-Zip CLI exists, and the Settings page gained a **Web remote** tab. The Avalonia shell
+still has the Phase 3 surface: Add links, Properties, Encode links, ELC, the Streaming
+library page and the General/Advanced/Language/Pre-shared-key/Streaming settings tabs.
 
 ## Build
 
@@ -49,7 +51,7 @@ dotnet run --project MegaDownloader.Full/MegaDownloader.Full.csproj
 1. Extract the download engine and settings into `MegaDownloader.Core`
 2. Rebuild the download queue in Avalonia (virtualized list, live progress) — done
 3. Port the remaining dialogs and settings tabs — done (add links, properties, encode/ELC, streaming library, settings tabs)
-4. Replace the embedded HTTP server and remaining Windows-only helpers
+4. Replace the embedded HTTP server and remaining Windows-only helpers — servers done, clipboard/protocol intake pending
 5. Package for Windows, macOS and Linux
 
 The WinForms-only state is preserved as tag `winforms-baseline` on the original

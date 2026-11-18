@@ -59,7 +59,6 @@
   <ItemGroup>
     <Reference Include="F5Lib"><HintPath>../src/Resources/DLLs/F5Lib.dll</HintPath></Reference>
     <Reference Include="Fadd"><HintPath>../src/Resources/DLLs/Fadd.dll</HintPath></Reference>
-    <Reference Include="HttpServer"><HintPath>../src/Resources/DLLs/HttpServer.dll</HintPath></Reference>
     <Reference Include="ObjectListView2022NET"><HintPath>../src/Resources/DLLs/ObjectListView2022NET.dll</HintPath></Reference>
   </ItemGroup>
 

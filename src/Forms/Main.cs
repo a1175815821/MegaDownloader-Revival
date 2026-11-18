@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -681,7 +681,7 @@ namespace MegaDownloader
 
         private void StartConfiguredWebServers()
         {
-            string strErrServidorWeb = ServidorWebController.StartWebServer(this, Config);
+            string strErrServidorWeb = WebServerHost.Start(this, Config);
             if (!string.IsNullOrEmpty(strErrServidorWeb))
             {
                 Log.WriteError("Error starting web server: " + strErrServidorWeb);
@@ -711,7 +711,7 @@ namespace MegaDownloader
                 return;
             }
             ApplyRuntimeDownloadSettings();
-            ServidorWebController.StopWebServer();
+            WebServerHost.Stop();
             StartConfiguredWebServers();
             scheduleController.Reset();
             ScheduleTick(null, EventArgs.Empty);
@@ -1220,7 +1220,7 @@ namespace MegaDownloader
 
             // 1) Stop accepting new work via Web/Streaming
             Log.WriteInfo("Stopping web server");
-            ServidorWebController.StopWebServer();
+            WebServerHost.Stop();
 
             // 2) Cancel background workers and extraction
             if (_startupReady)

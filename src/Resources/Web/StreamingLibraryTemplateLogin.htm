@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <title>Multimedia Library</title>
+        <style>
+            body {
+                background: #82D2F7;
+                text-align: center;
+                font: 12px/1.5em Verdana, Arial, Helvetica, sans-serif; 
+                color:Black;
+            }
+            .error {
+                color:red;
+            }
+        </style>
+    </head>
+    <body>
+
+       <div data-role="content">
+            <div class="error">%ERROR%</div>
+            <form name="input" action="login" method="post" data-ajax="false">
+        
+                <label for="Password" class="ui-hidden-accessible">Password:</label>
+                <input type="password" name="Password" id="Password" value=""/>
+             
+                <input type="submit" value="Login" data-theme="b">
+            </form>  
+       </div>
+
+    </body>
+</html>

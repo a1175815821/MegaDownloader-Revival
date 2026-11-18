@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -880,8 +880,8 @@ namespace MegaDownloader
             string avisoServidorWeb = "";
             if (!RequiereConfiguracion)
             {
-                ServidorWebController.StopWebServer();
-                string strErrServidorWeb = ServidorWebController.StartWebServer(My.MyProject.Forms.Main, Config);
+                WebServerHost.Stop();
+                string strErrServidorWeb = WebServerHost.Start(My.MyProject.Forms.Main, Config);
                 if (!string.IsNullOrEmpty(strErrServidorWeb))
                 {
                     // 设置此时已存盘,不能 Exit Sub:那会跳过"保存成功"提示与关窗,

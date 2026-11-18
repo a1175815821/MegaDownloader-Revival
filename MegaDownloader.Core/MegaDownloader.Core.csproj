@@ -33,6 +33,12 @@
     <EmbeddedResource Include="../src/Resources/Language/*-Language.xml" LogicalName="MegaDownloader.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../src/Resources/InternalConfig.xml" LogicalName="MegaDownloader.InternalConfig.xml" />
     <EmbeddedResource Include="../src/Resources/Binaries/7zr.exe" LogicalName="MegaDownloader.7zr.exe" />
+    <!--
+      Pages served by the built-in web servers. The WinForms build shipped these from
+      HttpModule\Template, which never made it into this repository, so the remote
+      controller and the streaming library page failed with "Error template not found".
+    -->
+    <EmbeddedResource Include="../src/Resources/Web/*" LogicalName="MegaDownloader.Web.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--
@@ -43,6 +49,15 @@
   -->
   <ItemGroup>
     <InternalsVisibleTo Include="MegaDownloader" />
+  </ItemGroup>
+
+  <!--
+    The embedded HttpServer.dll is replaced by Kestrel. A framework reference keeps the
+    ASP.NET Core assemblies out of the package graph; framework-dependent builds need
+    the ASP.NET Core runtime, self-contained publishes bundle it.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

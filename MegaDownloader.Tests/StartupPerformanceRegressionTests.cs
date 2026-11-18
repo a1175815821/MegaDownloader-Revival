@@ -31,7 +31,7 @@ public partial class RegressionTests {
         foreach(string value in new[]{null,"","ascii","中文密码","a\0b","\uD83D\uDE03","\uD800",new string('x',65536)})
             using(var secure=Criptografia.ToSecureString(value))
                 Check(secure.IsReadOnly()&&Criptografia.ToInsecureString(secure)==(value??""),"bulk secure-string factory preserves UTF-16 and read-only semantics");
-        byte[][] chain=(byte[][])typeof(Criptografia).GetField("decryptionEntropies",shared).GetValue(null);
+        byte[][] chain=MegaDownloader.Platform.WindowsDpapiSecretProtector.DecryptionEntropies.ToArray();
         var decrypt=typeof(Criptografia).GetMethod("DecryptStringWithCacheInfo",shared);
         for(int i=0;i<chain.Length;i++) {
             string blob=Convert.ToBase64String(ProtectedData.Protect(Encoding.Unicode.GetBytes("兼容\0value"),chain[i],DataProtectionScope.CurrentUser));
@@ -71,7 +71,7 @@ public partial class RegressionTests {
                         Check(Criptografia.ToInsecureString(secure)=="direct-field-replacement","public secure-field replacement cannot retain a stale cache");
                 }
             }
-            byte[][] chain=(byte[][])typeof(Criptografia).GetField("decryptionEntropies",shared).GetValue(null);
+            byte[][] chain=MegaDownloader.Platform.WindowsDpapiSecretProtector.DecryptionEntropies.ToArray();
             foreach(byte[] entropy in chain.Skip(1)) {
                 var old=(XmlDocument)saved.CloneNode(true);
                 foreach(string name in names)using(var plain=Criptografia.DecryptString_DPAPI(saved.DocumentElement[name].InnerText))

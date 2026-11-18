@@ -29,6 +29,15 @@ public partial class App : Application
             Services.GetRequiredService<IThemeService>().Initialize();
             Services.GetRequiredService<IAppLogger>().Info("Avalonia shell starting");
 
+            // Secrets at rest use the platform scheme: DPAPI on Windows, an AES-GCM key
+            // file elsewhere. The Windows protector keeps the legacy entropy chain so
+            // existing configuration files keep working.
+            Criptografia.SetSecretProtector(
+                OperatingSystem.IsWindows()
+                    ? new WindowsDpapiSecretProtector()
+                    : new AesFileSecretProtector(
+                        Services.GetRequiredService<IPlatformServices>().GetAppDataDirectory("MegaDownloader")));
+
             desktop.MainWindow = new MainWindow
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
@@ -38,7 +47,9 @@ public partial class App : Application
             {
                 // Only dispose the page if it was actually created; resolving it here
                 // would construct the view model and start loading the queue at shutdown.
+                Services.GetService<ClipboardMonitor>()?.Dispose();
                 Services.GetService<DownloadsPageViewModel>()?.Dispose();
+                WebServerHost.Stop();
                 Services.GetRequiredService<DownloadEngineService>().Dispose();
             };
         }
@@ -63,6 +74,8 @@ public partial class App : Application
         services.AddSingleton<INavigationService, NavigationService>();
 
         services.AddSingleton<DownloadEngineService>();
+        services.AddSingleton<LinkIntakeService>();
+        services.AddSingleton<ClipboardMonitor>();
         services.AddTransient<AddLinksViewModel>();
         services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();

@@ -1936,10 +1936,12 @@ public partial class RegressionTests {
     static void StreamingCases(LocalFileServer upstream,byte[] plain,string key) {
         var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
         cfg.ServidorStreamingPassword="";
+        cfg.ServidorStreamingActivo=true;
+        cfg.ServidorStreamingPuerto=FreePort();
         var info=new Conexion.InformacionFichero(); info.FileID="TESTFILE"; info.FileKey=key; info.Nombre="data.bin"; info.Tamano=plain.Length; info.URL=upstream.Url;
-        var cache=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)typeof(StreamingModule).GetField("Urls",shared).GetValue(null);
-        cache["TESTFILE|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(3),info);
-        int port=FreePort(); var server=new HttpServer.HttpServer(); server.Add(new StreamingModule(ref cfg)); server.Start(IPAddress.Loopback,port);
+        StreamingMediaResponder.Cache["TESTFILE|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(3),info);
+        int port=cfg.ServidorStreamingPuerto;
+        WebServerHost.Start(null,cfg);
         try {
             long[][] cases={null,new long[]{0,0},new long[]{1,1},new long[]{15,16},new long[]{16,16},new long[]{plain.Length-2,plain.Length-1},new long[]{15,Math.Min(plain.Length-1,50000)}};
             foreach(var range in cases) foreach(int fragment in new[]{0,2}) {
@@ -1954,7 +1956,7 @@ public partial class RegressionTests {
                         Check(resp.ContentLength==got.Length && got.SequenceEqual(expected),"streaming exact bytes: "+plain.Length+" "+(range==null?"full":range[0]+"-"+range[1])+" fragment="+fragment);
                     }
             }
-        } finally { server.Stop(); }
+        } finally { WebServerHost.Stop(); StreamingMediaResponder.Cache.Clear(); }
     }
     static void SameNameDownloads(byte[] plainA,string keyA,byte[] encryptedA,bool duplicateLink=false) {
         byte[] plainB=duplicateLink?plainA:plainA.Select(x=>(byte)(x^0x5A)).ToArray(); string keyB=MakeKey(plainB);
@@ -2123,8 +2125,7 @@ public partial class RegressionTests {
         infoType.GetField("Nombre").SetValue(info,"data.bin");
         infoType.GetField("Tamano").SetValue(info,1000L);
         infoType.GetField("URL").SetValue(info,"invalid upstream URL");
-        var moduleType=typeof(StreamingModule);
-        var urls=(Dictionary<string,KeyValuePair<DateTime,Conexion.InformacionFichero>>)moduleType.GetField("Urls",shared).GetValue(null);
+        var urls=StreamingMediaResponder.Cache;
         urls.Clear(); urls["HTTPRAW01|"+key]=new KeyValuePair<DateTime,Conexion.InformacionFichero>(DateTime.Now.AddMinutes(5),(Conexion.InformacionFichero)info);
         var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
         cfg.ServidorStreamingActivo=true;
@@ -2136,7 +2137,7 @@ public partial class RegressionTests {
         cfg.ServidorWebPuerto=((IPEndPoint)busy.LocalEndpoint).Port;
         try {
             WebRequest.DefaultWebProxy=null;
-            Check(!string.IsNullOrEmpty(ServidorWebController.StartWebServer(null,cfg)),
+            Check(!string.IsNullOrEmpty(WebServerHost.Start(null,cfg)),
                   "the busy remote-control port reports an error while streaming still starts");
             foreach(bool ranged in new[]{false,true}) foreach(bool compressed in new[]{false,true}) {
                 using(var client=new TcpClient(IPAddress.Loopback.ToString(),cfg.ServidorStreamingPuerto)) {
@@ -2177,7 +2178,7 @@ public partial class RegressionTests {
                 }
             }
         } finally {
-            ServidorWebController.StopWebServer();
+            WebServerHost.Stop();
             WebRequest.DefaultWebProxy=previousProxy;
             busy.Stop();
         }

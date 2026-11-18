@@ -16,7 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../MegaDownloader.Full/MegaDownloader.Full.csproj" />
-    <Reference Include="HttpServer"><HintPath>../src/Resources/DLLs/HttpServer.dll</HintPath></Reference>
     <Reference Include="ObjectListView2022NET"><HintPath>../src/Resources/DLLs/ObjectListView2022NET.dll</HintPath></Reference>
     <PackageReference Include="System.Resources.Extensions" Version="10.0.0" />
   </ItemGroup>

@@ -17,7 +17,7 @@
 | Phase 1 | 把下载引擎与设置抽取到 `MegaDownloader.Core` | ✅ 完成（`2b4e778`，已推送） |
 | Phase 2 | 在 Avalonia 中重建下载队列（虚拟化表格、实时进度） | ✅ 完成 |
 | Phase 3 | 迁移剩余对话框与设置页 | ✅ 完成（添加链接、属性、编码/ELC、流媒体库、设置标签） |
-| Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | ⬜ 未开始 |
+| Phase 4 | 替换内嵌 HTTP 服务器和其余 Windows-only 助手 | 🚧 进行中（Kestrel 服务器、DPAPI 抽象、7z 托管回退已完成；剪贴板/协议入口待做） |
 | Phase 5 | Windows / macOS / Linux 打包发布 | ⬜ 未开始 |
 
 说明：Avalonia UI 不受旧 WinForms 排布约束，允许重写视觉风格与整体布局，按现代桌面应用继续迭代优化。
@@ -165,10 +165,51 @@
 
 ### 5.2 后续（非阻塞）
 
-- [ ] 流媒体服务器本体（Phase 4 用 Kestrel 替换内嵌 HttpServer；当前只持久化设置并提供媒体库管理）。
-- [ ] 添加链接：剪贴板监听、`mega://` 协议入口、文件夹分享的完整路径展示（Phase 4 平台层）。
 - [ ] 流媒体库导入/导出与播放链接复制。
 - [ ] 队列拖拽排序、错误重试策略界面、单文件限速的快捷入口。
+- [ ] 文件夹分享在「添加链接」中的完整路径展示。
+
+---
+
+## 五之二、Phase 4 详细清单
+
+### 5b.1 已完成：内嵌 HTTP 服务器 → Kestrel
+
+- [x] 删除 `src/HttpModule/`（`WebInterfaceModule`、`StreamingModule`、`StreamingLibraryModule`）与 `ServidorWebController`，移除 `HttpServer.dll` 引用（Full 与 Tests 两处）。
+- [x] `MegaDownloader.Core` 增加 `<FrameworkReference Include="Microsoft.AspNetCore.App" />`。
+- [x] `WebServerHost`：拥有两个可选监听器（远程控制 / 流媒体），分别启动、分别报错；端口占用与 LAN 绑定规则与旧实现一致；`StartAsync/StopAsync` 通过 `Task.Run` 执行，避免在 UI 线程或 WinForms 测试宿主上同步等待 Kestrel 造成死锁。
+- [x] `RemoteControlResponder`：`/main`、`/login`、`/logout`、`/style.css`、`/favicon.ico` 与四个 AJAX 端点；保留 PBKDF2 登录哈希、并发上限、滑动窗口锁定、每个变更型 POST 的 CSRF 校验与 gzip 响应。
+- [x] `StreamingMediaResponder`：`/streaming` 的口令校验、`mega=`/`id=`/`t=` 解析、RFC 7233 Range（416、后缀区间、开区间、无法解析时按 §3.1 忽略）、上游范围对齐解密与上游提前结束保护。`HttpWebRequest.AddRange` 原生支持 `long`，删掉了 >2 GB 的反射 hack；客户端存活检查改为请求中止令牌，不再反射 `HttpServer` 私有成员。
+- [x] `StreamingLibraryResponder`：`/library`、`/manage`、`/login` 与 `/ajax` JSON API（Load/Save/Delete/LoadAll/OpenVLC/ImportLinks/ExportLinks），契约不变，原 jQuery 页面可直接使用。
+- [x] `WebTemplates`：把四个页面模板内嵌进 Core。**这些模板此前从未进入本仓库**（`HttpModule\Template\` 只存在于 `I:\v1.9`），所以 WinForms 版的 Web 远程控制与流媒体页面在启动时必然抛 "Error template not found"；现放在 `src/Resources/Web/` 并随 Core 内嵌。
+- [x] `DownloadEngineService` 实现 `IDownloaderService`，Avalonia 壳无需 WinForms `Main` 即可承载远程控制（速度/活动/完成/错误/排队计数、开始/停止、远程加链）。
+- [x] Avalonia：设置页新增 **Web remote** 标签（启用、端口、页面标题、会话超时、口令、LAN 访问与绑定 IP），保存后重启两个服务器；应用启动加载队列后按配置启动，退出时停止。
+- [x] WinForms 壳改为调用同一个 `WebServerHost`，两个应用共享一份实现。
+
+### 5b.2 已完成：DPAPI → 可替换的口令保护器
+
+- [x] 新增 `ISecretProtector`（`MegaDownloader.Core/Platform/SecretProtector.cs`）。
+- [x] `WindowsDpapiSecretProtector`：保留原有 DPAPI 与历史 entropy 链，旧配置文件继续可读。
+- [x] `AesFileSecretProtector`：macOS/Linux 使用 AES-256-GCM（随机 nonce、仅本人可读的 key 文件）。此前在非 Windows 上任何配置保存都会抛平台异常。
+- [x] `Criptografia.EncryptString_DPAPI` / `DecryptStringWithCacheInfo` 改为走保护器；`SetSecretProtector` 可替换实现，默认按操作系统选择。
+- [x] 回归测试的 entropy 链断言改为读取 `WindowsDpapiSecretProtector.DecryptionEntropies`。
+
+### 5b.3 已完成：7zr.exe 的跨平台回退
+
+- [x] `.7z` 解压顺序：系统 7-Zip → 内嵌 `7zr.exe` → SharpCompress 托管解码（LZMA/LZMA2/BCJ/AES）。
+- [x] `.7z.001` 分卷集仍需要 CLI，无 CLI 时给出明确的本地化错误，而不是笼统的"没有可执行文件"。
+
+### 5b.4 已完成：剪贴板与链接入口
+
+- [x] `LinkIntakeService`（Core）：把任意文本（剪贴板、命令行、`mega://` 激活参数）解析成队列条目，复用 `URLProcessor` 展开文件夹/ELC、按 `BatchLinkPreflight.Identity` 去重、`DownloadPackageBuilder` 建包，返回结构化结果（NoLinks / AllDuplicates / Added / NotReady / Failed）。
+- [x] `ClipboardMonitor`（Avalonia）：900 ms 轮询剪贴板（Avalonia 无变更事件），只对确实含链接的文本触发，跳过重复内容与并发重入；受设置项「Add MEGA links copied to the clipboard」（`AnalizarPortapapeles`）控制，无需重启。
+- [x] 设置页 General 增加该开关；状态栏显示入库结果。
+- [x] `DownloadEngineService` 的 `ControlRemotoAgregarLinks` 与剪贴板路径共用同一套展开/去重/建包逻辑。
+
+### 5b.5 待做（Phase 4 剩余）
+
+- [ ] `mega://` 协议激活参数在 Avalonia 壳中的入口（服务与解析已就绪，尚未接命令行/单实例转发）。
+- [ ] macOS/Linux 的 keychain/libsecret 后端（当前 AES key 文件是可用的过渡方案）。
 
 ---
 

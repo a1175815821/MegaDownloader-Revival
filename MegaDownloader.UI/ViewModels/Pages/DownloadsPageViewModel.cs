@@ -81,6 +81,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         {
             await _engine.LoadAsync();
             Status = "Queue loaded";
+
+            // The queue is loaded, so the browser remote control and the streaming
+            // server have something to act on. Starting them is a no-op unless the
+            // configuration enables them.
+            await Task.Run(() =>
+            {
+                string error = WebServerHost.Start(_engine, _engine.Config);
+                if (!string.IsNullOrEmpty(error))
+                    Log.WriteError("Web server did not start: " + error);
+            });
         }
         catch (Exception ex)
         {

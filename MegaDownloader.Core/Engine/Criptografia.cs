@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -19,52 +19,43 @@ namespace MegaDownloader
         #region Criptografía interna
 
 
-        // DPAPI application-specific entropy. This MUST stay derived from a value that never
-        // changes between releases: it used to come from AssemblyName.FullName, which embeds
-        // the version, so every bump silently invalidated the credentials, download-queue
-        // links and streaming-library links written by the previous release (they decrypted
-        // to empty strings with no prompt). Keeping the value out of source bought nothing —
-        // DPAPI relies on the CurrentUser scope, and anyone who can run code as the user can
-        // bypass it regardless of the entropy.
-        private const string AppIdentity = "MegaDownloader";
+        // Secrets at rest are handled by a platform protector. Windows keeps the original
+        // DPAPI scheme (including its historical entropy chain, so existing configuration
+        // files keep working); macOS and Linux use an AES-GCM key file instead, because
+        // DPAPI does not exist there and every save used to fail with a platform exception.
+        private static volatile Platform.ISecretProtector _protector;
 
-        // Entropy used by v1.9 .. v2.3.0, before it was derived from the assembly identity.
-        private const string PreDerivationEntropyLiteral = "G*SNAfhHW5A¿Amck+XMLCM6M#$xEK;9q";
-
-        // Releases that derived their entropy from AssemblyName.FullName, from the introduction
-        // of that scheme (v2.4.0) to the last one that shipped it (v2.5.3). Their data is still
-        // on users' disks. Do NOT add later releases here — they write with the stable entropy.
-        private static readonly string[] versionDerivedReleases = new[] { "2.4.0.0", "2.4.1.0", "2.4.2.0", "2.4.3.0", "2.4.4.0", "2.4.5.0", "2.4.6.0", "2.4.7.0", "2.5.0.0", "2.5.1.0", "2.5.2.0", "2.5.3.0" };
-
-        private static byte[] entropy = DeriveEntropy(AppIdentity);
-
-        // Decryption candidates, most likely first. VB runs shared field initialisers in textual
-        // declaration order, so this must stay below entropy/versionDerivedReleases.
-        private static readonly byte[][] decryptionEntropies = BuildDecryptionEntropyChain();
-
-        private static byte[] DeriveEntropy(string identity)
+        /// <summary>Installs the protector used for secrets written to disk.</summary>
+        public static void SetSecretProtector(Platform.ISecretProtector protector)
         {
-            using (var sha = new SHA256Managed())
+            _protector = protector;
+        }
+
+        internal static Platform.ISecretProtector SecretProtector
+        {
+            get
             {
-                return sha.ComputeHash(System.Text.Encoding.Unicode.GetBytes(identity));
+                var existing = _protector;
+                if (existing is not null)
+                    return existing;
+
+                // Lazy default: callers that never configure one (tests, the WinForms shell
+                // before start-up completes) still get the platform's native scheme.
+                var created = OperatingSystem.IsWindows()
+                    ? (Platform.ISecretProtector)new Platform.WindowsDpapiSecretProtector()
+                    : new Platform.AesFileSecretProtector(DefaultAppDataDirectory());
+                _protector = created;
+                return created;
             }
         }
 
-        private static byte[][] BuildDecryptionEntropyChain()
-        {
-            var chain = new List<byte[]>();
-            chain.Add(entropy);
-            foreach (string release in versionDerivedReleases)
-                // AssemblyName.FullName layout for a culture-neutral, non-strong-named assembly.
-                chain.Add(DeriveEntropy(AppIdentity + ", Version=" + release + ", Culture=neutral, PublicKeyToken=null"));
-            chain.Add(System.Text.Encoding.Unicode.GetBytes(PreDerivationEntropyLiteral));
-            return chain.ToArray();
-        }
+        private static string DefaultAppDataDirectory() => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader");
 
         public static string EncryptString_DPAPI(SecureString input)
         {
-            byte[] encryptedData = System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.Unicode.GetBytes(ToInsecureString(input)), entropy, System.Security.Cryptography.DataProtectionScope.CurrentUser);
-            return Convert.ToBase64String(encryptedData);
+            string plaintext = ToInsecureString(input);
+            return SecretProtector.Protect(plaintext);
         }
 
         public static SecureString DecryptString_DPAPI(string encryptedData)
@@ -81,49 +72,19 @@ namespace MegaDownloader
             if (string.IsNullOrEmpty(encryptedData))
                 return new SecureString();
 
-            byte[] blob;
-            try
+            if (SecretProtector.TryUnprotect(encryptedData, out string plaintext, out bool currentKey))
             {
-                blob = Convert.FromBase64String(encryptedData);
-            }
-            catch
-            {
-                // Not base64: a plaintext value left by a version that predates encryption.
-                // Callers have their own plaintext fallback, so stay quiet to avoid log spam.
-                return new SecureString();
+                // Reuse the stored ciphertext only when it was written with the current key;
+                // a value from an older release is re-encrypted on the next save.
+                if (currentKey && !string.IsNullOrEmpty(plaintext))
+                    currentCiphertext = encryptedData;
+                return ToSecureString(plaintext);
             }
 
-            for (int i = 0, loopTo = decryptionEntropies.Length - 1; i <= loopTo; i++)
-            {
-                byte[] decryptedData = null;
-                try
-                {
-                    decryptedData = System.Security.Cryptography.ProtectedData.Unprotect(blob, decryptionEntropies[i], System.Security.Cryptography.DataProtectionScope.CurrentUser);
-                    if (i > 0)
-                    {
-                        Log.WriteDebug("DecryptString_DPAPI: value was written by an older release (entropy #" + i + "); it is re-encrypted with the current entropy on the next save.");
-                    }
-                    var secure = ToSecureString(System.Text.Encoding.Unicode.GetString(decryptedData));
-                    if (i == 0)
-                        currentCiphertext = encryptedData;
-                    // Not this entropy; keep walking the chain. The catch must stay broad —
-                    // callers rely on this function never throwing.
-                    return secure;
-                }
-                catch
-                {
-                }
-                finally
-                {
-                    if (decryptedData is not null)
-                        Array.Clear(decryptedData, 0, decryptedData.Length);
-                }
-            }
-
-            // P0-4/P0-5：DPAPI 解密失败不要静默置空。A genuine blob that no known entropy can
-            // open (config restored onto another machine/user account, or corrupted) is logged
-            // so callers such as DecryptPasswordField can turn it into a re-entry prompt.
-            Log.WriteWarning("DecryptString_DPAPI: DPAPI decrypt failed with the current entropy and all " + (decryptionEntropies.Length - 1) + " historical ones (cross-machine/user restore or corrupted value); returning empty, caller should prompt for re-entry");
+            // A genuine blob that cannot be opened (config restored onto another machine or
+            // account, or corrupted) must not be silently blanked: callers such as
+            // DecryptPasswordField turn this into a re-entry prompt.
+            Log.WriteWarning("DecryptString_DPAPI: the stored value could not be decrypted on this machine (cross-machine/user restore or corrupted value); returning empty, caller should prompt for re-entry");
             return new SecureString();
         }
 

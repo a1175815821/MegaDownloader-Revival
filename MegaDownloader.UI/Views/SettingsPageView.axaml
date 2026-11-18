@@ -64,6 +64,8 @@
                                                   IsChecked="{Binding StartOnLaunch}" />
                                         <CheckBox Content="Remember the last used add-links options"
                                                   IsChecked="{Binding KeepLastOptions}" />
+                                        <CheckBox Content="Add MEGA links copied to the clipboard"
+                                                  IsChecked="{Binding WatchClipboard}" />
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
@@ -251,7 +253,67 @@
                                            Text="The saved streaming password could not be decrypted on this machine. Enter it again." />
                                 <TextBlock Classes="caption"
                                            TextWrapping="Wrap"
-                                           Text="The embedded HTTP server is replaced with Kestrel in Phase 4. These values are persisted now so the new server can pick them up." />
+                                           Text="The streaming server runs on Kestrel and only listens on 127.0.0.1. Playback URLs use this port; the library page is served from the same port." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Web remote">
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="4,12,4,4" MaxWidth="820" HorizontalAlignment="Left">
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Browser remote control" Classes="h2" />
+                                <CheckBox Content="Enable the web remote control" IsChecked="{Binding WebServerEnabled}" />
+
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                                      RowSpacing="10" ColumnSpacing="12"
+                                      IsEnabled="{Binding WebServerEnabled}">
+                                    <TextBlock Text="Port" VerticalAlignment="Center" />
+                                    <NumericUpDown Grid.Column="1"
+                                                   Value="{Binding WebServerPort}"
+                                                   Minimum="0" Maximum="65535" Increment="1"
+                                                   FormatString="0"
+                                                   Width="140" HorizontalAlignment="Left" />
+
+                                    <TextBlock Grid.Row="1" Text="Page title" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding WebServerTitle}"
+                                             Watermark="Defaults to the application name" />
+
+                                    <TextBlock Grid.Row="2" Text="Session timeout" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                        <NumericUpDown Value="{Binding WebServerTimeout}"
+                                                       Minimum="0" Maximum="99" Increment="1"
+                                                       FormatString="0"
+                                                       Width="140" />
+                                        <TextBlock Classes="caption" Text="minutes" VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="3" Text="Password" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="3" Grid.Column="1"
+                                             Text="{Binding WebServerPassword}"
+                                             PasswordChar="●"
+                                             Watermark="Required for LAN access" />
+
+                                    <TextBlock Grid.Row="4" Text="LAN access" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Spacing="8">
+                                        <CheckBox Content="Allow other devices on the network"
+                                                  IsChecked="{Binding WebServerAllowLan}" />
+                                        <TextBox Text="{Binding WebServerBindIp}"
+                                                 IsEnabled="{Binding WebServerAllowLan}"
+                                                 Watermark="Bind IP (empty = all interfaces)" />
+                                        <TextBlock Classes="caption"
+                                                   TextWrapping="Wrap"
+                                                   Text="Loopback only by default. Allowing LAN access requires a password; the page is then reachable from phones and other computers on the same network." />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Classes="caption"
+                                           TextWrapping="Wrap"
+                                           Text="Saving restarts both servers so port and password changes apply immediately." />
                             </StackPanel>
                         </Border>
                     </StackPanel>

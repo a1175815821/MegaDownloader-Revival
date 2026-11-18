@@ -18,7 +18,7 @@ namespace MegaDownloader
     /// (<see cref="Paquete"/>, <see cref="Fichero"/>, <see cref="ThrottledStreamController"/>)
     /// through a small public surface so the Avalonia UI can load, run and edit the queue.
     /// </summary>
-    public sealed class DownloadEngineService : IDisposable
+    public sealed class DownloadEngineService : IDisposable, IDownloaderService
     {
         private readonly object _stateGate = new object();
         private readonly object _scheduleGate = new object();
@@ -759,5 +759,124 @@ namespace MegaDownloader
                 Log.WriteWarning("Saving the queue on shutdown failed: " + Log.SafeException(ex));
             }
         }
+
+        #region IDownloaderService (browser remote control)
+
+        // Aggregate state for the web remote control. Counts come from the same package
+        // snapshots the queue page uses, so both surfaces always agree.
+
+        public decimal? ControlRemotoObtenerVelocidad()
+        {
+            decimal total = 0m;
+            foreach (Paquete package in SnapshotPackages())
+            {
+                try
+                {
+                    total += package.DescargaVelocidadKBs();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+            return total;
+        }
+
+        public int? ControlRemotoObtenerDescargasActivas() => CountFiles(IsActive);
+
+        public int? ControlRemotoObtenerDescargasCompletadas() => CountFiles(state => state == Estado.Completado);
+
+        public int? ControlRemotoObtenerDescargasErroneas() => CountFiles(state => state == Estado.Erroneo);
+
+        public int? ControlRemotoObtenerDescargasEnCola() => CountFiles(state => state == Estado.EnCola);
+
+        public DownloaderEstado ControlRemotoObtenerEstado() => State switch
+        {
+            DownloadEngineState.Running => DownloaderEstado.Descargando,
+            DownloadEngineState.Paused => DownloaderEstado.Pausa,
+            _ => DownloaderEstado.Parado
+        };
+
+        public void ControlRemotoDescargar() => StartAll();
+
+        public void ControlRemotoParar() => StopAll();
+
+        public string ControlRemotoAgregarLinks(string Links, string NombrePaquete, bool CrearDirectorio)
+        {
+            if (!IsLoaded)
+                return Language.GetText("Loading please wait");
+            if (Paquete.HasTransientLoadError)
+                return Language.GetText("Queue_LoadFailed");
+
+            List<string> urls = URLExtractor.ExtraerURLs(Links);
+            if (urls.Count == 0)
+                return Language.GetText("No valid URLs have been inserted");
+
+            string destination = _config.RutaDefecto;
+            if (string.IsNullOrEmpty(destination) || !System.IO.Directory.Exists(destination))
+                return Language.GetText("Can not add remote links without a default path");
+
+            List<URLProcessor.FileURL> expanded;
+            try
+            {
+                expanded = URLProcessor.ProcessURLs(urls, ref _config);
+            }
+            catch (Exception ex)
+            {
+                Log.WriteError("Remote link intake failed: " + Log.SafeException(ex));
+                return ex.Message;
+            }
+
+            if (expanded is null || expanded.Count == 0)
+                return Language.GetText("No valid URLs have been inserted");
+
+            Paquete package;
+            try
+            {
+                package = DownloadPackageBuilder.Build(
+                    expanded,
+                    NombrePaquete ?? string.Empty,
+                    destination,
+                    CrearDirectorio,
+                    _config.ExtraerAutomaticamente,
+                    string.Empty,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                Log.WriteError("Building a package from remote links failed: " + Log.SafeException(ex));
+                return ex.Message;
+            }
+
+            if (!AddPackage(package))
+            {
+                foreach (Fichero file in package.SnapshotFicheros())
+                    file.Dispose();
+                return Language.GetText("Loading please wait");
+            }
+
+            return string.Empty;
+        }
+
+        private int CountFiles(Func<Estado, bool> predicate)
+        {
+            int count = 0;
+            foreach (Paquete package in SnapshotPackages())
+            {
+                foreach (Fichero file in package.SnapshotFicheros())
+                {
+                    try
+                    {
+                        if (predicate(file.DescargaEstado()))
+                            count++;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                }
+            }
+            return count;
+        }
+
+        #endregion
     }
 }

@@ -10,6 +10,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly INavigationService _navigation;
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
+    private readonly ClipboardMonitor _clipboard;
 
     [ObservableProperty]
     private NavigationItemViewModel? selectedNavigationItem;
@@ -27,6 +28,7 @@ public partial class MainWindowViewModel : ViewModelBase
         INavigationService navigation,
         IThemeService theme,
         IDialogService dialogs,
+        ClipboardMonitor clipboard,
         DownloadsPageViewModel downloadsPage,
         SettingsPageViewModel settingsPage,
         StreamingPageViewModel streamingPage)
@@ -34,7 +36,17 @@ public partial class MainWindowViewModel : ViewModelBase
         _navigation = navigation;
         _theme = theme;
         _dialogs = dialogs;
+        _clipboard = clipboard;
         DownloadsPage = downloadsPage;
+
+        // Clipboard monitoring is opt-in through the configuration; the monitor itself
+        // checks the setting on every tick, so toggling it needs no restart.
+        _clipboard.IntakeCompleted += result =>
+        {
+            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed or LinkIntakeStatus.NotReady)
+                StatusText = result.Message;
+        };
+        _clipboard.Start();
 
         NavigationItems = new ObservableCollection<NavigationItemViewModel>
         {

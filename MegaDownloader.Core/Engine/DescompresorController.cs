@@ -679,6 +679,12 @@ namespace MegaDownloader
                 {
                     return SharpCompress.Archives.Zip.ZipArchive.OpenArchive(PathFichero, ReaderOpts(Password));
                 }
+                else if (PathFichero.ToUpper().EndsWith(".7Z"))
+                {
+                    // Managed 7z decoding, used when no 7-Zip command-line tool is
+                    // available (macOS/Linux, or a Windows machine without 7-Zip).
+                    return SharpCompress.Archives.SevenZip.SevenZipArchive.OpenArchive(PathFichero, ReaderOpts(Password));
+                }
                 else
                 {
                     return SharpCompress.Archives.ArchiveFactory.OpenArchive(PathFichero, ReaderOpts(null));
@@ -790,6 +796,12 @@ namespace MegaDownloader
             private static bool Is7zContainer(string PathFichero)
             {
                 return PathFichero.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) || rxVolumePath.Match(Path.GetFileName(PathFichero)).Groups["sz"].Success;
+            }
+
+            /// <summary>A .7z.001 / .7z.002 volume set, which only the 7-Zip CLI can join.</summary>
+            private static bool IsMultipart7z(string pathFichero)
+            {
+                return rxVolumePath.Match(Path.GetFileName(pathFichero)).Groups["sz"].Success;
             }
 
             public void Extract()
@@ -970,7 +982,17 @@ namespace MegaDownloader
                     cli = EnsureEmbedded7zr();
                 if (cli is null)
                 {
-                    throw new ApplicationException("No 7-Zip executable available to extract .7z archives.");
+                    // No 7-Zip CLI: decode in managed code. SharpCompress handles LZMA,
+                    // LZMA2, BCJ/BCJ2 and AES-encrypted headers, so .7z works on macOS and
+                    // Linux too, where the Windows-only 7zr.exe is not shipped.
+                    if (IsMultipart7z(PathFichero))
+                    {
+                        throw new NotSupportedException(Language.GetText(
+                            "Multipart .7z archives need the 7-Zip command-line tool. Install 7-Zip, or extract the archive with another tool."));
+                    }
+                    Log.WriteInfo("7z extraction: no 7-Zip executable found; using the managed extractor.");
+                    ExtractManaged();
+                    return;
                 }
 
                 // Both passes need the password: a header-encrypted archive (-mhe=on) cannot

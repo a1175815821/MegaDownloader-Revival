@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -146,7 +146,7 @@ public partial class RegressionTests {
                         InvokeMain(main,"CompleteStartup");
                         Check(workers.All(w=>w.Starts==1),"startup completion is idempotent after recovery");
                     } finally {
-                        ServidorWebController.StopWebServer();
+                        WebServerHost.Stop();
                         var timer=typeof(Main).GetField("_recoveryTimer",hidden).GetValue(main) as System.Windows.Forms.Timer;
                         if(timer!=null)timer.Dispose();
                         foreach(var worker in workers)worker.Dispose();
