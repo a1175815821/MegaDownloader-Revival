@@ -2078,9 +2078,14 @@ Public Class Main
             If quotaBannerPanel Is Nothing Then Return
             Dim quotaRem As TimeSpan? = MegaQuotaManager.GetRemaining()
             If quotaRem.HasValue Then
-                quotaBannerPanel.Visible = True
-                LayoutQuotaBanner()
-                LayoutDownloadArea()
+                ' 闪烁修复:仅在横幅由隐到显的翻转时重排工作区。此前每个 430ms tick 都
+                ' 无条件 LayoutDownloadArea,配额熔断期间(可达数小时)侧栏持续被全量重排。
+                ' 倒计时文本仍每 tick 更新(Label.Text 自带等值短路,开销极小)。
+                If Not quotaBannerPanel.Visible Then
+                    quotaBannerPanel.Visible = True
+                    LayoutQuotaBanner()
+                    LayoutDownloadArea()
+                End If
                 quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
                 If Not quotaNotified Then
                     quotaNotified = True
@@ -2646,8 +2651,18 @@ Public Class Main
         LayoutDownloadArea()
     End Sub
 
+    ' 闪烁修复:虚拟模式 TreeListView.RefreshObjects 每个刷新 tick 都重设 SelectedObjects
+    ' (先 Clear 再重选),即使选中项未变也会经 Application.Idle 抛 SelectionChanged。
+    ' 详情面板显隐/列表让位只取决于"有无选中",故缓存上一次的有无选中,仅在翻转时全量重排。
+    Private _lastHasSelection As Boolean = False
+
     Private Sub ListaDescargas_SelectionChanged(sender As Object, e As EventArgs) Handles ListaDescargas.SelectionChanged
-        If workbenchReady Then LayoutDownloadArea()
+        Dim hasSelection As Boolean = ListaDescargas IsNot Nothing AndAlso ListaDescargas.SelectedObject IsNot Nothing
+        Dim presenceChanged As Boolean = hasSelection <> _lastHasSelection
+        _lastHasSelection = hasSelection
+        ' 同一选中项被周期性重选(有无选中未变)时不再 LayoutDownloadArea,
+        ' 避免侧栏每 430ms 被全量重排而持续闪烁;详情数值仍由 UpdateDetailPanel 轻量更新。
+        If workbenchReady AndAlso presenceChanged Then LayoutDownloadArea()
         UpdateDetailPanel()
     End Sub
 
