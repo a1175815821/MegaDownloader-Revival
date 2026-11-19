@@ -54,6 +54,20 @@ namespace MegaDownloader
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         }
 
+        public static string DownloadFolder(Configuracion config)
+        {
+            if (!string.IsNullOrWhiteSpace(config.RutaDefecto))
+                return config.RutaDefecto.Trim();
+            if (OperatingSystem.IsWindows())
+            {
+                const string folders = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+                if (Microsoft.Win32.Registry.GetValue(folders, "{374DE290-123F-4565-9164-39C4925E467B}", null) is string redirected &&
+                    System.IO.Path.IsPathFullyQualified(Environment.ExpandEnvironmentVariables(redirected)))
+                    return Environment.ExpandEnvironmentVariables(redirected);
+            }
+            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        }
+
         /// <summary>Links found in the text, without touching the queue.</summary>
         public static IReadOnlyList<string> ExtractLinks(string? text)
         {
@@ -81,12 +95,7 @@ namespace MegaDownloader
                 return new LinkIntakeResult(LinkIntakeStatus.NoLinks, 0, 0, "No MEGA links found.");
 
             Configuracion config = _engine.Config;
-            string destination = config.RutaDefecto;
-            if (string.IsNullOrEmpty(destination) || !System.IO.Directory.Exists(destination))
-            {
-                return new LinkIntakeResult(LinkIntakeStatus.NotReady, links.Count, 0,
-                    "Set a default download folder in Settings before adding links from the clipboard.");
-            }
+            string destination = DownloadFolder(config);
 
             // The clipboard path uses the same package defaults as the add-links
             // window, so a copied link lands in the same place as a pasted one.
@@ -95,7 +104,7 @@ namespace MegaDownloader
             try
             {
                 var expanded = await Task.Run(
-                    () => URLProcessor.ProcessURLs(new List<string>(links), ref config),
+                    () => URLProcessor.ProcessURLs(new List<string>(links), ref config, ct: cancellationToken),
                     cancellationToken).ConfigureAwait(false);
 
                 if (expanded is null || expanded.Count == 0)
@@ -128,24 +137,27 @@ namespace MegaDownloader
                         cancellationToken),
                     cancellationToken).ConfigureAwait(false);
 
-                if (!_engine.AddPackage(package))
+                int added = _engine.AddUniquePackage(package);
+                if (added <= 0)
                 {
                     foreach (Fichero file in package.SnapshotFicheros())
                         file.Dispose();
-                    return new LinkIntakeResult(LinkIntakeStatus.NotReady, links.Count, 0, "The download queue is not ready.");
+                    return added == 0
+                        ? new LinkIntakeResult(LinkIntakeStatus.AllDuplicates, links.Count, 0, "Those links are already in the queue.")
+                        : new LinkIntakeResult(LinkIntakeStatus.NotReady, links.Count, 0, "The download queue is not ready.");
                 }
 
                 // The user asked for these links, so the transfer starts right away —
                 // the same behaviour as the legacy shell, where the add-links dialog
                 // had "start download" enabled by default.
-                _engine.TryStartAll(out _);
+                _engine.TryStartPending(out _);
 
                 return new LinkIntakeResult(
                     LinkIntakeStatus.Added,
                     links.Count,
-                    filtered.Count,
+                    added,
                     string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                        $"Added {filtered.Count} file(s) from the clipboard."));
+                        $"Added {added} file(s) from the clipboard."));
             }
             catch (OperationCanceledException)
             {

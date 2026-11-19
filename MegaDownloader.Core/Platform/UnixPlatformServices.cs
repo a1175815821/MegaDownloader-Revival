@@ -18,9 +18,9 @@ public sealed class UnixPlatformServices : IPlatformServices
     {
         _kind = kind;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        _appData = kind == PlatformKind.MacOS
+        _appData = ApplicationDataDirectory.Override ?? (kind == PlatformKind.MacOS
             ? Path.Combine(home, "Library", "Application Support", applicationName)
-            : Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") ?? Path.Combine(home, ".local", "share"), applicationName);
+            : Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") ?? Path.Combine(home, ".local", "share"), applicationName));
         Directory.CreateDirectory(_appData);
     }
 

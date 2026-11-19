@@ -68,7 +68,7 @@ namespace MegaDownloader
 
         private static string GetLanguageDirectory()
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Language");
+            return Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "Language");
         }
 
         private static Dictionary<string, XmlDocument> LoadBuiltinPacks()

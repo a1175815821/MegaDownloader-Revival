@@ -1217,7 +1217,7 @@ namespace MegaDownloader
         /// </summary>
             private static string EnsureEmbedded7zr()
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"MegaDownloader\bin");
+                string dir = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "bin");
                 string target = Path.Combine(dir, "7zr.exe");
 
                 try

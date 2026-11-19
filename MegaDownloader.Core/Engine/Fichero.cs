@@ -681,6 +681,8 @@ namespace MegaDownloader
             }
             public Configuracion Config;
             public int NumConexionesDisponibles;
+            public Paquete Package;
+            public bool FirstStart;
         }
 
         // Usamos un worker para iniciar la descarga en segundo plano, ya que es necesario llamar a ActualizarInformacionFichero pero esta función
@@ -743,6 +745,7 @@ namespace MegaDownloader
                     return;
                 }
 
+                worker.Package?.ApplyVerifiedName(this, worker.FirstStart);
                 NumErroresChunk = 0;
                 // B8: "清空 + 装配"必须在同一把锁下完成,后续全程使用局部引用 dl。
                 // downloader_Canceled 会在 Mutex.FicheroDownloader 内把 Me.Downloader 置 Nothing;
@@ -835,19 +838,20 @@ namespace MegaDownloader
         }
 
 
-        public void Start(ref Configuracion Config, int NumConexionesDisponibles)
+        public void Start(ref Configuracion Config, int NumConexionesDisponibles, Paquete package = null)
         {
             if (disposedValue || Estado.Erroneo == DescargaEstado())
                 return;
 
             if (bgArranque is null && (Downloader is null || Downloader.CanStart))
             {
+                bool firstStart = !DescargaComenzada;
                 EstadoDescarga = Estado.CreandoLocal;
                 DescargaComenzada = true;
                 _StartupCancelled = false;
                 // B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
                 System.Threading.Interlocked.Exchange(ref _cancellationNotified, 0);
-                bgArranque = new DownloadWorker(ref Config, NumConexionesDisponibles);
+                bgArranque = new DownloadWorker(ref Config, NumConexionesDisponibles) { Package = package, FirstStart = firstStart };
                 bgArranque.WorkerSupportsCancellation = false;
                 bgArranque.WorkerReportsProgress = false;
                 bgArranque.RunWorkerAsync();

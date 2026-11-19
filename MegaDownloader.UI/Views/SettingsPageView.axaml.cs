@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using MegaDownloader.UI.ViewModels;
@@ -23,7 +24,7 @@ public partial class SettingsPageView : UserControl
         var folders = await TopLevel.GetTopLevel(this)!.StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
             {
-                Title = "Choose default download folder",
+                Title = UiText.Get("Choose default download folder"),
                 AllowMultiple = false
             });
 

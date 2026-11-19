@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StreamGeometry x:Key="Icon.Brand">M2,19 L2,6 L7,10 L12,4 L17,10 L22,6 L22,19 L17,19 L17,14 L12,19 L7,14 L7,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Downloads">M11,2 H13 V13 L17,9 18.5,10.5 12,17 5.5,10.5 7,9 11,13 Z M4,19 H20 V21 H4 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Library">M4,4 H20 V20 H4 Z M6,6 V18 H18 V6 Z M10,8 L16,12 10,16 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Settings">M4,6 H10 V4 H12 V6 H20 V8 H12 V10 H10 V8 H4 Z M4,16 H14 V14 H16 V16 H20 V18 H16 V20 H14 V18 H4 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Link">M8,11 H16 V13 H8 Z M2,12 C2,9 4,7 7,7 H10 V9 H7 C5,9 4,10 4,12 S5,15 7,15 H10 V17 H7 C4,17 2,15 2,12 Z M14,7 H17 C20,7 22,9 22,12 S20,17 17,17 H14 V15 H17 C19,15 20,14 20,12 S19,9 17,9 H14 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Key">M8,3 A5,5 0 1 0 11,12 L14,15 V18 H17 V21 H21 V17 L14,10 A5,5 0 0 0 8,3 Z M8,5 A2,2 0 1 1 8,9 A2,2 0 1 1 8,5 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Help">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M12,4 A8,8 0 1 1 12,20 A8,8 0 1 1 12,4 Z M11,16 H13 V18 H11 Z M8,9 C8,5 16,5 16,9 C16,12 13,12 13,15 H11 C11,11 14,11 14,9 C14,7 10,7 10,9 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Moon">M20.4,14.1 A9,9 0 0 1 9.9,3.6 A9,9 0 1 0 20.4,14.1 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.SystemTheme">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M12,4 A8,8 0 0 1 12,20 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Theme">M12,1 L13,5 H11 Z M12,23 L11,19 H13 Z M1,12 L5,11 V13 Z M23,12 L19,13 V11 Z M4,4 L8,6 6,8 Z M20,4 L18,8 16,6 Z M4,20 L6,16 8,18 Z M20,20 L16,18 18,16 Z M12,7 A5,5 0 1 0 12,17 A5,5 0 1 0 12,7 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Plus">M11,4 H13 V11 H20 V13 H13 V20 H11 V13 H4 V11 H11 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Play">M7,4 L20,12 7,20 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Pause">M6,5 H10 V19 H6 Z M14,5 H18 V19 H14 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Stop">M6,6 H18 V18 H6 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.More">M5,10 A2,2 0 1 0 5,14 A2,2 0 1 0 5,10 Z M12,10 A2,2 0 1 0 12,14 A2,2 0 1 0 12,10 Z M19,10 A2,2 0 1 0 19,14 A2,2 0 1 0 19,10 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Folder">M2,5 H10 L12,7 H22 V20 H2 Z M4,9 V18 H20 V9 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.File">M5,2 H14 L19,7 V22 H5 Z M7,4 V20 H17 V9 H12 V4 Z M14,4 V7 H17 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Clock">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M12,4 A8,8 0 1 1 12,20 A8,8 0 1 1 12,4 Z M11,6 H13 V11 L17,14 16,16 11,12 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Check">M3,12 L5,10 10,15 19,6 21,8 10,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Speed">M2,14 A10,10 0 1 1 22,14 V19 H2 Z M4,14 V17 H20 V14 A8,8 0 1 0 4,14 Z M10,14 L17,8 13,16 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Chevron">M8,4 L16,12 8,20 6.5,18.5 13,12 6.5,5.5 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Arrow">M3,11 H17 L11,5 12.5,3.5 21,12 12.5,20.5 11,19 17,13 H3 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Search">M10,2 A8,8 0 1 0 15,16 L21,22 22.5,20.5 16.5,14.5 A8,8 0 0 0 10,2 Z M10,4 A6,6 0 1 1 10,16 A6,6 0 0 1 10,4 Z</StreamGeometry>
+</ResourceDictionary>

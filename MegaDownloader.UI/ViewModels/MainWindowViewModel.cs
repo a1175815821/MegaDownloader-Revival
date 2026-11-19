@@ -1,4 +1,5 @@
-using System.Collections.ObjectModel;
+using Avalonia.Media;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MegaDownloader.UI.Services;
@@ -10,8 +11,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly INavigationService _navigation;
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
-    private readonly ClipboardMonitor _clipboard;
-    private readonly ActivationService _activation;
+    private readonly DownloadsPageViewModel _downloads;
 
     [ObservableProperty]
     private NavigationItemViewModel? selectedNavigationItem;
@@ -20,10 +20,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private ViewModelBase? currentPage;
 
     [ObservableProperty]
-    private string statusText = "Ready";
+    private string statusText = UiText.Get("Ready");
 
     [ObservableProperty]
-    private string themeLabel = "Theme: Auto";
+    private string themeLabel = string.Empty;
 
     public MainWindowViewModel(
         INavigationService navigation,
@@ -38,36 +38,41 @@ public partial class MainWindowViewModel : ViewModelBase
         _navigation = navigation;
         _theme = theme;
         _dialogs = dialogs;
-        _clipboard = clipboard;
-        _activation = activation;
-        DownloadsPage = downloadsPage;
+        _downloads = downloadsPage;
 
         // Clipboard monitoring is opt-in through the configuration; the monitor itself
         // checks the setting on every tick, so toggling it needs no restart.
-        _clipboard.IntakeCompleted += result =>
+        clipboard.IntakeCompleted += result =>
         {
-            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed or LinkIntakeStatus.NotReady)
-                StatusText = result.Message;
+            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed or LinkIntakeStatus.NotReady or LinkIntakeStatus.AllDuplicates)
+                StatusText = IntakeMessage(result);
         };
-        _clipboard.Start();
+        clipboard.Start();
 
         // A mega:// activation (or a second launch) is reported in the status bar too:
         // without this the user sees no feedback at all when a link arrives.
-        _activation.IntakeCompleted += result =>
+        activation.IntakeCompleted += result =>
         {
             if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed
                 or LinkIntakeStatus.NotReady or LinkIntakeStatus.AllDuplicates)
-                StatusText = result.Message;
+                StatusText = IntakeMessage(result);
         };
 
         // The settings page can change the theme too; the toolbar label follows.
         _theme.ModeChanged += (_, _) => UpdateThemeLabel();
 
-        NavigationItems = new ObservableCollection<NavigationItemViewModel>
+        NavigationItems =
+        [
+            new("Downloads", GetIcon("Downloads"), downloadsPage),
+            new("Streaming library", GetIcon("Library"), streamingPage),
+            new("Settings", GetIcon("Settings"), settingsPage)
+        ];
+        UiText.Changed += (_, _) =>
         {
-            new("downloads", "Downloads", downloadsPage),
-            new("streaming", "Streaming", streamingPage),
-            new("settings", "Settings", settingsPage)
+            foreach (var item in NavigationItems)
+                item.ApplyLanguage();
+            UpdateThemeLabel();
+            StatusText = UiText.Get("Ready");
         };
 
         _navigation.CurrentPageChanged += (_, _) => CurrentPage = _navigation.CurrentPage;
@@ -77,14 +82,25 @@ public partial class MainWindowViewModel : ViewModelBase
         UpdateThemeLabel();
     }
 
-    public ObservableCollection<NavigationItemViewModel> NavigationItems { get; }
+    public IReadOnlyList<NavigationItemViewModel> NavigationItems { get; }
 
-    /// <summary>The queue page owns the live start/pause/stop state used by the toolbar.</summary>
-    public DownloadsPageViewModel DownloadsPage { get; }
+    private static string IntakeMessage(LinkIntakeResult result) => result.Status switch
+    {
+        LinkIntakeStatus.Added => UiText.Format("Added {0} file(s) to the queue.", result.AddedCount),
+        LinkIntakeStatus.AllDuplicates => UiText.Get("All selected links are already queued."),
+        LinkIntakeStatus.NotReady when result.Message == "The download queue is still loading." =>
+            UiText.Get("The download queue is still loading. Try again in a moment."),
+        LinkIntakeStatus.NotReady when result.Message == "The download queue is not ready." =>
+            UiText.Get("The queue is not ready yet. Try again in a moment."),
+        _ => UiText.Get(result.Message)
+    };
+
+    private static Geometry GetIcon(string name) =>
+        Application.Current!.Resources.TryGetResource("Icon." + name, null, out object? resource) && resource is Geometry icon
+            ? icon
+            : Geometry.Parse("M0,0");
 
     public string VersionText => AppInfo.Version;
-
-    public string RuntimeText => AppInfo.Runtime;
 
     partial void OnSelectedNavigationItemChanged(NavigationItemViewModel? value)
     {
@@ -93,13 +109,14 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private Task AddLinksAsync() => _dialogs.ShowAddLinksAsync();
+    private Task AddLinksAsync() => _downloads.AddLinksCommand.ExecuteAsync(null);
 
     [RelayCommand]
-    private Task EncodeLinksAsync() => _dialogs.ShowEncodeLinksAsync();
-
-    [RelayCommand]
-    private Task GenerateElcAsync() => _dialogs.ShowElcGenerateAsync();
+    private async Task ShowGuideAsync()
+    {
+        if (await _dialogs.ShowGuideAsync())
+            await AddLinksAsync();
+    }
 
     [RelayCommand]
     private void CycleTheme()
@@ -112,8 +129,13 @@ public partial class MainWindowViewModel : ViewModelBase
         };
 
         _theme.SetMode(next);
-        UpdateThemeLabel();
     }
 
-    private void UpdateThemeLabel() => ThemeLabel = $"Theme: {_theme.Mode}";
+    public Geometry ThemeIcon => GetIcon(_theme.Mode switch { ThemeMode.Dark => "Moon", ThemeMode.Light => "Theme", _ => "SystemTheme" });
+
+    private void UpdateThemeLabel()
+    {
+        ThemeLabel = UiText.Format("Theme: {0}", UiText.Get(_theme.Mode.ToString()));
+        OnPropertyChanged(nameof(ThemeIcon));
+    }
 }

@@ -3,10 +3,10 @@
         xmlns:vm="using:MegaDownloader.UI.ViewModels"
         x:Class="MegaDownloader.UI.Views.ElcAccountsWindow"
         x:DataType="vm:ElcAccountsViewModel"
-        Title="ELC accounts"
+        Title="{DynamicResource Loc.ELCAccounts}"
         Width="860" Height="720"
         MinWidth="720" MinHeight="600"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
 
     <Window.Styles>
         <Style Selector="TextBlock.status">
@@ -27,13 +27,13 @@
         </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-            <TextBlock Text="ELC accounts" Classes="h1" />
-            <TextBlock Classes="muted"
-                       TextWrapping="Wrap"
-                       Text="Accounts used to sign ELC links on the encoder server. Credentials are stored encrypted in Configuration.xml." />
-        </StackPanel>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="26,18" RowSpacing="12" Classes="reveal">
+        <Border BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,0,0,1" Padding="0,0,0,12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{DynamicResource Loc.ELCAccounts}" Classes="h1" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.ManageTheAccountsUsedToSignELCLinks}" />
+            </StackPanel>
+        </Border>
 
         <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="16">
             <Border Classes="card" Padding="10">
@@ -53,8 +53,8 @@
                     </ListBox>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-                        <Button Content="New account" Command="{Binding NewCommand}" />
-                        <Button Content="Delete" Command="{Binding DeleteCommand}" IsEnabled="{Binding HasSelection}" />
+                        <Button Content="{DynamicResource Loc.NewAccount}" Command="{Binding NewCommand}" />
+                        <Button Content="{DynamicResource Loc.Delete}" Command="{Binding DeleteCommand}" IsEnabled="{Binding HasSelection}" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -66,41 +66,41 @@
 
                         <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                               RowSpacing="10" ColumnSpacing="12">
-                            <TextBlock Text="Alias" VerticalAlignment="Center" />
-                            <TextBox Grid.Column="1" Text="{Binding Alias}" Watermark="Friendly name" />
+                            <TextBlock Text="{DynamicResource Loc.Alias}" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding Alias}" Watermark="{DynamicResource Loc.FriendlyName}" />
 
-                            <TextBlock Grid.Row="1" Text="Server URL" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Text="{DynamicResource Loc.ServerURL}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Url}" Watermark="https://…" />
 
-                            <TextBlock Grid.Row="2" Text="User" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Text="{DynamicResource Loc.User}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding User}" />
 
-                            <TextBlock Grid.Row="3" Text="API key" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="3" Text="{DynamicResource Loc.APIKey}" VerticalAlignment="Center" />
                             <Grid Grid.Row="3" Grid.Column="1">
                                 <TextBox Text="{Binding Key}" PasswordChar="●" IsVisible="{Binding !ShowKey}" />
                                 <TextBox Text="{Binding Key}" IsVisible="{Binding ShowKey}" />
                             </Grid>
 
                             <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
-                                <CheckBox Content="Show API key" IsChecked="{Binding ShowKey}" />
-                                <CheckBox Content="Use as the default account" IsChecked="{Binding IsDefault}" />
+                                <CheckBox Content="{DynamicResource Loc.ShowAPIKey}" IsChecked="{Binding ShowKey}" />
+                                <CheckBox Content="{DynamicResource Loc.UseAsTheDefaultAccount}" IsChecked="{Binding IsDefault}" />
                             </StackPanel>
                         </Grid>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Save account" Classes="accent" Command="{Binding SaveCommand}" />
+                            <Button Content="{DynamicResource Loc.SaveAccount}" Classes="accent" Command="{Binding SaveCommand}" />
                         </StackPanel>
 
                         <Border Classes="card" Padding="12">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Import accounts" Classes="h2" />
+                                <TextBlock Text="{DynamicResource Loc.ImportAccounts}" Classes="h2" />
                                 <TextBox Text="{Binding ImportText}"
                                          AcceptsReturn="True"
                                          Height="90"
                                          TextWrapping="NoWrap"
                                          FontFamily="Consolas"
-                                         Watermark="url:nick:apikey[:alias] — one per line" />
-                                <Button Content="Import" Command="{Binding ImportCommand}" HorizontalAlignment="Left" />
+                                         Watermark="{DynamicResource Loc.UrlNickApikeyAliasOnePerLine}" />
+                                <Button Content="{DynamicResource Loc.Import}" Command="{Binding ImportCommand}" HorizontalAlignment="Left" />
                             </StackPanel>
                         </Border>
 
@@ -118,7 +118,7 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,16,0,0">
-            <Button Content="Close" Command="{Binding CloseCommand}" />
+            <Button Content="{DynamicResource Loc.Close}" Command="{Binding CloseCommand}" />
         </StackPanel>
     </Grid>
 </Window>

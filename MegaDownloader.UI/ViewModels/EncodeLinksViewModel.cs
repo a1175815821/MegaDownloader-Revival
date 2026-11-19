@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -14,10 +15,11 @@ public partial class EncodeLinksViewModel : ViewModelBase
     private string inputText = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CopyResultCommand))]
     private string outputText = string.Empty;
 
     [ObservableProperty]
-    private string status = "Paste links, then press Encode.";
+    private string status = UiText.Get("Paste links, then press Encode.");
 
     public Func<string, Task>? CopyAsync { get; set; }
 
@@ -29,7 +31,7 @@ public partial class EncodeLinksViewModel : ViewModelBase
         string text = InputText ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
-            Status = "Paste at least one link.";
+            Status = UiText.Get("Paste at least one link.");
             return;
         }
 
@@ -61,17 +63,27 @@ public partial class EncodeLinksViewModel : ViewModelBase
 
         OutputText = text;
         Status = skipped > 0
-            ? $"Encoded {encoded} link(s); {skipped} sub-folder/sub-file link(s) kept unchanged."
-            : $"Encoded {encoded} link(s).";
+            ? UiText.Format("Encoded {0} link(s); {1} sub-folder/sub-file link(s) kept unchanged.", encoded, skipped)
+            : UiText.Format("Encoded {0} link(s).", encoded);
     }
 
-    [RelayCommand]
+    private bool CanCopyResult => !string.IsNullOrEmpty(OutputText);
+
+    [RelayCommand(CanExecute = nameof(CanCopyResult))]
     private async Task CopyResultAsync()
     {
         if (CopyAsync is null || string.IsNullOrEmpty(OutputText))
             return;
-        await CopyAsync(OutputText);
-        Status = "Encoded links copied to the clipboard.";
+        try
+        {
+            await CopyAsync(OutputText);
+            Status = UiText.Get("Encoded links copied to the clipboard.");
+        }
+        catch (Exception ex)
+        {
+            Log.WriteWarning("Copying encoded links failed: " + Log.SafeException(ex));
+            Status = UiText.Get("Could not copy the result to the clipboard.");
+        }
     }
 
     [RelayCommand]

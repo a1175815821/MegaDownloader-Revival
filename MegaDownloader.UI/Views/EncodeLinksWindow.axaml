@@ -1,57 +1,37 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MegaDownloader.UI.ViewModels"
-        x:Class="MegaDownloader.UI.Views.EncodeLinksWindow"
-        x:DataType="vm:EncodeLinksViewModel"
-        Title="Encode links"
-        Width="760" Height="640"
-        MinWidth="620" MinHeight="520"
-        WindowStartupLocation="CenterOwner">
-
-    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
-
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
-            <TextBlock Text="Encode links" Classes="h1" />
-            <TextBlock Classes="muted"
-                       TextWrapping="Wrap"
-                       Text="Rewrites official Mega links as their encoded mega://enc form. Sub-folder and single-file links keep their original text." />
-        </StackPanel>
-
-        <Grid Grid.Row="1" RowDefinitions="*,Auto,*" RowSpacing="10">
-            <StackPanel Grid.Row="0" Spacing="6">
-                <TextBlock Text="Original links" Classes="h2" />
-                <TextBox Text="{Binding InputText}"
-                         AcceptsReturn="True"
-                         TextWrapping="NoWrap"
-                         FontFamily="Consolas"
-                         Watermark="Paste Mega links or text containing them" />
+        x:Class="MegaDownloader.UI.Views.EncodeLinksWindow" x:DataType="vm:EncodeLinksViewModel"
+        Title="{DynamicResource Loc.EncodeLinks}" Width="876" Height="508" MinWidth="705" MinHeight="395"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Classes="reveal" RowDefinitions="Auto,*,Auto" Margin="26,18" RowSpacing="14">
+        <Border BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,0,0,1" Padding="0,0,0,12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{DynamicResource Loc.EncodeLinks}" Classes="h1" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.ConvertMEGALinksToTheEncodedMegaEncFormat}" />
             </StackPanel>
-
-            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                <Button Content="Encode" Classes="accent" Command="{Binding EncodeCommand}" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding Status}"
-                           Classes="caption"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-                <Button Grid.Column="2" Content="Copy result" Command="{Binding CopyResultCommand}" />
-            </Grid>
-
-            <StackPanel Grid.Row="2" Spacing="6">
-                <TextBlock Text="Encoded links" Classes="h2" />
-                <TextBox Text="{Binding OutputText, Mode=OneWay}"
-                         AcceptsReturn="True"
-                         TextWrapping="NoWrap"
-                         FontFamily="Consolas"
-                         IsReadOnly="True" />
-            </StackPanel>
+        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="14">
+            <Border Classes="card" Padding="14">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <TextBlock Text="{DynamicResource Loc.OriginalLinks}" Classes="h2" />
+                    <TextBox Grid.Row="1" Text="{Binding InputText}" AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalContentAlignment="Top" Watermark="{DynamicResource Loc.PasteMegaLinksOrTextContainingThem}" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="1" Classes="card" Padding="14">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <TextBlock Text="{DynamicResource Loc.EncodedLinks}" Classes="h2" />
+                    <TextBox Grid.Row="1" Text="{Binding OutputText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                             TextWrapping="Wrap" VerticalContentAlignment="Top" />
+                </Grid>
+            </Border>
         </Grid>
-
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,16,0,0">
-            <Button Content="Close" Command="{Binding CloseCommand}" />
-        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Text="{Binding Status}" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="{DynamicResource Loc.Close}" Command="{Binding CloseCommand}" IsCancel="True" />
+            <Button Grid.Column="2" Content="{DynamicResource Loc.CopyResult}" Command="{Binding CopyResultCommand}" />
+            <Button Grid.Column="3" Content="{DynamicResource Loc.Encode}" Classes="accent" Command="{Binding EncodeCommand}" />
+        </Grid>
     </Grid>
 </Window>

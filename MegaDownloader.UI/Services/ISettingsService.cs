@@ -4,6 +4,8 @@ namespace MegaDownloader.UI.Services;
 public sealed class UiSettings
 {
     public string Theme { get; set; } = "Auto";
+
+    public bool HasSeenGuide { get; set; }
 }
 
 public interface ISettingsService

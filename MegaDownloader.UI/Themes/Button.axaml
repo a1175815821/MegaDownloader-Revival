@@ -1,19 +1,15 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!--
-        Implicit Button theme replacing the Fluent default so every button follows the
-        ported Md.* tokens. Fluent's own ControlTheme styles outrank plain Style
-        setters for the template parts, which is why this is a ControlTheme and not
-        a set of Style selectors.
-    -->
     <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource Md.ButtonBack}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Md.ButtonBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{DynamicResource Md.Fore}" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="14,7" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
@@ -24,7 +20,14 @@
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="{TemplateBinding CornerRadius}"
                         Padding="{TemplateBinding Padding}">
+                    <Border.Transitions>
+                        <Transitions>
+                            <BrushTransition Property="Background" Duration="0:0:0.10" />
+                            <BrushTransition Property="BorderBrush" Duration="0:0:0.10" />
+                        </Transitions>
+                    </Border.Transitions>
                     <ContentPresenter Name="PART_ContentPresenter"
+                                      RecognizesAccessKey="True"
                                       Content="{TemplateBinding Content}"
                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                       HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -33,6 +36,10 @@
                 </Border>
             </ControlTemplate>
         </Setter>
+
+        <Style Selector="^:disabled">
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
 
         <Style Selector="^:pointerover /template/ Border#PART_Border">
             <Setter Property="Background" Value="{DynamicResource Md.ButtonHover}" />
@@ -81,6 +88,32 @@
 
         <Style Selector="^.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource Md.ButtonDisabledFore}" />
+        </Style>
+        <Style Selector="^.rail /template/ Border#PART_Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="^.rail:pointerover /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.RailHover}" />
+        </Style>
+        <Style Selector="^.rail:pressed /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.RailSelected}" />
+        </Style>
+        <Style Selector="^.rail:focus-visible /template/ Border#PART_Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Md.RailAccent}" />
+        </Style>
+        <Style Selector="^.quiet /template/ Border#PART_Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="^.quiet:pointerover /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.ButtonHover}" />
+        </Style>
+        <Style Selector="^.quiet:pressed /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.ButtonPressed}" />
+        </Style>
+        <Style Selector="^.quiet:focus-visible /template/ Border#PART_Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Md.Accent}" />
         </Style>
     </ControlTheme>
 </ResourceDictionary>

@@ -26,7 +26,8 @@ public partial class StreamingPageView : UserControl
         // The stream server runs on loopback, so the default browser can play it.
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;
         if (launcher is null)
-            return;
-        await launcher.LaunchUriAsync(new Uri(url));
+            throw new InvalidOperationException(MegaDownloader.UI.Services.UiText.Get("Could not open the playback URL."));
+        if (!await launcher.LaunchUriAsync(new Uri(url)))
+            throw new InvalidOperationException(MegaDownloader.UI.Services.UiText.Get("Could not open the playback URL."));
     }
 }

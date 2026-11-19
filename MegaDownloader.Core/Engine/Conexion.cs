@@ -562,7 +562,7 @@ namespace MegaDownloader
 
             URL = URL.Replace("%ID%", GetSequenceId());
 
-            string useSSL = "0";
+            const string useSSL = "1";
 
             string json;
             if (FileID.StartsWith("megafolder?") && FileID.Split('?').Length == 3) // Private file from folder: old system (just for compatibility)

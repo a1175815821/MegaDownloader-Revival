@@ -221,7 +221,7 @@ namespace MegaDownloader
         private static string ObtenerRutaFicheroConfiguracion()
         {
 
-            string PathLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Library");
+            string PathLog = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "Library");
 
             if (!Directory.Exists(PathLog))
             {

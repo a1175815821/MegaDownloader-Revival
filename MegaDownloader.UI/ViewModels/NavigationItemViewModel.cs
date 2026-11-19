@@ -1,18 +1,16 @@
+using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
+using MegaDownloader.UI.Services;
+
 namespace MegaDownloader.UI.ViewModels;
 
-/// <summary>One entry in the left navigation rail.</summary>
-public sealed class NavigationItemViewModel
+public sealed class NavigationItemViewModel(string title, Geometry icon, ViewModelBase page) : ObservableObject
 {
-    public NavigationItemViewModel(string key, string title, ViewModelBase page)
-    {
-        Key = key;
-        Title = title;
-        Page = page;
-    }
+    public string Title => UiText.Get(title);
+    public Geometry Icon { get; } = icon;
+    public ViewModelBase Page { get; } = page;
 
-    public string Key { get; }
+    public override string ToString() => Title;
 
-    public string Title { get; }
-
-    public ViewModelBase Page { get; }
+    internal void ApplyLanguage() => OnPropertyChanged(nameof(Title));
 }

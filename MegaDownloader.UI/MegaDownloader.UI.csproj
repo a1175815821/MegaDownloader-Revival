@@ -8,8 +8,8 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>MegaDownloader.UI</RootNamespace>
     <AssemblyName>MegaDownloader</AssemblyName>
-    <ApplicationIcon>../src/Resources/icono.ico</ApplicationIcon>
-    <Version>2.6.3</Version>
+    <ApplicationIcon>Assets/App.ico</ApplicationIcon>
+    <Version>2.9.0</Version>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets/**/*" />
+    <EmbeddedResource Include="Localization/*.json" LogicalName="Desktop.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

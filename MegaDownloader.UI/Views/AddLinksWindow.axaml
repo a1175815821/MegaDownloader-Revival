@@ -1,179 +1,98 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:MegaDownloader.UI.ViewModels"
-        x:Class="MegaDownloader.UI.Views.AddLinksWindow"
-        x:DataType="vm:AddLinksViewModel"
-        Title="Add links"
-        Width="900" Height="780"
-        MinWidth="720" MinHeight="620"
-        WindowStartupLocation="CenterOwner">
-
-    <Window.Styles>
-        <Style Selector="TextBlock.notice">
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-        </Style>
-        <Style Selector="TextBlock.notice.error">
-            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
-        </Style>
-        <Style Selector="TextBlock.state">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-        </Style>
-        <Style Selector="TextBlock.state.ready">
-            <Setter Property="Foreground" Value="{DynamicResource Md.SuccessFore}" />
-        </Style>
-        <Style Selector="TextBlock.state.error">
-            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
-        </Style>
-        <Style Selector="ListBox.preflight">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-        </Style>
-        <Style Selector="ListBox.preflight ListBoxItem">
-            <Setter Property="Padding" Value="6,2" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        </Style>
-    </Window.Styles>
-
-    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
-
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-            <TextBlock Text="Add links" Classes="h1" />
-            <TextBlock Classes="muted"
-                       TextWrapping="Wrap"
-                       Text="Paste Mega file or folder links, check them, then add the selected files to the download queue." />
-        </StackPanel>
-
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="16">
-
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Links" Classes="h2" />
-                    <TextBox Text="{Binding LinksText}"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             Height="120"
-                             VerticalContentAlignment="Top"
-                             Watermark="https://mega.nz/file/… — one link per line" />
-                </StackPanel>
-
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="Download folder" Classes="h2" />
-                        <TextBox Text="{Binding Destination}" Watermark="Choose a folder" />
-                    </StackPanel>
-                    <Button Grid.Column="1"
-                            Content="Browse…"
-                            Command="{Binding BrowseCommand}"
-                            VerticalAlignment="Bottom" />
-                </Grid>
-
-                <Border Classes="card" Padding="16">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Package options" Classes="h2" />
-                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="10">
-                            <CheckBox Content="Create a subfolder for this package"
-                                      IsChecked="{Binding CreateSubdirectory}" />
-                            <CheckBox Grid.Column="1"
-                                      Content="Extract archives automatically"
-                                      IsChecked="{Binding ExtractArchives}" />
-                            <TextBox Grid.Row="1"
-                                     Text="{Binding PackageName}"
-                                     Watermark="Package name (optional)" />
-                            <TextBox Grid.Row="1"
-                                     Grid.Column="1"
-                                     Text="{Binding Password}"
-                                     PasswordChar="●"
-                                     Watermark="Archive password (optional)" />
-                        </Grid>
-                        <CheckBox Content="Start downloading after adding" IsChecked="{Binding StartDownload}" />
-                    </StackPanel>
-                </Border>
-
-                <StackPanel Spacing="8">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <Button Content="Check links"
-                                Classes="accent"
-                                Command="{Binding CheckCommand}" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding Status}"
-                                   Classes="caption"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:MegaDownloader.UI.ViewModels" x:Class="MegaDownloader.UI.Views.AddLinksWindow" x:DataType="vm:AddLinksViewModel" Title="{DynamicResource Loc.AddLinks}" Width="1000" Height="680" MinWidth="760" MinHeight="520" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CheckCommand}" />
+  </Window.KeyBindings>
+  <Window.Styles>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+    </Style>
+    <Style Selector="TextBlock.ready">
+      <Setter Property="Foreground" Value="{DynamicResource Md.SuccessFore}" />
+    </Style>
+    <Style Selector="ListBox.preflight ListBoxItem">
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="MinHeight" Value="49" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+  </Window.Styles>
+  <Grid Classes="reveal" RowDefinitions="Auto,*,Auto" Margin="24,16" RowSpacing="14">
+    <TextBlock Classes="h1" Text="{DynamicResource Loc.AddLinks}" />
+    <Grid Grid.Row="1" ColumnDefinitions="1.55*,1*" ColumnSpacing="20">
+      <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="{DynamicResource Loc.MEGALinks}" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.Paste}" Click="PasteLinks" IsEnabled="{Binding !IsInspecting}" />
+        </Grid>
+        <TextBox Grid.Row="1" x:Name="LinkInput" Text="{Binding LinksText}" IsReadOnly="{Binding IsInspecting}" IsEnabled="{Binding !IsImporting}" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Height="90" PlaceholderText="{DynamicResource Loc.PasteOneMEGALinkPerLine}" AutomationProperties.Name="{DynamicResource Loc.MEGALinks}" />
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+          <TextBlock Classes="h2" Text="{DynamicResource Loc.LinkPreview}" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="{DynamicResource Loc.CheckLinks}" Command="{Binding CheckCommand}" ToolTip.Tip="Ctrl+Enter" />
+        </Grid>
+        <Border Grid.Row="3" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1">
+          <Grid RowDefinitions="Auto,*">
+            <TextBox IsVisible="{Binding HasEntries}" Margin="0,6" Text="{Binding FilterText}" PlaceholderText="{DynamicResource Loc.FilterByName}" AutomationProperties.Name="{DynamicResource Loc.FilterByName}" />
+            <Grid Grid.Row="1">
+              <TextBlock Classes="muted" Margin="8" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding !HasEntries}" Text="{Binding Status}" />
+              <ListBox Classes="preflight" ItemsSource="{Binding VisibleEntries}" IsVisible="{Binding HasEntries}" IsEnabled="{Binding !IsImporting}" Background="Transparent" BorderThickness="0" Margin="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PreflightRowViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                      <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanSelect}" AutomationProperties.Name="{Binding Name}" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                        <TextBlock Classes="caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="caption" Classes.ready="{Binding IsReady}" Classes.error="{Binding IsErrorState}" Text="{Binding StateText}" TextAlignment="Right" />
+                        <TextBlock Classes="caption" Text="{Binding SizeText}" TextAlignment="Right" />
+                      </StackPanel>
                     </Grid>
-                    <ProgressBar Value="{Binding ProgressValue}"
-                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
-                                 IsVisible="{Binding IsInspecting}"
-                                 Height="4" />
-                </StackPanel>
-
-                <Border Classes="card" Padding="12" IsVisible="{Binding HasEntries}">
-                    <StackPanel Spacing="10">
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                            <TextBox Text="{Binding FilterText}"
-                                     Watermark="Filter by name…"
-                                     VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding SelectionSummary}"
-                                       Classes="caption"
-                                       VerticalAlignment="Center" />
-                            <Button Grid.Column="2" Content="Select all" Command="{Binding SelectAllCommand}" />
-                            <Button Grid.Column="3" Content="Clear" Command="{Binding ClearSelectionCommand}" />
-                        </Grid>
-
-                        <ListBox Classes="preflight"
-                                 ItemsSource="{Binding VisibleEntries}"
-                                 Height="300"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:PreflightRowViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,4">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  IsEnabled="{Binding CanSelect}"
-                                                  VerticalAlignment="Top" />
-                                        <StackPanel Grid.Column="1" Spacing="2">
-                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Classes="caption"
-                                                       Text="{Binding Detail}"
-                                                       IsVisible="{Binding HasDetail}"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Spacing="2" MinWidth="120">
-                                            <TextBlock Classes="state"
-                                                       Classes.ready="{Binding IsReady}"
-                                                       Classes.error="{Binding IsErrorState}"
-                                                       Text="{Binding StateText}"
-                                                       HorizontalAlignment="Right" />
-                                            <TextBlock Classes="caption"
-                                                       Text="{Binding SizeText}"
-                                                       HorizontalAlignment="Right" />
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </StackPanel>
-                </Border>
-
-                <TextBlock Classes="notice"
-                           Classes.error="{Binding NoticeIsError}"
-                           Text="{Binding Notice}"
-                           IsVisible="{Binding HasNotice}"
-                           TextWrapping="Wrap" />
-            </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Grid>
+          </Grid>
+        </Border>
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasEntries}">
+          <TextBlock Classes="caption" Text="{Binding SelectionSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.SelectAll}" Command="{Binding SelectAllCommand}" />
+          <Button Grid.Column="2" Classes="quiet" Content="{DynamicResource Loc.Clear}" Command="{Binding ClearSelectionCommand}" />
+        </Grid>
+      </Grid>
+      <Border Grid.Column="1" Background="{DynamicResource Md.AltBack}" Padding="17,15">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="13" IsEnabled="{Binding !IsImporting}">
+            <TextBlock Classes="h2" Text="{DynamicResource Loc.DownloadFolder}" TextWrapping="Wrap" />
+            <TextBox Text="{Binding Destination}" PlaceholderText="{DynamicResource Loc.ChooseAFolder}" AutomationProperties.Name="{DynamicResource Loc.ChooseAFolder}" />
+            <Button Command="{Binding BrowseCommand}" HorizontalAlignment="Left" Content="{DynamicResource Loc.Browse}" />
+            <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="0,0,0,9">
+              <TextBlock Classes="h2" Text="{DynamicResource Loc.PackageOptions}" TextWrapping="Wrap" />
+            </Border>
+            <TextBox Text="{Binding PackageName}" PlaceholderText="{DynamicResource Loc.PackageNameOptional}" AutomationProperties.Name="{DynamicResource Loc.PackageNameOptional}" />
+            <TextBox Text="{Binding Password}" PlaceholderText="{DynamicResource Loc.ArchivePasswordOptional}" AutomationProperties.Name="{DynamicResource Loc.ArchivePasswordOptional}" PasswordChar="●" />
+            <CheckBox IsChecked="{Binding CreateSubdirectory}">
+              <TextBlock Text="{DynamicResource Loc.CreateASubfolderForThisPackage}" TextWrapping="Wrap" />
+            </CheckBox>
+            <CheckBox IsChecked="{Binding ExtractArchives}">
+              <TextBlock Text="{DynamicResource Loc.ExtractArchivesAutomatically}" TextWrapping="Wrap" />
+            </CheckBox>
+            <CheckBox IsChecked="{Binding StartDownload}">
+              <TextBlock Text="{DynamicResource Loc.StartDownloadingAfterAdding}" TextWrapping="Wrap" />
+            </CheckBox>
+          </StackPanel>
         </ScrollViewer>
-
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Spacing="8"
-                    Margin="0,16,0,0">
-            <Button Content="Cancel" Command="{Binding CancelCommand}" />
-            <Button Content="{Binding AddButtonText}"
-                    Classes="accent"
-                    Command="{Binding AddCommand}" />
-        </StackPanel>
+      </Border>
     </Grid>
+    <Border Grid.Row="2" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <StackPanel VerticalAlignment="Center" Spacing="3">
+          <TextBlock Classes="caption" Text="{Binding Status}" IsVisible="{Binding HasEntries}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+          <TextBlock Classes="caption" Classes.error="{Binding NoticeIsError}" Text="{Binding Notice}" IsVisible="{Binding HasNotice}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+          <ProgressBar Height="4" Value="{Binding ProgressValue}" IsVisible="{Binding IsInspecting}" IsIndeterminate="{Binding IsProgressIndeterminate}" />
+        </StackPanel>
+        <Button Grid.Column="1" IsCancel="True" Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}" />
+        <Button Grid.Column="2" Classes="accent" Content="{Binding AddButtonText}" Command="{Binding AddCommand}" />
+      </Grid>
+    </Border>
+  </Grid>
 </Window>

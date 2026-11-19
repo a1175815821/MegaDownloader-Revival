@@ -117,7 +117,7 @@ namespace MegaDownloader
 
                 if ((DoFlush | forceFlush) & _Buffer is not null && _Buffer.Length > 0)
                 {
-                    string PathLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Log");
+                    string PathLog = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "Log");
 
                     // N-P2-3: never let logging throw. A log file held open by another
                     // process (notepad) or a full disk used to make WriteError itself throw

@@ -1,82 +1,54 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MegaDownloader.UI.ViewModels"
-        x:Class="MegaDownloader.UI.Views.ElcGenerateWindow"
-        x:DataType="vm:ElcGenerateViewModel"
-        Title="Generate ELC"
-        Width="820" Height="720"
-        MinWidth="680" MinHeight="600"
-        WindowStartupLocation="CenterOwner">
-
+        x:Class="MegaDownloader.UI.Views.ElcGenerateWindow" x:DataType="vm:ElcGenerateViewModel"
+        Title="{DynamicResource Loc.GenerateELC}" Width="955" Height="590" MinWidth="755" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <Window.Styles>
-        <Style Selector="TextBlock.status">
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-        </Style>
-        <Style Selector="TextBlock.status.error">
+        <Style Selector="TextBlock.error">
             <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
         </Style>
     </Window.Styles>
-
-    <Grid RowDefinitions="Auto,*,Auto" Margin="24">
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-            <TextBlock Text="Generate ELC" Classes="h1" />
-            <TextBlock Classes="muted"
-                       TextWrapping="Wrap"
-                       Text="Signs links on the ELC server and returns mega://elc links. The account must be configured first." />
-        </StackPanel>
-
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="14">
-
-                <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
-                    <TextBlock Text="Account" VerticalAlignment="Center" />
-                    <ComboBox Grid.Column="1"
-                              ItemsSource="{Binding Accounts}"
-                              SelectedItem="{Binding SelectedAccount}"
-                              HorizontalAlignment="Stretch" />
-                    <Button Grid.Column="2" Content="Manage accounts…" Command="{Binding ManageAccountsCommand}" />
-                </Grid>
-
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Links" Classes="h2" />
-                    <TextBox Text="{Binding LinksText}"
-                             AcceptsReturn="True"
-                             Height="140"
-                             TextWrapping="Wrap"
-                             Watermark="Paste Mega links — one per line" />
-                    <CheckBox Content="Generate one ELC per link" IsChecked="{Binding OnePerLink}" />
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button Content="Generate" Classes="accent" Command="{Binding GenerateCommand}" />
-                    <TextBlock Classes="status"
-                               Classes.error="{Binding StatusIsError}"
-                               Text="{Binding Status}"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Result" Classes="h2" />
-                    <TextBox Text="{Binding ResultText, Mode=OneWay}"
-                             AcceptsReturn="True"
-                             Height="160"
-                             TextWrapping="Wrap"
-                             FontFamily="Consolas"
-                             IsReadOnly="True" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="Copy result" Command="{Binding CopyResultCommand}" />
-                        <Button Content="Save…" Command="{Binding SaveResultCommand}" />
-                    </StackPanel>
-                </StackPanel>
+    <Grid Classes="reveal" RowDefinitions="Auto,Auto,*,Auto" Margin="26,18" RowSpacing="14">
+        <Border BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,0,0,1" Padding="0,0,0,12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{DynamicResource Loc.GenerateELC}" Classes="h1" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.SignMEGALinksUsingAConfiguredELCAccount}" />
             </StackPanel>
-        </ScrollViewer>
-
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,16,0,0">
-            <Button Content="Close" Command="{Binding CloseCommand}" />
-        </StackPanel>
+        </Border>
+        <Border Grid.Row="1" Classes="card" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{DynamicResource Loc.Account}" Classes="label" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" />
+                <Button Grid.Column="2" Content="{DynamicResource Loc.ManageAccounts}" Command="{Binding ManageAccountsCommand}" />
+            </Grid>
+        </Border>
+        <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="14">
+            <Border Classes="card" Padding="14">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
+                    <TextBlock Text="{DynamicResource Loc.Links}" Classes="h2" />
+                    <TextBox Grid.Row="1" Text="{Binding LinksText}" AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalContentAlignment="Top" Watermark="{DynamicResource Loc.PasteMegaLinksOnePerLine}" />
+                    <CheckBox Grid.Row="2" Content="{DynamicResource Loc.GenerateOneELCPerLink}" IsChecked="{Binding OnePerLink}" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="1" Classes="card" Padding="14">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
+                    <TextBlock Text="{DynamicResource Loc.Result}" Classes="h2" />
+                    <TextBox Grid.Row="1" Text="{Binding ResultText, Mode=OneWay}" AcceptsReturn="True" IsReadOnly="True"
+                             VerticalContentAlignment="Top" TextWrapping="Wrap" />
+                    <WrapPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Margin="0,0,6,0" Content="{DynamicResource Loc.CopyResult}" Command="{Binding CopyResultCommand}" />
+                        <Button Content="{DynamicResource Loc.Save}" Command="{Binding SaveResultCommand}" />
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Text="{Binding Status}" Classes="caption" Classes.error="{Binding StatusIsError}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="{DynamicResource Loc.Close}" Command="{Binding CloseCommand}" IsCancel="True" />
+            <Button Grid.Column="2" Content="{DynamicResource Loc.Generate}" Classes="accent" Command="{Binding GenerateCommand}" />
+        </Grid>
     </Grid>
 </Window>

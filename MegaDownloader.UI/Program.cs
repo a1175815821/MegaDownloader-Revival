@@ -35,10 +35,7 @@ internal static class Program
 
         try
         {
-            var directory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MegaDownloader",
-                "logs");
+            var directory = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "logs");
             Directory.CreateDirectory(directory);
             File.AppendAllText(
                 Path.Combine(directory, $"crash-{DateTime.Now:yyyyMMdd}.log"),

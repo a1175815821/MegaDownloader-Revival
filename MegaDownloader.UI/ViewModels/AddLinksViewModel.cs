@@ -1,5 +1,5 @@
+using MegaDownloader.UI.Services;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -58,7 +58,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     private bool hasEntries;
 
     [ObservableProperty]
-    private string status = "Paste links, choose a folder, then check them.";
+    private string status = UiText.Get("Paste links, choose a folder, then check them.");
 
     [ObservableProperty]
     private string notice = string.Empty;
@@ -76,7 +76,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     private string filterText = string.Empty;
 
     [ObservableProperty]
-    private string selectionSummary = "No links selected";
+    private string selectionSummary = UiText.Get("No links selected");
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
@@ -90,9 +90,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         bool reuseLast = config.MantenerUltimaConfiguracion && UltimaConfiguracionUsada.ExisteUltimaConfiguracion;
         Destination = reuseLast && !string.IsNullOrWhiteSpace(UltimaConfiguracionUsada.RutaDescarga)
             ? UltimaConfiguracionUsada.RutaDescarga
-            : string.IsNullOrWhiteSpace(config.RutaDefecto)
-                ? DefaultDownloadFolder()
-                : config.RutaDefecto;
+            : LinkIntakeService.DownloadFolder(config);
         CreateSubdirectory = reuseLast ? UltimaConfiguracionUsada.CrearDirectorioPaquete : config.CrearDirectorioPaquete;
         ExtractArchives = reuseLast ? UltimaConfiguracionUsada.ExtraerAutomaticamente : config.ExtraerAutomaticamente;
         StartDownload = reuseLast ? UltimaConfiguracionUsada.IniciarDescarga : true;
@@ -108,13 +106,15 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     /// <summary>Raised with true when the package was added, false when the user cancels.</summary>
     public event Action<bool>? CloseRequested;
 
+    internal void ClipboardNotice(string message) => SetNotice(UiText.Get(message), true);
+
     public bool CanCheck => !IsInspecting && !IsImporting && !string.IsNullOrWhiteSpace(LinksText);
 
     public bool CanAdd => SelectedCount > 0 && !IsImporting && !IsInspecting;
 
     public bool HasNotice => !string.IsNullOrWhiteSpace(Notice);
 
-    public string AddButtonText => SelectedCount > 0 ? $"Add {SelectedCount} selected" : "Add selected";
+    public string AddButtonText => SelectedCount > 0 ? UiText.Format("Add {0} selected", SelectedCount) : UiText.Get("Add selected");
 
     partial void OnLinksTextChanged(string value)
     {
@@ -129,8 +129,8 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         _rowsByEntry.Clear();
         _selection = null;
         SelectedCount = 0;
-        SelectionSummary = "No links selected";
-        Status = "Links changed — check them again.";
+        SelectionSummary = UiText.Get("No links selected");
+        Status = UiText.Get("Links changed — check them again.");
     }
 
     partial void OnIsInspectingChanged(bool value)
@@ -157,12 +157,12 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         SetNotice(string.Empty);
         if (string.IsNullOrWhiteSpace(LinksText))
         {
-            SetNotice("Paste at least one link.", true);
+            SetNotice(UiText.Get("Paste at least one link."), true);
             return;
         }
         if (string.IsNullOrWhiteSpace(Destination))
         {
-            SetNotice("Choose a download folder.", true);
+            SetNotice(UiText.Get("Choose a download folder."), true);
             return;
         }
 
@@ -172,6 +172,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         VisibleEntries.Clear();
         _rowsByEntry.Clear();
         _selection = null;
+        UpdateSelectionSummary();
 
         _session?.Dispose();
         _session = new PreflightSession(_engine.Config);
@@ -186,7 +187,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
                 return;
             if (!string.Equals(LinksText, requestedText, StringComparison.Ordinal))
             {
-                Status = "Links changed — check them again.";
+                Status = UiText.Get("Links changed — check them again.");
                 return;
             }
 
@@ -202,16 +203,18 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             ApplyFilter();
             HasEntries = Entries.Count > 0;
             UpdateSelectionSummary();
-            Status = string.Create(CultureInfo.InvariantCulture, $"Checked {reconciled.Count} link(s).");
+            Status = reconciled.Count == 0
+                ? UiText.Get("No valid MEGA links were found.")
+                : UiText.Format("Checked {0} link(s).", reconciled.Count);
             ProgressValue = 100;
         }
         catch (OperationCanceledException)
         {
-            Status = "Check cancelled.";
+            Status = UiText.Get("Check cancelled.");
         }
         catch (Exception ex)
         {
-            Status = "Check failed.";
+            Status = UiText.Get("Check failed.");
             SetNotice(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
         }
         finally
@@ -246,9 +249,14 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     {
         if (_selection is null || IsImporting)
             return;
+        if (!Path.IsPathFullyQualified(Destination.Trim()))
+        {
+            SetNotice(UiText.Get("Choose a download folder."), true);
+            return;
+        }
         if (!_engine.IsLoaded)
         {
-            SetNotice("The download queue is still loading. Try again in a moment.", true);
+            SetNotice(UiText.Get("The download queue is still loading. Try again in a moment."), true);
             return;
         }
 
@@ -260,7 +268,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         }
         if (chosen.Count == 0)
         {
-            SetNotice("Select at least one link to add.", true);
+            SetNotice(UiText.Get("Select at least one link to add."), true);
             return;
         }
 
@@ -270,7 +278,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         var token = _importCancellation.Token;
         try
         {
-            Status = "Checking the queue for duplicates…";
+            Status = UiText.Get("Checking the queue for duplicates…");
             var latest = await Task.Run(() => _engine.GetQueuedLinkSnapshot(), token);
             var filtered = await Task.Run(() =>
             {
@@ -288,11 +296,11 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
             if (filtered.Count == 0)
             {
-                SetNotice("All selected links are already queued.", true);
+                SetNotice(UiText.Get("All selected links are already queued."), true);
                 return;
             }
 
-            Status = string.Create(CultureInfo.InvariantCulture, $"Building package for {filtered.Count} file(s)…");
+            Status = UiText.Format("Building package for {0} file(s)…", filtered.Count);
             var package = await Task.Run(
                 () => DownloadPackageBuilder.Build(
                     filtered,
@@ -304,14 +312,21 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
                     token),
                 token);
 
-            if (!_engine.AddPackage(package))
+            if (!StartDownload)
+            {
+                foreach (Fichero file in package.SnapshotFicheros())
+                    file.PausaIndividual = true;
+            }
+            int added = token.IsCancellationRequested ? -1 : _engine.AddUniquePackage(package);
+            if (added <= 0)
             {
                 if (package.ListaFicheros is not null)
                 {
                     foreach (var file in package.ListaFicheros)
                         file.Dispose();
                 }
-                SetNotice("The queue is not ready yet. Try again in a moment.", true);
+                token.ThrowIfCancellationRequested();
+                SetNotice(UiText.Get(added == 0 ? "All selected links are already queued." : "The queue is not ready yet. Try again in a moment."), true);
                 return;
             }
 
@@ -321,26 +336,25 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             UltimaConfiguracionUsada.RutaDescarga = Destination;
             UltimaConfiguracionUsada.IniciarDescarga = StartDownload;
 
-            if (StartDownload && !_engine.TryStartAll(out string reason))
+            if (StartDownload && !_engine.TryStartPending(out string reason))
             {
                 // The tasks are queued but the queue refused to start (schedule window
                 // or quota cooldown). Say so instead of claiming they are running.
-                Status = string.Create(CultureInfo.InvariantCulture,
-                    $"Added {filtered.Count} file(s) to the queue. {reason}");
+                Status = UiText.Format("Added {0} file(s) to the queue.", added) + " " + reason;
                 CloseRequested?.Invoke(true);
                 return;
             }
 
-            Status = string.Create(CultureInfo.InvariantCulture, $"Added {filtered.Count} file(s) to the queue.");
+            Status = UiText.Format("Added {0} file(s) to the queue.", added);
             CloseRequested?.Invoke(true);
         }
         catch (OperationCanceledException)
         {
-            Status = "Import cancelled.";
+            Status = UiText.Get("Import cancelled.");
         }
         catch (Exception ex)
         {
-            Status = "Could not add the links.";
+            Status = UiText.Get("Could not add the links.");
             SetNotice(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
         }
         finally
@@ -389,18 +403,16 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         if (_selection is null)
         {
             SelectedCount = 0;
-            SelectionSummary = "No links selected";
+            SelectionSummary = UiText.Get("No links selected");
             return;
         }
 
         SelectedCount = _selection.SelectedCount;
         string bytes = DownloadsPageViewModel.FormatBytes((long)_selection.SelectedBytes);
         string unknown = _selection.UnknownSizes > 0
-            ? string.Create(CultureInfo.InvariantCulture, $" + {_selection.UnknownSizes} unknown")
+            ? UiText.Format(" + {0} unknown", _selection.UnknownSizes)
             : string.Empty;
-        SelectionSummary = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{_selection.SelectedCount} selected · {bytes}{unknown}");
+        SelectionSummary = UiText.Format("{0} selected · {1}{2}", _selection.SelectedCount, bytes, unknown);
     }
 
     private void StartProgressTimer(PreflightSession.Request request)
@@ -427,11 +439,11 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         switch (progress.Stage)
         {
             case PreflightProgress.Phase.Parsing:
-                Status = "Reading links…";
+                Status = UiText.Get("Reading links…");
                 IsProgressIndeterminate = true;
                 break;
             case PreflightProgress.Phase.Waiting:
-                Status = string.Create(CultureInfo.InvariantCulture, $"Resolving {progress.LinksTotal} link(s)…");
+                Status = UiText.Format("Resolving {0} link(s)…", progress.LinksTotal);
                 IsProgressIndeterminate = true;
                 break;
             case PreflightProgress.Phase.Reading:
@@ -440,8 +452,8 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
                     ? Math.Min(100d, 100d * progress.LinksCompleted / progress.LinksTotal)
                     : 0d;
                 Status = progress.LinksTotal > 0
-                    ? string.Create(CultureInfo.InvariantCulture, $"Reading link {Math.Min(progress.LinksTotal, progress.LinksCompleted + 1)} of {progress.LinksTotal}…")
-                    : "Reading link contents…";
+                    ? UiText.Format("Reading link {0} of {1}…", Math.Min(progress.LinksTotal, progress.LinksCompleted + 1), progress.LinksTotal)
+                    : UiText.Get("Reading link contents…");
                 break;
             case PreflightProgress.Phase.Checking:
                 IsProgressIndeterminate = progress.ItemsTotal == 0;
@@ -449,21 +461,21 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
                     ? Math.Min(100d, 100d * progress.ItemsProcessed / progress.ItemsTotal)
                     : 0d;
                 Status = progress.ItemsTotal > 0
-                    ? string.Create(CultureInfo.InvariantCulture, $"Checking file {progress.ItemsProcessed} of {progress.ItemsTotal}…")
-                    : "Checking files…";
+                    ? UiText.Format("Checking file {0} of {1}…", progress.ItemsProcessed, progress.ItemsTotal)
+                    : UiText.Get("Checking files…");
                 break;
             case PreflightProgress.Phase.Completed:
                 IsProgressIndeterminate = false;
                 ProgressValue = 100;
-                Status = string.Create(CultureInfo.InvariantCulture, $"Checked {progress.FilesFound} file(s).");
+                Status = UiText.Format("Checked {0} file(s).", progress.FilesFound);
                 break;
             case PreflightProgress.Phase.Cancelled:
                 IsProgressIndeterminate = false;
-                Status = "Check cancelled.";
+                Status = UiText.Get("Check cancelled.");
                 break;
             case PreflightProgress.Phase.Failed:
                 IsProgressIndeterminate = false;
-                Status = "Check failed.";
+                Status = UiText.Get("Check failed.");
                 break;
         }
     }
@@ -472,16 +484,6 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     {
         Notice = text;
         NoticeIsError = isError;
-    }
-
-    private static string DefaultDownloadFolder()
-    {
-        string downloads = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Downloads");
-        return Directory.Exists(downloads)
-            ? downloads
-            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     public void Dispose()
@@ -513,7 +515,7 @@ public partial class PreflightRowViewModel : ObservableObject
 
     public BatchLinkPreflight.Entry Entry { get; }
 
-    public string Name => string.IsNullOrWhiteSpace(Entry.Name) ? "(unnamed link)" : Entry.Name;
+    public string Name => string.IsNullOrWhiteSpace(Entry.Name) ? UiText.Get("(unnamed link)") : Entry.Name;
 
     public string SizeText => Entry.SizeBytes.HasValue
         ? DownloadsPageViewModel.FormatBytes(Entry.SizeBytes.Value)
@@ -521,11 +523,11 @@ public partial class PreflightRowViewModel : ObservableObject
 
     public string StateText => Entry.State switch
     {
-        BatchLinkPreflight.LinkState.Ready => "Ready",
-        BatchLinkPreflight.LinkState.AlreadyQueued => "Already queued",
-        BatchLinkPreflight.LinkState.Duplicate => "Duplicate",
-        BatchLinkPreflight.LinkState.Invalid => "Invalid",
-        _ => "Unavailable"
+        BatchLinkPreflight.LinkState.Ready => UiText.Get("Ready"),
+        BatchLinkPreflight.LinkState.AlreadyQueued => UiText.Get("Already queued"),
+        BatchLinkPreflight.LinkState.Duplicate => UiText.Get("Duplicate"),
+        BatchLinkPreflight.LinkState.Invalid => UiText.Get("Invalid"),
+        _ => UiText.Get("Unavailable")
     };
 
     public bool CanSelect => Entry.CanAdd;

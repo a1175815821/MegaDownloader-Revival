@@ -71,6 +71,9 @@ public partial class App : Application
             Criptografia.SetSecretProtector(
                 PlatformServicesFactory.CreateSecretProtector(Services.GetRequiredService<IPlatformServices>()));
 
+            var engine = Services.GetRequiredService<DownloadEngineService>();
+            UiText.Refresh();
+
             var mainWindow = new MainWindow
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
@@ -117,7 +120,7 @@ public partial class App : Application
                 Services.GetService<ClipboardMonitor>()?.Dispose();
                 Services.GetService<DownloadsPageViewModel>()?.Dispose();
                 WebServerHost.Stop();
-                Services.GetRequiredService<DownloadEngineService>().Dispose();
+                engine.Dispose();
                 _instance?.Dispose();
             };
         }

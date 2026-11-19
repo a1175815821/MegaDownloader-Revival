@@ -22,6 +22,8 @@ public sealed class WindowsPlatformServices : IPlatformServices
     public string GetAppDataDirectory(string applicationName)
     {
         EnsureWindows();
+        if (applicationName == "MegaDownloader")
+            return ApplicationDataDirectory.GetLegacyRoot();
         return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             applicationName);

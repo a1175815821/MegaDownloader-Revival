@@ -132,9 +132,14 @@ public partial class SettingsPageViewModel : ViewModelBase
         // page kept showing the old selection after the toolbar cycled it, and
         // picking the stale entry did nothing.
         _theme.ModeChanged += (_, _) => SyncThemeFromService();
+        UiText.Changed += (_, _) =>
+        {
+            Languages[0].ApplyLanguage();
+            OnPropertyChanged(nameof(ThemeOptions));
+        };
 
         var config = engine.Config;
-        DefaultFolder = config.RutaDefecto ?? string.Empty;
+        DefaultFolder = LinkIntakeService.DownloadFolder(config);
         SimultaneousDownloads = Math.Clamp(config.DescargasSimultaneas, 1, 20);
         ConnectionsPerFile = Math.Clamp(config.ConexionesPorFichero, 1, 16);
         CreateSubdirectory = config.CrearDirectorioPaquete;
@@ -145,10 +150,10 @@ public partial class SettingsPageViewModel : ViewModelBase
 
         Languages = new ObservableCollection<LanguageOption>
         {
-            new(Language.FollowSystemLanguageCode, "Follow system")
+            new(Language.FollowSystemLanguageCode, UiText.Get("Follow system"))
         };
         foreach (var pair in Language.GetAvailableLanguages().OrderBy(pair => pair.Value, StringComparer.CurrentCultureIgnoreCase))
-            Languages.Add(new LanguageOption(pair.Key, pair.Value));
+            Languages.Add(new LanguageOption(pair.Key, NativeLanguageName(pair.Key, pair.Value)));
         string currentLanguage = Language.NormalizeLanguagePreference(config.Idioma);
         selectedLanguage = Languages.FirstOrDefault(
             option => string.Equals(option.Code, currentLanguage, StringComparison.OrdinalIgnoreCase)) ?? Languages[0];
@@ -202,9 +207,25 @@ public partial class SettingsPageViewModel : ViewModelBase
         PreSharedKeysText = keys.ToString();
     }
 
+    private static string NativeLanguageName(string code, string fallback) => code switch
+    {
+        "en-US" => "English",
+        "de-DE" => "Deutsch",
+        "es-ES" => "Español",
+        "fr-FR" => "Français",
+        "hu-HU" => "Magyar",
+        "it-IT" => "Italiano",
+        "pt-BR" => "Português (Brasil)",
+        "ro-RO" => "Română",
+        "ru-RU" => "Русский",
+        "zh-CN" => "简体中文",
+        "zh-TW" => "繁體中文",
+        _ => fallback
+    };
+
     public ObservableCollection<LanguageOption> Languages { get; }
 
-    public string[] ThemeOptions { get; } = { "Auto (system)", "Light", "Dark" };
+    public string[] ThemeOptions => [UiText.Get("Follow system"), UiText.Get("Light"), UiText.Get("Dark")];
 
     public string AppDataPath { get; }
 
@@ -253,14 +274,14 @@ public partial class SettingsPageViewModel : ViewModelBase
             int end = ToMinutes(ScheduleEnd);
             if (start == end)
             {
-                SetSaveStatus("The schedule start and end times must differ.", true);
+                SetSaveStatus(UiText.Get("The schedule start and end times must differ."), true);
                 return;
             }
         }
 
         if (UseProxy && string.IsNullOrWhiteSpace(ProxyHost))
         {
-            SetSaveStatus("Enter a proxy host or turn the proxy off.", true);
+            SetSaveStatus(UiText.Get("Enter a proxy host or turn the proxy off."), true);
             return;
         }
 
@@ -274,20 +295,9 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.MantenerUltimaConfiguracion = KeepLastOptions;
         config.AnalizarPortapapeles = WatchClipboard;
 
-        // The theme is staged on this page and applied here, like every other setting.
-        if (_theme.Mode != (ThemeMode)SelectedThemeIndex)
-            _theme.SetMode((ThemeMode)SelectedThemeIndex);
-
+        string previousLanguage = config.Idioma;
         string language = SelectedLanguage?.Code ?? Language.FollowSystemLanguageCode;
         config.Idioma = language;
-        try
-        {
-            Language.InitLanguage(language);
-        }
-        catch (Exception ex)
-        {
-            Log.WriteWarning("Applying the selected language failed: " + Log.SafeException(ex));
-        }
 
         config.UsarProxy = UseProxy;
         config.ProxyIP = ProxyHost.Trim();
@@ -342,9 +352,16 @@ public partial class SettingsPageViewModel : ViewModelBase
         config.GuardarXML(true);
         if (config.ErrorConfig != Configuracion.ErrorConfigClass.SinErrores)
         {
-            SetSaveStatus("Configuration could not be saved: " + config.ErrorConfig + ".", true);
+            config.Idioma = previousLanguage;
+            SetSaveStatus(UiText.Format("Configuration could not be saved: {0}.", config.ErrorConfig), true);
             return;
         }
+
+        int themeIndex = SelectedThemeIndex;
+        bool languageApplied = language == previousLanguage || UiText.ApplyLanguage(language);
+        if (Enum.IsDefined(typeof(ThemeMode), themeIndex) && _theme.Mode != (ThemeMode)themeIndex)
+            _theme.SetMode((ThemeMode)themeIndex);
+        SelectedThemeIndex = (int)_theme.Mode;
 
         // The schedule controller caches the window it last saw, so an edited
         // schedule only took effect when the window changed by itself.
@@ -353,17 +370,17 @@ public partial class SettingsPageViewModel : ViewModelBase
         // Start with Windows is applied by the platform layer (registry on Windows,
         // autostart entries elsewhere). A failure here must not lose the rest of
         // the settings, so it is reported but not fatal.
+        bool autoStartApplied = true;
         try
         {
             string executable = Environment.ProcessPath ?? string.Empty;
-            if (executable.Length > 0)
+            if (ApplicationDataDirectory.Override is null && executable.Length > 0)
                 _platform.SetAutoStart(StartWithWindows, executable, string.Empty);
         }
         catch (Exception ex)
         {
             Log.WriteWarning("Could not update the start-with-Windows entry: " + Log.SafeException(ex));
-            SetSaveStatus("Saved, but the start-with-Windows entry could not be updated.", true);
-            return;
+            autoStartApplied = false;
         }
 
         // Restart the servers so port/password changes take effect immediately. The
@@ -373,11 +390,16 @@ public partial class SettingsPageViewModel : ViewModelBase
         string serverError = await Task.Run(() => WebServerHost.Start(_engine, config));
         if (!string.IsNullOrEmpty(serverError))
         {
-            SetSaveStatus("Saved, but the web server could not start: " + serverError, true);
+            SetSaveStatus(UiText.Format("Saved, but the web server could not start: {0}", serverError), true);
             return;
         }
 
-        SetSaveStatus($"Saved at {DateTime.Now:HH:mm:ss}.", false);
+        if (!languageApplied)
+            SetSaveStatus(UiText.Get("Saved, but the language could not be applied."), true);
+        else if (!autoStartApplied)
+            SetSaveStatus(UiText.Get("Saved, but the start-with-Windows entry could not be updated."), true);
+        else
+            SetSaveStatus(UiText.Format("Saved at {0:HH:mm:ss}.", DateTime.Now), false);
     }
 
     private static int ToMinutes(TimeSpan? value)
@@ -394,17 +416,21 @@ public partial class SettingsPageViewModel : ViewModelBase
     }
 }
 
-public sealed class LanguageOption
+public sealed class LanguageOption : ObservableObject
 {
     public LanguageOption(string code, string name)
     {
         Code = code;
-        Name = name;
+        _name = name;
     }
 
     public string Code { get; }
 
-    public string Name { get; }
+    private readonly string _name;
+
+    public string Name => Code == Language.FollowSystemLanguageCode ? UiText.Get(_name) : _name;
+
+    internal void ApplyLanguage() => OnPropertyChanged(nameof(Name));
 
     public override string ToString() => Name;
 }

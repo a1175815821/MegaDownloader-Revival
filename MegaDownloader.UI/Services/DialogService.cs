@@ -4,11 +4,29 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using MegaDownloader.UI.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MegaDownloader.UI.Services;
 
 public sealed class DialogService : IDialogService
 {
+    public async Task<bool> ShowGuideAsync()
+    {
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (owner is not { IsVisible: true })
+            return false;
+
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var window = new QuickStartWindow();
+        bool addLinks = await window.ShowDialog<bool>(owner);
+        if (!settings.Current.HasSeenGuide)
+        {
+            settings.Current.HasSeenGuide = true;
+            settings.Save();
+        }
+        return addLinks;
+    }
+
     public Task ShowMessageAsync(string title, string message, string okText = "OK")
     {
         var window = BuildWindow(title, message, okText, null, null);
@@ -29,16 +47,16 @@ public sealed class DialogService : IDialogService
         return await result.Task;
     }
 
-    public async Task<bool> ShowAddLinksAsync()
+    public async Task<string?> ShowAddLinksAsync(string? initialText = null)
     {
-        var window = new AddLinksWindow();
+        var window = new AddLinksWindow { InitialText = initialText };
         var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
         if (owner is { IsVisible: true })
-            return await window.ShowDialog<bool>(owner);
+            return await window.ShowDialog<bool>(owner) ? window.Outcome : null;
 
         window.Show();
-        return false;
+        return null;
     }
 
     public async Task<bool> ShowPropertiesAsync(object item)
@@ -97,7 +115,7 @@ public sealed class DialogService : IDialogService
 
         panel.Children.Add(new TextBlock
         {
-            Text = message,
+            Text = UiText.Get(message),
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 460
         });
@@ -105,18 +123,18 @@ public sealed class DialogService : IDialogService
 
         var window = new Window
         {
-            Title = title,
+            Title = UiText.Get(title),
             Width = 480,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             ShowInTaskbar = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel
+            Content = new Border { Classes = { "card" }, Margin = new Thickness(12), Padding = new Thickness(0), Child = panel }
         };
 
         var okButton = new Button
         {
-            Content = okText,
+            Content = UiText.Get(okText),
             MinWidth = 88,
             IsDefault = true,
             HorizontalContentAlignment = HorizontalAlignment.Center
@@ -133,7 +151,7 @@ public sealed class DialogService : IDialogService
         {
             var cancelButton = new Button
             {
-                Content = cancelText,
+                Content = UiText.Get(cancelText),
                 MinWidth = 88,
                 IsCancel = true,
                 HorizontalContentAlignment = HorizontalAlignment.Center
@@ -151,7 +169,8 @@ public sealed class DialogService : IDialogService
 
     private static async Task ShowAsync(Window window)
     {
-        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        var owner = desktop?.Windows.LastOrDefault(candidate => candidate.IsVisible && candidate.IsActive) ?? desktop?.MainWindow;
 
         if (owner is { IsVisible: true })
             await window.ShowDialog(owner);

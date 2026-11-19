@@ -41,6 +41,29 @@ namespace MegaDownloader
 
         private string TiempoEstimadoDescarga;
 
+        internal void ApplyVerifiedName(Fichero file, bool firstStart)
+        {
+            lock (Mutex.ListaDescargas)
+            {
+                if (!PendienteNombrePaquete || ListaFicheros is null || !ListaFicheros.Contains(file))
+                    return;
+                string name = ListaFicheros.Count == 1 ? file.ObtenerNombreSinExtension() : null;
+                if (string.IsNullOrWhiteSpace(name))
+                    name = Language.GetText("New package");
+                name = PathGuard.SanitizeFileName(name, "package");
+                if (ListaFicheros.Count == 1 && CrearSubdirectorio && firstStart)
+                {
+                    string folder = PathGuard.GetSafePathUnderRoot(RutaLocal, name, allowRoot: false);
+                    string destination = PathGuard.GetSafePathUnderRoot(folder, file.RutaRelativa ?? "", allowRoot: true);
+                    Directory.CreateDirectory(destination);
+                    RutaLocal = folder;
+                    file.RutaLocal = destination;
+                }
+                Nombre = name;
+                PendienteNombrePaquete = false;
+            }
+        }
+
         private bool HayFicheros()
         {
             lock (Mutex.ListaDescargas)
@@ -529,7 +552,7 @@ namespace MegaDownloader
         private static string ObtenerRutaFicheroDescargas()
         {
 
-            string PathLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader/Config");
+            string PathLog = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "Config");
 
             if (!Directory.Exists(PathLog))
             {

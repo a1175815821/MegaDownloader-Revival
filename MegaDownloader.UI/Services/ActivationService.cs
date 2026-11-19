@@ -30,6 +30,7 @@ public sealed class ActivationService : IDisposable
     private readonly List<IReadOnlyList<string>> _pending = new();
 
     private bool _disposed;
+    private bool _draining;
 
     public ActivationService(
         IPlatformServices platform,
@@ -86,7 +87,7 @@ public sealed class ActivationService : IDisposable
         try
         {
             string executable = Environment.ProcessPath ?? string.Empty;
-            if (executable.Length == 0)
+            if (ApplicationDataDirectory.Override is not null || executable.Length == 0)
                 return;
             _platform.SetMegaProtocolHandler(true, executable);
         }
@@ -99,9 +100,15 @@ public sealed class ActivationService : IDisposable
 
     private async Task DrainAsync()
     {
-        if (_disposed)
+        if (_disposed || _draining)
             return;
+        _draining = true;
+        try { await DrainPendingAsync(); }
+        finally { _draining = false; }
+    }
 
+    private async Task DrainPendingAsync()
+    {
         // The spool is only read once the queue can take the links. Reading it earlier
         // would truncate the file and drop the links of a second launch that arrived
         // while the queue was still loading.
@@ -135,7 +142,7 @@ public sealed class ActivationService : IDisposable
             }
 
             LinkIntakeResult? result = await HandleAsync(arguments);
-            if (result is null)
+            if (_disposed || result is null)
             {
                 // The queue could not take the links yet: keep the batch and try again.
                 break;

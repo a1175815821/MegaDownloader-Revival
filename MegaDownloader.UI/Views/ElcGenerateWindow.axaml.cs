@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
@@ -33,12 +34,12 @@ public partial class ElcGenerateWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save ELC links",
+            Title = UiText.Get("Save ELC links"),
             SuggestedFileName = "links.elc",
             DefaultExtension = "txt",
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("Text") { Patterns = new[] { "*.txt", "*.elc" } }
+                new FilePickerFileType(UiText.Get("Text")) { Patterns = new[] { "*.txt", "*.elc" } }
             }
         });
         if (file is null)

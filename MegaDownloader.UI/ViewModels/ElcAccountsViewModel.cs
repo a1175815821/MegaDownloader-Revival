@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,7 +20,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
     private ElcAccountRow? selectedAccount;
 
     [ObservableProperty]
-    private string editorTitle = "New account";
+    private string editorTitle = UiText.Get("New account");
 
     [ObservableProperty]
     private string alias = string.Empty;
@@ -77,7 +78,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
 
         _editingUrl = account.URL;
-        EditorTitle = "Edit account";
+        EditorTitle = UiText.Get("Edit account");
         Alias = account.Alias ?? string.Empty;
         Url = account.URL ?? string.Empty;
         User = SafePlain(account.User);
@@ -91,7 +92,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
     {
         SelectedAccount = null;
         _editingUrl = null;
-        EditorTitle = "New account";
+        EditorTitle = UiText.Get("New account");
         Alias = string.Empty;
         Url = string.Empty;
         User = string.Empty;
@@ -110,7 +111,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
         string accountKey = Key.Trim();
         if (accountAlias.Length == 0 || accountUrl.Length == 0 || accountUser.Length == 0 || accountKey.Length == 0)
         {
-            SetStatus("Alias, URL, user and API key are all required.", true);
+            SetStatus(UiText.Get("Alias, URL, user and API key are all required."), true);
             return;
         }
 
@@ -129,14 +130,14 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
         if (!saved)
         {
             DisposeAccount(account);
-            SetStatus("An account with the same alias or URL already exists.", true);
+            SetStatus(UiText.Get("An account with the same alias or URL already exists."), true);
             return;
         }
 
         if (!Persist())
             return;
         Reload();
-        SetStatus("Account saved.", false);
+        SetStatus(UiText.Get("Account saved."), false);
     }
 
     [RelayCommand]
@@ -147,7 +148,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
 
         if (!_helper.DeleteAccount(SelectedAccount.Url))
         {
-            SetStatus("The account could not be removed.", true);
+            SetStatus(UiText.Get("The account could not be removed."), true);
             return;
         }
 
@@ -155,7 +156,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
         New();
         Reload();
-        SetStatus("Account deleted.", false);
+        SetStatus(UiText.Get("Account deleted."), false);
     }
 
     [RelayCommand]
@@ -171,7 +172,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
 
         if (!_helper.ImportConfig(lines))
         {
-            SetStatus("No valid account lines found. Expected url:nick:apikey[:alias].", true);
+            SetStatus(UiText.Get("No valid account lines found. Expected url:nick:apikey[:alias]."), true);
             return;
         }
 
@@ -179,7 +180,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
             return;
         Reload();
         ImportText = string.Empty;
-        SetStatus("Accounts imported.", false);
+        SetStatus(UiText.Get("Accounts imported."), false);
     }
 
     [RelayCommand]
@@ -208,7 +209,7 @@ public partial class ElcAccountsViewModel : ViewModelBase, IDisposable
         {
             // The accounts are in memory but not on disk. Saying "saved" here would
             // lose them on the next restart without a word of warning.
-            SetStatus("The accounts could not be written to disk: " + _config.ErrorConfig + ".", true);
+            SetStatus(UiText.Format("The accounts could not be written to disk: {0}.", _config.ErrorConfig), true);
             return false;
         }
         return true;
@@ -256,5 +257,5 @@ public sealed class ElcAccountRow
 
     public bool IsDefault { get; }
 
-    public string Display => IsDefault ? Alias + " (default)" : Alias;
+    public string Display => IsDefault ? UiText.Format("{0} (default)", Alias) : Alias;
 }

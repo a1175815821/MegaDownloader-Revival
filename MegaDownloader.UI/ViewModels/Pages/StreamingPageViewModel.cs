@@ -20,7 +20,7 @@ public partial class StreamingPageViewModel : ViewModelBase
     private StreamingRowViewModel? selectedItem;
 
     [ObservableProperty]
-    private string editorTitle = "New entry";
+    private string editorTitle = UiText.Get("New entry");
 
     [ObservableProperty]
     private string name = string.Empty;
@@ -63,6 +63,13 @@ public partial class StreamingPageViewModel : ViewModelBase
         _dialogs = dialogs;
         _engine = engine;
         Refresh();
+        UiText.Changed += (_, _) =>
+        {
+            EditorTitle = UiText.Get(_editingId is null ? "New entry" : "Edit entry");
+            foreach (var row in Items)
+                row.ApplyLanguage();
+            SetStatus(string.Empty, false);
+        };
     }
 
     public ObservableCollection<StreamingRowViewModel> Items { get; } = new();
@@ -80,7 +87,7 @@ public partial class StreamingPageViewModel : ViewModelBase
             return;
 
         _editingId = value.Id;
-        EditorTitle = "Edit entry";
+        EditorTitle = UiText.Get("Edit entry");
         Name = value.Element.Name ?? string.Empty;
         Description = value.Element.Description ?? string.Empty;
         Comments = value.Element.Comments ?? string.Empty;
@@ -97,7 +104,7 @@ public partial class StreamingPageViewModel : ViewModelBase
     {
         SelectedItem = null;
         _editingId = null;
-        EditorTitle = "New entry";
+        EditorTitle = UiText.Get("New entry");
         Name = string.Empty;
         Description = string.Empty;
         Comments = string.Empty;
@@ -113,7 +120,7 @@ public partial class StreamingPageViewModel : ViewModelBase
     [RelayCommand]
     private void Refresh()
     {
-        string? selectedId = SelectedItem?.Id;
+        string? selectedId = _editingId;
         Items.Clear();
         try
         {
@@ -122,7 +129,7 @@ public partial class StreamingPageViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus("Could not read the streaming library: " + ex.Message, true);
+            SetStatus(UiText.Format("Could not read the streaming library: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
         }
 
         OnPropertyChanged(nameof(HasItems));
@@ -137,7 +144,7 @@ public partial class StreamingPageViewModel : ViewModelBase
         string entryName = Name.Trim();
         if (entryName.Length == 0)
         {
-            SetStatus("Enter a name for the entry.", true);
+            SetStatus(UiText.Get("Enter a name for the entry."), true);
             return;
         }
 
@@ -156,7 +163,7 @@ public partial class StreamingPageViewModel : ViewModelBase
                     Allocine.Trim(),
                     Filmaffinity.Trim());
                 _editingId = created?.ID;
-                SetStatus("Entry added.", false);
+                SetStatus(UiText.Get("Entry added."), false);
             }
             else
             {
@@ -173,10 +180,10 @@ public partial class StreamingPageViewModel : ViewModelBase
                     Filmaffinity.Trim());
                 if (updated is null)
                 {
-                    SetStatus("The entry no longer exists. Refresh the list.", true);
+                    SetStatus(UiText.Get("The entry no longer exists. Refresh the list."), true);
                     return;
                 }
-                SetStatus("Entry saved.", false);
+                SetStatus(UiText.Get("Entry saved."), false);
             }
 
             Refresh();
@@ -184,7 +191,7 @@ public partial class StreamingPageViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log.WriteError("Saving a streaming library entry failed: " + Log.SafeException(ex));
-            SetStatus("Could not save the entry: " + ex.Message, true);
+            SetStatus(UiText.Format("Could not save the entry: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
         }
     }
 
@@ -194,26 +201,27 @@ public partial class StreamingPageViewModel : ViewModelBase
         if (SelectedItem is null)
             return;
 
+        string entryId = SelectedItem.Id;
         string entryName = SelectedItem.Name;
         bool confirmed = await _dialogs.ConfirmAsync(
-            "Delete entry",
-            $"Remove “{entryName}” from the streaming library?",
-            "Delete",
-            "Cancel");
+            UiText.Get("Delete entry"),
+            UiText.Format("Remove “{0}” from the streaming library?", entryName),
+            UiText.Get("Delete"),
+            UiText.Get("Cancel"));
         if (!confirmed)
             return;
 
         try
         {
-            StreamingLibraryManager.RemoveElement(SelectedItem.Id);
+            StreamingLibraryManager.RemoveElement(entryId);
             New();
             Refresh();
-            SetStatus("Entry deleted.", false);
+            SetStatus(UiText.Get("Entry deleted."), false);
         }
         catch (Exception ex)
         {
             Log.WriteError("Deleting a streaming library entry failed: " + Log.SafeException(ex));
-            SetStatus("Could not delete the entry: " + ex.Message, true);
+            SetStatus(UiText.Format("Could not delete the entry: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
         }
     }
 
@@ -227,42 +235,43 @@ public partial class StreamingPageViewModel : ViewModelBase
         if (SelectedItem is null)
             return;
 
+        string entryId = SelectedItem.Id;
         string link = SafeLink(SelectedItem.Element);
         if (string.IsNullOrWhiteSpace(link))
         {
-            SetStatus("This entry has no link to play.", true);
+            SetStatus(UiText.Get("This entry has no link to play."), true);
             return;
         }
 
         var config = _engine.Config;
         if (!config.ServidorStreamingActivo)
         {
-            SetStatus("Enable the streaming server in Settings → Streaming to play this entry.", true);
+            SetStatus(UiText.Get("Enable the streaming server in Settings → Streaming to play this entry."), true);
             return;
         }
 
-        SetStatus("Resolving the stream…", false);
+        SetStatus(UiText.Get("Resolving the stream…"), false);
         string streamUrl = string.Empty;
         try
         {
             // The resolution talks to the MEGA API, so it must not block the UI.
             streamUrl = await Task.Run(() =>
             {
-                if (!string.IsNullOrEmpty(SelectedItem?.Id))
-                    return StreamingHelper.CreateStreamingLinkFromLibrary(SelectedItem.Id, link, ref config);
+                if (!string.IsNullOrEmpty(entryId))
+                    return StreamingHelper.CreateStreamingLinkFromLibrary(entryId, link, ref config);
                 return StreamingHelper.CreateStreamingLink(link, config.ServidorStreamingPuerto, ref config);
             });
         }
         catch (Exception ex)
         {
             Log.WriteError("Resolving the streaming URL failed: " + Log.SafeException(ex));
-            SetStatus("The stream could not be resolved: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+            SetStatus(UiText.Format("The stream could not be resolved: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
             return;
         }
 
         if (string.IsNullOrEmpty(streamUrl))
         {
-            SetStatus("The stream could not be resolved for this link.", true);
+            SetStatus(UiText.Get("The stream could not be resolved for this link."), true);
             return;
         }
 
@@ -275,12 +284,12 @@ public partial class StreamingPageViewModel : ViewModelBase
         try
         {
             await OpenStreamAsync(streamUrl);
-            SetStatus("Playing " + streamUrl, false);
+            SetStatus(UiText.Get("Opened in the system player."), false);
         }
         catch (Exception ex)
         {
             Log.WriteError("Starting the player failed: " + Log.SafeException(ex));
-            SetStatus("The player could not be started: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+            SetStatus(UiText.Format("The player could not be started: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
         }
     }
 
@@ -303,26 +312,30 @@ public partial class StreamingPageViewModel : ViewModelBase
     }
 }
 
-public sealed class StreamingRowViewModel
+public sealed class StreamingRowViewModel : ObservableObject
 {
     public StreamingRowViewModel(LibraryElement element)
     {
         Element = element;
         Id = element.ID ?? string.Empty;
-        Name = string.IsNullOrWhiteSpace(element.Name) ? "(untitled)" : element.Name;
         Subtitle = string.IsNullOrWhiteSpace(element.Description)
             ? element.LastModification.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
             : element.Description;
-        LinkText = element.LinkVisible ? "Link visible" : "Link hidden";
     }
 
     public LibraryElement Element { get; }
 
     public string Id { get; }
 
-    public string Name { get; }
+    public string Name => string.IsNullOrWhiteSpace(Element.Name) ? UiText.Get("(untitled)") : Element.Name;
 
     public string Subtitle { get; }
 
-    public string LinkText { get; }
+    public string LinkText => UiText.Get(Element.LinkVisible ? "Link visible" : "Link hidden");
+
+    internal void ApplyLanguage()
+    {
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(LinkText));
+    }
 }

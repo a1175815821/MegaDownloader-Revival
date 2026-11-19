@@ -136,6 +136,29 @@ namespace MegaDownloader
             return true;
         }
 
+        // Commit the duplicate check and package insertion together. Clipboard, manual
+        // imports and second-instance activations can finish resolving the same link concurrently.
+        public int AddUniquePackage(Paquete package)
+        {
+            if (package is null || !IsLoaded || Volatile.Read(ref _disposed) != 0)
+                return -1;
+            lock (_scheduleGate)
+            {
+                var known = new HashSet<string>(GetQueuedLinkSnapshot().Keys, StringComparer.Ordinal);
+                package.ListaFicheros.RemoveAll(file =>
+                {
+                    string id = BatchLinkPreflight.Identity(file.FileID, file.FileKey);
+                    if (id is null || known.Add(id))
+                        return false;
+                    file.Dispose();
+                    return true;
+                });
+                if (package.ListaFicheros.Count == 0)
+                    return 0;
+                return AddPackage(package) ? package.ListaFicheros.Count : -1;
+            }
+        }
+
         public async Task LoadAsync(CancellationToken cancellationToken = default)
         {
             if (Volatile.Read(ref _loaded) != 0)
@@ -214,7 +237,11 @@ namespace MegaDownloader
         /// </summary>
         /// <param name="reason">Empty when the queue was started; otherwise the reason.</param>
         /// <returns>True when the queue was set to running.</returns>
-        public bool TryStartAll(out string reason)
+        public bool TryStartAll(out string reason) => TryStart(out reason, resumeIndividual: true);
+
+        public bool TryStartPending(out string reason) => TryStart(out reason, resumeIndividual: false);
+
+        private bool TryStart(out string reason, bool resumeIndividual)
         {
             reason = StartBlockedReason(_config, MegaQuotaManager.IsQuarantined());
             if (reason.Length > 0)
@@ -226,15 +253,11 @@ namespace MegaDownloader
             _scheduleController.MarkManualStart();
             // WinForms parity (QuitarPausasIndividuales): "Start all" also resumes
             // files the user had paused one by one.
-            lock (Mutex.ListaDescargas)
+            if (resumeIndividual)
             {
-                foreach (Paquete package in _packages)
-                {
-                    if (package.ListaFicheros is null)
-                        continue;
-                    foreach (Fichero file in package.ListaFicheros)
+                lock (Mutex.ListaDescargas)
+                    foreach (var file in SnapshotFiles())
                         file.PausaIndividual = false;
-                }
             }
 
             lock (_stateGate)
@@ -316,9 +339,10 @@ namespace MegaDownloader
             // A single file obeys the same schedule window as the whole queue: the
             // WinForms shell refuses it with a toast instead of starting a transfer
             // that the next tick would pause again.
-            if (!_config.DownloadSchedule.AllowsDownload(DateTime.Now))
+            string blocked = StartBlockedReason(_config, MegaQuotaManager.IsQuarantined());
+            if (blocked.Length > 0)
             {
-                UserNotification.ShowInfo("The download schedule does not allow downloads right now.", "Schedule");
+                UserNotification.ShowInfo(blocked, "Download");
                 return;
             }
 
@@ -329,6 +353,8 @@ namespace MegaDownloader
             {
                 lock (Mutex.ListaDescargas)
                 {
+                    if (FindPackageLocked(file, out _) is null)
+                        return;
                     file.PausaIndividual = false;
                     file.DescargaIndividual = true;
                 }
@@ -337,9 +363,9 @@ namespace MegaDownloader
                 {
                     file.Resume();
                 }
-                else if (file.DescargaEstado() == Estado.EnCola && file.DescargaProcesada)
+                else if (file.DescargaEstado() == Estado.EnCola)
                 {
-                    file.Start(ref _config, Math.Max(1, _config.ConexionesPorFichero));
+                    StartQueuedFile(file, Math.Max(1, _config.ConexionesPorFichero));
                 }
                 else if (file.DescargaEstado() == Estado.Erroneo && !file.EsErrorPermanente)
                 {
@@ -347,6 +373,15 @@ namespace MegaDownloader
                     file.SetDescargaEstado = Estado.EnCola;
                 }
             }
+        }
+
+        private void StartQueuedFile(Fichero file, int connections)
+        {
+            Paquete owner;
+            lock (Mutex.ListaDescargas)
+                owner = FindPackageLocked(file, out _);
+            if (owner is not null)
+                file.Start(ref _config, connections, owner);
         }
 
         public void PauseFile(Fichero file)
@@ -440,6 +475,8 @@ namespace MegaDownloader
             {
                 try
                 {
+                    foreach (Fichero file in package.SnapshotFicheros())
+                        file.ActualizarDatosDescarga();
                     package.ActualizarDatosDescarga();
                 }
                 catch (Exception ex)
@@ -533,7 +570,7 @@ namespace MegaDownloader
                                 toResume ??= new List<Fichero>();
                                 toResume.Add(file);
                             }
-                            else if (fileState == Estado.EnCola && file.DescargaProcesada)
+                            else if (fileState == Estado.EnCola)
                             {
                                 toStart ??= new List<Fichero>();
                                 toStart.Add(file);
@@ -578,10 +615,10 @@ namespace MegaDownloader
                             break;
                         try
                         {
-                            if (file.DescargaEstado() != Estado.EnCola || !file.DescargaProcesada ||
+                            if (file.DescargaEstado() != Estado.EnCola ||
                                 file.PausaIndividual)
                                 continue;
-                            file.Start(ref _config, connections);
+                            StartQueuedFile(file, connections);
                             slots--;
                         }
                         catch (Exception ex)

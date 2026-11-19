@@ -49,8 +49,7 @@ namespace MegaDownloader
             }
         }
 
-        private static string DefaultAppDataDirectory() => System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader");
+        private static string DefaultAppDataDirectory() => ApplicationDataDirectory.GetLegacyRoot();
 
         public static string EncryptString_DPAPI(SecureString input)
         {

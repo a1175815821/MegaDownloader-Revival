@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -17,7 +18,7 @@ public partial class PropertiesViewModel : ViewModelBase
     private readonly int _limitInitialKb;
 
     [ObservableProperty]
-    private string header = "Properties";
+    private string header = UiText.Get("Properties");
 
     [ObservableProperty]
     private string name = string.Empty;
@@ -64,19 +65,19 @@ public partial class PropertiesViewModel : ViewModelBase
         _file = item as Fichero;
         _package = item as Paquete;
 
-        Header = _file is not null ? "File properties" : "Package properties";
+        Header = _file is not null ? UiText.Get("File properties") : UiText.Get("Package properties");
         Name = _item.DescargaNombre();
         StatusText = DownloadsPageViewModel.StateLabel(_item.DescargaEstado());
         long total = _item.DescargaTamanoBytes();
         long downloaded = (long)(_item.DescargaPorcentaje() * total / 100m);
-        SizeText = $"{DownloadsPageViewModel.FormatBytes(downloaded)} of {DownloadsPageViewModel.FormatBytes(total)}";
+        SizeText = UiText.Format("{0} of {1}", DownloadsPageViewModel.FormatBytes(downloaded), DownloadsPageViewModel.FormatBytes(total));
         ExtractArchives = _item.DescargaExtraccionAutomatica();
         Password = _item.DescargaExtraccionPassword() ?? string.Empty;
 
         if (_file is not null)
         {
             Url = _file.LinkVisible ? _file.URL : Fichero.HIDDEN_LINK_DESC;
-            Md5 = string.IsNullOrEmpty(_file.MD5) ? "Not available" : _file.MD5;
+            Md5 = string.IsNullOrEmpty(_file.MD5) ? UiText.Get("Not available") : _file.MD5;
             Path = _file.RutaLocal ?? string.Empty;
             CanEditPath = !_file.DescargaComenzada;
             if (_file.LimiteVelocidad > 0)
@@ -88,8 +89,8 @@ public partial class PropertiesViewModel : ViewModelBase
         }
         else if (_package is not null)
         {
-            Url = "Not applied";
-            Md5 = "Not applied";
+            Url = UiText.Get("Not applied");
+            Md5 = UiText.Get("Not applied");
             Path = _package.RutaLocal ?? string.Empty;
             int common = -1;
             foreach (Fichero file in _package.SnapshotFicheros())
@@ -144,7 +145,7 @@ public partial class PropertiesViewModel : ViewModelBase
         int limitKb = 0;
         if (LimitSpeed && !Utils.TryParseSpeedLimit(SpeedLimitText, ref limitKb))
         {
-            SetNotice("Invalid speed limit. Use a value like 512 KB/s or 2 MB/s.");
+            SetNotice(UiText.Get("Invalid speed limit. Use a value like 512 KB/s or 2 MB/s."));
             return;
         }
 
@@ -154,7 +155,7 @@ public partial class PropertiesViewModel : ViewModelBase
         if (_file is not null)
         {
             Fichero file = _file;
-            if (CanEditPath && !string.Equals(newPath, file.RutaLocal ?? string.Empty, StringComparison.Ordinal))
+            if (!file.DescargaComenzada && CanEditPath && !string.Equals(newPath, file.RutaLocal ?? string.Empty, StringComparison.Ordinal))
             {
                 if (!ValidateDirectory(newPath))
                     return;
@@ -176,9 +177,10 @@ public partial class PropertiesViewModel : ViewModelBase
             if (rootChanged && !ValidateDirectory(newPath))
                 return;
 
+            var files = package.SnapshotFicheros();
             if (rootChanged)
             {
-                foreach (Fichero file in package.ListaFicheros)
+                foreach (Fichero file in files)
                 {
                     if (file.DescargaComenzada)
                         continue;
@@ -196,7 +198,7 @@ public partial class PropertiesViewModel : ViewModelBase
 
             bool extractionChanged = package.DescargaExtraccionAutomatica() != ExtractArchives ||
                                      (package.DescargaExtraccionPassword() ?? string.Empty) != (Password ?? string.Empty);
-            foreach (Fichero file in package.ListaFicheros)
+            foreach (Fichero file in files)
             {
                 if (extractionChanged)
                     file.set_SetDescargaExtraccionAutomatica(Password, ExtractArchives);
@@ -219,7 +221,7 @@ public partial class PropertiesViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            SetNotice("Enter a download folder.");
+            SetNotice(UiText.Get("Enter a download folder."));
             return false;
         }
         try
@@ -230,7 +232,7 @@ public partial class PropertiesViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log.WriteError("Properties: invalid path '" + path + "': " + Log.SafeException(ex));
-            SetNotice("Invalid directory.");
+            SetNotice(UiText.Get("Invalid directory."));
             return false;
         }
     }

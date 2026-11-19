@@ -22,9 +22,37 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<object, DownloadItemViewModel> _rowCache = new(ReferenceEqualityComparer.Instance);
     private bool _loading;
     private bool _disposed;
+    private bool _loadFailed;
+    private string? _actionFeedback;
+    private DateTime _feedbackUntil;
+    private readonly Queue<double> _speedSamples = new(60);
 
     [ObservableProperty]
-    private string status = "Loading queue…";
+    private IReadOnlyList<double> speedHistory = Array.Empty<double>();
+
+    [ObservableProperty]
+    private string transferSpeed = "0 KB/s";
+
+    [ObservableProperty]
+    private int activeCount;
+
+    [ObservableProperty]
+    private int queuedCount;
+
+    [ObservableProperty]
+    private int completedCount;
+
+    [ObservableProperty]
+    private bool hasFiles;
+
+    [ObservableProperty]
+    private bool canAddFromEmpty;
+
+    [ObservableProperty]
+    private bool canResetFilter;
+
+    [ObservableProperty]
+    private string status = UiText.Get("Loading saved queue…");
 
     [ObservableProperty]
     private string summary = string.Empty;
@@ -48,16 +76,23 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     private DownloadItemViewModel? selectedDownload;
 
     [ObservableProperty]
-    private string selectedFilter = "All";
+    private QueueFilterOption? selectedFilter;
 
     [ObservableProperty]
-    private string emptyTitle = "No downloads yet";
+    private string emptyTitle = UiText.Get("Loading saved queue…");
 
     [ObservableProperty]
-    private string emptyMessage =
-        "Add links with the toolbar button. Queued items appear here with live progress, speed and per-item controls.";
+    private string emptyMessage = string.Empty;
 
-    public IReadOnlyList<string> Filters { get; } = new[] { "All", "Active", "Queued", "Paused", "Completed", "Failed" };
+    public IReadOnlyList<QueueFilterOption> Filters { get; } =
+    [
+        new(QueueFilter.All, "All statuses"),
+        new(QueueFilter.Active, "Active"),
+        new(QueueFilter.Queued, "Queued"),
+        new(QueueFilter.Paused, "Paused"),
+        new(QueueFilter.Completed, "Completed"),
+        new(QueueFilter.Failed, "Failed")
+    ];
 
     public DownloadsPageViewModel(DownloadEngineService engine, IDialogService dialogs)
     {
@@ -65,7 +100,9 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         _dialogs = dialogs;
 
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _refreshTimer.Tick += (_, _) => Refresh();
+        _refreshTimer.Tick += (_, _) => Refresh(sampleSpeed: true);
+        selectedFilter = Filters[0];
+        UiText.Changed += ApplyLanguage;
 
         _ = LoadAsync();
     }
@@ -75,16 +112,17 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     private async Task LoadAsync()
     {
         IsBusy = true;
-        Status = "Loading queue…";
+        Status = UiText.Get("Loading saved queue…");
 
         try
         {
             await _engine.LoadAsync();
-            Status = "Queue loaded";
+
         }
         catch (Exception ex)
         {
-            Status = "Could not load the download queue: " + ex.Message;
+            _loadFailed = true;
+            Log.WriteError("Queue loading failed: " + Log.SafeException(ex));
         }
         finally
         {
@@ -101,9 +139,43 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
                 Log.WriteError("Web server did not start: " + error);
         });
 
+        if (_disposed)
+            return;
         Refresh();
         _refreshTimer.Start();
     }
+
+    private void ApplyLanguage(object? sender, EventArgs args)
+    {
+        foreach (var filter in Filters)
+            filter.ApplyLanguage();
+        foreach (var item in _rowCache.Values)
+            item.ApplyLanguage();
+        Refresh();
+    }
+
+    [ObservableProperty]
+    private string draftLinks = string.Empty;
+
+    [RelayCommand]
+    private Task EncodeLinksAsync() => _dialogs.ShowEncodeLinksAsync();
+
+    [RelayCommand]
+    private Task GenerateElcAsync() => _dialogs.ShowElcGenerateAsync();
+
+    [RelayCommand]
+    private async Task AddLinksAsync()
+    {
+        if (await _dialogs.ShowAddLinksAsync(DraftLinks) is { } result)
+        {
+            DraftLinks = string.Empty;
+            SetFeedback(result);
+            Refresh();
+        }
+    }
+
+    [RelayCommand]
+    private void ResetFilter() => SelectedFilter = Filters[0];
 
     [RelayCommand]
     private void StartAll()
@@ -111,13 +183,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         // The engine refuses to start outside the download schedule or during a
         // quota cooldown, and explains why.
         if (!_engine.TryStartAll(out string reason))
-            Status = reason;
+            SetFeedback(reason);
+        else
+            _actionFeedback = null;
         Refresh();
     }
 
     [RelayCommand]
     private void PauseAll()
     {
+        _actionFeedback = null;
         _engine.PauseAll();
         Refresh();
     }
@@ -125,6 +200,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void StopAll()
     {
+        _actionFeedback = null;
         _engine.StopAll();
         Refresh();
     }
@@ -176,18 +252,18 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         {
             Paquete package => package.DescargaNombre(),
             Fichero file => file.DescargaNombre(),
-            _ => "this download"
+            _ => UiText.Get("this download")
         };
 
         string message = deleteFiles
-            ? $"Remove “{name}” and delete its downloaded files from disk?"
-            : $"Remove “{name}” from the queue? Files already downloaded are kept.";
+            ? UiText.Format("Remove “{0}” and delete its downloaded files from disk?", name)
+            : UiText.Format("Remove “{0}” from the queue? Files already downloaded are kept.", name);
 
         bool confirmed = await _dialogs.ConfirmAsync(
-            deleteFiles ? "Delete download" : "Remove download",
+            deleteFiles ? UiText.Get("Delete download") : UiText.Get("Remove download"),
             message,
-            deleteFiles ? "Delete" : "Remove",
-            "Cancel");
+            deleteFiles ? UiText.Get("Delete") : UiText.Get("Remove"),
+            UiText.Get("Cancel"));
 
         if (!confirmed)
             return;
@@ -196,8 +272,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             return;
 
         // Stop() can wait up to five seconds for an in-flight write; keep it off the UI thread.
-        await Task.Run(() => _engine.Remove(item, deleteFiles));
-        Status = deleteFiles ? $"Deleted {name}" : $"Removed {name}";
+        try
+        {
+            await Task.Run(() => _engine.Remove(item, deleteFiles));
+            SetFeedback(UiText.Format(deleteFiles ? "Deleted {0}" : "Removed {0}", name));
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Removing a download failed: " + Log.SafeException(ex));
+            SetFeedback(UiText.Get("Could not remove the download."));
+        }
         Refresh();
     }
 
@@ -237,16 +321,17 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             return true;
 
         bool confirmed = await _dialogs.ConfirmAsync(
-            "Delete download",
+            UiText.Get("Delete download"),
             unverified.Count == 1
-                ? "This file comes from an older link without an integrity checksum, so it cannot be verified automatically. Delete it anyway?"
-                : $"{unverified.Count} files come from older links without an integrity checksum, so they cannot be verified automatically. Delete them anyway?",
-            "Delete anyway",
-            "Cancel");
+                ? UiText.Get("This file comes from an older link without an integrity checksum, so it cannot be verified automatically. Delete it anyway?")
+                : UiText.Format("{0} files come from older links without an integrity checksum, so they cannot be verified automatically. Delete them anyway?", unverified.Count),
+            UiText.Get("Delete anyway"),
+            UiText.Get("Cancel"));
 
         if (!confirmed)
         {
-            Status = "Nothing was deleted.";
+            SetFeedback(UiText.Get("Nothing was deleted."));
+            Refresh();
             return false;
         }
 
@@ -255,7 +340,13 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         return true;
     }
 
-    internal void Refresh()
+    private void SetFeedback(string message)
+    {
+        _actionFeedback = message;
+        _feedbackUntil = DateTime.UtcNow.AddSeconds(10);
+    }
+
+    internal void Refresh(bool sampleSpeed = false)
     {
         if (_disposed || _loading)
             return;
@@ -273,10 +364,9 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             {
                 liveItems.Add(package);
                 var header = GetOrCreateRow(package, isPackage: true);
-                UpdatePackageRow(header, package);
-
                 var files = package.SnapshotFicheros();
-                CountState(package.DescargaEstado(), ref downloading, ref queued, ref paused, ref completed, ref failed);
+                UpdatePackageRow(header, package, files);
+
 
                 var visibleFiles = new List<Fichero>(files.Count);
                 foreach (Fichero file in files)
@@ -308,38 +398,60 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             PruneRowCache(liveItems);
 
             IsEmpty = Downloads.Count == 0;
-            if (packages.Count == 0)
+            HasFiles = packages.Count > 0;
+            CanAddFromEmpty = !HasFiles && _engine.IsLoaded;
+            CanResetFilter = IsEmpty && HasFiles;
+            if (IsBusy)
             {
-                EmptyTitle = "No downloads yet";
-                EmptyMessage = "Add links with the toolbar button. Queued items appear here with live progress, speed and per-item controls.";
+                EmptyTitle = UiText.Get("Loading saved queue…");
+                EmptyMessage = string.Empty;
+            }
+            else if (_loadFailed)
+            {
+                EmptyTitle = UiText.Get("Could not load the download queue");
+                EmptyMessage = UiText.Get("Check the application log for details.");
+            }
+            else if (!HasFiles)
+            {
+                EmptyTitle = UiText.Get("Add links");
+                EmptyMessage = UiText.Get("Add a MEGA file or folder link to start a download.");
             }
             else
             {
-                EmptyTitle = "Nothing matches this filter";
-                EmptyMessage = "Pick another status filter to see the rest of the queue.";
+                EmptyTitle = UiText.Get("Nothing matches this filter");
+                EmptyMessage = UiText.Get("Choose another status to see more downloads.");
             }
-            CanStartAll = _engine.State != DownloadEngineState.Running;
-            CanPauseAll = _engine.State == DownloadEngineState.Running;
-            CanStopAll = _engine.State != DownloadEngineState.Stopped;
 
-            string stateText = _engine.State switch
+            CanStartAll = _engine.IsLoaded && HasFiles && _engine.State != DownloadEngineState.Running;
+            CanPauseAll = _engine.IsLoaded && _engine.State == DownloadEngineState.Running;
+            CanStopAll = _engine.IsLoaded && _engine.State != DownloadEngineState.Stopped;
+            ActiveCount = downloading;
+            QueuedCount = queued;
+            CompletedCount = completed;
+            TransferSpeed = FormatSpeed(totalSpeed);
+            if (sampleSpeed)
             {
-                DownloadEngineState.Running => "Running",
-                DownloadEngineState.Paused => "Paused",
-                _ => "Stopped"
-            };
+                if (_speedSamples.Count == 60)
+                    _speedSamples.Dequeue();
+                _speedSamples.Enqueue((double)totalSpeed);
+                SpeedHistory = _speedSamples.ToArray();
+            }
 
-            Summary = string.Create(
-                CultureInfo.InvariantCulture,
-                $"{downloading} downloading · {queued} queued · {paused} paused · {completed} completed · {failed} failed");
-
-            Status = totalSpeed > 0
-                ? $"{stateText} · {FormatSpeed(totalSpeed)} · {downloading} active"
-                : stateText;
+            Summary = UiText.Format("{0} active · {1} queued · {2} paused · {3} completed · {4} failed",
+                downloading, queued, paused, completed, failed);
+            Status = _actionFeedback is not null && DateTime.UtcNow < _feedbackUntil
+                ? _actionFeedback
+                : UiText.Get(_loadFailed ? "Could not load the download queue" : _engine.State switch
+                {
+                    DownloadEngineState.Running => UiText.Get("Queue running"),
+                    DownloadEngineState.Paused => UiText.Get("Queue paused"),
+                    _ => UiText.Get("Queue stopped")
+                });
         }
         catch (Exception ex)
         {
-            Status = "Queue refresh failed: " + ex.Message;
+            Status = UiText.Get("Queue refresh failed.");
+            Log.WriteError("Queue refresh failed: " + Log.SafeException(ex));
         }
         finally
         {
@@ -347,18 +459,18 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private bool MatchesFilter(Estado state) => SelectedFilter switch
+    private bool MatchesFilter(Estado state) => SelectedFilter?.Value switch
     {
-        "Active" => state is Estado.Descargando or Estado.CreandoLocal or Estado.Verificando
+        QueueFilter.Active => state is Estado.Descargando or Estado.CreandoLocal or Estado.Verificando
             or Estado.ComprobandoMD5 or Estado.Descomprimiendo or Estado.EsperandoVolumenes,
-        "Queued" => state == Estado.EnCola,
-        "Paused" => state == Estado.Pausado,
-        "Completed" => state == Estado.Completado,
-        "Failed" => state == Estado.Erroneo,
+        QueueFilter.Queued => state == Estado.EnCola,
+        QueueFilter.Paused => state == Estado.Pausado,
+        QueueFilter.Completed => state == Estado.Completado,
+        QueueFilter.Failed => state == Estado.Erroneo,
         _ => true
     };
 
-    partial void OnSelectedFilterChanged(string value) => Refresh();
+    partial void OnSelectedFilterChanged(QueueFilterOption? value) => Refresh();
 
     private static void CountState(Estado state, ref int downloading, ref int queued, ref int paused, ref int completed, ref int failed)
     {
@@ -419,23 +531,34 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             _rowCache.Remove(key);
     }
 
-    private static void UpdatePackageRow(DownloadItemViewModel row, Paquete package)
+    private static void UpdatePackageRow(DownloadItemViewModel row, Paquete package, IReadOnlyList<Fichero> files)
     {
-        row.Title = package.DescargaNombre();
+        string? title = package.DescargaNombre();
+        if (string.IsNullOrWhiteSpace(title))
+            title = files.Count == 1 ? FileTitle(files[0]) : Language.GetText("New package");
+        row.Title = title;
         row.StateText = StateLabel(package.DescargaEstado());
         row.Progress = (double)Math.Clamp(package.DescargaPorcentaje(), 0m, 100m);
         row.SizeText = FormatBytes(package.DescargaTamanoBytes());
         row.SpeedText = package.DescargaVelocidadKBs() > 0 ? FormatSpeed(package.DescargaVelocidadKBs()) : string.Empty;
-        row.DetailText = $"{package.ListaFicheros?.Count ?? 0} files · {row.SizeText}";
+        row.DetailText = UiText.Format("{0} files · {1}", files.Count, row.SizeText);
         row.CanStart = package.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = package.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
         row.IsCompleted = package.DescargaEstado() == Estado.Completado;
         row.IsFailed = package.DescargaEstado() == Estado.Erroneo;
     }
 
+    private static string FileTitle(Fichero file)
+    {
+        string name = file.DescargaNombre();
+        if (!string.IsNullOrWhiteSpace(name) && !name.Contains("://", StringComparison.Ordinal))
+            return name;
+        return string.IsNullOrWhiteSpace(file.FileID) ? UiText.Get("(unnamed link)") : "MEGA · " + file.FileID;
+    }
+
     private static void UpdateFileRow(DownloadItemViewModel row, Fichero file)
     {
-        row.Title = file.DescargaNombre();
+        row.Title = FileTitle(file);
         row.StateText = StateLabel(file.DescargaEstado());
         row.Progress = (double)Math.Clamp(file.DescargaPorcentaje(), 0m, 100m);
         row.SizeText = FormatBytes(file.DescargaTamanoBytes());
@@ -446,7 +569,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         string eta = file.DescargaTiempoEstimadoDescarga();
         row.DetailText = string.IsNullOrWhiteSpace(eta)
             ? row.SizeText
-            : $"{row.SizeText} · ETA {eta}";
+            : UiText.Format("{0} · {1} remaining", row.SizeText, eta);
 
         row.CanStart = file.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = file.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
@@ -482,16 +605,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     internal static string StateLabel(Estado state) => state switch
     {
-        Estado.Verificando => "Checking",
-        Estado.CreandoLocal => "Preparing",
-        Estado.EnCola => "Queued",
-        Estado.Descargando => "Downloading",
-        Estado.Pausado => "Paused",
-        Estado.Completado => "Completed",
-        Estado.ComprobandoMD5 => "Verifying",
-        Estado.Descomprimiendo => "Extracting",
-        Estado.Erroneo => "Error",
-        Estado.EsperandoVolumenes => "Waiting for volumes",
+        Estado.Verificando => UiText.Get("Checking"),
+        Estado.CreandoLocal => UiText.Get("Preparing"),
+        Estado.EnCola => UiText.Get("Queued"),
+        Estado.Descargando => UiText.Get("Downloading"),
+        Estado.Pausado => UiText.Get("Paused"),
+        Estado.Completado => UiText.Get("Completed"),
+        Estado.ComprobandoMD5 => UiText.Get("Verifying"),
+        Estado.Descomprimiendo => UiText.Get("Extracting"),
+        Estado.Erroneo => UiText.Get("Error"),
+        Estado.EsperandoVolumenes => UiText.Get("Waiting for volumes"),
         _ => state.ToString()
     };
 
@@ -526,6 +649,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             return;
         _disposed = true;
         _refreshTimer.Stop();
+        UiText.Changed -= ApplyLanguage;
     }
 }
 
@@ -539,7 +663,7 @@ public partial class DownloadItemViewModel : ObservableObject
         _owner = owner;
         Item = item;
         IsPackage = isPackage;
-        RowMargin = isPackage ? new Thickness(0) : new Thickness(24, 0, 0, 0);
+        RowMargin = isPackage ? new Thickness(0) : new Thickness(16, 0, 0, 0);
     }
 
     public object Item { get; }
@@ -566,7 +690,12 @@ public partial class DownloadItemViewModel : ObservableObject
     private string speedText = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private double progress;
+
+    public string ProgressText => (Progress / 100).ToString("0.0%", UiText.Culture);
+
+    internal void ApplyLanguage() => OnPropertyChanged(nameof(ProgressText));
 
     [ObservableProperty]
     private bool canStart;
@@ -586,7 +715,7 @@ public partial class DownloadItemViewModel : ObservableObject
     [ObservableProperty]
     private bool isExpanded = true;
 
-    public string Chevron => IsExpanded ? "▾" : "▸";
+    public string Chevron => IsExpanded ? "⌄" : "›";
 
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(Chevron));
 
@@ -611,4 +740,14 @@ public partial class DownloadItemViewModel : ObservableObject
 
     [RelayCommand]
     private Task DeleteAsync() => _owner.RemoveItemAsync(Item, deleteFiles: true);
+}
+
+public enum QueueFilter { All, Active, Queued, Paused, Completed, Failed }
+
+public sealed class QueueFilterOption(QueueFilter value, string label) : ObservableObject
+{
+    public QueueFilter Value { get; } = value;
+    public string Label => UiText.Get(label);
+
+    internal void ApplyLanguage() => OnPropertyChanged(nameof(Label));
 }

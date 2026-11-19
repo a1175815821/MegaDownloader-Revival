@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.VisualBasic.CompilerServices;
 
@@ -1711,14 +1710,7 @@ namespace MegaDownloader
                                 throw new ApplicationException(string.Format("Resume offset {0} for {1} is not block-aligned; aborting chunk to avoid keystream misalignment.", ChunkStart, @file.Name));
                             }
 
-                            // Pequeño hack para soportar ficheros de más de 2 GB:
-                            // http://forums.codeguru.com/showthread.php?467570-WebRequest.AddRange-what-about-files-gt-2gb&p=1794639
-                            // http://www.freesoft.org/CIE/RFC/2068/198.htm
-                            string key = "Range";
-                            string val = string.Format("bytes={0}-{1}", ChunkStart, ChunkStop);
-
-                            var @method = typeof(WebHeaderCollection).GetMethod("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
-                            @method.Invoke(webReq.Headers, new object[] { key, val });
+                            webReq.AddRange(ChunkStart, ChunkStop);
 
                             webResp = (HttpWebResponse)webReq.GetResponse();
 

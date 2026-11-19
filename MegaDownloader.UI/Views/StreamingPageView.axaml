@@ -23,24 +23,25 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,*" Margin="24">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+    <Grid RowDefinitions="Auto,*" Classes="reveal" Margin="36,22,36,16" RowSpacing="16">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
             <StackPanel Spacing="4">
-                <TextBlock Text="Streaming library" Classes="h1" />
+                <TextBlock Text="{DynamicResource Loc.StreamingLibrary}" Classes="h1" />
                 <TextBlock Classes="muted"
                            TextWrapping="Wrap"
-                           Text="Manage the entries served by the streaming server. Playback URLs use the server port configured in Settings → Streaming." />
+                           Text="{DynamicResource Loc.OrganizeLinksForPlaybackOnYourLocalStreamingServer}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button Content="Refresh" Command="{Binding RefreshCommand}" />
-                <Button Content="New entry" Classes="accent" Command="{Binding NewCommand}" />
+                <Button Content="{DynamicResource Loc.Refresh}" Command="{Binding RefreshCommand}" />
+                <Button Content="{DynamicResource Loc.NewEntry}" Classes="accent" Command="{Binding NewCommand}" />
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" ColumnDefinitions="340,*" ColumnSpacing="16">
-            <Border Classes="card" Padding="10">
-                <Grid RowDefinitions="*,Auto">
-                    <ListBox Classes="library"
+        <Grid Grid.Row="1" ColumnDefinitions="1*,1.85*" ColumnSpacing="24">
+            <Border BorderThickness="0,2,0,0" BorderBrush="{DynamicResource Md.Fore}" Padding="0,10">
+                <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <TextBlock Text="{DynamicResource Loc.Entries}" Classes="h2" Margin="8,6,5,2" />
+                    <ListBox Grid.Row="1" Classes="library"
                              ItemsSource="{Binding Items}"
                              SelectedItem="{Binding SelectedItem}"
                              ScrollViewer.VerticalScrollBarVisibility="Auto">
@@ -56,52 +57,48 @@
                     </ListBox>
 
                     <TextBlock Grid.Row="1"
-                               Classes="caption"
-                               Margin="8,8,8,2"
-                               Text="No entries yet. Use New entry to add one."
+                               Classes="caption" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="10"
+                               Text="{DynamicResource Loc.NoEntriesYetUseNewEntryToAddOne}"
                                IsVisible="{Binding !HasItems}" />
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Classes="card" Padding="16">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Md.Border}" Padding="24,0,0,0">
+                <Grid RowDefinitions="*,Auto" RowSpacing="12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="14">
                         <TextBlock Text="{Binding EditorTitle}" Classes="h2" />
 
-                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                              RowSpacing="10" ColumnSpacing="12">
-                            <TextBlock Text="Name" VerticalAlignment="Center" />
-                            <TextBox Grid.Column="1" Text="{Binding Name}" Watermark="Display name" />
-
-                            <TextBlock Grid.Row="1" Text="Description" VerticalAlignment="Top" Margin="0,6,0,0" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Description}"
+<Grid ColumnDefinitions="126,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="14" RowSpacing="10"><TextBlock Grid.Row="0" Text="{DynamicResource Loc.Name}" VerticalAlignment="Center" />
+<TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" Watermark="{DynamicResource Loc.DisplayName}" />
+<TextBlock Grid.Row="1" Text="{DynamicResource Loc.Link}" VerticalAlignment="Center" />
+<TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Link}" Watermark="{DynamicResource Loc.MegaLink}" />
+<TextBlock Grid.Row="2" Text="{DynamicResource Loc.Visibility}" VerticalAlignment="Center" />
+<CheckBox Grid.Row="2" Grid.Column="1"
+                                      Content="{DynamicResource Loc.ShowTheLinkInTheStreamingLibrary}"
+                                      IsChecked="{Binding LinkVisible}" /></Grid>
+                        <Expander Header="{DynamicResource Loc.Advanced}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+<Grid ColumnDefinitions="126,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="14" RowSpacing="10"><TextBlock Grid.Row="0" Text="{DynamicResource Loc.Description}" VerticalAlignment="Top" Margin="0,6,0,0" />
+<TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Description}"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="70" />
-
-                            <TextBlock Grid.Row="2" Text="Comments" VerticalAlignment="Top" Margin="0,6,0,0" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Comments}"
+<TextBlock Grid.Row="1" Text="{DynamicResource Loc.Comments}" VerticalAlignment="Top" Margin="0,6,0,0" />
+<TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Comments}"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+<TextBlock Grid.Row="2" Text="{DynamicResource Loc.PosterURL}" VerticalAlignment="Center" />
+<TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Poster}" Watermark="https://…" />
+<TextBlock Grid.Row="3" Text="IMDB" VerticalAlignment="Center" />
+<TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Imdb}" Watermark="tt…" />
+<TextBlock Grid.Row="4" Text="Allociné" VerticalAlignment="Center" />
+<TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Allocine}" />
+<TextBlock Grid.Row="5" Text="Filmaffinity" VerticalAlignment="Center" />
+<TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Filmaffinity}" /></Grid>
+                        </Expander>
 
-                            <TextBlock Grid.Row="3" Text="Poster URL" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Poster}" Watermark="https://…" />
 
-                            <TextBlock Grid.Row="4" Text="Link" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Link}" Watermark="Mega link" />
-
-                            <TextBlock Grid.Row="5" Text="Visibility" VerticalAlignment="Center" />
-                            <CheckBox Grid.Row="5" Grid.Column="1"
-                                      Content="Show the link in the streaming library"
-                                      IsChecked="{Binding LinkVisible}" />
-
-                            <TextBlock Grid.Row="6" Text="IMDB" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Imdb}" Watermark="tt…" />
-
-                            <TextBlock Grid.Row="7" Text="Allociné" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Allocine}" />
-
-                            <TextBlock Grid.Row="8" Text="Filmaffinity" VerticalAlignment="Center" />
-                            <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding Filmaffinity}" />
-                        </Grid>
-
+                    </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Row="1" Spacing="10">
                         <TextBlock Classes="status"
                                    Classes.error="{Binding StatusIsError}"
                                    Text="{Binding Status}"
@@ -109,16 +106,16 @@
                                    TextWrapping="Wrap" />
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Save" Classes="accent" Command="{Binding SaveCommand}" />
-                            <Button Content="Play"
+                            <Button Content="{DynamicResource Loc.SaveLabel}" Classes="accent" Command="{Binding SaveCommand}" />
+                            <Button Content="{DynamicResource Loc.Play}"
                                     Command="{Binding PlayCommand}"
                                     IsEnabled="{Binding HasSelection}" />
-                            <Button Content="Delete"
+                            <Button Content="{DynamicResource Loc.Delete}"
                                     Command="{Binding DeleteCommand}"
                                     IsEnabled="{Binding HasSelection}" />
                         </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
+                </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

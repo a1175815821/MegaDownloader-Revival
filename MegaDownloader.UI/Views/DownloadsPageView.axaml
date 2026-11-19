@@ -1,225 +1,158 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MegaDownloader.UI.ViewModels"
+             xmlns:controls="using:MegaDownloader.UI.Controls"
              x:Class="MegaDownloader.UI.Views.DownloadsPageView"
              x:DataType="vm:DownloadsPageViewModel">
-
     <UserControl.Styles>
-        <Style Selector="ListBox.queue">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-        </Style>
-
         <Style Selector="ListBox.queue ListBoxItem">
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,1" />
-            <Setter Property="CornerRadius" Value="8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        </Style>
-
-        <Style Selector="Border.row">
-            <Setter Property="Padding" Value="10,9" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Background" Value="Transparent" />
-        </Style>
-
-        <Style Selector="Button.rowAction">
-            <Setter Property="Padding" Value="7,2" />
-            <Setter Property="MinWidth" Value="30" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-        </Style>
-
-        <Style Selector="Button.rowAction:pointerover">
-            <Setter Property="Foreground" Value="{DynamicResource Md.Fore}" />
-        </Style>
-
-        <Style Selector="Button.chevron">
-            <Setter Property="Padding" Value="4,0" />
-            <Setter Property="MinWidth" Value="20" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-            <Setter Property="VerticalAlignment" Value="Top" />
-        </Style>
-
-        <Style Selector="ProgressBar.queue">
-            <Setter Property="Height" Value="4" />
-            <Setter Property="CornerRadius" Value="2" />
-            <Setter Property="Minimum" Value="0" />
-            <Setter Property="Maximum" Value="100" />
-            <Setter Property="Background" Value="{DynamicResource Md.ProgressBack}" />
-            <Setter Property="Foreground" Value="{DynamicResource Md.ProgressFill}" />
-        </Style>
-
-        <Style Selector="TextBlock.state">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{DynamicResource Md.Muted}" />
-            <Setter Property="HorizontalAlignment" Value="Right" />
-        </Style>
-
-        <Style Selector="TextBlock.state.completed">
-            <Setter Property="Foreground" Value="{DynamicResource Md.SuccessFore}" />
-        </Style>
-
-        <Style Selector="TextBlock.state.failed">
-            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+            <Setter Property="CornerRadius" Value="0" />
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="24">
 
-        <!-- Header and queue-wide controls -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-            <StackPanel Spacing="4">
-                <TextBlock Text="Downloads" Classes="h1" />
-                <TextBlock Classes="muted" Text="{Binding Summary}" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1"
-                        Orientation="Horizontal"
-                        Spacing="8"
-                        VerticalAlignment="Center">
-                <ComboBox ItemsSource="{Binding Filters}"
-                          SelectedItem="{Binding SelectedFilter}"
-                          MinWidth="132"
-                          VerticalAlignment="Center"
-                          ToolTip.Tip="Filter by status" />
-                <Button Content="Start all"
-                        Classes="accent"
-                        Command="{Binding StartAllCommand}"
-                        IsEnabled="{Binding CanStartAll}" />
-                <Button Content="Pause all"
-                        Command="{Binding PauseAllCommand}"
-                        IsEnabled="{Binding CanPauseAll}" />
-                <Button Content="Stop"
-                        Command="{Binding StopAllCommand}"
-                        IsEnabled="{Binding CanStopAll}" />
-            </StackPanel>
+    <Grid Classes="reveal" Margin="36,24,36,18" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Classes="h1" Text="{DynamicResource Loc.TransferQueue}" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Classes="quiet" Command="{Binding EncodeLinksCommand}" Content="{DynamicResource Loc.EncodeLinks}"/>
+            <Button Grid.Column="2" Classes="quiet" Command="{Binding GenerateElcCommand}" Content="{DynamicResource Loc.GenerateELC}"/>
+            <Button Grid.Column="3" IsVisible="{Binding HasFiles}" Classes="accent" Command="{Binding AddLinksCommand}" ToolTip.Tip="Ctrl+N" Content="{DynamicResource Loc.AddLinks}"/>
         </Grid>
+        <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*" IsVisible="{Binding HasFiles}">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3,0,12">
+                    <TextBlock Text="{Binding Status}" Classes="muted" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Button Classes="quiet icon" Command="{Binding StartAllCommand}" IsEnabled="{Binding CanStartAll}"
+                                    ToolTip.Tip="{DynamicResource Loc.StartQueue}" AutomationProperties.Name="{DynamicResource Loc.StartQueue}">
+                                <PathIcon Data="{StaticResource Icon.Play}"  />
+                            </Button>
+                        <Button Classes="quiet icon" Command="{Binding PauseAllCommand}" IsEnabled="{Binding CanPauseAll}"
+                                    ToolTip.Tip="{DynamicResource Loc.PauseQueue}" AutomationProperties.Name="{DynamicResource Loc.PauseQueue}">
+                                <PathIcon Data="{StaticResource Icon.Pause}"  />
+                            </Button>
+                        <Button Classes="quiet icon" Command="{Binding StopAllCommand}" IsEnabled="{Binding CanStopAll}"
+                                    ToolTip.Tip="{DynamicResource Loc.StopQueue}" AutomationProperties.Name="{DynamicResource Loc.StopQueue}">
+                                <PathIcon Data="{StaticResource Icon.Stop}"  />
+                            </Button>
+                    </StackPanel>
+                    <ComboBox Grid.Column="2" MinWidth="118" MaxWidth="168" VerticalAlignment="Center"
+                              ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter}"
+                              AutomationProperties.Name="{DynamicResource Loc.FilterByStatus}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:QueueFilterOption">
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
 
-        <!-- Live status line -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource Md.AltBack}"
-                BorderBrush="{DynamicResource Md.Border}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="12,7"
-                Margin="0,0,0,12">
-            <Grid ColumnDefinitions="Auto,*">
-                <TextBlock Text="●"
-                           Foreground="{DynamicResource Md.ProgressFill}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,8,0" />
-                <TextBlock Grid.Column="1"
-                           Classes="caption"
-                           Text="{Binding Status}"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-            </Grid>
-        </Border>
+                <Border Grid.Row="1" Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}"
+                        BorderThickness="0,1" IsVisible="{Binding !IsEmpty}">
+                    <Grid ColumnDefinitions="2.4*,1*,96" ColumnSpacing="12" Margin="16,8,16,8">
+                        <TextBlock Classes="caption" Text="{DynamicResource Loc.FileOrPackage}" />
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.Progress}" />
+                        <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Actions}" HorizontalAlignment="Right" />
+                    </Grid>
+                </Border>
 
-        <!-- Virtualized queue -->
-        <Border Grid.Row="2" Classes="card" Padding="8">
-            <Grid>
-                <ListBox Classes="queue"
-                         ItemsSource="{Binding Downloads}"
-                         SelectedItem="{Binding SelectedDownload}"
+                <ListBox Grid.Row="2" Classes="queue" Background="Transparent" BorderThickness="0" Padding="0"
+                         ItemsSource="{Binding Downloads}" SelectedItem="{Binding SelectedDownload}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:DownloadItemViewModel">
-                            <Border Classes="row"
-                                    Margin="{Binding RowMargin}"
-                                    DoubleTapped="RowDoubleTapped">
+                            <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1"
+                                    Padding="16,12,16,12" Background="Transparent" DoubleTapped="RowDoubleTapped">
                                 <Border.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Properties…"
-                                                  Command="{Binding PropertiesCommand}" />
+                                        <MenuItem Header="{DynamicResource Loc.Properties}" Command="{Binding PropertiesCommand}" />
                                         <Separator />
-                                        <MenuItem Header="Remove from queue"
-                                                  Command="{Binding RemoveCommand}" />
-                                        <MenuItem Header="Remove and delete local files"
-                                                  Command="{Binding DeleteCommand}" />
+                                        <MenuItem Header="{DynamicResource Loc.RemoveFromQueue}" Command="{Binding RemoveCommand}" />
+                                        <MenuItem Header="{DynamicResource Loc.RemoveAndDeleteLocalFiles}" Command="{Binding DeleteCommand}" />
                                     </ContextMenu>
                                 </Border.ContextMenu>
+                                <Grid ColumnDefinitions="2.4*,1*,96" ColumnSpacing="12">
+                                    <Grid ColumnDefinitions="Auto,34,*" ColumnSpacing="6" Margin="{Binding RowMargin}">
+                                        <Button Classes="quiet icon" Command="{Binding ToggleExpandedCommand}"
+                                                ToolTip.Tip="{DynamicResource Loc.ExpandOrCollapsePackage}"
+                                                AutomationProperties.Name="{DynamicResource Loc.ExpandOrCollapsePackage}"
+                                                IsVisible="{Binding HasChildren}">
+                                            <TextBlock Text="{Binding Chevron}" FontSize="17" />
+                                        </Button>
+                                        <Border Grid.Column="1" Background="{DynamicResource Md.AltBack}" Width="34" Height="34" CornerRadius="2" IsVisible="{Binding IsPackage}">
+                                            <PathIcon Data="{StaticResource Icon.Folder}" IsVisible="{Binding IsPackage}" Foreground="{DynamicResource Md.Link}" />
+                                        </Border>
+                                        <PathIcon Data="{StaticResource Icon.File}" Grid.Column="1" IsVisible="{Binding !IsPackage}" Foreground="{DynamicResource Md.Muted}" />
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="3">
+                                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="{Binding TitleWeight}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                                            <TextBlock Classes="caption" Text="{Binding DetailText}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Grid>
 
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
-                                    <Button Classes="chevron"
-                                            Content="{Binding Chevron}"
-                                            Command="{Binding ToggleExpandedCommand}"
-                                            IsVisible="{Binding IsPackage}" />
-
-                                    <StackPanel Grid.Column="1" Spacing="5">
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontWeight="{Binding TitleWeight}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <ProgressBar Classes="queue"
-                                                     Value="{Binding Progress}"
-                                                     IsVisible="{Binding !IsCompleted}" />
-                                        <TextBlock Classes="caption"
-                                                   Text="{Binding DetailText}"
-                                                   TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="5">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <TextBlock Classes="caption" Text="{Binding StateText}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" FontFamily="Consolas" FontSize="13" Text="{Binding ProgressText}"/>
+                                        </Grid>
+                                        <ProgressBar Value="{Binding Progress}" Height="3" CornerRadius="0" HorizontalAlignment="Stretch" IsHitTestVisible="False"/>
+                                        <TextBlock Text="{Binding SpeedText}" Classes="caption" IsVisible="{Binding CanPause}"/>
                                     </StackPanel>
-
-                                    <StackPanel Grid.Column="2"
-                                                Spacing="2"
-                                                VerticalAlignment="Center"
-                                                MinWidth="150">
-                                        <TextBlock Classes="state"
-                                                   Classes.completed="{Binding IsCompleted}"
-                                                   Classes.failed="{Binding IsFailed}"
-                                                   Text="{Binding StateText}" />
-                                        <TextBlock Classes="caption"
-                                                   HorizontalAlignment="Right"
-                                                   Text="{Binding SpeedText}" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Column="3"
-                                                Orientation="Horizontal"
-                                                Spacing="2"
-                                                VerticalAlignment="Center">
-                                        <Button Classes="rowAction"
-                                                Content="▶"
-                                                Command="{Binding StartCommand}"
-                                                IsVisible="{Binding CanStart}"
-                                                ToolTip.Tip="Start or resume" />
-                                        <Button Classes="rowAction"
-                                                Content="⏸"
-                                                Command="{Binding PauseCommand}"
-                                                IsVisible="{Binding CanPause}"
-                                                ToolTip.Tip="Pause" />
-                                        <Button Classes="rowAction"
-                                                Content="✕"
-                                                Command="{Binding RemoveCommand}"
-                                                ToolTip.Tip="Remove from queue" />
-                                    </StackPanel>
+                                    <Grid Grid.Column="2" ColumnDefinitions="*,42" VerticalAlignment="Center">
+                                        <Button Classes="quiet icon" Command="{Binding StartCommand}" IsVisible="{Binding CanStart}" HorizontalAlignment="Right"
+                                    ToolTip.Tip="{DynamicResource Loc.StartOrResume}" AutomationProperties.Name="{DynamicResource Loc.StartOrResume}">
+                                <PathIcon Data="{StaticResource Icon.Play}"  />
+                            </Button>
+                                        <Button Classes="quiet icon" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" HorizontalAlignment="Right"
+                                    ToolTip.Tip="{DynamicResource Loc.Pause}" AutomationProperties.Name="{DynamicResource Loc.Pause}">
+                                <PathIcon Data="{StaticResource Icon.Pause}"  />
+                            </Button>
+                                        <Button Grid.Column="1" Classes="quiet icon" ToolTip.Tip="{DynamicResource Loc.TaskOptions}"
+                                                AutomationProperties.Name="{DynamicResource Loc.TaskOptions}">
+                                            <PathIcon Data="{StaticResource Icon.More}"  />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="{DynamicResource Loc.Properties}" Command="{Binding PropertiesCommand}" />
+                                                    <Separator />
+                                                    <MenuItem Header="{DynamicResource Loc.RemoveFromQueue}" Command="{Binding RemoveCommand}" />
+                                                    <MenuItem Header="{DynamicResource Loc.RemoveAndDeleteLocalFiles}" Command="{Binding DeleteCommand}" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <!-- Empty state -->
-                <StackPanel IsVisible="{Binding IsEmpty}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="8"
-                            Margin="24">
-                    <TextBlock Text="{Binding EmptyTitle}"
-                               Classes="h2"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Classes="muted"
-                               TextWrapping="Wrap"
-                               MaxWidth="420"
-                               TextAlignment="Center"
-                               Text="{Binding EmptyMessage}" />
-                    <TextBlock Classes="caption"
-                               IsVisible="{Binding IsBusy}"
-                               HorizontalAlignment="Center"
-                               Text="Loading saved queue…" />
+
+            <StackPanel Grid.Row="2" IsVisible="{Binding CanResetFilter}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+                <TextBlock Text="{Binding EmptyTitle}" Classes="h2" TextAlignment="Center"/>
+                <TextBlock Classes="muted" Text="{Binding EmptyMessage}" TextAlignment="Center"/>
+                <Button Command="{Binding ResetFilterCommand}" Content="{DynamicResource Loc.ShowAllDownloads}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" IsVisible="{Binding !HasFiles}" RowDefinitions="*,Auto,*">
+            <Border Grid.Row="1" MaxWidth="690" HorizontalAlignment="Stretch" BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,2,0,1" Padding="0,23,0,20">
+                <StackPanel Spacing="13">
+                    <TextBlock Classes="h2" FontSize="29" Text="{Binding EmptyTitle}"/>
+                    <TextBlock Classes="muted" Text="{Binding EmptyMessage}" TextWrapping="Wrap"/>
+                    <TextBox Text="{Binding DraftLinks}" AcceptsReturn="True" MinHeight="95" MaxHeight="145" TextWrapping="Wrap" VerticalContentAlignment="Top" AutomationProperties.Name="{DynamicResource Loc.MEGALinks}" PlaceholderText="{DynamicResource Loc.PasteMegaLinksOrTextContainingThem}" IsVisible="{Binding CanAddFromEmpty}"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="caption" Text="{Binding Status}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="accent" Command="{Binding AddLinksCommand}" IsVisible="{Binding CanAddFromEmpty}" Content="{DynamicResource Loc.AddLinks}" ToolTip.Tip="Ctrl+N"/>
+                    </Grid>
                 </StackPanel>
+            </Border>
+        </Grid>
+        <Border Grid.Row="2" IsVisible="{Binding HasFiles}" BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
+            <Grid ColumnDefinitions="Auto,Auto,95,*,Auto" ColumnSpacing="12">
+                <TextBlock Text="{DynamicResource Loc.TransferSpeed}" Classes="caption" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding TransferSpeed}" FontFamily="Consolas" VerticalAlignment="Center"/>
+                <controls:TransferGraph Grid.Column="2" History="{Binding SpeedHistory}" Height="27" LineBrush="{DynamicResource Md.ProgressFill}" GridBrush="{DynamicResource Md.Grid}" IsHitTestVisible="False"/>
+                <TextBlock Grid.Column="4" Text="{Binding Summary}" Classes="caption" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

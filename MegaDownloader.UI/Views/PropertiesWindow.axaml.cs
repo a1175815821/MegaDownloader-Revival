@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using MegaDownloader.UI.ViewModels;
@@ -20,7 +21,7 @@ public partial class PropertiesWindow : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose download folder",
+            Title = UiText.Get("Choose download folder"),
             AllowMultiple = false
         });
 

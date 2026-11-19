@@ -21,15 +21,26 @@ public sealed class SettingsService : ISettingsService
 
     public void Save()
     {
+        string temporary = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            File.WriteAllText(_path, JsonSerializer.Serialize(Current, JsonOptions));
+            File.WriteAllText(temporary, JsonSerializer.Serialize(Current, JsonOptions));
+            File.Move(temporary, _path, overwrite: true);
         }
-        catch (IOException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
+            Log.WriteWarning("UI settings could not be saved: " + Log.SafeException(error));
         }
-        catch (UnauthorizedAccessException)
+        finally
         {
+            try
+            {
+                File.Delete(temporary);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                Log.WriteWarning("Temporary UI settings could not be removed: " + Log.SafeException(error));
+            }
         }
     }
 

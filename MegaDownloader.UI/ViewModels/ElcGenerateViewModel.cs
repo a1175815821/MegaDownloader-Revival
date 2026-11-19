@@ -1,3 +1,4 @@
+using MegaDownloader.UI.Services;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,13 +30,18 @@ public partial class ElcGenerateViewModel : ViewModelBase
     private bool onePerLink;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CopyResultCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveResultCommand))]
     private string resultText = string.Empty;
 
     [ObservableProperty]
-    private string status = "Choose an account and paste links.";
+    private string status = UiText.Get("Choose an account and paste links.");
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ManageAccountsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyResultCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveResultCommand))]
     private bool isBusy;
 
     public ElcGenerateViewModel(DownloadEngineService engine)
@@ -84,12 +90,12 @@ public partial class ElcGenerateViewModel : ViewModelBase
         var urls = URLExtractor.ExtraerURLs(LinksText);
         if (urls.Count == 0)
         {
-            SetStatus("No Mega links found in the text.", true);
+            SetStatus(UiText.Get("No Mega links found in the text."), true);
             return;
         }
 
         IsBusy = true;
-        SetStatus("Contacting the ELC server…", false);
+        SetStatus(UiText.Get("Contacting the ELC server…"), false);
         string accountUrl = SelectedAccount.Url;
         bool onePer = OnePerLink;
         string input = LinksText;
@@ -97,12 +103,12 @@ public partial class ElcGenerateViewModel : ViewModelBase
         {
             string result = await Task.Run(() => Generate(accountUrl, urls, onePer, input));
             ResultText = result;
-            SetStatus($"Generated {urls.Count} link(s).", false);
+            SetStatus(UiText.Format("Generated {0} link(s).", urls.Count), false);
         }
         catch (Exception ex)
         {
             Log.WriteError("ELC generation failed: " + Log.SafeException(ex));
-            SetStatus(ex.Message, true);
+            SetStatus(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
         }
         finally
         {
@@ -110,16 +116,28 @@ public partial class ElcGenerateViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    private bool HasResult => !IsBusy && !string.IsNullOrEmpty(ResultText);
+
+    private bool CanManageAccounts => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(HasResult))]
     private async Task CopyResultAsync()
     {
         if (CopyAsync is null || string.IsNullOrEmpty(ResultText))
             return;
-        await CopyAsync(ResultText);
-        SetStatus("Result copied to the clipboard.", false);
+        try
+        {
+            await CopyAsync(ResultText);
+            SetStatus(UiText.Get("Result copied to the clipboard."), false);
+        }
+        catch (Exception ex)
+        {
+            Log.WriteWarning("Copying ELC links failed: " + Log.SafeException(ex));
+            SetStatus(UiText.Get("Could not copy the result to the clipboard."), true);
+        }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasResult))]
     private async Task SaveResultAsync()
     {
         if (SaveFileAsync is null || string.IsNullOrEmpty(ResultText))
@@ -132,11 +150,11 @@ public partial class ElcGenerateViewModel : ViewModelBase
         {
             // A cancelled picker or a read-only folder must not take the window down.
             Log.WriteError("Saving the ELC result failed: " + Log.SafeException(ex));
-            SetStatus("The result could not be saved: " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+            SetStatus(UiText.Format("The result could not be saved: {0}", DownloadAdvice.FirstLine(Log.Redact(ex.Message))), true);
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageAccounts))]
     private async Task ManageAccountsAsync()
     {
         if (OpenAccountsAsync is null)
@@ -159,7 +177,7 @@ public partial class ElcGenerateViewModel : ViewModelBase
                 var single = new List<ServerEncoderLinkHelper.MegaLink> { ToMegaLink(url) };
                 string encoded = ServerEncoderLinkHelper.ServerEncode(accountUrl, single, ref config);
                 if (string.IsNullOrEmpty(encoded))
-                    throw new ApplicationException("The server returned an empty ELC.");
+                    throw new ApplicationException(UiText.Get("The server returned an empty ELC."));
                 text = text.Replace(url, "mega://elc?" + encoded, StringComparison.Ordinal);
             }
             return text;
@@ -170,7 +188,7 @@ public partial class ElcGenerateViewModel : ViewModelBase
             links.Add(ToMegaLink(url));
         string result = ServerEncoderLinkHelper.ServerEncode(accountUrl, links, ref config);
         if (string.IsNullOrEmpty(result))
-            throw new ApplicationException("The server returned an empty ELC.");
+            throw new ApplicationException(UiText.Get("The server returned an empty ELC."));
         return "mega://elc?" + result;
     }
 
@@ -208,5 +226,5 @@ public sealed class ElcAccountOption
 
     public bool IsDefault { get; }
 
-    public override string ToString() => IsDefault ? Alias + " (default)" : Alias;
+    public override string ToString() => IsDefault ? UiText.Format("{0} (default)", Alias) : Alias;
 }
