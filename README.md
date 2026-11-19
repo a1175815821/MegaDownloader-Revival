@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Free%20download-Latest-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.3-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.4-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. Copy a MEGA link — the app detects it automatically.
 3. Confirm the link → choose files → start the download.
 
-> v2.6.3: an actionable failure banner, update checks on your terms, and a fully rewritten natural Simplified Chinese UI — plus another round of download and extraction reliability fixes.
+> v2.6.4: a steady sidebar (no more periodic flicker), a faster and sharper regression suite, and tidier docs — a maintenance release on the 2.6 workbench.
 
 <table>
 <tr>
@@ -46,15 +46,13 @@
 
 ---
 
-## ✨ What's new in 2.6.3
+## ✨ What's new in 2.6.4
 
-- **A failure banner you can act on** — failed tasks raise a persistent banner with a count; dismiss it and it stays hidden until the count changes. "Retry now" retries only recoverable failures (quota failures keep their resume data); permanently dead links are skipped so they don't burn quota.
-- **Update checks on your terms** — choose "Manual check only" plus an interval in hours; the background checker no longer pops up on a fixed timer. Help → Check for updates still works on demand.
-- **Natural Simplified Chinese** — all 511 zh-CN strings rewritten as natural Simplified Chinese, and existing uncustomized language copies sync automatically on upgrade. "Manual check only" and the hour unit are now translated, and browse buttons no longer stretch over their input boxes.
-- **More reliable downloads and extraction** — split keys mangled by chat apps are recognised again; multi-volume archives wait and extract as a set; 7z extraction commits transactionally and rolls back on failure; over-long archive names get unique hash suffixes; encrypted multi-volume RAR errors are localized.
-- **Readable themes and safer exits** — light/dark accent, surface and quota-banner text meet WCAG 4.5:1 contrast; closing the window while extracting warns about corruption danger; proxy host:port parsing and startup queue-load recovery are fixed.
-- **No overlapping buttons, tighter layout** — Cancel / primary-action buttons no longer collide in Add Links, Settings, pre-flight and schedule; the selected-task details panel is a compact label＋value grid with a single-line title; settings groups gain divider lines between sub-sections.
-- **Cleaner code, 1121 assertions** — 18 unreferenced dead members and a stray build artifact removed, and the docs reorganized. Debug / Release each pass 1121 regression assertions. [Full changelog](docs/CHANGELOG.md).
+- **No more sidebar flicker** — the workbench no longer re-lays itself out every 430ms while a task is selected or the quota banner is showing. It relayouts only when the selection or quota state actually flips, so the sidebar stays steady through long quota pauses while the countdown keeps updating.
+- **A faster, sharper regression suite** — the test run is now 53 named, individually timed cases that no longer stop at the first failure: one round reports every problem with per-case timing and a slowest-case summary. Repeat rounds skip recompilation via a content-hash cache, and `-NoBuild` skips the app build.
+- **More precise tests** — the settings first-open guard no longer false-fails on a cold process's JIT cost; download fixtures wait for the real output file instead of fixed sleeps; port allocation retries around Windows reserved-port ranges, fixing "Error starting web server" socket errors.
+- **Broader coverage** — new checks for the failure banner (dismiss / re-show / retry filter / quota resume), permanent-vs-quota error classification and quota countdown formatting (+38 assertions). Debug / Release each pass **1135 assertions** across 53 cases.
+- **Tidier docs** — audit and performance notes moved under `docs/audits/`, language and self-test guides under `docs/guides/`; the three READMEs regain the full badge row and first-screen star request. [Full changelog](docs/CHANGELOG.md).
 
 ## Workbench features introduced in 2.6
 
@@ -220,10 +218,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.3 settings" src="docs/screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.4 settings" src="docs/screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>Settings in 2.6.3 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+<p align="center"><sub>Settings in 2.6.4 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
 
 ---
 
@@ -233,7 +231,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.3** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.4** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -339,7 +337,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.3](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.3) | Highlights and downloads for v2.6.3 |
+| [Release notes 2.6.4](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.4) | Highlights and downloads for v2.6.4 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

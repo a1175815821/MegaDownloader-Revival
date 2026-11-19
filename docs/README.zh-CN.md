@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/%E5%85%8D%E8%B4%B9%E4%B8%8B%E8%BD%BD-%E6%9C%80%E6%96%B0%E7%89%88-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.3-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.4-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. 复制一个 MEGA 链接，程序会自动识别。
 3. 确认链接 → 勾选要的文件 → 开始下载。
 
-> v2.6.3 重点：可一键重试的失败横幅、可配置的更新检查、整体重写的自然简体中文界面，以及新一轮下载与解压可靠性修复。
+> v2.6.4 重点：侧栏不再周期性闪烁、更快更准的回归测试套件，以及更整齐的文档——基于 2.6 工作台的维护版。
 
 <table>
 <tr>
@@ -46,15 +46,13 @@
 
 ---
 
-## ✨ 2.6.3 新在哪
+## ✨ 2.6.4 新在哪
 
-- **可处理的失败横幅**：失败任务在底部弹出常驻横幅并显示计数，关闭后保持隐藏，计数变化才重新提醒；「立即重试」只重试可恢复的失败（配额失败保留断点），永久失效的链接跳过以免消耗配额。
-- **更新检查由你掌控**：可选「仅手动检查」加自定义间隔（小时），后台不再固定定时弹窗；帮助 → 检查更新仍可手动检查并提示结果。
-- **自然简体中文**：511 条简中文案整体重写为自然简体，旧安装升级时未自定义的语言副本自动同步；「仅手动检查」与小时单位按语言显示，浏览按钮不再拉宽压住输入框。
-- **下载与解压更可靠**：被聊天软件截断的分裂 key 重新识别；多卷归档成套等待与解压；7z 事务式提交、失败回滚；超长归档名哈希唯一化；加密多卷 RAR 错误本地化。
-- **主题更清晰、退出更安全**：深浅色主按钮、底色与配额横幅文字对比度达 WCAG 4.5:1；解压中关窗提示损坏风险；修复代理 host:port 解析与启动队列加载失败恢复。
-- **按钮不再重叠、布局更紧凑**：添加链接 / 设置 / 预检 / 定时对话框的取消与主操作按钮不再重叠；选中任务的详情面板改为「标签＋值同行」紧凑布局、标题单行；设置分组内逻辑子段之间补分割线。
-- **代码更干净，1121 项断言**：移除 18 个零引用死成员与一个构建产物，文档归档整理；Debug / Release 完整回归各通过 1121 项断言。[完整变更](CHANGELOG.md)。
+- **侧栏不再闪烁**：选中任务或配额横幅显示期间，工作区不再每 430ms 全量重排，仅在选中 / 配额状态真正翻转时重排一次；长时间配额暂停时侧栏保持稳定，倒计时照常刷新。
+- **回归套件更快更准**：测试改为 53 个命名用例逐用例计时，失败不再中断整轮——一轮即可报告全部问题，附逐用例耗时与最慢用例汇总；重复轮按内容哈希缓存跳过重新编译，`-NoBuild` 再跳过应用构建。
+- **测试更精准**：设置首开守卫不再因冷进程 JIT 耗时误报；下载夹具改为等待真实成品文件而非固定 sleep；端口分配避开 Windows 保留端口段并重试，修复「Error starting web server」套接字错误。
+- **覆盖更全面**：新增失败横幅行为（关闭 / 重现 / 重试过滤 / 配额续传）、永久 vs 配额错误分类、配额倒计时格式边界等用例（+38 断言）。Debug / Release 完整回归各通过 **1135 项断言**（53 用例全过）。
+- **文档更整齐**：审计 / 性能笔记归入 `docs/audits/`，语言 / 自测指南归入 `docs/guides/`；三语 README 恢复完整徽章行与首屏 Star 请求。[完整变更](CHANGELOG.md)。
 
 ## 2.6 引入的工作台功能
 
@@ -220,10 +218,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.3 settings" src="screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.4 settings" src="screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>2.6.3 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
+<p align="center"><sub>2.6.4 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
 
 ---
 
@@ -233,7 +231,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.3** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.4** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
@@ -339,7 +337,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6.3 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.3) | v2.6.3 的更新亮点与下载 |
+| [2.6.4 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.4) | v2.6.4 的更新亮点与下载 |
 
 README 为三种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 
