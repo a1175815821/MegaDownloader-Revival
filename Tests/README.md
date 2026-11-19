@@ -1,5 +1,36 @@
 # 回归验证
 
+## 运行
+
+在 Windows 项目根目录运行（需本项目已有的 .NET SDK 与 .NET Framework 4.8 构建环境及资源依赖，无需测试框架、不连接 MEGA、不读取真实账户或队列）：
+
+```powershell
+.\Tests\Run-RegressionTests.ps1                  # 构建 Release 并跑完整回归
+.\Tests\Run-RegressionTests.ps1 -NoBuild         # 复用已有构建，跳过 msbuild
+.\Tests\Run-RegressionTests.ps1 -Configuration Debug
+.\Tests\Run-RegressionTests.ps1 -List            # 列出全部用例（类别 + 名称）
+.\Tests\Run-RegressionTests.ps1 -Cases failure_banner,quota   # 只跑名称匹配的用例
+.\Tests\Run-RegressionTests.ps1 -Category ui,download         # 按类别跑（core/download/archive/queue/preflight/language/ui/startup/audit）
+.\Tests\Run-RegressionTests.ps1 -UiOnly          # 界面专项夹具
+.\Tests\Run-RegressionTests.ps1 -StartupOnly     # 启动专项夹具
+.\Tests\Run-RegressionTests.ps1 -Screenshots     # 额外输出文档截图 PNG（更新 docs/screenshots 时用）
+```
+
+## 套件特性
+
+- **逐用例计时与隔离**：53 个命名用例各自独立 try/catch 并计时；单个失败不再中断整轮，结尾汇总通过/失败数、断言总数、总耗时与最慢用例，失败逐条列出——一轮即可定位全部问题。
+- **编译缓存**：测试程序按（测试源码 + 应用二进制 + app.config）内容哈希缓存于 `%TEMP%\MegaDownloader-regression-cache`；构建未变时重复轮跳过 csc，`-NoBuild` 再跳过 msbuild。每轮仍把 exe 复制到独立临时目录运行，夹具不污染缓存。
+- **截图按需**：常规轮不做 PrintWindow 渲染与 PNG 写盘（界面几何/布局断言照常运行）；更新文档截图时加 `-Screenshots`。
+- **UTF-8 输出**：控制台与 `results.txt` 均为 UTF-8，中文不再乱码。
+- **精准度**：设置首开守卫只测 load+首帧并辅以布局次数上限（`layouts<500`），排除冷进程 JIT/构造耗时造成的误报；下载/并行用例以“等待真实成品文件”取代固定 sleep；流媒体分段夹具去掉人为 250ms 延迟（仍真实分段）；16 MiB MetaMAC 独立生成器改用 `TransformBlock` 复用缓冲（语义不变、更快）。
+- **端口稳健**：`FreePort()` 与 `LocalFileServer` 用真实 `HttpListener` 探测并重试绑定，避开 Hyper-V/WinNAT 保留端口段导致的 WSAEACCES（“Error starting web server / 套接字访问权限”）环境性失败。
+
+## 当前基线（2026-11-19，main）
+
+Debug / Release 完整回归各通过 **1135 项断言**（53 用例，全部通过）。界面专项 `-UiOnly` 通过 247 项（截图关闭；加 `-Screenshots` 会恢复 PrintWindow 捕获校验），启动专项 `-StartupOnly` 通过 157 项。本轮新增覆盖：失败横幅行为（dismiss 保持隐藏 / 计数变化重现 / Retry 仅唤醒非永久失败 / 配额失败保留断点 / 与 dismiss 计数联动）、永久 vs 配额错误分类（`IsPermanentErrorText`/`IsQuotaErrorText`/`EstablecerError`）、配额倒计时格式边界（`FormatQuotaRemaining`）。常规一轮约 60–75 秒（界面专项与启动恢复计时占大头），重复轮因缓存省去构建与编译。
+
+以下为历史发布检查记录。
+
 2.6.3 修订包发布检查（2026-11-14，替换原始 2.6.3 资产）：使用 `bin/Release-uifix` 独立输出目录运行完整回归与界面专项，Debug / Release 完整回归各通过 **1121 项断言**（924→1006→1121），界面专项通过 271 项。在原始 2.6.3 用例（失败横幅重试 / 永久过滤、主题对比度、浏览按钮几何、简中繁中字形守卫、用户语言副本同步、加密多卷 RAR 提示、split-key、长名哈希唯一化、非首分卷等待、StreamingModule 原始 TCP 502）之上，新增四对话框 RightToLeft 操作面板按钮两两不重叠守卫（含非空校验）。单文件版校验全部 15 个内嵌依赖；ZIP 仅包含 EXE、15 个 DLL 与运行配置共 17 个文件。文档截图取自本次 Release 隔离夹具（详情面板紧凑同行、设置分组分割线），清单见 [截图说明](../docs/screenshots/README.md)。本轮另移除 18 个零引用死成员与构建产物 `My Project/Resources.resources`，根目录审计笔记归入 `docs/`。版本号保持 `2.6.3`，已装原始 2.6.3 需手动替换。
 
 2026-11-14 审计修复基线（a2c1d47）：Debug/Release 双跑完整回归各通过 **1006 项断言**（936→1006，新增 `FinalReleaseCases`：队列备份完整性、解压事务与回滚、分卷等待 lifecycle、停止代际竞态、更新提醒/代理）。RAR4/RAR5/旧式分卷与 TAR 的真实样本由维护者手动验证，未落入回归夹具。
@@ -8,7 +39,7 @@
 
 2026-11-05 性能与启动优化：新增 `StartupPerformanceRegressionTests.cs`，验证批量安全字符串构造、全部历史熵链、当前密文复用与修改失效、隐藏链接、顺序一致的并发恢复、可取消的文件锁重试、后台加载期间的界面响应与保存 / 调度门槛、并发追加、失败与关闭保护、周期刷新合并及媒体库恢复状态的非阻塞读取。Debug / Release 完整回归分别通过 **924 项断言**，其中新增启动专项 **157 项**。测试入口使用 STA 并提前初始化视觉样式；原生界面异常直接报告测试失败，避免弹出 JIT 对话框。
 
-启动采用先显示界面再后台恢复队列的流程，测试使用隔离配置和可控加载器验证，不启动真实下载。同一份 679 项队列、交替各 5 轮的隔离关键阶段中位数从约 **3.69 秒降至 1.33 秒**；该数值包含模型恢复和界面准备，不等同于完整进程冷启动时间。详情见 [性能分析与验收记录](../docs/PERFORMANCE_ANALYSIS_2026-11-05.zh-CN.md)。
+启动采用先显示界面再后台恢复队列的流程，测试使用隔离配置和可控加载器验证，不启动真实下载。同一份 679 项队列、交替各 5 轮的隔离关键阶段中位数从约 **3.69 秒降至 1.33 秒**；该数值包含模型恢复和界面准备，不等同于完整进程冷启动时间。详情见 [性能分析与验收记录](../docs/audits/PERFORMANCE_ANALYSIS_2026-11-05.zh-CN.md)。
 
 2026-11-05 最终审查修复：补充 `DeliveryAuditRegressionTests.cs`，覆盖媒体库恢复时并发新增 / 删除的内存与 XML 一致性、恢复后的唯一 ID、配置被锁期间禁止启动工作线程和下载、恢复后的启动偏好及真实流媒体端口、HTTP 请求与取消回调尚未退出时的停止 / 重启，以及五种地区格式下限速回显与属性保存。配置、队列和媒体库均验证被锁备份的自动恢复，并保留被锁主文件不得静默回退旧备份的保护。Debug / Release 构建及完整回归分别通过 **767 项断言**。
 
@@ -20,9 +51,9 @@
 
 2.6.1 发布检查：Debug / Release 构建通过；Release 完整回归通过 **509 项断言**。原生截图额外覆盖已加载设置的深色、连接与高级页面，以及嵌入真实添加窗口的第二步文件选择页。
 
-系统语言功能加入完整语言代码、地区变体、简繁中文、缺失语言英文回退、手动选择优先、自定义语言包与损坏文件验证，并检查设置页的“跟随系统”选项。语言初始化使用临时目录，详见 `docs/SYSTEM-LANGUAGE.zh-CN.md`。
+系统语言功能加入完整语言代码、地区变体、简繁中文、缺失语言英文回退、手动选择优先、自定义语言包与损坏文件验证，并检查设置页的“跟随系统”选项。语言初始化使用临时目录，详见 `docs/guides/SYSTEM-LANGUAGE.zh-CN.md`。
 
-第二轮 UI 复查加入菜单首次显示、真实设置加载计时、未使用账号页的保存与关闭、空账号列表画布所有权、搜索滚动，以及多页多尺寸布局验证。2026-10-31 的完整回归通过 437 项断言；设置首次打开的隔离采样从约 8.2 秒降至约 0.92 秒。详见 `docs/UI-BUG-REVIEW-20261031.zh-CN.md`。
+第二轮 UI 复查加入菜单首次显示、真实设置加载计时、未使用账号页的保存与关闭、空账号列表画布所有权、搜索滚动，以及多页多尺寸布局验证。2026-10-31 的完整回归通过 437 项断言；设置首次打开的隔离采样从约 8.2 秒降至约 0.92 秒。详见 `docs/audits/UI-REWORK-2026-10.zh-CN.md`。
 
 视觉整理新增原生界面夹具，可在不执行窗体业务加载的情况下检查深浅主题、列布局、包树、详情适配和弹窗。使用独立输出目录及界面专项检查：
 
@@ -35,7 +66,7 @@
 
 更新文档截图时，运行上述完整或界面专项检查，从输出的临时目录按 [截图清单](../docs/screenshots/README.md) 复制精选图片。发布截图使用示例任务、`D:\Downloads` 路径及程序内版本标题，不加载真实用户配置；不要把整个临时目录提交到仓库。
 
-2026-10-31 视觉整理后的 Release 完整回归通过 354 项断言，界面专项通过 116 项；Debug / Release 编译通过。验证记录见 `docs/UI-VISUAL-REFRESH.zh-CN.md`。
+2026-10-31 视觉整理后的 Release 完整回归通过 354 项断言，界面专项通过 116 项；Debug / Release 编译通过。验证记录见 `docs/audits/UI-REWORK-2026-10.zh-CN.md`。
 
 在 Windows 项目根目录运行：
 

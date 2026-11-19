@@ -19,15 +19,6 @@ public partial class RegressionTests {
     static T FileBacked<T>(string path) {
         return (T)Activator.CreateInstance(typeof(T),hidden,null,new object[]{path},CultureInfo.InvariantCulture);
     }
-    static void DeliveryAuditFixCases(byte[] plain,string key,byte[] encrypted) {
-        SpeedLimitRoundTrips();
-        StopWhileRequestIsPending(plain,key,encrypted);
-        DeferredConfigurationStartup();
-        RecoverConcurrentLibraryEdits();
-        RecoverLockedBackups();
-        Print("delivery_audit_fixes","locale round trips, stop/restart, deferred startup, live services, concurrent library edits and backup recovery passed");
-    }
-
     static void SpeedLimitRoundTrips() {
         var previous=Thread.CurrentThread.CurrentCulture;
         var format=typeof(Utils).GetMethod("FormatSpeedLimit",shared);
