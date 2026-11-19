@@ -80,6 +80,8 @@ MegaDownloader/
 │   ├── README.*.md                  #   各语言说明（根 README.md 为英文）
 │   ├── CHANGELOG.md                 #   变更日志（仅简体中文）
 │   ├── CONTRIBUTING*.md             #   贡献指南（英文 + 简体中文）
+│   ├── audits/                      #   历史审计、UI 记录与性能分析
+│   ├── guides/                      #   功能说明与人工自测清单
 │   └── screenshots/                 #   README 使用的横幅与界面截图
 ├── Tests/                          # 可执行回归验证与运行脚本
 ├── MegaDownloader.sln              # VS 解决方案
@@ -101,7 +103,7 @@ MegaDownloader/
 | `Stegano/` | 隐写术相关窗体与逻辑 |
 | `Resources/Language/` | 界面多语言 XML，每种语言一个文件 |
 | `Resources/DLLs/` | 第三方依赖 DLL，随仓库提交 |
-| `docs/` | 本文档与变更日志 |
+| `docs/` | 贡献文档与变更日志，以及 `audits/`、`guides/` 下的历史记录与指南 |
 | `Tests/` | 下载、解压、路径与流媒体回归验证，详见 [Tests/README.md](../Tests/README.md) |
 
 ## 贡献流程

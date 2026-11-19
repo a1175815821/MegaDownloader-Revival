@@ -80,6 +80,8 @@ MegaDownloader/
 │   ├── README.*.md                  #   Translated readmes (root README.md is English)
 │   ├── CHANGELOG.md                 #   Changelog (Simplified Chinese only)
 │   ├── CONTRIBUTING*.md             #   Contributing guide (English + Simplified Chinese)
+│   ├── audits/                      #   Historical audits, UI records and performance reviews
+│   ├── guides/                      #   Feature guides and manual self-test checklist
 │   └── screenshots/                 #   Banner and interface images used by the READMEs
 ├── Tests/                          # Executable regression checks and runner
 ├── MegaDownloader.sln              # VS solution
@@ -101,7 +103,7 @@ MegaDownloader/
 | `Stegano/` | Steganography forms and logic |
 | `Resources/Language/` | UI localization XML, one file per language |
 | `Resources/DLLs/` | Third-party dependency DLLs, committed with the repository |
-| `docs/` | This document and the changelog |
+| `docs/` | Contribution docs and changelog, plus historical records in `audits/` and guides in `guides/` |
 | `Tests/` | Download, extraction, path and streaming regression checks; see [Tests/README.md](../Tests/README.md) |
 
 ## Contribution workflow

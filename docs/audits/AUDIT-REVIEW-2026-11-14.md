@@ -99,7 +99,7 @@
 - 11 个 `Resources/Language/*-Language.xml`
 - `Tests/RegressionTests.cs`
 - `app.config`
-- `docs/AUDIT-REVIEW-2026-11-14.md`（本报告）
+- `docs/audits/AUDIT-REVIEW-2026-11-14.md`（本报告）
 
 ## 5. 最终建议
 
