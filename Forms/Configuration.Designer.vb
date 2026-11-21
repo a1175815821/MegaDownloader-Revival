@@ -124,7 +124,6 @@ Partial Class Configuration
         Me.lblStreamingPort = New System.Windows.Forms.Label()
         Me.chkStreamingServer = New System.Windows.Forms.CheckBox()
         Me.TabPage5 = New System.Windows.Forms.TabPage()
-        Me.ElcAccountControl = New MegaDownloader.ELCAccountControl()
         Me.txtSearchConfig = New System.Windows.Forms.TextBox()
         Me.GroupBox1.SuspendLayout()
         Me.GroupBox3.SuspendLayout()
@@ -1254,7 +1253,6 @@ Partial Class Configuration
         '
         'TabPage5
         '
-        Me.TabPage5.Controls.Add(Me.ElcAccountControl)
         Me.TabPage5.Location = New System.Drawing.Point(4, 22)
         Me.TabPage5.Name = "TabPage5"
         Me.TabPage5.Padding = New System.Windows.Forms.Padding(3)
@@ -1262,13 +1260,6 @@ Partial Class Configuration
         Me.TabPage5.TabIndex = 4
         Me.TabPage5.Text = "Cuentas ELC"
         Me.TabPage5.UseVisualStyleBackColor = True
-        '
-        'ElcAccountControl
-        '
-        Me.ElcAccountControl.Location = New System.Drawing.Point(-2, 0)
-        Me.ElcAccountControl.Name = "ElcAccountControl"
-        Me.ElcAccountControl.Size = New System.Drawing.Size(615, 376)
-        Me.ElcAccountControl.TabIndex = 0
         '
         'Configuration
         '

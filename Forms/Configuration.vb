@@ -46,6 +46,9 @@ Public Class Configuration
 			Dim q As String = raw.Trim().ToLowerInvariant()
 			If q.Length < 2 Then Return
 			For Each tp As TabPage In TabControl1.TabPages
+				' 设置搜索必须能搜到尚未打开过的页：先按需构建该页，
+				' 再检查标题/控件文本。搜索是用户主动操作，构建成本可以接受。
+				EnsureSettingsPage(tp)
 				If tp.Text.ToLowerInvariant().Contains(q) Then
 					TabControl1.SelectedTab = tp
 					Return
@@ -116,12 +119,14 @@ Public Class Configuration
     Private ListaPreSharedKey As List(Of String)
     Private configurationLoaded As Boolean
     Private elcAccountsLoaded As Boolean
+    Private themeApplied As Boolean
 
     Private Sub Configuration_Load(sender As Object, e As System.EventArgs) Handles Me.Load
 
         Dim suspended = UiStyles.SuspendLayouts(Me)
         Try
-            ElcAccountControl.Config = Config
+            ' ELC 页在第一次选中前不创建，避免 DataGridView 的构造/JIT 影响首次打开。
+            If ElcAccountControl IsNot Nothing Then ElcAccountControl.Config = Config
 
             Translate()
             TrySetSearchCue()
@@ -287,6 +292,7 @@ Public Class Configuration
             Catch ex As Exception
                 Log.WriteError("Failed to apply theme to Configuration form: " & ex.ToString)
             End Try
+            themeApplied = True
             configurationLoaded = True
             EnsureElcAccounts()
         Finally
@@ -296,6 +302,8 @@ Public Class Configuration
     End Sub
 
     Private Sub ConfigurationShown(sender As Object, e As EventArgs)
+        ' 隐藏期间就构建好、且正好是当前页的懒建页面，在这里补一次布局。
+        If settingsLayoutReady Then ForceSettingsPageLayout(TabControl1.SelectedTab)
         ' Show warnings only after the settings window has painted, with a real
         ' owner, instead of blocking Load behind an otherwise blank window.
         If Config IsNot Nothing AndAlso ((Config.ProxyPasswordNeedsReentry AndAlso Config.UsarProxy) OrElse
@@ -324,17 +332,74 @@ Public Class Configuration
     End Sub
 
     Private Sub SettingsTabChanged(sender As Object, e As EventArgs)
+        If settingsLayoutReady Then
+            Dim page As TabPage = TabControl1.SelectedTab
+            EnsureSettingsPage(page)
+            ' 已构建但从未显示过的页(例如设置搜索提前建好的页)也要补一次布局。
+            ForceSettingsPageLayout(page)
+        End If
         If configurationLoaded Then EnsureElcAccounts()
+    End Sub
+
+    Private Sub EnsureElcControl()
+        If ElcAccountControl IsNot Nothing Then
+            ElcAccountControl.Config = Config
+            Return
+        End If
+        ' 账号页的 DataGridView/表格控件是设置窗体里最重的一棵子树；
+        ' 只有在第一次打开 ELC 页时才付出这部分构造和 JIT 成本。
+        ElcAccountControl = New ELCAccountControl()
+        ElcAccountControl.Config = Config
+        ElcAccountControl.Dock = DockStyle.Fill
+        TabPage5.Padding = New Padding(12)
+        UiStyles.SetRole(TabPage5, UiStyles.Role.Surface)
+        TabPage5.Controls.Add(ElcAccountControl)
     End Sub
 
     Private Sub EnsureElcAccounts()
         If elcAccountsLoaded OrElse Not configurationLoaded OrElse TabControl1.SelectedTab IsNot TabPage5 Then Return
+        EnsureSettingsPage(TabPage5)
+        EnsureElcControl()
         ElcAccountControl.CargarDatos()
         elcAccountsLoaded = True
     End Sub
 
+    ''' <summary>
+    ''' 空闲预建时顺手跑一次 Load：把绑定、翻译、主题和首次 ShowDialog 的
+    ''' JIT 提前完成，用户第一次点击设置时只剩刷新和重显。
+    ''' </summary>
+    Friend Sub PreloadForFirstShow(configuration As Configuracion)
+        If configuration Is Nothing OrElse configurationLoaded Then Return
+        Me.Config = configuration
+        Configuration_Load(Me, EventArgs.Empty)
+    End Sub
+
+    ''' <summary>
+    ''' 复用同一个设置窗口时的重开准备：丢弃上一次打开留下的临时编辑，
+    ''' 按当前 Config 重新填充全部字段，并把窗口状态复位到“一般”页。
+    ''' 第一次打开时 configurationLoaded 仍为 False，真正的填充由 Load 事件完成。
+    ''' </summary>
+    Friend Sub PrepareForReopen()
+        DialogResult = DialogResult.None
+        StartupConfigurationSaved = False
+        If Not configurationLoaded Then Return
+
+        ' ELC 的编辑副本属于一次打开；关闭时已释放，这里再保证一次幂等清理。
+        If ElcAccountControl IsNot Nothing Then ElcAccountControl.Cerrar()
+        elcAccountsLoaded = False
+        If TabControl1.TabPages.Count > 0 Then TabControl1.SelectedIndex = 0
+        For Each page As TabPage In TabControl1.TabPages
+            page.AutoScrollPosition = Point.Empty
+        Next
+        txtSearchConfig.Clear()
+        chkShowPassword.Checked = False
+        ' 不再手动调用 Configuration_Load：WinForms 每次重新 ShowDialog 都会
+        ' 再次触发 Load，重复调用会把整套绑定和主题做两遍。
+        DialogResult = DialogResult.None
+    End Sub
+
     Private Sub Configuration_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
-        elcAccountControl.Cerrar()
+        If elcAccountControl IsNot Nothing Then elcAccountControl.Cerrar()
     End Sub
 
     Private Sub Translate()
@@ -629,7 +694,7 @@ Public Class Configuration
         Config.ServidorWebPuerto = servidorWebPuerto
         Config.ServidorWebRutaPlantilla = txtServidorWebTemplate.Text
         Config.ServidorWebTimeout = servidorWebTimeout
-        ElcAccountControl.SaveToConfig(Config)
+        If ElcAccountControl IsNot Nothing Then ElcAccountControl.SaveToConfig(Config)
 
         Dim AvisoReiniciarAppParaIdioma As Boolean = False
         If CStr(comboIdiomas.SelectedValue) = Language.FollowSystemLanguageCode OrElse Language.IsValidLanguageCode(CStr(comboIdiomas.SelectedValue)) Then

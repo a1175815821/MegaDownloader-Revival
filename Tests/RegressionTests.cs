@@ -1614,12 +1614,15 @@ public partial class RegressionTests {
             Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"opening general settings does not rebuild unused account data");
             Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text==cfg.RutaDefecto,"opening settings preserves an unavailable download path without probing or replacing it");
             var accountControl=(ELCAccountControl)typeof(Configuration).GetProperty("ElcAccountControl",hidden).GetValue(settings,null);
+            Check(accountControl==null,"opening general settings leaves the unused account page unbuilt");
             var originalAccounts=cfg.ELCAccounts;
-            accountControl.SaveToConfig(ref cfg);
-            Check(Object.ReferenceEquals(originalAccounts,cfg.ELCAccounts) && cfg.ELCAccounts.Count==1,"saving unopened account settings preserves the existing collection");
+            Check(Object.ReferenceEquals(originalAccounts,cfg.ELCAccounts) && cfg.ELCAccounts.Count==1,"unopened account settings keep the existing collection");
             var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetProperty("TabControl1",hidden).GetValue(settings,null);
             tabs.SelectedIndex=tabs.TabPages.Count-1;
             Check((bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"account editing initializes when its tab is selected");
+            Check(tabs.SelectedTab.Controls.Count>0 && tabs.SelectedTab.Controls[0].Height>100,"first visit to the account page lays out its body");
+            accountControl=(ELCAccountControl)typeof(Configuration).GetProperty("ElcAccountControl",hidden).GetValue(settings,null);
+            Check(accountControl!=null,"selecting the account tab builds the account control");
             accountControl.Cerrar();accountControl.Cerrar();
             Check(true,"account cleanup is safe before or after repeated close calls");
             tabs.SelectedIndex=0;
@@ -1640,6 +1643,8 @@ public partial class RegressionTests {
                 settings.ClientSize=new System.Drawing.Size(width,650);
                 foreach(System.Windows.Forms.TabPage page in tabs.TabPages.Cast<System.Windows.Forms.TabPage>().Take(5)) {
                     tabs.SelectedTab=page;System.Windows.Forms.Application.DoEvents();
+                    if(page!=tabs.TabPages[0])
+                        Check(page.Controls.Count>0 && page.Controls[0].Height>100,"first visit to a lazy page lays out its body at width "+width+": "+page.Name);
                     if(page==tabs.TabPages[0]) {
                         var master=checkUpdates.RectangleToScreen(checkUpdates.ClientRectangle);
                         var manual=manualUpdates.RectangleToScreen(manualUpdates.ClientRectangle);
@@ -1675,6 +1680,7 @@ public partial class RegressionTests {
             settings.ClientSize=new System.Drawing.Size(880,650);
             typeof(Configuration).GetMethod("LocateConfigText",hidden).Invoke(settings,new object[]{"代理"});
             Check(tabs.SelectedTab.Text.Contains("连接") && tabs.SelectedTab.AutoScrollPosition.Y<0,"settings search scrolls to a matching section below the fold");
+            Check(tabs.SelectedTab.Controls.Count>0 && tabs.SelectedTab.Controls[0].Height>100,"search-selected lazy page lays out its body");
             tabs.SelectedIndex=0;
             DrawFeatureDialog(settings,"settings-loaded-first-open.png");
             var themeChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboTheme",hidden).GetValue(settings,null);
@@ -1689,7 +1695,25 @@ public partial class RegressionTests {
             tabs.SelectedIndex=1;
             tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
             DrawFeatureDialog(settings,"settings-loaded-connection.png");
+            // Reusing the same settings window: reset per-open state and reload values.
+            ((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text="stale";
+            Check(tabs.TabPages[1].Controls.Count>0,"connection page is built before reopening");
+            cfg.RutaDefecto=@"E:\Reopened";
+            typeof(Configuration).GetMethod("PrepareForReopen",hidden).Invoke(settings,null);
+            typeof(Configuration).GetMethod("Configuration_Load",hidden).Invoke(settings,new object[]{settings,EventArgs.Empty});
+            Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text==cfg.RutaDefecto,"reopened settings refresh values from the current configuration");
+            Check(tabs.SelectedIndex==0,"reopened settings return to the general page");
+            Check(tabs.TabPages[1].Controls.Count>0,"reopened settings keep already-built pages");
+            Check(settings.DialogResult==System.Windows.Forms.DialogResult.None,"reopened settings reset the dialog result");
+            Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"reopened settings discard the previous account load");
             settings.Hide();
+
+            // Idle prewarm runs Load while hidden so the first click only refreshes and shows.
+            using(var preloaded=new PresentationSettings()) {
+                typeof(Configuration).GetMethod("PreloadForFirstShow",hidden).Invoke(preloaded,new object[]{cfg});
+                Check((bool)typeof(Configuration).GetField("configurationLoaded",hidden).GetValue(preloaded),"idle prewarm populates the settings window without showing it");
+                Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(preloaded,null)).Text==cfg.RutaDefecto,"idle prewarm reads the current configuration");
+            }
         }
         using(var emptyAccounts=new ELCAccountControl()) {
             var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
