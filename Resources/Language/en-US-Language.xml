@@ -1,5 +1,33 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Language id="en-US" name="English" app="MegaDownloader">
+  <Text key="MegaAccount_Title"><![CDATA[MEGA account]]></Text>
+  <Text key="MegaAccount_Login"><![CDATA[Sign in to MEGA]]></Text>
+  <Text key="MegaAccount_LoginButton"><![CDATA[Sign in]]></Text>
+  <Text key="MegaAccount_Logout"><![CDATA[Sign out]]></Text>
+  <Text key="MegaAccount_Hint"><![CDATA[Sign in to choose this account when adding a public file.]]></Text>
+  <Text key="MegaAccount_SignedOut"><![CDATA[MEGA: signed out]]></Text>
+  <Text key="MegaAccount_SignedIn"><![CDATA[MEGA: signed in]]></Text>
+  <Text key="MegaAccount_Connecting"><![CDATA[MEGA: connecting…]]></Text>
+  <Text key="MegaAccount_Reconnect"><![CDATA[Sign in to MEGA again]]></Text>
+  <Text key="MegaAccount_Code"><![CDATA[Two-factor code]]></Text>
+  <Text key="MegaAccount_Remember"><![CDATA[Keep me signed in on this device]]></Text>
+  <Text key="MegaAccount_EnterCredentials"><![CDATA[Enter your MEGA email and password.]]></Text>
+  <Text key="MegaAccount_MfaRequired"><![CDATA[Enter the code from your authenticator app.]]></Text>
+  <Text key="MegaAccount_RefreshQuota"><![CDATA[Refresh quota]]></Text>
+  <Text key="MegaAccount_QuotaUnknown"><![CDATA[Signed in. MEGA did not report a transfer allowance for this account.]]></Text>
+  <Text key="MegaAccount_QuotaRemaining"><![CDATA[MEGA: %N% transfer left]]></Text>
+  <Text key="MegaAccount_QuotaReached"><![CDATA[MEGA: transfer quota reached]]></Text>
+  <Text key="MegaAccount_SessionExpired"><![CDATA[Sign in to the MEGA account selected for this task, then retry.]]></Text>
+  <Text key="MegaAccount_BackendMissing"><![CDATA[This build does not include the Windows x64 MEGA account module. Anonymous downloads are still available.]]></Text>
+  <Text key="MegaAccount_KeyMissing"><![CDATA[The MEGA App Key is not configured for this build.]]></Text>
+  <Text key="MegaAccount_Busy"><![CDATA[Wait for the current MEGA operation or stop the account downloads first.]]></Text>
+  <Text key="MegaAccount_LocalError"><![CDATA[The MEGA account settings could not be read or saved.]]></Text>
+  <Text key="MegaAccount_AuthenticationFailed"><![CDATA[MEGA could not sign you in. Check your email, password and verification code.]]></Text>
+  <Text key="MegaAccount_FileUnavailable"><![CDATA[MEGA could not open this public file. Check the link and its key.]]></Text>
+  <Text key="MegaAccount_RequestFailed"><![CDATA[MEGA did not complete the request (error %N%).]]></Text>
+  <Text key="MegaAccount_LocalFileError"><![CDATA[The MEGA account download could not be saved to disk.]]></Text>
+  <Text key="AddLinks_UseMegaAccount"><![CDATA[Use MEGA account (public files only)]]></Text>
+  <Text key="AddLinks_MegaAccountFilesOnly"><![CDATA[Account downloads support direct public file links only. Go back and uncheck Use MEGA account to add folders or encoded links.]]></Text>
   <Text key="Loading..."><![CDATA[Loading...]]></Text>
   <Text key="Loading please wait"><![CDATA[Loading, please wait...]]></Text>
   <Text key="Closing please wait"><![CDATA[Closing, please wait...]]></Text>

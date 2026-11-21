@@ -43,7 +43,6 @@ Partial Public Class Configuration
         TabControl1.Multiline = True
         TabControl1.Padding = New Point(16, 9)
 
-        SettingsSection(GroupBox1, FieldRow(Label2, txtUsuario), FieldRow(Label3, txtPassword, chkShowPassword))
         Dim options As New TableLayoutPanel With {.Dock = DockStyle.Top, .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .ColumnCount = 2, .RowCount = 4, .Margin = New Padding(0)}
         options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
         UiStyles.SetRole(options, UiStyles.Role.Surface)
@@ -94,7 +93,10 @@ Partial Public Class Configuration
         UiStyles.SetRole(lblInfoStreaming, UiStyles.Role.Muted)
         SettingsSection(GroupBox7, lblInfoStreaming)
 
-        SettingsPage(TabPage1, GroupBox4, GroupBox1)
+        SettingsPage(TabPage1, GroupBox4)
+        ' Keep the historical fields owned by the form, but sign in from the main window.
+        GroupBox1.Visible = False
+        TabPage1.Controls.Add(GroupBox1)
         SettingsPage(connectionPage, ConexionGroup, GroupBox2)
         SettingsPage(TabPage2, GroupBox3, GroupBox5)
         SettingsPage(TabPage3, lblDesc, GroupBox)

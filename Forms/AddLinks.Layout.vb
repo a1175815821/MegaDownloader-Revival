@@ -11,6 +11,7 @@ Partial Public Class AddLinks
     Private addLinksStepLabel As Label
     Private addLinksFeedback As Label
     Private addLinksCancel As Button
+    Private chkMegaAccount As CheckBox
 
     Private Sub InitAddLinksLayout()
         ' Use the designer's Segoe UI 9 / 96-DPI baseline, before automatic scaling.
@@ -106,7 +107,9 @@ Partial Public Class AddLinks
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
             .WrapContents = True, .Margin = New Padding(0)}
-        flags.Controls.AddRange(New Control() {chkStartDownload, chkCrearDirectorio, chkUnZip})
+        chkMegaAccount = New CheckBox With {.AutoSize = True, .Text = Language.GetText("AddLinks_UseMegaAccount")}
+        AddHandler chkMegaAccount.CheckedChanged, AddressOf MegaAccountChoiceChanged
+        flags.Controls.AddRange(New Control() {chkStartDownload, chkCrearDirectorio, chkUnZip, chkMegaAccount})
         For Each flag As Control In flags.Controls
             flag.MinimumSize = Size.Empty
             flag.Margin = New Padding(0, 6, 16, 4)

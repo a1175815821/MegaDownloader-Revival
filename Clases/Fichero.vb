@@ -3,6 +3,7 @@ Imports System.Text.RegularExpressions
 Imports System.ComponentModel
 Imports System.Xml
 Imports System.Security
+Imports System.Threading
 
 Public Class Fichero
 	Implements IDescarga, IDisposable
@@ -20,6 +21,29 @@ Public Class Fichero
 	Public _URLFichero As SecureString ' Codificado!!
 
     Public NombreFichero As String ' Solo el nombre del fichero, sin ruta
+
+    Public MegaAccountEmail As String = String.Empty
+
+    Friend ReadOnly Property UsesMegaAccount As Boolean
+        Get
+            Return Not String.IsNullOrEmpty(MegaAccountEmail)
+        End Get
+    End Property
+
+    ' Accept only direct public files; never turn a folder child or encoded link into one.
+    Private Shared ReadOnly accountFilePattern As New Regex(
+        "\A(?:(?:https?://)?(?:www\.)?mega\.(?:co\.)?nz/(?:file/(?<id>[A-Za-z0-9_-]{8})#|#!(?<id>[A-Za-z0-9_-]{8})!)|mega:(?:/{2,3})?#?!(?<id>[A-Za-z0-9_-]{8})!)(?<key>[A-Za-z0-9_-]{43})=?\z",
+        RegexOptions.IgnoreCase Or RegexOptions.CultureInvariant)
+
+    Friend Shared Function GetMegaAccountLink(link As String) As String
+        Dim match As Match = accountFilePattern.Match(If(link, ""))
+        If Not match.Success Then Return Nothing
+        Return "https://mega.nz/file/" & match.Groups("id").Value & "#" & match.Groups("key").Value
+    End Function
+
+    Friend Shared Function IsPermanentMegaAccountError(code As Integer) As Boolean
+        Return code = -9 OrElse code = -11 OrElse code = -14 OrElse code = -16
+    End Function
 
     Public PartialFileName As String = FileDownloader.CreatePartialFileName()
 
@@ -335,6 +359,10 @@ Public Class Fichero
 	
 	Private _Actualizando As Boolean = False
 	Public Sub ActualizarInformacionFichero(ByVal Config As Configuracion, ByRef ErrorObtenido As Conexion.TipoError, ByVal ComprobacionAntesDescarga As boolean, Optional ByVal ct As System.Threading.CancellationToken = Nothing)
+        If UsesMegaAccount Then
+            VerifyMegaAccountFile(ErrorObtenido, ct)
+            Return
+        End If
 		If Not _Actualizando Then
 			_Actualizando = True
 			Try
@@ -404,7 +432,7 @@ Public Class Fichero
 			' 界面入口会先在后台线程 PrepareOutputOwnership() 预热,这里通常命中缓存。
 			Dim completado As String = GetCompletedFileForDeletion()
 			Ruta = If(completado, String.Empty)
-			Dim parcial As String = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
+			Dim parcial As String = If(UsesMegaAccount, Nothing, FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName))
 			SyncLock Mutex.DeletingFiles
 				Try
 					If Not String.IsNullOrEmpty(completado) Then
@@ -463,7 +491,7 @@ Public Class Fichero
             End Try
         End If
 
-        If completedFileName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
+        If UsesMegaAccount OrElse completedFileName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
         ' Older queues have no output marker. Require a real MetaMAC match before
         ' treating a same-named existing file as their completed output.
         If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
@@ -539,6 +567,222 @@ Public Class Fichero
 	End Function
 	
 #Region "Downloader"
+
+    Private accountDownload As CancellationTokenSource
+    Private accountCancelTarget As Estado?
+
+    Private Function ReadMegaAccountInfo(ByRef name As String, ByRef size As Long) As Integer
+        Dim link As String = GetMegaAccountLink(Me.URL)
+        If link Is Nothing Then Return -2
+        Dim code As Integer = MegaAccountService.Current.Inspect(MegaAccountEmail, link, name, size)
+        Return If(code = 0 AndAlso (String.IsNullOrEmpty(name) OrElse size < 0), -2, code)
+    End Function
+
+    Private Sub ApplyMegaAccountInfo(name As String, size As Long)
+        If String.IsNullOrEmpty(completedFileName) Then NombreFichero = PathGuard.SanitizeFileName(name, "file")
+        TamanoBytes = size
+        DescargaProcesada = True
+    End Sub
+
+    Private Sub VerifyMegaAccountFile(ByRef errorResult As Conexion.TipoError, ct As CancellationToken)
+        Dim previous As Estado
+        SyncLock Mutex.FicheroDownloader
+            If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing Then Return
+            _Actualizando = True
+            previous = EstadoDescarga
+            EstadoDescarga = Estado.Verificando
+        End SyncLock
+        Try
+            ct.ThrowIfCancellationRequested()
+            Dim name As String = Nothing
+            Dim size As Long
+            Dim code As Integer = ReadMegaAccountInfo(name, size)
+            ct.ThrowIfCancellationRequested()
+            SyncLock Mutex.FicheroDownloader
+                If disposedValue Then Return
+                If code = 0 Then
+                    ApplyMegaAccountInfo(name, size)
+                Else
+                    errorResult = Conexion.TipoError.Otros
+                    SetMegaAccountError(code)
+                End If
+            End SyncLock
+        Catch ex As Exception When Not TypeOf ex Is OperationCanceledException
+            Log.WriteWarning("MEGA account metadata failed: " & Log.SafeException(ex))
+            SyncLock Mutex.FicheroDownloader
+                If disposedValue Then Return
+                errorResult = Conexion.TipoError.Otros
+                SetMegaAccountLocalError()
+            End SyncLock
+        Finally
+            SyncLock Mutex.FicheroDownloader
+                If EstadoDescarga = Estado.Verificando Then EstadoDescarga = previous
+                _Actualizando = False
+            End SyncLock
+        End Try
+    End Sub
+
+    Private Sub StartMegaAccountDownload()
+        If MegaAccountService.Current.GetStatus().Connecting Then Return
+        SyncLock Mutex.FicheroDownloader
+            If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing OrElse
+               (EstadoDescarga <> Estado.EnCola AndAlso EstadoDescarga <> Estado.Pausado) Then Return
+            Dim source As New CancellationTokenSource()
+            accountDownload = source
+            accountCancelTarget = Nothing
+            Interlocked.Exchange(_cancellationNotified, 0)
+            EstadoDescarga = Estado.CreandoLocal
+            DescargaComenzada = True
+            ResetMegaAccountProgress()
+            NumeroConexionesAbiertas = 1
+            System.Threading.Tasks.Task.Run(Sub() RunMegaAccountDownload(source))
+        End SyncLock
+    End Sub
+
+    Private Sub RunMegaAccountDownload(source As CancellationTokenSource)
+        Dim token As CancellationToken = source.Token
+        Dim staging As String = Nothing
+        Dim output As String = Nothing
+        Dim code As Integer = 0
+        Dim localFailure As Boolean = False
+        Try
+            token.ThrowIfCancellationRequested()
+            Dim link As String = GetMegaAccountLink(Me.URL)
+            If link Is Nothing Then
+                code = -2
+                Return
+            End If
+            If Not DescargaProcesada Then
+                ' A manual retry can start a task whose initial metadata request failed.
+                Dim name As String = Nothing
+                Dim size As Long
+                code = ReadMegaAccountInfo(name, size)
+                If code <> 0 Then Return
+                token.ThrowIfCancellationRequested()
+                SyncLock Mutex.FicheroDownloader
+                    ApplyMegaAccountInfo(name, size)
+                End SyncLock
+            End If
+            System.IO.Directory.CreateDirectory(RutaLocal)
+            Do
+                staging = PathGuard.GetSafePathUnderRoot(RutaLocal, ".mega-sdk-" & Guid.NewGuid().ToString("N") & ".tmp", allowRoot:=False)
+            Loop While System.IO.File.Exists(staging) OrElse System.IO.Directory.Exists(staging)
+            token.ThrowIfCancellationRequested()
+            EstadoDescarga = Estado.Descargando
+            code = MegaAccountService.Current.Download(MegaAccountEmail, link, staging, AddressOf UpdateMegaAccountProgress, token)
+            If code <> 0 Then Return
+            token.ThrowIfCancellationRequested()
+            If New System.IO.FileInfo(staging).Length <> TamanoBytes Then Throw New System.IO.IOException("Unexpected MEGA SDK output size.")
+            SyncLock Mutex.FicheroDownloader
+                If accountCancelTarget.HasValue Then Return
+                output = DeliverMegaAccountFile(staging)
+                completedFileName = System.IO.Path.GetFileName(output)
+                NombreFichero = completedFileName
+                RecordVerifiedOutput(output)
+                BytesDescargados = TamanoBytes
+                Porcentaje = 100D
+            End SyncLock
+            downloader_Completed(Nothing, EventArgs.Empty)
+        Catch ex As OperationCanceledException
+            code = -13
+        Catch ex As Exception
+            localFailure = True
+            Log.WriteWarning("MEGA account download failed: " & Log.SafeException(ex))
+        Finally
+            If staging IsNot Nothing Then
+                Try
+                    System.IO.File.Delete(staging)
+                Catch ex As Exception
+                    Log.WriteWarning("MEGA account staging cleanup failed: " & Log.SafeException(ex))
+                End Try
+            End If
+            Dim notify As Boolean
+            SyncLock Mutex.FicheroDownloader
+                NumeroConexionesAbiertas = 0
+                VelocidadKBs = 0D
+                notify = accountCancelTarget.GetValueOrDefault(Estado.Pausado) = Estado.EnCola
+                If output Is Nothing Then
+                    ResetMegaAccountProgress()
+                    If accountCancelTarget.HasValue Then
+                        EstadoDescarga = accountCancelTarget.Value
+                    ElseIf localFailure Then
+                        SetMegaAccountLocalError()
+                    Else
+                        SetMegaAccountError(code)
+                    End If
+                End If
+                accountDownload = Nothing
+                accountCancelTarget = Nothing
+            End SyncLock
+            source.Dispose()
+            If notify Then NotifyCancellationComplete()
+        End Try
+    End Sub
+
+    Private Sub UpdateMegaAccountProgress(received As Long, total As Long, speed As Long)
+        SyncLock Mutex.FicheroDownloader
+            If accountCancelTarget.HasValue Then Return
+            BytesDescargados = Math.Max(0L, Math.Min(received, total))
+            If total > 0 Then Porcentaje = CDec(BytesDescargados) * 100D / total
+            VelocidadKBs = CDec(Math.Max(0L, speed)) / 1024D
+        End SyncLock
+    End Sub
+
+    Private Function DeliverMegaAccountFile(staging As String) As String
+        Dim leaf As String = PathGuard.SanitizeFileName(NombreFichero, "file")
+        Dim dot As Integer = leaf.LastIndexOf("."c)
+        Dim ext As String = If(dot > 0, leaf.Substring(dot), "")
+        Dim stem As String = If(dot > 0, leaf.Substring(0, dot), leaf)
+        Dim candidate As String = CompletedOutputPath(leaf)
+        Dim suffix As Integer = 1
+        Do
+            If Not System.IO.Directory.Exists(candidate) Then
+                Try
+                    ' File.Move never replaces an existing file, including one just delivered by the anonymous engine.
+                    System.IO.File.Move(staging, candidate)
+                    Return candidate
+                Catch ex As System.IO.IOException When System.IO.File.Exists(candidate) OrElse System.IO.Directory.Exists(candidate)
+                End Try
+            End If
+            suffix += 1
+            Dim tail As String = " (" & suffix.ToString() & ")" & ext
+            Dim keep As Integer = 240 - tail.Length
+            Dim nextLeaf As String = If(keep < 1, Guid.NewGuid().ToString("N"), stem.Substring(0, Math.Min(stem.Length, Math.Max(0, keep))) & tail)
+            candidate = CompletedOutputPath(nextLeaf)
+        Loop
+    End Function
+
+    Private Sub ResetMegaAccountProgress()
+        BytesDescargados = 0
+        Porcentaje = 0D
+        VelocidadKBs = 0D
+        TiempoEstimadoDescarga = ""
+    End Sub
+
+    Private Sub SetMegaAccountError(code As Integer)
+        ' SDK quota never enters the anonymous quota manager or its automatic retry path.
+        EstablecerError(MegaAccountService.ErrorText(code), IsPermanentMegaAccountError(code), False)
+    End Sub
+
+    Private Sub SetMegaAccountLocalError()
+        EstablecerError(Language.GetText("MegaAccount_LocalFileError"), False, False)
+    End Sub
+
+    Private Sub CancelMegaAccountDownload(target As Estado, Optional disposing As Boolean = False)
+        Dim notify As Boolean = False
+        SyncLock Mutex.FicheroDownloader
+            If disposing Then disposedValue = True
+            If accountDownload IsNot Nothing Then
+                If target = Estado.EnCola OrElse Not accountCancelTarget.HasValue Then accountCancelTarget = target
+                ' The SDK polls the token; staging cleanup and cancellation notification happen on its worker.
+                accountDownload.Cancel()
+            ElseIf Not disposing AndAlso target = Estado.EnCola Then
+                EstadoDescarga = Estado.EnCola
+                notify = True
+            End If
+        End SyncLock
+        If notify Then NotifyCancellationComplete()
+    End Sub
 	
 	Private Class DownloadWorker
 		Inherits BackgroundWorker
@@ -661,6 +905,10 @@ Public Class Fichero
 	
 	
 	Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
+        If UsesMegaAccount Then
+            StartMegaAccountDownload()
+            Return
+        End If
 		If disposedValue OrElse Estado.Erroneo = Me.DescargaEstado Then Exit Sub
 
 		If bgArranque Is Nothing AndAlso (Me.Downloader Is Nothing OrElse Me.Downloader.CanStart) Then
@@ -686,6 +934,10 @@ Public Class Fichero
     End Sub
 	
 	Public Sub [Resume]()
+        If UsesMegaAccount Then
+            StartMegaAccountDownload()
+            Return
+        End If
 		If Me.Downloader IsNot Nothing AndAlso Me.Downloader.CanResume Then
             ThrottledStreamController.GetController.Continuar(Me.FileID)
 			Me.Downloader.Resume()
@@ -693,12 +945,21 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub Pause()
+        If UsesMegaAccount Then
+            CancelMegaAccountDownload(Estado.Pausado)
+            Return
+        End If
 		If Me.Downloader IsNot Nothing AndAlso Me.Downloader.CanPause Then
 			Me.Downloader.Pause()
 		End If
 	End Sub
 	
 	Public Sub [Stop]()
+        If UsesMegaAccount Then
+            Interlocked.Exchange(_cancellationNotified, 0)
+            CancelMegaAccountDownload(Estado.EnCola)
+            Return
+        End If
 		' B1-④:先置验证取消标志,再等。bgArranque 不可 CancelAsync,只能靠标志自停。
 		Me._StartupCancelled = True
 		' B7: 每次显式 Stop 都开启一个新的通知周期。同一次取消里随后到达的
@@ -1181,7 +1442,7 @@ Public Class Fichero
 		Me.TiempoEstimadoDescarga = ""
 
 		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
-		If Not String.IsNullOrWhiteSpace(Me.RutaLocal) AndAlso Not String.IsNullOrWhiteSpace(Me.NombreFichero) Then
+		If Not UsesMegaAccount AndAlso Not String.IsNullOrWhiteSpace(Me.RutaLocal) AndAlso Not String.IsNullOrWhiteSpace(Me.NombreFichero) Then
 			Try
 				Dim partPath As String = FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName)
 				If System.IO.File.Exists(partPath) Then
@@ -1204,6 +1465,10 @@ Public Class Fichero
 	
 	' IDisposable
 	Protected Overridable Sub Dispose(disposing As Boolean)
+        If UsesMegaAccount AndAlso disposing Then
+            CancelMegaAccountDownload(Estado.Pausado, disposing:=True)
+            Return
+        End If
 		If Not Me.disposedValue Then
 			' B1-④:释放即取消验证,防关机后复活。
 			Me._StartupCancelled = True
@@ -1281,6 +1546,7 @@ Public Class Fichero
         End If
 
 
+        Me.MegaAccountEmail = LeerNodo(XML, "MegaAccountEmail", "")
         Me.NombreFichero = LeerNodo(XML, "NombreFichero", "")
         Me.PartialFileName = LeerNodo(XML, "PartialFileName", "")
         If Not String.IsNullOrEmpty(Me.PartialFileName) Then
@@ -1363,7 +1629,7 @@ Public Class Fichero
         Boolean.TryParse(LeerNodo(XML, "EsErrorPermanente", "false"), EsErrorPermanente)
         Boolean.TryParse(LeerNodo(XML, "FailedByQuota", "false"), FailedByQuota)
         ' 兼容旧版派生标记:老队列无标记时按描述文本回推,避免重启后永久失败被自愈捞起。
-        If Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
+        If Not UsesMegaAccount AndAlso Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
             EsErrorPermanente = IsPermanentErrorText(Me.DescripcionError)
             If Not EsErrorPermanente Then FailedByQuota = IsQuotaErrorText(Me.DescripcionError)
             If FailedByQuota Then EsErrorPermanente = False
@@ -1428,6 +1694,7 @@ Public Class Fichero
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
         End If
+        If UsesMegaAccount Then NodoFic.AppendChild(XML.CreateElement("MegaAccountEmail")).InnerText = MegaAccountEmail
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName
         If completedFileName IsNot Nothing Then NodoFic.AppendChild(XML.CreateElement("CompletedFileName")).InnerText = completedFileName

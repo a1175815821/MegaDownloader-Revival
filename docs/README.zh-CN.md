@@ -253,6 +253,9 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 **提示配额不足 / quota exceeded？**
 MEGA 对免费账户和 IP 有下载配额限制。v2.5 起程序会自动暂停并倒计时恢复；等不及的话，可在设置中开启「配额突破模式」持续重试。
 
+**能用自己的 MEGA 账号下载吗？**
+源码的首版账号功能需要 Windows x64 账号模块和 MEGA App Key，见[构建与启用说明](../Native/MegaAccount/README.md)。启用后从右上角登录；底栏显示登录状态和 MEGA 返回的传输余额。添加公开单文件时可选择账号下载，匿名下载和 ELC 不受影响。
+
 **配置和下载队列存在哪？**
 `%LOCALAPPDATA%\MegaDownloader\`。程序目录可以随意搬动或删除，配置不受影响；重装系统前备份这个目录即可。
 

@@ -425,15 +425,7 @@ Public Class Configuration
 
 
     Private Sub btnCancel_Click(sender As System.Object, e As System.EventArgs) Handles btnCancel.Click
-        ' 密码框在 Load 时被填成占位符 PASSWORDDEFECTO("*****"),恒非空:
-        ' 必须把占位符视为"未设置",否则首次运行的强制配置可被"取消"直接绕过
-        Dim PasswordNoConfigurada As Boolean = String.IsNullOrEmpty(txtPassword.Text) OrElse txtPassword.Text = PASSWORDDEFECTO
-        If RequiereConfiguracion And String.IsNullOrEmpty(txtUsuario.Text) And PasswordNoConfigurada Then
-            MessageBox.Show(Language.GetText("You must configure user and password"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-        Else
-            Me.Close()
-        End If
-
+        Me.Close()
     End Sub
 
     Private Sub btnGuardar_Click(sender As System.Object, e As System.EventArgs) Handles btnGuardar.Click
@@ -735,19 +727,9 @@ Public Class Configuration
             End If
         End If
 
-        Dim AvisoUsuarioAnonimo As Boolean = String.IsNullOrEmpty(txtUsuario.Text) And String.IsNullOrEmpty(txtPassword.Text)
-        Dim AvisoUsuarioRegistrado As Boolean = Not String.IsNullOrEmpty(txtUsuario.Text) And Not String.IsNullOrEmpty(txtPassword.Text)
-
         Dim avisos As String = ""
         If AvisoReiniciarAppParaIdioma Then
             avisos &= vbNewLine & " * " & Language.GetText("You have to restart the application for the language change to take effect")
-        End If
-        If AvisoUsuarioAnonimo Then
-            ' Cuando sirva el user/password para descargar, mostraremos este mensaje
-            'avisos &= vbNewLine & " * " & Language.GetText("If no user and password is specified, downloads will be made as an anonymous user")
-        End If
-        If AvisoUsuarioRegistrado Then
-            avisos &= vbNewLine & " * " & Language.GetText("User and password is not used yet")
         End If
 
         If Not String.IsNullOrEmpty(avisos) Then

@@ -184,6 +184,7 @@ Partial Public Class Main
                                End Sub
         StatusStrip1.SizingGrip = True
         RAMProcToolStripStatusLabel.ForeColor = ThemeManager.GetColor("Muted")
+        InitMegaAccountUi()
         workbenchReady = True
         UpdateWorkbenchTexts()
     End Sub
@@ -299,6 +300,7 @@ Partial Public Class Main
         SuspendLayout()
         Try
             LayoutMainMenu()
+            EnsureMegaAccountMenu()
             LayoutWorkbenchToolbar()
             Dim scale As Single = GetUiScale()
             Dim pad As Integer = CInt(24 * scale)

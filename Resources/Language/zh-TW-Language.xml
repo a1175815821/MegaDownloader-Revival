@@ -1,5 +1,33 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Language id="zh-TW" name="Traditional Chinese" app="MegaDownloader">
+  <Text key="MegaAccount_Title"><![CDATA[MEGA 帳號]]></Text>
+  <Text key="MegaAccount_Login"><![CDATA[登入 MEGA]]></Text>
+  <Text key="MegaAccount_LoginButton"><![CDATA[登入]]></Text>
+  <Text key="MegaAccount_Logout"><![CDATA[登出]]></Text>
+  <Text key="MegaAccount_Hint"><![CDATA[登入後，新增公開檔案時可選擇使用此帳號。]]></Text>
+  <Text key="MegaAccount_SignedOut"><![CDATA[MEGA：未登入]]></Text>
+  <Text key="MegaAccount_SignedIn"><![CDATA[MEGA：已登入]]></Text>
+  <Text key="MegaAccount_Connecting"><![CDATA[MEGA：連線中…]]></Text>
+  <Text key="MegaAccount_Reconnect"><![CDATA[重新登入 MEGA]]></Text>
+  <Text key="MegaAccount_Code"><![CDATA[兩步驗證碼]]></Text>
+  <Text key="MegaAccount_Remember"><![CDATA[在此裝置上保持登入]]></Text>
+  <Text key="MegaAccount_EnterCredentials"><![CDATA[請輸入 MEGA 電子郵件和密碼。]]></Text>
+  <Text key="MegaAccount_MfaRequired"><![CDATA[請輸入驗證器應用程式中的驗證碼。]]></Text>
+  <Text key="MegaAccount_RefreshQuota"><![CDATA[更新配額]]></Text>
+  <Text key="MegaAccount_QuotaUnknown"><![CDATA[已登入。MEGA 未回傳此帳號的傳輸配額。]]></Text>
+  <Text key="MegaAccount_QuotaRemaining"><![CDATA[MEGA：傳輸剩餘 %N%]]></Text>
+  <Text key="MegaAccount_QuotaReached"><![CDATA[MEGA：傳輸配額已用完]]></Text>
+  <Text key="MegaAccount_SessionExpired"><![CDATA[請登入此任務所選的 MEGA 帳號，然後重試。]]></Text>
+  <Text key="MegaAccount_BackendMissing"><![CDATA[此版本未包含 Windows x64 MEGA 帳號模組，仍可匿名下載。]]></Text>
+  <Text key="MegaAccount_KeyMissing"><![CDATA[此版本尚未設定 MEGA App Key。]]></Text>
+  <Text key="MegaAccount_Busy"><![CDATA[請等待目前的 MEGA 操作完成，或先停止帳號下載。]]></Text>
+  <Text key="MegaAccount_LocalError"><![CDATA[無法讀取或儲存此裝置上的 MEGA 帳號設定。]]></Text>
+  <Text key="MegaAccount_AuthenticationFailed"><![CDATA[MEGA 登入失敗。請檢查電子郵件、密碼和驗證碼。]]></Text>
+  <Text key="MegaAccount_FileUnavailable"><![CDATA[MEGA 無法開啟此公開檔案。請檢查連結及其金鑰。]]></Text>
+  <Text key="MegaAccount_RequestFailed"><![CDATA[MEGA 未能完成請求（錯誤 %N%）。]]></Text>
+  <Text key="MegaAccount_LocalFileError"><![CDATA[無法將 MEGA 帳號下載的檔案儲存到磁碟。]]></Text>
+  <Text key="AddLinks_UseMegaAccount"><![CDATA[使用 MEGA 帳號（僅公開檔案）]]></Text>
+  <Text key="AddLinks_MegaAccountFilesOnly"><![CDATA[帳號下載僅支援公開單檔連結。新增資料夾或編碼連結時，請返回取消勾選「使用 MEGA 帳號」。]]></Text>
   <Text key="Loading..."><![CDATA[載入中...]]></Text>
   <Text key="Loading please wait"><![CDATA[載入中請稍候...]]></Text>
   <Text key="Closing please wait"><![CDATA[關閉中請稍候...]]></Text>

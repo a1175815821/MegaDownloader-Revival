@@ -1,8 +1,10 @@
 Imports System.Collections.Generic
+Imports System.Threading
 Imports System.Threading.Tasks
 
 Partial Public Class AddLinks
     Private preflightSession As PreflightSession
+    Private previewMegaAccountEmail As String = ""
     Private warmRequest As PreflightSession.Request
     Private inputGeneration As Integer
     Private importBusy As Boolean
@@ -29,10 +31,55 @@ Partial Public Class AddLinks
         PreflightProgress.Display(snapshot, lblLinkCount, preflightProgressBar, warmRequest.Started)
     End Sub
 
+    Private Sub MegaAccountChoiceChanged(sender As Object, e As EventArgs)
+        previewMegaAccountEmail = If(chkMegaAccount.Checked, MegaAccountService.Current.Email, "")
+        chkMegaAccount.Text = Language.GetText("AddLinks_UseMegaAccount") & If(String.IsNullOrEmpty(previewMegaAccountEmail), "", " (" & previewMegaAccountEmail & ")")
+        PreflightInputChanged()
+        If preflightSession IsNot Nothing Then preflightSession.Dispose()
+        preflightSession = Nothing
+        Dim needsLogin As Boolean = chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail)
+        ShowInputNotice(If(needsLogin, MegaAccountService.ErrorText(-15), ""), needsLogin)
+        UpdateLinkCount()
+    End Sub
+
     Private Function CurrentPreflightRequest() As PreflightSession.Request
-        If preflightSession Is Nothing Then preflightSession = New PreflightSession(Config)
+        If preflightSession Is Nothing Then
+            If chkMegaAccount.Checked Then
+                Dim email As String = previewMegaAccountEmail
+                preflightSession = New PreflightSession(Function(url, token) InspectMegaAccountLink(url, email, token))
+            Else
+                preflightSession = New PreflightSession(Config)
+            End If
+        End If
         warmRequest = preflightSession.Prepare(txtLinks.Text & vbNewLine & HiddenLinks)
         Return warmRequest
+    End Function
+
+    Private Shared Function InspectMegaAccountLink(url As String, email As String, token As CancellationToken) As List(Of BatchLinkPreflight.Entry)
+        Dim entry As New BatchLinkPreflight.Entry With {.Name = "—", .State = BatchLinkPreflight.LinkState.Invalid}
+        Dim link As String = Fichero.GetMegaAccountLink(url)
+        If link Is Nothing Then
+            entry.Detail = Language.GetText("AddLinks_MegaAccountFilesOnly")
+        Else
+            token.ThrowIfCancellationRequested()
+            Dim name As String = Nothing
+            Dim size As Long
+            Dim code As Integer = MegaAccountService.Current.Inspect(email, link, name, size)
+            token.ThrowIfCancellationRequested()
+            entry.Name = Fichero.ExtraerFileID(url)
+            entry.Source = New URLProcessor.FileURL(url, "")
+            If code = 0 AndAlso Not String.IsNullOrEmpty(name) AndAlso size >= 0 Then
+                entry.Name = PathGuard.SanitizeFileName(name, "file")
+                entry.SizeBytes = size
+                entry.Source.DisplayName = entry.Name
+                entry.Source.SizeBytes = size
+                entry.State = BatchLinkPreflight.LinkState.Ready
+            Else
+                entry.Detail = MegaAccountService.ErrorText(If(code = 0, -2, code))
+                If Not Fichero.IsPermanentMegaAccountError(code) Then entry.State = BatchLinkPreflight.LinkState.Unavailable
+            End If
+        End If
+        Return New List(Of BatchLinkPreflight.Entry) From {entry}
     End Function
 
     Private Async Sub UpdateLinkCount()
@@ -42,6 +89,11 @@ Partial Public Class AddLinks
             If String.IsNullOrWhiteSpace(txtLinks.Text) Then
                 HiddenLinks = String.Empty
                 lblLinkCount.Text = ""
+                Return
+            End If
+            If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail) Then
+                lblLinkCount.Text = ""
+                preflightProgressBar.Visible = False
                 Return
             End If
             Dim request As PreflightSession.Request = CurrentPreflightRequest()

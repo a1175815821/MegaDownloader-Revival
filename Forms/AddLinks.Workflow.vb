@@ -23,7 +23,11 @@ Partial Public Class AddLinks
             txtRuta.Focus()
             Return
         End If
-        ShowInputNotice("")
+        If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail) Then
+            ShowInputNotice(MegaAccountService.ErrorText(-15), True)
+            Return
+        End If
+        ShowInputNotice(If(chkMegaAccount.Checked, chkMegaAccount.Text, ""))
         If _linkCountTimer IsNot Nothing Then _linkCountTimer.Stop()
         preflightProgressTimer.Stop()
         Dim created As Boolean = preflightView Is Nothing
@@ -148,6 +152,11 @@ Partial Public Class AddLinks
         If importBusy OrElse preflightDisposed OrElse preflightView Is Nothing Then Return
         Dim selected As List(Of URLProcessor.FileURL) = preflightView.SelectedFiles
         If selected Is Nothing OrElse selected.Count = 0 Then Return
+        Dim megaAccountEmail As String = If(chkMegaAccount.Checked, previewMegaAccountEmail, "")
+        If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(megaAccountEmail) Then
+            preflightView.ShowNotice(MegaAccountService.ErrorText(-15), True)
+            Return
+        End If
         importBusy = True
         importCancellation = New CancellationTokenSource()
         Dim source As CancellationTokenSource = importCancellation
@@ -185,7 +194,7 @@ Partial Public Class AddLinks
                 Return
             End If
             importTotal = selected.Count
-            committed = Await FinishAddPackageAsync(selected)
+            committed = Await FinishAddPackageAsync(selected, megaAccountEmail)
             If committed Then
                 UltimaConfiguracionUsada.ExisteUltimaConfiguracion = True
                 UltimaConfiguracionUsada.CrearDirectorioPaquete = chkCrearDirectorio.Checked

@@ -139,6 +139,7 @@ public partial class RegressionTests {
             new CaseDef("parallel_same_name","download",()=>{SameNameDownloads(Plain,Key,Encrypted);SameNameDownloads(Plain,Key,Encrypted,true);}),
             new CaseDef("concurrent_final_names","download",ConcurrentFinalNames),
             new CaseDef("partial_persistence","core",()=>PartialPersistenceAndCleanup(Plain,Key)),
+            new CaseDef("mega_account_queue","queue",MegaAccountQueueCases),
             new CaseDef("deletion_ownership","core",()=>DeletionOwnershipCases(Plain,Key)),
             new CaseDef("locked_primary","core",LockedPrimaryCases),
             new CaseDef("resume_space","download",ResumeSpaceCases),
@@ -1358,6 +1359,7 @@ public partial class RegressionTests {
                 foreach(string name in languageFields)typeof(Language).GetField(name,shared).SetValue(null,lang);
                 typeof(Language).GetField("culture",shared).SetValue(null,System.Globalization.CultureInfo.GetCultureInfo("zh-CN"));
                 FirstOpenUiCases();
+                MegaAccountDialogCases();
                 PasswordPropertiesCases();
                 var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
                 WarmInboxUiCases(config);
@@ -1471,6 +1473,43 @@ public partial class RegressionTests {
         thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
         if(failure!=null)throw new Exception("Native feature dialog regression failed",failure);
     }
+    static void MegaAccountDialogCases() {
+        var assembly=typeof(Main).Assembly;
+        var dialogType=assembly.GetType("MegaDownloader.MegaAccountForm",true);
+        var serviceType=assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var service=serviceType.GetField("Current",shared).GetValue(null);
+        var current=serviceType.GetField("currentStatus",hidden);
+        var old=current.GetValue(service);
+        string oldKey=Environment.GetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY");
+        try {
+            Environment.SetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY",null);
+            using(var form=(System.Windows.Forms.Form)Activator.CreateInstance(dialogType,true)) {
+                ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Light);
+                DrawFeatureDialog(form,"mega-account-login.png");
+                CheckActionButtons("MEGA login",form);
+                var password=(System.Windows.Forms.TextBox)form.Controls.Find("MegaAccountPassword",true).Single();
+                var remember=(System.Windows.Forms.CheckBox)form.Controls.Find("MegaAccountRemember",true).Single();
+                Check(password.UseSystemPasswordChar && !remember.Checked,"MEGA password is masked; remembering the session is opt-in");
+                var button=(System.Windows.Forms.Button)form.Controls.Find("MegaAccountAction",true).Single();
+                Check(!button.Enabled && form.Controls.Find("MegaAccountMessage",true).Single().Text.Length>0,"missing SDK or App Key is explained without submitting credentials");
+            }
+            object signedIn=Activator.CreateInstance(current.FieldType);
+            current.FieldType.GetField("Email",hidden).SetValue(signedIn,"fixture@example.invalid");
+            current.FieldType.GetField("Remaining",hidden).SetValue(signedIn,(long)2684354560);
+            current.SetValue(service,signedIn);
+            using(var form=(System.Windows.Forms.Form)Activator.CreateInstance(dialogType,true)) {
+                ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Dark);
+                DrawFeatureDialog(form,"mega-account-details.png");
+                CheckActionButtons("MEGA account",form);
+                var controls=ControlTree(form).ToList();
+                Check(controls.Any(c=>c.Text=="fixture@example.invalid") && controls.Any(c=>c.Text.Contains("传输剩余") && c.Text.Contains("GiB")),"signed-in dialog shows the email and the numeric transfer balance");
+                Check(!controls.Any(c=>c.Name=="MegaAccountPassword"),"signed-in dialog does not show credential fields");
+            }
+        } finally {
+            current.SetValue(service,old);
+            Environment.SetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY",oldKey);
+        }
+    }
     static void FirstOpenUiCases() {
         using(var main=new PresentationMain()) {
             var type=typeof(Main);
@@ -1488,7 +1527,11 @@ public partial class RegressionTests {
             var menu=main.MainMenuStrip;
             Print("menu_first_open","width="+menu.Width,"client="+main.ClientSize.Width,string.Join("|",menu.Items.Cast<System.Windows.Forms.ToolStripItem>().Select(i=>i.Text+":"+i.Placement+":"+i.Bounds)));
             Check(menu.Width==main.ClientSize.Width && !menu.AutoSize,"menu keeps the full client width on first show without a resize");
-            Check(menu.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main && i.Bounds.Right<=menu.ClientSize.Width),"all four menu entries are visible on the first frame");
+            Check(menu.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main && i.Bounds.Right<=menu.ClientSize.Width),"all menu entries are visible on the first frame");
+            var accountItem=menu.Items["MegaAccountMenu"];
+            Check(accountItem!=null && accountItem.Alignment==System.Windows.Forms.ToolStripItemAlignment.Right && accountItem.Text=="登录 MEGA","MEGA login is right-aligned in the command strip");
+            var status=main.Controls.OfType<System.Windows.Forms.StatusStrip>().Single().Items["MegaAccountStatus"];
+            Check(status!=null && status.Text=="MEGA：未登录","status strip identifies the anonymous session");
             type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
             main.ClientSize=new System.Drawing.Size(640,600);
@@ -1800,7 +1843,7 @@ public partial class RegressionTests {
             presentation=new CaptureHost {AutoScaleMode=System.Windows.Forms.AutoScaleMode.None,Font=source.Font,
                 ClientSize=source.Size,BackColor=source.BackColor};
             presentation.Controls.Add(source);
-        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm)) {
+        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm || source.GetType().FullName=="MegaDownloader.MegaAccountForm")) {
             throw new Exception("Refusing to show a business form from a presentation test");
         }
         try {
@@ -2089,6 +2132,33 @@ public partial class RegressionTests {
             }
         });
         Check(names.Distinct().Count()==8,"simultaneous finalization chooses eight distinct names");
+    }
+    static void MegaAccountQueueCases() {
+        string direct="https://mega.nz/file/TESTFILE#"+Key;
+        var normalize=typeof(Fichero).GetMethod("GetMegaAccountLink",shared);
+        Check((string)normalize.Invoke(null,new object[]{"https://mega.co.nz/#!TESTFILE!"+Key})==direct,"legacy public file link resolves to the SDK URL");
+        Check(normalize.Invoke(null,new object[]{"https://mega.nz/folder/TESTFILE#"+Key})==null,"SDK account path excludes public folders");
+        using(var original=new Fichero(direct))using(var restored=new Fichero()) {
+            original.MegaAccountEmail="fixture@example.invalid";
+            original.FileID="TESTFILE";original.FileKey=Key;
+            original.NombreFichero="data.bin";original.TamanoBytes=Plain.Length;
+            original.RutaLocal=Path.Combine(root,"account-queue");Directory.CreateDirectory(original.RutaLocal);
+            var xml=new System.Xml.XmlDocument();var node=original.GuardarXML(xml,true);
+            restored.CargarXML(node);
+            Check(restored.MegaAccountEmail==original.MegaAccountEmail,"account selection round-trips with the queued task");
+            var result=Conexion.TipoError.SinErrores;
+            var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            restored.ActualizarInformacionFichero(cfg,ref result,false);
+            Check(result!=Conexion.TipoError.SinErrores && restored.EstadoDescarga==Estado.Erroneo && !restored.FailedByQuota,"an account-bound task without its session fails without entering the anonymous download or quota loop");
+            string staged=Path.Combine(original.RutaLocal,".mega-sdk-fixture.tmp");
+            string existing=Path.Combine(original.RutaLocal,original.NombreFichero);
+            File.WriteAllText(existing,"existing file");File.WriteAllBytes(staged,Plain);
+            string output=(string)typeof(Fichero).GetMethod("DeliverMegaAccountFile",hidden).Invoke(restored,new object[]{staged});
+            Check(output!=existing && File.ReadAllText(existing)=="existing file" && File.ReadAllBytes(output).SequenceEqual(Plain),"SDK delivery leaves an existing file intact and moves the staged bytes to a collision-free name");
+            node.RemoveChild(node.SelectSingleNode("MegaAccountEmail"));
+            restored.CargarXML(node);
+            Check(restored.MegaAccountEmail=="","legacy queued tasks still default to anonymous downloads");
+        }
     }
     static void PartialPersistenceAndCleanup(byte[] plain,string key) {
         string d=Path.Combine(root,"partial-persistence"); Directory.CreateDirectory(d);

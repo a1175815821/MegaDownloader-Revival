@@ -84,6 +84,15 @@ Public Class Conexion
         System.Threading.Volatile.Write(_proxy, settings)
     End Sub
 
+    Friend Shared Sub GetMegaAccountProxy(ByRef url As String, ByRef user As String, ByRef password As String)
+        Dim settings As ProxySettings = System.Threading.Volatile.Read(_proxy)
+        If settings Is Nothing Then Return
+        If settings.Address Is Nothing Then Throw New IO.IOException("Invalid proxy address.")
+        url = settings.Address.AbsoluteUri
+        user = If(settings.Username, "")
+        password = If(settings.Password, "")
+    End Sub
+
     ''' <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.
     ''' An inline port ("127.0.0.1:8000", "[::1]:8000") is stripped; the configured port wins.</summary>
     Friend Shared Function NormalizeProxyHost(value As String) As String

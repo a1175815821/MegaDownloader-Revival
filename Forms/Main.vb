@@ -503,6 +503,7 @@ Public Class Main
         End If
 
         ApplyRuntimeDownloadSettings()
+        RestoreMegaAccount()
         If Config.ComenzarDescargando AndAlso Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then
             Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
         End If
@@ -2132,7 +2133,7 @@ Public Class Main
         SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
-                    If fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
+                    If Not fic.UsesMegaAccount AndAlso fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
                         pend.Add(fic)
                     End If
                 Next
@@ -2981,12 +2982,9 @@ Public Class Main
                 Dim quotaHoldVerify As Boolean = MegaQuotaManager.IsQuarantined()
                 If quotaHoldVerify Then TiempoDormir = 5000
 
-                If Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify Then
-                    ' 原来单 worker 串行逐个验：几百文件的文件夹 × 每次 API 往返 = 十几分钟"转圈"。
-                    ' 现跨包最多 4 并发；同包靠投递序号保命名确定性（与串行时代"首个验完命名"一致）。
-                    PumpVerifyQueue(verifyCts.Token)
-                    If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
-                End If
+                ' Account metadata follows the SDK session, not the anonymous quota/credential gate.
+                PumpVerifyQueue(verifyCts.Token, Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify)
+                If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
 
                     ' Miramos si hay que guardar el fichero de downloads
                     ' Se guarda cada 5 segundos siempre O
@@ -3075,7 +3073,7 @@ Public Class Main
     ''' 投递按列表顺序编号；包命名只认"同包最早投递且无更早在途者"的完成，
     ''' 与串行时代"首个验完命名"结果一致。字典只在 worker 线程碰，无需加锁。
     ''' </summary>
-    Private Sub PumpVerifyQueue(ByVal ct As System.Threading.CancellationToken)
+    Private Sub PumpVerifyQueue(ByVal ct As System.Threading.CancellationToken, anonymousAllowed As Boolean)
         Try
             If _verifyInflight.Count > 0 Then
                 For Each job As VerifyJob In New Generic.List(Of VerifyJob)(_verifyInflight.Values)
@@ -3086,11 +3084,14 @@ Public Class Main
                 Next
             End If
             If _verifyInflight.Count >= VerifyMaxParallel Then Return
+            Dim accountConnecting As Boolean = MegaAccountService.Current.GetStatus().Connecting
             Dim picked As VerifyJob = Nothing
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each fic As Fichero In paq.ListaFicheros
-                        If fic.DescargaProcesada = False AndAlso fic.DescargaEstado <> Estado.Erroneo AndAlso Not _verifyInflight.ContainsKey(fic) Then
+                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not accountConnecting AndAlso fic.DescargaEstado = Estado.EnCola,
+                                                      anonymousAllowed AndAlso fic.DescargaEstado <> Estado.Erroneo)
+                        If canVerify AndAlso Not fic.DescargaProcesada AndAlso Not _verifyInflight.ContainsKey(fic) Then
                             picked = New VerifyJob()
                             picked.Fic = fic
                             picked.Paq = paq
@@ -3458,7 +3459,8 @@ Public Class Main
                 Dim fic As Fichero = newFailures(0)
                 _recentBalloonTimes.Add(now)
                 ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
-                    fic.NombreFichero & vbCrLf & DownloadAdvice.Describe(fic.DescripcionError, fic.FailedByQuota, fic.EsErrorPermanente), ToolTipIcon.Warning)
+                    fic.NombreFichero & vbCrLf & If(fic.UsesMegaAccount, DownloadAdvice.FirstLine(fic.DescripcionError),
+                        DownloadAdvice.Describe(fic.DescripcionError, fic.FailedByQuota, fic.EsErrorPermanente)), ToolTipIcon.Warning)
             ElseIf newFailures.Count > 1 AndAlso _recentBalloonTimes.Count < 3 Then
                 _recentBalloonTimes.Add(now)
                 ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
@@ -3578,6 +3580,7 @@ Public Class Main
         Dim ResetearErroresPeriodo As Integer = Config.ResetearErroresPeriodoMinutos
         ' v2.5 beta: 配额熔断状态。配额期内不唤醒配额失败项、不开新任务；到期后配额失败项立即唤醒。
         Dim quotaHold As Boolean = MegaQuotaManager.IsQuarantined()
+        Dim accountConnecting As Boolean = MegaAccountService.Current.GetStatus().Connecting
         ' P1:配额到期唤醒必须独立于自愈开关。WakeQuotaFailedItems 的唯一旧出口藏在下面
         ' If ResetearErrores 分支里,用户关掉"失败自愈"后横幅消失、倒计时归零,失败项却永久停在
         ' Erroneo——发布说明承诺的行为静默失效。此处熔断解除边沿直接复用 WakeQuotaFailedItems。
@@ -3596,7 +3599,7 @@ Public Class Main
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each Fichero As Fichero In paq.ListaFicheros
-                        If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
+                        If Not Fichero.UsesMegaAccount AndAlso Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
                             If Fichero.FailedByQuota Then
                                 If MegaQuotaManager.IsBreakthroughMode() Then
                                     ' 突破模式:无熔断,按普通失败的自愈节拍复活(旧版行为)。
@@ -3625,21 +3628,22 @@ Public Class Main
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
+                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not accountConnecting, Not quotaHold)
+                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
-                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
+                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescargaPausa.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
                         ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
                         NumFicherosDescargando += 1
                         Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
                         If NumConAbiertas = 0 Then
-                            NumConAbiertas = configConexionesPorFichero ' Todavía no está descargando pero empezará en breve
+                            NumConAbiertas = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero) ' Todavía no está descargando pero empezará en breve
                         End If
                         NumConexionesAbiertas += NumConAbiertas
                     ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
                         NumFicherosDescargando += 1
-                        NumConexionesAbiertas += configConexionesPorFichero
+                        NumConexionesAbiertas += If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
                     End If
 
                 Next
@@ -3662,14 +3666,15 @@ Public Class Main
                 If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
                     Log.WriteInfo("Continuing paused file download " & Fichero.NombreFichero)
                     Fichero.[Resume]()
-                    ConexionesPorAbrir -= Fichero.NumeroConexionesAbiertas
+                    ConexionesPorAbrir -= If(Fichero.UsesMegaAccount, 1, Fichero.NumeroConexionesAbiertas)
                     FicherosPorAbrir -= 1
                 End If
             Next
             For Each Fichero As Fichero In ColaDescarga
                 If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
-                    Dim ConexionesParaEstaDescarga As Integer = configConexionesPorFichero
-                    If ConexionesPorAbrir < configConexionesPorFichero Then ConexionesParaEstaDescarga = ConexionesPorAbrir
+                    ' One logical queue slot per SDK transfer; socket scheduling belongs to the SDK.
+                    Dim ConexionesParaEstaDescarga As Integer = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
+                    If ConexionesPorAbrir < ConexionesParaEstaDescarga Then ConexionesParaEstaDescarga = ConexionesPorAbrir
                     Log.WriteInfo("Starting file download " & Fichero.NombreFichero)
                     Fichero.Start(Me.Config, ConexionesParaEstaDescarga)
                     ConexionesPorAbrir -= ConexionesParaEstaDescarga
@@ -5202,11 +5207,7 @@ Public Class Main
 
     Public Sub StartDownload()
         If Not ScheduleAllowsStart(True) Then Return
-        ' P3-11: 配额熔断守卫此前只挂在工具栏 Play 上,AddLinks 的"立即下载"直接
-        ' 调 StartDownload 绕过了它 —— 熔断期里一个任务都不会开,状态栏却显示
-        ' "Downloading",配额 Toast 也不弹,用户完全得不到解释。
-        ' 守卫下沉到 StartDownload,所有入口(工具栏/AddLinks/其它调用方)行为一致。
-        If MegaQuotaManager.IsQuarantined() Then
+        If MegaQuotaManager.IsQuarantined() AndAlso Not HasPendingMegaAccountDownload() Then
             ShowQuotaBlockedToast()
             Return
         End If
@@ -5237,13 +5238,23 @@ Public Class Main
     End Sub
 
     Private Sub btnPlay_Click(sender As System.Object, e As System.EventArgs) Handles btnPlay.Click
-        ' 熔断期点开始此前零反馈(调度器静默不开新任务)。给明确提示,不改状态。
-        If MegaQuotaManager.IsQuarantined() Then
-            ShowQuotaBlockedToast()
-            Return
-        End If
         StartDownload()
     End Sub
+
+    Private Function HasPendingMegaAccountDownload() As Boolean
+        SyncLock Mutex.ListaDescargas
+            For Each package As Paquete In ListaPaquetes
+                For Each fic As Fichero In package.ListaFicheros
+                    If Not fic.UsesMegaAccount Then Continue For
+                    Select Case fic.DescargaEstado()
+                        Case Estado.EnCola, Estado.Pausado, Estado.Verificando, Estado.CreandoLocal, Estado.Descargando
+                            Return True
+                    End Select
+                Next
+            Next
+        End SyncLock
+        Return False
+    End Function
 
     ''' <summary>配额熔断提示。工具栏 Play 与"立即下载"(AddLinks)共用同一出口,
     ''' 免得两边的文案/倒计时格式走样。</summary>

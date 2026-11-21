@@ -213,6 +213,11 @@
     <Compile Include="Clases\Cryptography\AES.vb" />
     <Compile Include="Clases\ELCAccountHelper.vb" />
     <Compile Include="Clases\MegaFolderHelper.vb" />
+    <Compile Include="Clases\MegaAccountService.vb" />
+    <Compile Include="Forms\Main.MegaAccount.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\MegaAccountForm.vb" />
     <Compile Include="Clases\NetworkErrors.vb" />
     <Compile Include="Clases\MegaURIProtocol.vb" />
     <Compile Include="Clases\MEGA_ErrorHandler.vb" />
@@ -561,6 +566,12 @@
     <EmbeddedResource Include="Resources\Language\ro-RO-Language.xml" />
     <EmbeddedResource Include="Resources\Language\zh-CN-Language.xml" />
     <EmbeddedResource Include="Resources\Language\ru-RU-Language.xml" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MegaAccountBridgePath)' != ''">
+    <Content Include="$(MegaAccountBridgePath)">
+      <Link>MegaAccountBridge.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>

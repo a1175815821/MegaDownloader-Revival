@@ -192,8 +192,10 @@ Partial Public Class Main
             Dim remainTxt As String = ele.DescargaTiempoEstimadoDescarga()
             If String.IsNullOrEmpty(remainTxt) Then remainTxt = "-"
 
+            Dim statusText As String = EstadoDisplayText(st)
+            If fic IsNot Nothing AndAlso Not String.IsNullOrEmpty(fic.MegaAccountEmail) Then statusText &= " / MEGA"
             Dim values() As String = {
-                EstadoDisplayText(st),
+                statusText,
                 pct.ToString("F2") & "%",
                 done,
                 speedTxt,
@@ -206,6 +208,10 @@ Partial Public Class Main
                 If detailRows(i).Value.Text <> values(i) Then
                     detailRows(i).Value.Text = values(i)
                     If i = 5 Then ToolTipBotones.SetToolTip(detailRows(i).Value, values(i))
+                End If
+                If i = 0 Then
+                    Dim accountEmail As String = If(fic Is Nothing, "", fic.MegaAccountEmail)
+                    If ToolTipBotones.GetToolTip(detailRows(i).Value) <> accountEmail Then ToolTipBotones.SetToolTip(detailRows(i).Value, accountEmail)
                 End If
                 ' 失败态用语义色标注,与列表"状态"列的着色保持一致
                 If i = 0 AndAlso st = Estado.Erroneo Then

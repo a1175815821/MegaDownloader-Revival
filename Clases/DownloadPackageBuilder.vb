@@ -4,7 +4,7 @@ Imports System.Threading
 Public NotInheritable Class DownloadPackageBuilder
     Public Shared Function Build(URLs2 As Generic.List(Of URLProcessor.FileURL), packageName As String, destination As String,
                                  createDirectory As Boolean, extractArchives As Boolean, password As String, cancellation As CancellationToken,
-                                 Optional progress As IProgress(Of Integer) = Nothing) As Paquete
+                                 Optional progress As IProgress(Of Integer) = Nothing, Optional megaAccountEmail As String = "") As Paquete
         cancellation.ThrowIfCancellationRequested()
 
         ' Creamos el paquete
@@ -83,7 +83,12 @@ Public NotInheritable Class DownloadPackageBuilder
                         URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
                     End If
 
-                    Dim oFichero As New Fichero(URLFile)
+                    If Not String.IsNullOrEmpty(megaAccountEmail) AndAlso
+                       (Not Visible OrElse Not String.IsNullOrEmpty(URL.Path) OrElse Not String.IsNullOrEmpty(URL.FolderName) OrElse
+                        Fichero.GetMegaAccountLink(URLFile) Is Nothing) Then
+                        Throw New ArgumentException(Language.GetText("AddLinks_MegaAccountFilesOnly"))
+                    End If
+                    Dim oFichero As New Fichero(URLFile) With {.MegaAccountEmail = megaAccountEmail}
                     .ListaFicheros.Add(oFichero)
                     With oFichero
                         .LinkVisible = Visible
