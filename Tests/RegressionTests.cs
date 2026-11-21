@@ -1795,11 +1795,28 @@ public partial class RegressionTests {
             typeof(AddLinks).GetMethod("Translate",hidden).Invoke(add,null);
             ((System.Windows.Forms.TextBox)typeof(AddLinks).GetProperty("txtRuta",hidden).GetValue(add,null)).Text=@"D:\Downloads";
             ((System.Windows.Forms.TextBox)typeof(AddLinks).GetProperty("txtNombre",hidden).GetValue(add,null)).Text="Design Resources / 设计资源包";
+            typeof(AddLinks).GetField("addLinksLayoutReady",hidden).SetValue(add,true);
+            var identity=add.Controls.Find("AddLinksDownloadIdentity",true).Single();
+            var identityLabel=ControlTree(add).Single(c=>c is System.Windows.Forms.Label && c.Text==Language.GetText("DownloadIdentity"));
+            var path=(System.Windows.Forms.TextBox)typeof(AddLinks).GetProperty("txtRuta",hidden).GetValue(add,null);
+            var viewport=(System.Windows.Forms.Panel)typeof(AddLinks).GetField("addLinksViewport",hidden).GetValue(add);
             foreach(var mode in new[]{ConfiguracionUI.ThemeModeType.Light,ConfiguracionUI.ThemeModeType.Dark}) {
                 ThemeManager.ApplyTheme(add,mode);
                 DrawFeatureDialog(add,"add-links-"+mode+".png");
                 CheckActionButtons("add-links "+mode, add);
+                Check(identityLabel.Right<identity.Left && Math.Abs(identityLabel.Top+identityLabel.Height/2-identity.Top-identity.Height/2)<=2,
+                    "download identity label and selector share the same row: "+mode);
+                Check(path.Left==identity.Left && path.Bottom<identity.Top,"download identity aligns with the path input: "+mode);
+                Check(!viewport.VerticalScroll.Visible && !viewport.HorizontalScroll.Visible,"add links fits its default window: "+mode);
             }
+            var defaultSize=add.ClientSize;
+            add.ClientSize=new System.Drawing.Size(640,440);
+            DrawFeatureDialog(add,"add-links-compact-Dark.png");
+            Check(viewport.VerticalScroll.Visible && !viewport.HorizontalScroll.Visible,"compact add links only scrolls vertically");
+            var actions=((System.Windows.Forms.Control)add.AcceptButton).Parent;
+            Check(actions.Top>=viewport.Bottom && actions.Bottom<=actions.Parent.ClientSize.Height,"compact add links keeps the actions in view below the scroll area");
+            CheckActionButtons("compact add links",add);
+            add.ClientSize=defaultSize;
             // Capture the actual second page inside its normal host, using
             // demonstration metadata without starting inspection or downloads.
             using(var preview=new BatchPreflightView(new List<string>(),null,new Dictionary<string,URLProcessor.FileURL>(),@"D:\Downloads")) {
