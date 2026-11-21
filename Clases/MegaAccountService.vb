@@ -29,6 +29,7 @@ Friend NotInheritable Class MegaAccountService
         Friend Remember As Boolean
         Friend Remaining As Long?
         Friend QuotaReached As Boolean
+        Friend QuotaRetryUtc As Date?
         Friend Plan As Integer?
         Friend StorageUsed As Long?
         Friend StorageTotal As Long?
@@ -46,6 +47,8 @@ Friend NotInheritable Class MegaAccountService
         Public Property Email As String
         Public Property AliasName As String
         Public Property Session As String
+        Public Property DrivePreferences As MegaDrivePreferences
+        Public Property QuotaRetryUtc As Date?
     End Class
 
     Private Class AccountStore
@@ -59,6 +62,8 @@ Friend NotInheritable Class MegaAccountService
         Friend Saved As Boolean
         Friend Client As MegaAccountHandle
         Friend Operations As Integer
+        Friend ReadOnly StreamingNodes As New HashSet(Of ULong)()
+        Friend DrivePreferences As New MegaDrivePreferences()
     End Class
 
     Private ReadOnly gate As New Object()
@@ -68,9 +73,12 @@ Friend NotInheritable Class MegaAccountService
     Private selectedDefault As String = ""
     Private restoring As Boolean
 
+    Friend ReadOnly DriveHistory As MegaDriveHistory
+
     Friend Sub New(folder As String)
         accountFolder = folder
         storePath = Path.Combine(folder, "accounts.dat")
+        DriveHistory = New MegaDriveHistory(Path.Combine(folder, "Drive history"))
     End Sub
 
     Friend ReadOnly Property DefaultEmail As String
@@ -92,21 +100,31 @@ Friend NotInheritable Class MegaAccountService
     Friend Function GetStatus() As Status
         SyncLock gate
             Dim entry = FindAccount(selectedDefault)
-            Return If(entry Is Nothing, New Status With {.Email = "", .Connecting = restoring}, entry.Value)
+            Return SnapshotStatus(entry)
         End SyncLock
     End Function
 
     Friend Function GetStatus(email As String) As Status
         SyncLock gate
             Dim entry = FindAccount(email)
-            Return If(entry Is Nothing, New Status With {.Email = "", .Connecting = restoring}, entry.Value)
+            Return SnapshotStatus(entry)
         End SyncLock
     End Function
 
     Friend Function GetAccounts() As List(Of Status)
         SyncLock gate
-            Return accounts.ConvertAll(Function(entry) entry.Value)
+            Return accounts.ConvertAll(AddressOf SnapshotStatus)
         End SyncLock
+    End Function
+
+    Private Function SnapshotStatus(entry As AccountEntry) As Status
+        If entry Is Nothing Then Return New Status With {.Email = "", .Connecting = restoring}
+        Dim status = entry.Value
+        If status.QuotaRetryUtc.HasValue Then
+            status.QuotaReached = status.QuotaRetryUtc.Value > Date.UtcNow OrElse status.Remaining.GetValueOrDefault(1L) = 0
+            If status.QuotaRetryUtc.Value <= Date.UtcNow Then status.QuotaRetryUtc = Nothing
+        End If
+        Return status
     End Function
 
     Private Function FindAccount(email As String) As AccountEntry
@@ -117,7 +135,7 @@ Friend NotInheritable Class MegaAccountService
         SyncLock gate
             Dim start As Integer = accounts.IndexOf(FindAccount(email))
             For offset As Integer = 1 To accounts.Count
-                Dim status = accounts((start + offset) Mod accounts.Count).Value
+                Dim status = SnapshotStatus(accounts((start + offset) Mod accounts.Count))
                 If status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached AndAlso Not attempted.Contains(status.Email) Then Return status.Email
             Next
             Return ""
@@ -153,7 +171,9 @@ Friend NotInheritable Class MegaAccountService
                                           For Each saved In store.Accounts
                                               Dim entry As New AccountEntry With {
                                                   .Saved = True, .Session = If(saved.Session, ""),
-                                                  .Value = New Status With {.Email = saved.Email, .AliasName = If(saved.AliasName, ""), .NeedsLogin = True}}
+                                                  .DrivePreferences = If(saved.DrivePreferences, New MegaDrivePreferences()),
+                                                  .Value = New Status With {.Email = saved.Email, .AliasName = If(saved.AliasName, ""), .NeedsLogin = True,
+                                                                            .QuotaRetryUtc = saved.QuotaRetryUtc}}
                                               entry.Value.Remember = entry.Session.Length > 0
                                               entry.Value.Connecting = sessionAvailable AndAlso entry.Value.Remember
                                               accounts.Add(entry)
@@ -242,7 +262,8 @@ Friend NotInheritable Class MegaAccountService
                                                      selectedDefault = previousDefault
                                                      Return stored
                                                  End If
-                                                 entry.Value = New Status With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName, .NeedsLogin = True, .Connecting = True}
+                                                 entry.Value = New Status With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName, .NeedsLogin = True,
+                                                                                .Connecting = True, .QuotaRetryUtc = entry.Value.QuotaRetryUtc}
                                              End SyncLock
                                              If entry.Client Is Nothing Then Return 0
                                              Dim result As Integer
@@ -342,7 +363,8 @@ Friend NotInheritable Class MegaAccountService
                 Dim previousDefault = selectedDefault
                 Dim previouslySaved = entry.Saved
                 entry.Value = New Status With {.Email = email, .AliasName = If(aliasName, previous.AliasName).Trim(),
-                                               .SignedIn = True, .Connecting = True, .Remember = remember}
+                                               .SignedIn = True, .Connecting = True, .Remember = remember,
+                                               .QuotaRetryUtc = previous.QuotaRetryUtc}
                 entry.Session = session
                 entry.Saved = True
                 If selectedDefault = "" Then selectedDefault = email
@@ -379,7 +401,11 @@ Friend NotInheritable Class MegaAccountService
     Private Function SaveStore() As Integer
         Dim store As New AccountStore With {.DefaultEmail = selectedDefault, .Accounts = New List(Of SavedLogin)()}
         For Each entry In accounts
-            If entry.Saved Then store.Accounts.Add(New SavedLogin With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName, .Session = entry.Session})
+            If entry.Saved Then
+                store.Accounts.Add(New SavedLogin With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName,
+                                                        .Session = entry.Session, .DrivePreferences = entry.DrivePreferences,
+                                                        .QuotaRetryUtc = SnapshotStatus(entry).QuotaRetryUtc})
+            End If
         Next
         Dim bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(store))
         Dim tempPath = storePath & ".tmp"
@@ -416,16 +442,27 @@ Friend NotInheritable Class MegaAccountService
         End SyncLock
     End Function
 
-    Private Sub Release(entry As AccountEntry, result As Integer, Optional detailsChanged As Boolean = False)
+    Private Sub Release(entry As AccountEntry, result As Integer, Optional detailsChanged As Boolean = False, Optional quotaWaitSeconds As Long? = Nothing)
         SyncLock gate
             entry.Operations -= 1
             If result = SessionExpired AndAlso entry.Value.SignedIn Then
                 entry.Value.SignedIn = False
                 entry.Value.NeedsLogin = True
                 detailsChanged = True
-            ElseIf result = OverQuota AndAlso Not entry.Value.QuotaReached Then
+            ElseIf result = OverQuota Then
+                detailsChanged = detailsChanged OrElse Not SnapshotStatus(entry).QuotaReached
                 entry.Value.QuotaReached = True
-                detailsChanged = True
+                Dim previous = SnapshotStatus(entry).QuotaRetryUtc
+                If quotaWaitSeconds.GetValueOrDefault() > 0 Then
+                    Dim deadline = Date.UtcNow.AddSeconds(Math.Min(CDbl(quotaWaitSeconds.Value), (Date.MaxValue - Date.UtcNow.AddDays(1)).TotalSeconds))
+                    If Not previous.HasValue OrElse deadline > previous.Value.AddSeconds(1) Then
+                        entry.Value.QuotaRetryUtc = deadline
+                        detailsChanged = True
+                        If SaveStore() <> 0 Then Log.WriteWarning("Could not save MEGA transfer quota deadline.")
+                    End If
+                ElseIf Not previous.HasValue Then
+                    entry.Value.QuotaRetryUtc = Nothing
+                End If
             End If
         End SyncLock
         If detailsChanged Then RaiseEvent Changed(Me, EventArgs.Empty)
@@ -447,7 +484,9 @@ Friend NotInheritable Class MegaAccountService
                                         entry.Value.TransferUsed = If(transferUsed >= 0, CType(transferUsed, Long?), Nothing)
                                         entry.Value.TransferTotal = If(transferTotal > 0, CType(transferTotal, Long?), Nothing)
                                         entry.Value.Remaining = If(transferTotal > 0 AndAlso transferUsed >= 0, CType(Math.Max(0L, transferTotal - transferUsed), Long?), Nothing)
-                                        If entry.Value.Remaining.HasValue Then entry.Value.QuotaReached = entry.Value.Remaining.Value = 0
+                                        Dim deadline = SnapshotStatus(entry).QuotaRetryUtc
+                                        entry.Value.QuotaRetryUtc = deadline
+                                        entry.Value.QuotaReached = deadline.HasValue OrElse entry.Value.Remaining.GetValueOrDefault(1L) = 0
                                     End SyncLock
                                 End If
                                 Return result
@@ -459,21 +498,75 @@ Friend NotInheritable Class MegaAccountService
                         End Function)
     End Function
 
-    Friend Function Inspect(email As String, link As String, ByRef name As String, ByRef size As Long) As Integer
+    Friend Function GetDrivePreferences(email As String) As MegaDrivePreferences
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            Return If(entry Is Nothing, New MegaDrivePreferences(), entry.DrivePreferences.Copy())
+        End SyncLock
+    End Function
+
+    Friend Function SaveDrivePreferences(email As String, preferences As MegaDrivePreferences) As Integer
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            If entry Is Nothing OrElse Not entry.Saved Then Return SessionExpired
+            Dim previous = entry.DrivePreferences
+            If previous.LastFolder.Equals(preferences.LastFolder) AndAlso previous.LastSharedFolder.Equals(preferences.LastSharedFolder) AndAlso
+               previous.Favorites.SequenceEqual(preferences.Favorites) AndAlso previous.FolderDestinations.Count = preferences.FolderDestinations.Count AndAlso
+               previous.FolderDestinations.All(Function(item)
+                                                   Dim path As String = Nothing
+                                                   Return preferences.FolderDestinations.TryGetValue(item.Key, path) AndAlso path = item.Value
+                                               End Function) Then Return 0
+            entry.DrivePreferences = preferences.Copy()
+            Dim result = SaveStore()
+            If result <> 0 Then entry.DrivePreferences = previous
+            Return result
+        End SyncLock
+    End Function
+
+    Friend Function ReadDrive(email As String, ct As CancellationToken, ByRef snapshot As MegaDriveSnapshot,
+                              Optional incomingShares As Boolean = False) As Integer
         Dim entry = Acquire(email)
         If entry Is Nothing Then Return SessionExpired
         Dim result As Integer = LocalError
         Try
-            Dim buffer(4095) As Byte
-            result = MegaAccountNative.md_inspect(entry.Client, link, buffer, buffer.Length, size)
-            If result = 0 Then name = Encoding.UTF8.GetString(buffer, 0, Array.IndexOf(buffer, CByte(0)))
+            Dim nodes As New List(Of MegaDriveNode)()
+            Dim root As ULong
+            Dim visit As MegaAccountNative.DriveNode =
+                Function(id, parent, name, folder, bytes, modified)
+                    If ct.IsCancellationRequested Then Return 0
+                    nodes.Add(New MegaDriveNode(id, parent, name, folder <> 0, bytes, modified))
+                    Return 1
+                End Function
+            result = If(incomingShares, MegaAccountNative.md_list_shares(entry.Client, visit, root),
+                        MegaAccountNative.md_list_drive(entry.Client, visit, root))
+            If result = 0 Then snapshot = New MegaDriveSnapshot(root, nodes)
             Return result
+        Catch ex As Exception When IsLibraryError(ex)
+            Return BackendMissing
         Finally
             Release(entry, result)
         End Try
     End Function
 
-    Friend Function Download(email As String, link As String, destination As String, progress As Action(Of Long, Long, Long), ct As CancellationToken) As Integer
+    Friend Function Inspect(email As String, link As String, ByRef name As String, ByRef size As Long, Optional node As ULong? = Nothing) As Integer
+        Dim entry = Acquire(email)
+        If entry Is Nothing Then Return SessionExpired
+        Dim result As Integer = LocalError
+        Try
+            Dim buffer(4095) As Byte
+            result = If(node.HasValue, MegaAccountNative.md_inspect_node(entry.Client, node.GetValueOrDefault(), buffer, buffer.Length, size),
+                        MegaAccountNative.md_inspect(entry.Client, link, buffer, buffer.Length, size))
+            If result = 0 Then name = Encoding.UTF8.GetString(buffer, 0, Array.IndexOf(buffer, CByte(0)))
+            Return result
+        Catch ex As Exception When node.HasValue AndAlso IsLibraryError(ex)
+            Return BackendMissing
+        Finally
+            Release(entry, result)
+        End Try
+    End Function
+
+    Friend Function Download(email As String, link As String, destination As String, progress As Action(Of Long, Long, Long), ct As CancellationToken,
+                             Optional node As ULong? = Nothing) As Integer
         Dim entry = Acquire(email)
         If entry Is Nothing Then Return SessionExpired
         Dim result As Integer = LocalError
@@ -481,12 +574,82 @@ Friend NotInheritable Class MegaAccountService
             If GetStatus(email).QuotaReached Then
                 result = OverQuota
             Else
-                result = MegaAccountNative.md_download(entry.Client, link, destination,
-                    Sub(received, total, speed) progress(received, total, speed), Function() If(ct.IsCancellationRequested, 1, 0))
+                Dim report As MegaAccountNative.Progress = Sub(received, total, speed) progress(received, total, speed)
+                Dim cancelled As MegaAccountNative.Cancelled = Function() If(ct.IsCancellationRequested, 1, 0)
+                result = If(node.HasValue, MegaAccountNative.md_download_node(entry.Client, node.GetValueOrDefault(), destination, report, cancelled),
+                            MegaAccountNative.md_download(entry.Client, link, destination, report, cancelled))
             End If
             Return result
+        Catch ex As Exception When node.HasValue AndAlso IsLibraryError(ex)
+            Return BackendMissing
         Finally
             Release(entry, result)
+        End Try
+    End Function
+
+    Friend Function InspectPrivateDownload(email As String, node As ULong, ByRef name As String, ByRef size As Long,
+                                           ByRef key As String) As Integer
+        Dim entry = Acquire(email)
+        If entry Is Nothing Then Return SessionExpired
+        Dim result As Integer = LocalError
+        Try
+            Dim nameBuffer(4095) As Byte
+            Dim keyBuffer(43) As Byte
+            result = MegaAccountNative.md_inspect_node_for_resume(entry.Client, node, nameBuffer, nameBuffer.Length,
+                                                                   size, keyBuffer, keyBuffer.Length)
+            If result = 0 Then
+                name = Encoding.UTF8.GetString(nameBuffer, 0, Array.IndexOf(nameBuffer, CByte(0)))
+                key = Encoding.ASCII.GetString(keyBuffer, 0, Array.IndexOf(keyBuffer, CByte(0)))
+                ' VerifyMegaMetaMac also accepts public keys that do not contain a MAC.
+                ' A private transfer must always supply a full 32-byte file key.
+                If key.Length <> 43 OrElse Not System.Text.RegularExpressions.Regex.IsMatch(key, "\A[A-Za-z0-9_-]{43}\z") OrElse
+                   Criptografia.base64urldecodeBytes(key).Length <> 32 Then result = -14
+            End If
+            Return result
+        Catch ex As Exception When IsLibraryError(ex)
+            Return BackendMissing
+        Finally
+            Release(entry, result)
+        End Try
+    End Function
+
+    Friend Function StreamPrivateDownload(email As String, node As ULong, key As String, size As Long, offset As Long,
+                                          write As MegaAccountNative.StreamData, ct As CancellationToken) As Integer
+        Dim entry = Acquire(email)
+        If entry Is Nothing Then Return SessionExpired
+        Dim result As Integer = LocalError
+        Dim started As Boolean = False
+        Dim quotaWaitSeconds As Long
+        Dim reportedWait As Long?
+        Try
+            ' SDK streaming cancellation is by node and range, not by listener. Do not
+            ' let a second task for the same node be stopped by the first task's pause.
+            SyncLock entry.StreamingNodes
+                While entry.StreamingNodes.Contains(node)
+                    ct.ThrowIfCancellationRequested()
+                    Monitor.Wait(entry.StreamingNodes, 100)
+                End While
+                ct.ThrowIfCancellationRequested()
+                started = entry.StreamingNodes.Add(node)
+            End SyncLock
+            If offset < size AndAlso GetStatus(email).QuotaReached Then
+                result = OverQuota
+            Else
+                Dim cancelled As MegaAccountNative.Cancelled = Function() If(ct.IsCancellationRequested, 1, 0)
+                result = MegaAccountNative.md_stream_node(entry.Client, node, key, size, offset, write, cancelled, quotaWaitSeconds)
+                If result = OverQuota AndAlso quotaWaitSeconds > 0 Then reportedWait = quotaWaitSeconds
+            End If
+            Return result
+        Catch ex As Exception When IsLibraryError(ex)
+            Return BackendMissing
+        Finally
+            If started Then
+                SyncLock entry.StreamingNodes
+                    entry.StreamingNodes.Remove(node)
+                    Monitor.PulseAll(entry.StreamingNodes)
+                End SyncLock
+            End If
+            Release(entry, result, quotaWaitSeconds:=reportedWait)
         End Try
     End Function
 
@@ -526,6 +689,10 @@ Friend Module MegaAccountNative
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
     Friend Delegate Function Cancelled() As Integer
 
+    <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
+    Friend Delegate Function DriveNode(id As ULong, parent As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> name As String,
+                                       folder As Integer, bytes As Long, modified As Long) As Integer
+
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl),
      DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory Or DllImportSearchPath.System32)>
     Friend Function md_open(<MarshalAs(UnmanagedType.LPUTF8Str)> key As String, <MarshalAs(UnmanagedType.LPUTF8Str)> cache As String,
@@ -560,5 +727,29 @@ Friend Module MegaAccountNative
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
     Friend Function md_download(handle As MegaAccountHandle, <MarshalAs(UnmanagedType.LPUTF8Str)> link As String,
                                  <MarshalAs(UnmanagedType.LPUTF8Str)> path As String, progressCallback As Progress, cancelCallback As Cancelled) As Integer
+    End Function
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_list_drive(handle As MegaAccountHandle, visit As DriveNode, ByRef root As ULong) As Integer
+    End Function
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_list_shares(handle As MegaAccountHandle, visit As DriveNode, ByRef root As ULong) As Integer
+    End Function
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_inspect_node(handle As MegaAccountHandle, node As ULong, <Out> name As Byte(), capacity As Integer, ByRef size As Long) As Integer
+    End Function
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_download_node(handle As MegaAccountHandle, node As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> path As String,
+                                      progressCallback As Progress, cancelCallback As Cancelled) As Integer
+    End Function
+    <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
+    Friend Delegate Function StreamData(buffer As IntPtr, count As Integer, speed As Long) As Integer
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_inspect_node_for_resume(handle As MegaAccountHandle, node As ULong, <Out> name As Byte(), nameCapacity As Integer,
+                                               ByRef size As Long, <Out> key As Byte(), keyCapacity As Integer) As Integer
+    End Function
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_stream_node(handle As MegaAccountHandle, node As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> key As String,
+                                    size As Long, offset As Long, write As StreamData, cancelCallback As Cancelled,
+                                    ByRef quotaWaitSeconds As Long) As Integer
     End Function
 End Module

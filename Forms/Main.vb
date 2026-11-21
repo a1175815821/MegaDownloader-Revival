@@ -1382,6 +1382,8 @@ Public Class Main
         Dim ColEstado As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(ListaDescargas.AllColumns(IndiceColumnaEstado))
         ColEstado.AspectGetter = Function(ele As IDescarga)
                                      Try
+                                         Dim cloudState = CloudQueueStatus(ele)
+                                         If cloudState IsNot Nothing Then Return cloudState
                                          Dim Estado As Estado = ele.DescargaEstado()
                                          Select Case Estado
                                              Case MegaDownloader.Estado.EnCola
@@ -2256,6 +2258,7 @@ Public Class Main
         sepBatchMenuItem.Name = "sepBatchMenuItem"
         sepColumnsMenuItem.Name = "sepColumnsMenuItem"
         MenuDescarga.Items.Add(queueIdentityMenu)
+        InitCloudQuotaActions()
         MenuDescarga.Items.Add(sepBatchMenuItem)
         MenuDescarga.Items.Add(RetryAllFailedMenuItem)
         MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
@@ -2307,7 +2310,7 @@ Public Class Main
         Try
             Dim lista As Generic.List(Of Fichero) = CollectErroneoFiles()
             For Each fic As Fichero In lista
-                fic.ResetearDescarga()
+                fic.ResetearDescarga(preserveProgress:=fic.MegaDriveNodeHandle.HasValue)
                 fic.SetDescargaEstado = Estado.EnCola
             Next
             Log.WriteWarning("Retrying all failed files: " & lista.Count)
@@ -3195,7 +3198,7 @@ Public Class Main
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each fic As Fichero In paq.ListaFicheros
-                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso fic.DescargaEstado = Estado.EnCola,
+                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(fic) AndAlso fic.DescargaEstado = Estado.EnCola,
                                                       anonymousAllowed AndAlso fic.DescargaEstado <> Estado.Erroneo)
                         If canVerify AndAlso Not fic.DescargaProcesada AndAlso Not _verifyInflight.ContainsKey(fic) Then
                             picked = New VerifyJob()
@@ -3733,7 +3736,7 @@ Public Class Main
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not Fichero.IsMegaAccountConnecting, Not quotaHold)
+                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not Fichero.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(Fichero), Not quotaHold)
                     If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
@@ -3793,6 +3796,10 @@ Public Class Main
 
     Private Sub ForzarDescarga(Fichero As Fichero)
         If Not ScheduleAllowsStart(True) Then Return
+        If CloudQuotaBlocks(Fichero) Then
+            ToastForm.ShowToast(Me, CloudQuotaText(MegaAccountService.Current.GetStatus(Fichero.MegaAccountEmail)))
+            Return
+        End If
         Log.WriteInfo("Forcing download" & Fichero.NombreFichero)
         SyncLock Mutex.ListaDescargas
             If Fichero.DescargaEstado = Estado.Pausado Then
@@ -3804,8 +3811,7 @@ Public Class Main
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             ElseIf Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                ' ⑧:红字强制=手动全量重置后按单个强制起(删 .part 从头来,顺带修尺寸不符类错误)。
-                Fichero.ResetearDescarga()
+                Fichero.ResetearDescarga(preserveProgress:=Fichero.MegaDriveNodeHandle.HasValue)
                 Fichero.PausaIndividual = False
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Fichero.DescargaIndividual = True
@@ -3859,9 +3865,9 @@ Public Class Main
         SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
-                    If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or _
-                       Fichero.DescargaEstado = Estado.Pausado Or _
-                       Fichero.DescargaEstado = Estado.CreandoLocal Then
+                    If (Fichero.DescargaEstado = Estado.Descargando AndAlso
+                        (Not Fichero.DescargaIndividual OrElse (Cerrando AndAlso Fichero.MegaDriveNodeHandle.HasValue))) OrElse
+                       Fichero.DescargaEstado = Estado.Pausado OrElse Fichero.DescargaEstado = Estado.CreandoLocal Then
                         Log.WriteInfo("Stopping file " & Fichero.NombreFichero)
                         Fichero.Stop()
                     End If
@@ -4438,6 +4444,7 @@ Public Class Main
                     fic.Stop()
                     Log.WriteDebug("File download stopped " & fic.NombreFichero)
                 Case Else
+                    fic.DiscardPrivateMegaCheckpoint()
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                     fic.BorrarFicheroLocal()
                     fic.Dispose()
@@ -4458,6 +4465,7 @@ Public Class Main
                         fic.Stop()
                         Log.WriteDebug("File download stopped " & fic.NombreFichero)
                     Case Else
+                        fic.DiscardPrivateMegaCheckpoint()
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                         fic.BorrarFicheroLocal()
                         fic.Dispose()
@@ -4527,6 +4535,7 @@ Public Class Main
                 ' BorrarFicheroLocal / Dispose 只执行一次(原代码会执行两遍)。
                 RemoveHandler fic.CancellationComplete, AddressOf DisposeFichero
                 If System.Threading.Interlocked.Exchange(fic.DisposalHandled, 1) <> 0 Then Return
+                fic.DiscardPrivateMegaCheckpoint()
                 Log.WriteDebug("Download file stopped " & fic.NombreFichero & ", pending delete")
                 If fic.MarcadoParaBorrarFicheroLocal Then
                     fic.BorrarFicheroLocal()
@@ -5093,6 +5102,7 @@ Public Class Main
                 End If
             Next
             PopulateQueueIdentityMenu()
+            PrepareCloudQuotaActions()
             e.MenuStrip = MenuDescarga
         End If
     End Sub
@@ -5128,6 +5138,10 @@ Public Class Main
             SyncLock Mutex.FicheroDownloader
                 files.RemoveWhere(Function(file) file.DescargaEstado() = Estado.Completado)
                 For Each file In files
+                    If file.MegaDriveNodeHandle.HasValue Then
+                        problem = "MegaDrive_AccountBound"
+                        Exit For
+                    End If
                     If Not file.CanChangeDownloadIdentity() Then
                         problem = "MegaAccount_QueueAccountInUse"
                         Exit For

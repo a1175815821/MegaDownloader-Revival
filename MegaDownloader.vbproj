@@ -214,6 +214,9 @@
     <Compile Include="Clases\ELCAccountHelper.vb" />
     <Compile Include="Clases\MegaFolderHelper.vb" />
     <Compile Include="Clases\MegaAccountService.vb" />
+    <Compile Include="Clases\MegaDrive.vb" />
+    <Compile Include="Clases\MegaDriveHistory.vb" />
+    <Compile Include="Forms\MegaDriveForm.vb" />
     <Compile Include="Forms\Main.MegaAccount.vb">
       <DependentUpon>Main.vb</DependentUpon>
     </Compile>

@@ -122,7 +122,9 @@ Partial Public Class Main
         workbenchSearchLabel.Visible = False
         TableLayoutPanel1.Dock = DockStyle.None
         TableLayoutPanel1.Anchor = AnchorStyles.Top Or AnchorStyles.Left
-        workbenchHeader.Controls.AddRange(New Control() {workbenchTitle, workbenchCount, workbenchSearchLabel, workbenchSearchFrame, workbenchDetails, btnAddLink, TableLayoutPanel1})
+        UiStyles.SetRole(megaDriveButton, UiStyles.Role.SecondaryButton)
+        AddHandler megaDriveButton.Click, AddressOf OpenMegaDrive
+        workbenchHeader.Controls.AddRange(New Control() {workbenchTitle, workbenchCount, workbenchSearchLabel, workbenchSearchFrame, workbenchDetails, megaDriveButton, btnAddLink, TableLayoutPanel1})
         navPanel.Controls.Add(btnConfig)
         btnConfig.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         UiStyles.SetRole(btnConfig, UiStyles.Role.QuietButton)
@@ -211,6 +213,9 @@ Partial Public Class Main
         ToolTipBotones.SetToolTip(workbenchSchedule, Language.GetText("Schedule_Title"))
         btnConfig.Text = Language.GetText("Configuration")
         btnAddLink.Text = Language.GetText("Add links")
+        megaDriveButton.Text = Language.GetText("MegaDrive_Title")
+        megaDriveButton.AccessibleName = Language.GetText("MegaDrive_Download")
+        ToolTipBotones.SetToolTip(megaDriveButton, megaDriveButton.AccessibleName)
         LayoutWorkbenchToolbar()
         UpdateWorkbenchHeading()
         navListBox.Invalidate()
@@ -316,11 +321,20 @@ Partial Public Class Main
             Dim commandHeight As Integer = TableLayoutPanel1.Height
             Dim addWidth As Integer = Math.Max(CInt(124 * scale), TextRenderer.MeasureText(btnAddLink.Text, Font).Width + CInt(52 * scale))
             btnAddLink.SetBounds(Math.Max(0, workbenchHeader.Width - addWidth), 0, addWidth, commandHeight)
+            Dim driveWidth As Integer = TextRenderer.MeasureText(megaDriveButton.Text, Font).Width + CInt(26 * scale)
+            Dim actionGap As Integer = CInt(8 * scale)
+            megaDriveButton.SetBounds(Math.Max(0, btnAddLink.Left - actionGap - driveWidth), 0, driveWidth, commandHeight)
             Dim hasSelection As Boolean = ListaDescargas.SelectedObject IsNot Nothing
             workbenchDetails.Visible = hasSelection
             workbenchDetails.Enabled = bottom - workbenchHeader.Bottom >= CInt(260 * scale)
-            workbenchDetails.SetBounds(Math.Max(0, btnAddLink.Left - CInt(120 * scale)), 0, CInt(112 * scale), commandHeight)
-            Dim titleRight As Integer = If(hasSelection, workbenchDetails.Left, btnAddLink.Left) - CInt(12 * scale)
+            Dim detailsWidth As Integer = CInt(112 * scale)
+            Dim inlineDetails As Boolean = megaDriveButton.Left >= CInt(248 * scale)
+            If inlineDetails Then
+                workbenchDetails.SetBounds(megaDriveButton.Left - actionGap - detailsWidth, 0, detailsWidth, commandHeight)
+            Else
+                workbenchDetails.SetBounds(workbenchHeader.Width - detailsWidth, commandHeight, detailsWidth, CInt(72 * scale) - commandHeight)
+            End If
+            Dim titleRight As Integer = If(hasSelection AndAlso inlineDetails, workbenchDetails.Left, megaDriveButton.Left) - CInt(12 * scale)
             workbenchTitle.SetBounds(0, 0, Math.Max(80, titleRight), CInt(34 * scale))
             workbenchCount.SetBounds(0, workbenchTitle.Bottom + CInt(2 * scale), workbenchTitle.Width, CInt(24 * scale))
             Dim searchWidth As Integer = Math.Min(CInt(280 * scale), Math.Max(CInt(176 * scale), workbenchHeader.Width \ 3))

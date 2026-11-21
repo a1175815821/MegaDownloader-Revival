@@ -194,7 +194,7 @@ Partial Public Class Main
             If String.IsNullOrEmpty(remainTxt) Then remainTxt = "-"
 
             Dim values() As String = {
-                EstadoDisplayText(st),
+                If(CloudQueueStatus(ele), EstadoDisplayText(st)),
                 pct.ToString("F2") & "%",
                 done,
                 speedTxt,

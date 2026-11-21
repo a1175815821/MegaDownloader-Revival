@@ -140,6 +140,7 @@ public partial class RegressionTests {
             new CaseDef("concurrent_final_names","download",ConcurrentFinalNames),
             new CaseDef("partial_persistence","core",()=>PartialPersistenceAndCleanup(Plain,Key)),
             new CaseDef("mega_account_queue","queue",MegaAccountQueueCases),
+            new CaseDef("mega_drive_queue","queue",MegaDriveQueueCases),
             new CaseDef("deletion_ownership","core",()=>DeletionOwnershipCases(Plain,Key)),
             new CaseDef("locked_primary","core",LockedPrimaryCases),
             new CaseDef("resume_space","download",ResumeSpaceCases),
@@ -1360,6 +1361,7 @@ public partial class RegressionTests {
                 typeof(Language).GetField("culture",shared).SetValue(null,System.Globalization.CultureInfo.GetCultureInfo("zh-CN"));
                 FirstOpenUiCases();
                 MegaAccountDialogCases();
+                MegaDriveDialogCases();
                 PasswordPropertiesCases();
                 var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
                 WarmInboxUiCases(config);
@@ -1545,6 +1547,108 @@ public partial class RegressionTests {
             defaultEmail.SetValue(service,"");
         }
     }
+    static object MakeDriveFixture() {
+        var assembly=typeof(Main).Assembly;
+        var nodeType=assembly.GetType("MegaDownloader.MegaDriveNode",true);
+        var snapshotType=assembly.GetType("MegaDownloader.MegaDriveSnapshot",true);
+        var rows=new[]{
+            new object[]{1UL,ulong.MaxValue,"Cloud Drive",true,0L,0L},
+            new object[]{2UL,1UL,"课程素材",true,0L,1700000000L},
+            new object[]{3UL,1UL,"工作资料",true,0L,1701000000L},
+            new object[]{4UL,2UL,"剪辑视频.mp4",false,4096L,1702000000L},
+            new object[]{5UL,2UL,"练习包.zip",false,1024L,1703000000L},
+            new object[]{6UL,2UL,"参考",true,0L,1704000000L},
+            new object[]{7UL,6UL,"参考文档.pdf",false,2048L,1705000000L},
+            new object[]{8UL,3UL,"剪辑说明.txt",false,512L,1706000000L},
+            new object[]{9UL,6UL,"空目录",true,0L,1707000000L}
+        };
+        var nodes=Array.CreateInstance(nodeType,rows.Length);
+        for(int i=0;i<rows.Length;i++)nodes.SetValue(Activator.CreateInstance(nodeType,hidden,null,rows[i],null),i);
+        return Activator.CreateInstance(snapshotType,hidden,null,new object[]{1UL,nodes},null);
+    }
+    static void MegaDriveDialogCases() {
+        var assembly=typeof(Main).Assembly;
+        var browserType=assembly.GetType("MegaDownloader.MegaDriveForm",true);
+        var serviceType=assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var service=Activator.CreateInstance(serviceType,hidden,null,new object[]{Path.Combine(root,"drive-dialog-account")},null);
+        var snapshot=MakeDriveFixture();
+        var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+        config.RutaDefecto=Path.Combine(root,"drive-dialog-path");
+        using(var form=(System.Windows.Forms.Form)Activator.CreateInstance(browserType,hidden,null,new object[]{null,config,service,null},null)) {
+            form.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+            form.Location=new System.Drawing.Point(-30000,-30000);
+            form.Show();System.Windows.Forms.Application.DoEvents();
+            var fixtureEmail="drive@example.invalid";
+            var entry=SeedMegaAccount(service,fixtureEmail,"示例账号",false);
+            var accountStatus=entry.GetType().GetField("Value",hidden).GetValue(entry);
+            var accountSelector=(System.Windows.Forms.ComboBox)form.Controls.Find("MegaDriveAccount",true).Single();
+            var choiceType=browserType.GetNestedType("AccountChoice",BindingFlags.NonPublic);
+            browserType.GetField("changingAccount",hidden).SetValue(form,true);
+            accountSelector.Items.Add(Activator.CreateInstance(choiceType,hidden,null,new[]{accountStatus},null));
+            accountSelector.SelectedIndex=0;
+            browserType.GetField("changingAccount",hidden).SetValue(form,false);
+            var preferences=serviceType.GetMethod("GetDrivePreferences",hidden).Invoke(service,new object[]{fixtureEmail});
+            var driveType=browserType.GetNestedType("AccountDrive",BindingFlags.NonPublic);
+            var drive=Activator.CreateInstance(driveType,hidden,null,new[]{preferences},null);
+            driveType.GetField("Snapshot",hidden).SetValue(drive,snapshot);
+            browserType.GetField("drive",hidden).SetValue(form,drive);
+            browserType.GetField("currentEmail",hidden).SetValue(form,fixtureEmail);
+            var grid=(System.Windows.Forms.DataGridView)form.Controls.Find("MegaDriveFiles",true).Single();
+            var scope=(System.Windows.Forms.ComboBox)form.Controls.Find("MegaDriveScope",true).Single();
+            var filter=(System.Windows.Forms.ComboBox)form.Controls.Find("MegaDriveType",true).Single();
+            var search=(System.Windows.Forms.TextBox)form.Controls.Find("MegaDriveSearch",true).Single();
+            var crumbs=form.Controls.Find("MegaDriveBreadcrumbs",true).Single();
+            var navigate=browserType.GetMethod("Navigate",hidden);
+            navigate.Invoke(form,new object[]{2UL,null});
+            Check(grid.VirtualMode && grid.RowCount==3 && crumbs.Controls.OfType<System.Windows.Forms.Button>().Count()==2,"opening a folder populates the virtual file list and root breadcrumb");
+            filter.SelectedIndex=1;
+            int videoRow=Enumerable.Range(0,grid.RowCount).Single(i=>Convert.ToString(grid[1,i].Value)=="剪辑视频.mp4");
+            Check(grid.RowCount==2,"video filter keeps folders navigable and excludes archives");
+            browserType.GetMethod("SelectVisible",hidden).Invoke(form,new object[]{true});
+            Check((bool)grid[0,videoRow].Value && !(bool)grid[0,1-videoRow].Value,"bulk selection checks matching files without selecting navigation-only folders");
+            filter.SelectedIndex=0;
+            navigate.Invoke(form,new object[]{3UL,null});
+            grid[0,0].Value=true;
+            ((System.Windows.Forms.Button)browserType.GetField("review",hidden).GetValue(form)).PerformClick();
+            Check(grid.RowCount==2 && grid.Columns["Location"].Visible && Enumerable.Range(0,grid.RowCount).All(i=>(bool)grid[0,i].Value),"review keeps selections from different folders and shows their locations");
+            ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Light);
+            DrawFeatureDialog(form,"mega-drive-selected-light.png");
+            navigate.Invoke(form,new object[]{2UL,null});
+            search.Text="剪辑";
+            browserType.GetMethod("RefreshRows",hidden).Invoke(form,null);
+            Check(grid.RowCount==1 && !grid.Columns["Jump"].Visible,"current-folder search limits the results to the current folder");
+            scope.SelectedIndex=1;
+            int jumpRow=Enumerable.Range(0,grid.RowCount).Single(i=>Convert.ToString(grid[1,i].Value)=="剪辑说明.txt");
+            Check(grid.RowCount==2 && grid.Columns["Jump"].Visible,"drive search shows results across folders with a location action");
+            typeof(System.Windows.Forms.DataGridView).GetMethod("OnCellContentClick",hidden).Invoke(grid,new object[]{new System.Windows.Forms.DataGridViewCellEventArgs(grid.Columns["Jump"].Index,jumpRow)});
+            Check(scope.SelectedIndex==0 && search.Text=="" && crumbs.Controls.Cast<System.Windows.Forms.Control>().Last().Text=="工作资料","opening a search location resets the query and navigates to the parent folder");
+            ((Dictionary<ulong,string>)preferences.GetType().GetProperty("FolderDestinations").GetValue(preferences,null))[2UL]=config.RutaDefecto;
+            navigate.Invoke(form,new object[]{2UL,null});
+            var source=form.Controls.Find("MegaDriveSource",true).Single() as System.Windows.Forms.ComboBox;
+            Check(source.Items.Count==2 && source.Items[1].ToString()=="共享给我的","the account browser offers the incoming shares source");
+            ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Dark);
+            DrawFeatureDialog(form,"mega-drive-browser-dark.png");
+            form.ClientSize=new System.Drawing.Size(700,460);form.Show();form.PerformLayout();System.Windows.Forms.Application.DoEvents();
+            foreach(var commands in new[]{source.Parent,scope.Parent,crumbs.Parent}) {
+                Check(commands.Controls.Cast<System.Windows.Forms.Control>().Where(c=>c.Visible).All(c=>c.Right<=commands.ClientSize.Width && c.Bottom<=commands.ClientSize.Height) && grid.Width>=600,"navigation, filters and file table fit the compact browser");
+            }
+            form.Close();
+            var saved=serviceType.GetMethod("GetDrivePreferences",hidden).Invoke(service,new object[]{fixtureEmail});
+            Check((ulong)saved.GetType().GetProperty("LastFolder").GetValue(saved,null)==2UL,"closing the picker remembers the last folder for this account");
+        }
+        var plan=snapshot.GetType().GetMethod("PlanDownload",hidden).Invoke(snapshot,new object[]{new[]{4UL,5UL,7UL},null});
+        var confirmType=assembly.GetType("MegaDownloader.MegaDriveDownloadForm",true);
+        using(var confirm=(System.Windows.Forms.Form)Activator.CreateInstance(confirmType,hidden,null,new object[]{plan,"课程素材",config.RutaDefecto,new[]{4UL},false,null},null)) {
+            ApplyFeatureTheme(confirm,ConfiguracionUI.ThemeModeType.Dark);
+            DrawFeatureDialog(confirm,"mega-drive-confirm-dark.png");
+            var preview=(System.Windows.Forms.DataGridView)confirm.Controls.Find("MegaDrivePreview",true).Single();
+            Check(preview.RowCount==3 && Enumerable.Range(0,preview.RowCount).Count(i=>Convert.ToString(preview[3,i].Value)=="已在队列")==1,"download preview lists every file and identifies an existing queue task");
+            Check(confirm.Controls.Find("MegaDriveDestination",true).Single().Text==config.RutaDefecto && ((System.Windows.Forms.Button)confirm.AcceptButton).Text=="加入队列","file confirmation pre-fills the save path and offers the existing queue action");
+            ((System.Windows.Forms.CheckBox)confirm.Controls.Find("MegaDriveSkipQueued",true).Single()).Checked=true;
+            var confirmed=confirmType.GetProperty("ConfirmedPlan",hidden).GetValue(confirm,null);
+            Check((decimal)confirmed.GetType().GetField("TotalBytes",hidden).GetValue(confirmed)==3072M,"skipping duplicates updates the bytes in the accepted plan");
+        }
+    }
     static void FirstOpenUiCases() {
         using(var main=new PresentationMain()) {
             var type=typeof(Main);
@@ -1579,6 +1683,9 @@ public partial class RegressionTests {
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
             main.ClientSize=new System.Drawing.Size(640,600);
             Check(main.MainMenuStrip.Width==main.ClientSize.Width && main.MainMenuStrip.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main),"menu entries stay visible after narrowing the window");
+            var driveButton=main.Controls.Find("OpenMegaDrive",true).Single();
+            var addLinks=main.Controls.Find("btnAddLink",true).Single();
+            Check(driveButton.Visible && driveButton.Text=="我的云盘" && driveButton.Right<=addLinks.Left && driveButton.Top==addLinks.Top,"cloud drive remains beside Add Links at the compact width");
             main.Hide();
         }
         var timer=System.Diagnostics.Stopwatch.StartNew();
@@ -1960,7 +2067,9 @@ public partial class RegressionTests {
             presentation=new CaptureHost {AutoScaleMode=System.Windows.Forms.AutoScaleMode.None,Font=source.Font,
                 ClientSize=source.Size,BackColor=source.BackColor};
             presentation.Controls.Add(source);
-        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm || source.GetType().FullName=="MegaDownloader.MegaAccountForm")) {
+        } else if(!(source is PresentationMain || source is PresentationSettings || source is PresentationAddLinks || source is DownloadScheduleForm ||
+            source.GetType().FullName=="MegaDownloader.MegaAccountForm" || source.GetType().FullName=="MegaDownloader.MegaDriveForm" ||
+            source.GetType().FullName=="MegaDownloader.MegaDriveDownloadForm")) {
             throw new Exception("Refusing to show a business form from a presentation test");
         }
         try {
@@ -2286,6 +2395,98 @@ public partial class RegressionTests {
             Check(restored.MegaAccountEmail=="reassigned@example.invalid" && !restored.DescargaProcesada && !restored.FailedByQuota,"explicit reassignment from anonymous reverifies through the account backend");
         }
         MegaAccountStoreCases();
+    }
+    static void MegaDriveQueueCases() {
+        var snapshot=MakeDriveFixture();
+        var snapshotType=snapshot.GetType();
+        var browse=snapshotType.GetMethod("Browse",hidden);
+        var kind=typeof(Main).Assembly.GetType("MegaDownloader.MegaDriveNode+FileKind",true);
+        var ordered=((System.Collections.IEnumerable)browse.Invoke(snapshot,new[]{(object)2UL,"",false,Enum.ToObject(kind,0),true,true})).Cast<object>().ToArray();
+        var field=ordered[0].GetType().GetField("Id",hidden);
+        Check(ordered.Select(node=>(ulong)field.GetValue(node)).SequenceEqual(new[]{6UL,5UL,4UL}),"drive sorts directories first and files by descending modification time");
+        var plan=snapshotType.GetMethod("PlanDownload",hidden).Invoke(snapshot,new object[]{new[]{2UL,4UL,7UL,8UL},null});
+        var destination=Path.Combine(root,"cloud-package");
+        const string email="drive@example.invalid";
+        var package=(Paquete)plan.GetType().GetMethod("Build",hidden).Invoke(plan,new object[]{email,destination,"Cloud drive",false,CancellationToken.None});
+        var handle=typeof(Fichero).GetField("MegaDriveNodeHandle",hidden);
+        var effective=typeof(Fichero).GetProperty("EffectiveMegaAccountEmail",hidden);
+        try {
+            Check(package.ListaFicheros.Count==4 && package.ListaFicheros.Select(f=>f.TamanoBytes).Sum()==7680,"overlapping folder and file selections produce unique queue entries and the expected byte total");
+            Check(package.ListaFicheros.All(f=>f.MegaAccountEmail==email && f.URL=="" && !f.LinkVisible),"cloud items queue with a private identity and no public URL");
+            var pdf=package.ListaFicheros.Single(f=>(ulong)handle.GetValue(f)==7UL);
+            Check(pdf.RutaRelativa==Path.Combine("课程素材","参考") && Directory.Exists(Path.Combine(pdf.RutaLocal,"空目录")),"folder plans preserve nested paths and create empty descendants");
+            Check(package.ListaFicheros.Single(f=>(ulong)handle.GetValue(f)==8UL).RutaLocal==PathGuard.GetSafePathUnderRoot(destination,"",true),"a separately selected file saves under the chosen root");
+            using(var restored=new Fichero()) {
+                var node=pdf.GuardarXML(new System.Xml.XmlDocument(),true);
+                restored.CargarXML(node);
+                Check(node["MegaDriveNodeHandle"].InnerText=="7" && (ulong)handle.GetValue(restored)==7UL && !restored.LinkVisible,"cloud node handle and private link state survive queue serialization");
+                typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(restored,"wrong@example.invalid");
+                Check((string)effective.GetValue(restored,null)==email,"private files stay bound to their original account");
+            }
+        } finally {foreach(var file in package.ListaFicheros)file.Dispose();}
+
+        var serviceType=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var store=Path.Combine(root,"cloud-preferences");
+        var service=Activator.CreateInstance(serviceType,hidden,null,new object[]{store},null);
+        const string other="other-drive@example.invalid";
+        var account=SeedMegaAccount(service,email,"Drive",true);
+        SeedMegaAccount(service,other,"Other",false);
+        var read=serviceType.GetMethod("GetDrivePreferences",hidden);
+        var prefs=read.Invoke(service,new object[]{email});
+        var last=prefs.GetType().GetProperty("LastFolder");
+        var favorites=prefs.GetType().GetProperty("Favorites");
+        last.SetValue(prefs,6UL,null);
+        ((List<ulong>)favorites.GetValue(prefs,null)).Add(2UL);
+        var bindings=prefs.GetType().GetProperty("FolderDestinations");
+        var lastShared=prefs.GetType().GetProperty("LastSharedFolder");
+        lastShared.SetValue(prefs,100UL,null);
+        ((Dictionary<ulong,string>)bindings.GetValue(prefs,null)).Add(2UL,destination);
+        Check((int)serviceType.GetMethod("SaveDrivePreferences",hidden).Invoke(service,new[]{email,prefs})==0,"favorite bindings and both browsing locations save with the account");
+        account.GetType().GetField("Operations",hidden).SetValue(account,1);
+        serviceType.GetMethod("Release",hidden).Invoke(service,new object[]{account,-17,false,120L});
+        var status=serviceType.GetMethod("GetStatus",hidden,null,new[]{typeof(string)},null);
+        var held=status.Invoke(service,new object[]{email});
+        var deadline=held.GetType().GetField("QuotaRetryUtc",hidden);
+        Check((DateTime)deadline.GetValue(held)>DateTime.UtcNow && deadline.GetValue(status.Invoke(service,new object[]{other}))==null,"the SDK wait applies only to the blocked account");
+        var reloaded=Activator.CreateInstance(serviceType,hidden,null,new object[]{store},null);
+        Check(((System.Threading.Tasks.Task<int>)serviceType.GetMethod("RestoreAsync",hidden).Invoke(reloaded,null)).GetAwaiter().GetResult()==0,"cloud preferences restore from the protected account store");
+        var saved=read.Invoke(reloaded,new object[]{email});
+        var separate=read.Invoke(reloaded,new object[]{other});
+        Check((ulong)last.GetValue(saved,null)==6UL && (ulong)lastShared.GetValue(saved,null)==100UL && ((List<ulong>)favorites.GetValue(saved,null)).SequenceEqual(new[]{2UL}) &&
+              ((Dictionary<ulong,string>)bindings.GetValue(saved,null))[2UL]==destination && last.GetValue(separate,null)==null,
+              "locations, favorites and incremental bindings stay isolated by account after restart");
+        Check((DateTime)deadline.GetValue(status.Invoke(reloaded,new object[]{email}))>DateTime.UtcNow,"a reported private quota wait survives restart");
+        var value=account.GetType().GetField("Value",hidden);
+        deadline.SetValue(held,DateTime.UtcNow.AddSeconds(-1));
+        value.SetValue(account,held);
+        Check(!(bool)held.GetType().GetField("QuotaReached",hidden).GetValue(status.Invoke(service,new object[]{email})),"elapsed wait releases the account to the scheduler");
+        MegaDriveIncrementalCases(snapshot,service,email);
+    }
+    static void MegaDriveIncrementalCases(object snapshot,object service,string email) {
+        var destination=Path.Combine(root,"incremental-target");
+        Directory.CreateDirectory(destination);
+        var plan=snapshot.GetType().GetMethod("PlanDownload",hidden).Invoke(snapshot,new object[]{new[]{2UL},2UL});
+        var history=service.GetType().GetField("DriveHistory",hidden).GetValue(service);
+        string delivered=Path.Combine(destination,"剪辑视频 (2).mp4");
+        File.WriteAllBytes(delivered,new byte[4096]);
+        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,4UL,delivered});
+        File.WriteAllBytes(Path.Combine(destination,"练习包.zip"),new byte[10]);
+        var queueType=typeof(Main).Assembly.GetType("MegaDownloader.MegaDriveQueueItem",true);
+        var queue=Array.CreateInstance(queueType,1);
+        queue.SetValue(Activator.CreateInstance(queueType,hidden,null,new object[]{5UL,PathGuard.GetSafePathUnderRoot(destination,"",true),"练习包.zip",1024L,false},null),0);
+        var find=history.GetType().GetMethod("FindChanges",hidden);
+        var changes=find.Invoke(history,new[]{email,plan,destination,queue});
+        var changesType=changes.GetType();
+        var result=changesType.GetField("Plan",hidden).GetValue(changes);
+        Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==3072M,"incremental scan skips a recorded delivery even when collision-safe naming changed its filename");
+        Check(((HashSet<ulong>)changesType.GetField("Pending",hidden).GetValue(changes)).SetEquals(new[]{5UL}) &&
+              ((HashSet<ulong>)changesType.GetField("Updated",hidden).GetValue(changes)).SetEquals(new[]{5UL}),"incremental preview distinguishes pending tasks and changed local destinations");
+        File.SetLastWriteTimeUtc(delivered,DateTime.UtcNow.AddDays(-2));
+        changes=find.Invoke(history,new[]{email,plan,destination,queue});
+        Check(((HashSet<ulong>)changesType.GetField("Updated",hidden).GetValue(changes)).Contains(4UL),"a locally modified recorded file reappears in the incremental plan");
+        var foreign=find.Invoke(history,new[]{"other@example.invalid",plan,destination,Array.CreateInstance(queueType,0)});
+        result=changesType.GetField("Plan",hidden).GetValue(foreign);
+        Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==7168M,"incremental history is isolated by account");
     }
     static void MegaAccountStoreCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
