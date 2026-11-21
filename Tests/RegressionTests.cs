@@ -1590,6 +1590,7 @@ public partial class RegressionTests {
             cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
             cfg.Usuario="";cfg.Password="";cfg.Idioma=Language.FollowSystemLanguageCode;cfg.RutaDefecto=@"D:\Downloads";cfg.VLCPath=root;
             cfg.NivelLog=Log.LevelLogType.Normal;cfg.PrioridadDescompresion=DescompresionPriority.Normal;
+            cfg.CheckUpdates=true;cfg.UpdateCheckIntervalHours=6;
             settings.Config=cfg;
             int layouts=0;foreach(var control in DescendantControls(settings))control.Layout+=(sender,args)=>layouts++;
             timer.Restart();
@@ -1622,10 +1623,32 @@ public partial class RegressionTests {
             accountControl.Cerrar();accountControl.Cerrar();
             Check(true,"account cleanup is safe before or after repeated close calls");
             tabs.SelectedIndex=0;
+            var checkUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkCheckUpdates",true).Single();
+            var manualUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkUpdateManualOnly",true).Single();
+            var updateInterval=(System.Windows.Forms.TextBox)settings.Controls.Find("txtUpdateCheckInterval",true).Single();
+            Check(checkUpdates.Checked && manualUpdates.Enabled && updateInterval.Enabled && updateInterval.Text=="6",
+                "saved automatic update interval loads as editable");
+            manualUpdates.Checked=true;
+            Check(!updateInterval.Enabled && updateInterval.Text=="6","manual updates disable the interval and retain its value");
+            checkUpdates.Checked=false;
+            Check(!manualUpdates.Enabled && manualUpdates.Checked && !updateInterval.Enabled,"turning off update checks retains the selected update preferences");
+            checkUpdates.Checked=true;
+            manualUpdates.Checked=false;
+            Check(updateInterval.Enabled && updateInterval.Text=="6","returning to automatic updates restores the editable interval");
+            var intervalLabel=updateInterval.Parent.Controls.OfType<System.Windows.Forms.Label>().Single(c=>c.Text=="检查间隔");
             foreach(int width in new[]{880,720,1080}) {
                 settings.ClientSize=new System.Drawing.Size(width,650);
                 foreach(System.Windows.Forms.TabPage page in tabs.TabPages.Cast<System.Windows.Forms.TabPage>().Take(5)) {
                     tabs.SelectedTab=page;System.Windows.Forms.Application.DoEvents();
+                    if(page==tabs.TabPages[0]) {
+                        var master=checkUpdates.RectangleToScreen(checkUpdates.ClientRectangle);
+                        var manual=manualUpdates.RectangleToScreen(manualUpdates.ClientRectangle);
+                        var interval=updateInterval.Parent.RectangleToScreen(updateInterval.Parent.ClientRectangle);
+                        var group=checkUpdates.Parent.RectangleToScreen(checkUpdates.Parent.ClientRectangle);
+                        Check(manual.Left>master.Left && manual.Top>=master.Bottom && manual.Top-master.Bottom<=8 && group.Contains(interval),
+                            "update controls stay together below the update checkbox at width "+width);
+                        Check(intervalLabel.Right<=updateInterval.Left,"update interval has a visible label at width "+width);
+                    }
                     foreach(var row in DescendantControls(page).Where(c=>c.GetType().Name=="SettingsFieldRow" && c.Visible)) {
                         Check(row.Controls[0].Right<=row.Controls[1].Left && row.Controls[1].Right<=row.ClientSize.Width,"setting labels and inputs do not overlap at width "+width);
                         // Browse rows: trailing button sits to the right of the input and keeps a usable size.
@@ -1640,14 +1663,15 @@ public partial class RegressionTests {
                     }
                 }
             }
-            // Manual-check translation must land in every pack and the code key must resolve.
             foreach(string code in new[]{"de-DE","es-ES","fr-FR","hu-HU","it-IT","pt-BR","ro-RO","ru-RU","zh-CN","zh-TW","en-US"}) {
                 var packPath=Path.Combine(projectRoot,"Resources","Language",code+"-Language.xml");
                 var doc=new System.Xml.XmlDocument(); doc.Load(packPath);
-                var node=doc.DocumentElement.SelectSingleNode("Text[@key='Manual check only']");
-                Check(node!=null&&!string.IsNullOrEmpty(node.InnerText)&&node.InnerText!= "Manual check only"||code=="en-US","manual-check translation exists for "+code);
+                foreach(string key in new[]{"Manual check only","Check interval"}) {
+                    var node=doc.DocumentElement.SelectSingleNode("Text[@key='"+key+"']");
+                    Check(node!=null && !string.IsNullOrEmpty(node.InnerText) && (node.InnerText!=key || code=="en-US"),
+                        "update setting '"+key+"' has a translation for "+code);
+                }
             }
-            Check(Language.GetText("Manual check only")!=null&&Language.GetText("Manual check only").Length>0,"manual-check key resolves via Language.GetText");
             settings.ClientSize=new System.Drawing.Size(880,650);
             typeof(Configuration).GetMethod("LocateConfigText",hidden).Invoke(settings,new object[]{"代理"});
             Check(tabs.SelectedTab.Text.Contains("连接") && tabs.SelectedTab.AutoScrollPosition.Y<0,"settings search scrolls to a matching section below the fold");

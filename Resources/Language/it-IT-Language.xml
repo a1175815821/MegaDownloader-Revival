@@ -305,6 +305,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
   <Text key="Manual check only"><![CDATA[Controllo manuale]]></Text>
+  <Text key="Check interval"><![CDATA[Intervallo di controllo]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Nascondi link dentro un'immagine]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[&Estrai link da un'immagine]]></Text>
   <Text key="&amp;Streaming"><![CDATA[&Streaming]]></Text>

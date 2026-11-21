@@ -708,5 +708,6 @@ If not, he will be able to download the links but not see them.]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[Operation cancelled. No tasks or files were deleted.]]></Text>
   <Text key="Downloads_Failed_Banner"><![CDATA[%N% item(s) failed. Right-click a failed row for details, or retry below.]]></Text>
   <Text key="Manual check only"><![CDATA[Manual check only]]></Text>
+  <Text key="Check interval"><![CDATA[Check interval]]></Text>
   <Text key="Must specify the update check interval, and this value must be a positive number of hours."><![CDATA[Must specify the update check interval, and this value must be a positive number of hours.]]></Text>
 </Language>

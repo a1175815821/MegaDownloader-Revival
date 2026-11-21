@@ -488,6 +488,17 @@ Public Class Configuration
             End If
         End If
 
+        Dim updateInterval As Integer
+        If Not Integer.TryParse(txtUpdateCheckInterval.Text, updateInterval) OrElse updateInterval <= 0 Then
+            If chkCheckUpdates.Checked AndAlso Not chkUpdateManualOnly.Checked Then
+                MessageBox.Show(Language.GetText("Must specify the update check interval, and this value must be a positive number of hours."),
+                                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                txtUpdateCheckInterval.Focus()
+                Exit Sub
+            End If
+            updateInterval = Config.UpdateCheckIntervalHours
+        End If
+
         Dim ProxyPort As Integer = 0
         Integer.TryParse(txtProxyPort.Text, ProxyPort)
 
@@ -592,15 +603,6 @@ Public Class Configuration
         Config.ApagarPC = chkApagarPC.Checked
         Config.CheckUpdates = chkCheckUpdates.Checked
         Config.UpdateManualOnly = chkUpdateManualOnly.Checked
-        Dim updateInterval As Integer = 1
-        If Not Integer.TryParse(txtUpdateCheckInterval.Text, updateInterval) OrElse updateInterval <= 0 Then
-            If chkCheckUpdates.Checked Then
-                MessageBox.Show(Language.GetText("Must specify the update check interval, and this value must be a positive number of hours."), _
-                                Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Exit Sub
-            End If
-            updateInterval = 1
-        End If
         Config.UpdateCheckIntervalHours = updateInterval
         Config.MantenerUltimaConfiguracion = chkUltimaConfig.Checked
         Config.IniciarConWindows = chkStartWindows.Checked

@@ -50,28 +50,50 @@ Partial Public Class Configuration
             options.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         Next
         options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
+        Dim intervalCaption As New Label With {.Text = Language.GetText("Check interval"), .AutoSize = True}
+        Dim hours As New Label With {.Text = Language.GetText("hours"), .AutoSize = True}
+        Dim intervalFields = InlineControls(intervalCaption, txtUpdateCheckInterval, hours)
+        intervalFields.WrapContents = False
+        txtUpdateCheckInterval.Width = 44
+        txtUpdateCheckInterval.AccessibleName = intervalCaption.Text & " (" & hours.Text & ")"
+        For Each field As Control In intervalFields.Controls
+            field.Anchor = AnchorStyles.None
+            field.Margin = New Padding(0, 0, 6, 0)
+        Next
+        Dim updatePreferences = InlineControls(chkUpdateManualOnly, intervalFields)
+        updatePreferences.Padding = New Padding(20, 0, 0, 0)
+        updatePreferences.Margin = New Padding(0)
+        updatePreferences.TabIndex = 1
+        chkUpdateManualOnly.Anchor = AnchorStyles.None
+        chkUpdateManualOnly.Margin = New Padding(0, 4, 12, 4)
+        chkUpdateManualOnly.TabIndex = 0
+        intervalFields.Anchor = AnchorStyles.None
+        intervalFields.Margin = New Padding(0, 4, 0, 4)
+        intervalFields.TabIndex = 1
+        Dim updateOptions = StackLayout()
+        updateOptions.TabIndex = chkCheckUpdates.TabIndex
+        chkCheckUpdates.Margin = New Padding(0)
+        chkCheckUpdates.TabIndex = 0
+        updateOptions.Controls.AddRange(New Control() {chkCheckUpdates, updatePreferences})
+        Dim refreshUpdateOptions As Action =
+            Sub()
+                chkUpdateManualOnly.Enabled = chkCheckUpdates.Checked
+                intervalFields.Enabled = chkCheckUpdates.Checked AndAlso Not chkUpdateManualOnly.Checked
+            End Sub
+        AddHandler chkCheckUpdates.CheckedChanged, Sub() refreshUpdateOptions()
+        AddHandler chkUpdateManualOnly.CheckedChanged, Sub() refreshUpdateOptions()
+        refreshUpdateOptions()
+
         Dim checks As Control() = {chkAnalisisPortapapeles, chkCrearDirectorio, chkComenzarPlay,
                                   InlineControls(chkApagarPC, linkApagarPC), chkStartWindows,
-                                  InlineControls(chkUltimaConfig, linkUltConfig), chkCheckUpdates,
+                                  InlineControls(chkUltimaConfig, linkUltConfig), updateOptions,
                                   InlineControls(chkUnZip, comboPrioridad)}
-        ' 6: 更新检查行：间隔（小时） + 仅手动。Interval>0 有意义，ManualOnly 独立于 CheckUpdates。
-        ' “h” 在区域设置下无意义：翻译后长尾巴会把复选框挤出可视区，沿用本语言的 hours 词。
-        Dim updateIntervalLabel As New Label With {.Text = Language.GetText("hours"), .AutoSize = True}
-        Dim updateRow As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .Dock = DockStyle.Top, .WrapContents = True, .Margin = New Padding(0)}
-        updateRow.Controls.AddRange(New Control() {chkUpdateManualOnly, txtUpdateCheckInterval, updateIntervalLabel})
-        UiStyles.SetRole(updateRow, UiStyles.Role.Surface)
-        For Each c As Control In updateRow.Controls
-            c.Margin = New Padding(0, 3, 8, 3)
-            If TypeOf c Is TextBox Then c.Width = 44
-        Next
-
         For index As Integer = 0 To checks.Length - 1
             checks(index).Margin = New Padding(0, 6, 16, 6)
             options.Controls.Add(checks(index), index Mod 2, index \ 2)
         Next
         SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), Divider(),
-                        options, updateRow, Divider(),
-                        FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
+                        options, Divider(), FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
         SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
                         InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
                         FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1)

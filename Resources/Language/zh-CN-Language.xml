@@ -440,6 +440,7 @@ ELC 生成器窗口会默认选中它。
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新(&K)]]></Text>
   <Text key="Check for updates"><![CDATA[检查更新]]></Text>
   <Text key="Manual check only"><![CDATA[仅手动检查]]></Text>
+  <Text key="Check interval"><![CDATA[检查间隔]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：数据校验失败，输出文件未创建。可能图片太小，请换一张更大的图片。]]></Text>
   <Text key="Steganograph&amp;y"><![CDATA[隐写(&Y)]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[隐藏链接到图片(&H)]]></Text>

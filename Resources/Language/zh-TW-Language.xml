@@ -399,8 +399,9 @@ B 是同行下載數。]]></Text>
   <Text key="MsgPasswordZip"><![CDATA[If the file is password protected, you can insert the password here and it will be used when extracting the file. If not, just leave it empty.
 Please note that only basic support for ZIP and RAR files is currently provided. Multipart RARs are not yet supported.]]></Text>
   <Text key="Chec&amp;k for updates"><![CDATA[检查更新 (&K)]]></Text>
-  <Text key="Check for updates"><![CDATA[检查更新]]></Text>
+  <Text key="Check for updates"><![CDATA[檢查更新]]></Text>
   <Text key="Manual check only"><![CDATA[僅手動檢查]]></Text>
+  <Text key="Check interval"><![CDATA[檢查間隔]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[在圖片中隱藏連結(&H)]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[從圖片提取連結(&R)]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[必須設定網頁伺服器密碼才能允許區域網路存取。]]></Text>
