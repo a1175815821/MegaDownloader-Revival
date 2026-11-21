@@ -23,11 +23,11 @@ Partial Public Class AddLinks
             txtRuta.Focus()
             Return
         End If
-        If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail) Then
-            ShowInputNotice(MegaAccountService.ErrorText(-15), True)
+        If previewMegaAccountEmail <> "" AndAlso Not MegaAccountService.Current.GetStatus(previewMegaAccountEmail).SignedIn Then
+            ShowInputNotice(MegaAccountService.ErrorText(MegaAccountService.SessionExpired), True)
             Return
         End If
-        ShowInputNotice(If(chkMegaAccount.Checked, chkMegaAccount.Text, ""))
+        ShowInputNotice("")
         If _linkCountTimer IsNot Nothing Then _linkCountTimer.Stop()
         preflightProgressTimer.Stop()
         Dim created As Boolean = preflightView Is Nothing
@@ -152,9 +152,9 @@ Partial Public Class AddLinks
         If importBusy OrElse preflightDisposed OrElse preflightView Is Nothing Then Return
         Dim selected As List(Of URLProcessor.FileURL) = preflightView.SelectedFiles
         If selected Is Nothing OrElse selected.Count = 0 Then Return
-        Dim megaAccountEmail As String = If(chkMegaAccount.Checked, previewMegaAccountEmail, "")
-        If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(megaAccountEmail) Then
-            preflightView.ShowNotice(MegaAccountService.ErrorText(-15), True)
+        Dim megaAccountEmail As String = previewMegaAccountEmail
+        If megaAccountEmail <> "" AndAlso Not MegaAccountService.Current.GetStatus(megaAccountEmail).SignedIn Then
+            preflightView.ShowNotice(MegaAccountService.ErrorText(MegaAccountService.SessionExpired), True)
             Return
         End If
         importBusy = True

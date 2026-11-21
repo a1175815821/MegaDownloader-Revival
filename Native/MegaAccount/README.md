@@ -1,6 +1,6 @@
 # MEGA account module (Windows x64)
 
-This optional native DLL connects the WinForms app to the official [MEGA SDK v10.21.1](https://github.com/meganz/sdk/releases/tag/v10.21.1). The application still builds and downloads anonymously without it. The account dialog reports a missing module or App Key instead of attempting an anonymous login or download.
+This optional native DLL connects the WinForms app to the official [MEGA SDK v10.21.1](https://github.com/meganz/sdk/releases/tag/v10.21.1). The application can also build and download anonymously without the DLL.
 
 ## Build
 
@@ -21,11 +21,12 @@ The managed project uses AnyCPU with Prefer 32-bit disabled, including in the so
 
 ## Try it locally
 
-Set `MEGADOWNLOADER_MEGA_APP_KEY` to your application's MEGA App Key in the process environment, then launch the built app from the same terminal. The App Key identifies the application; it is not the user's password or session. Enter account credentials only in the in-app dialog.
+Run the x64 application with `MegaAccountBridge.dll` beside it and enter account credentials in the sign-in dialog. The pinned SDK constructor ignores its App Key parameter, so `MEGADOWNLOADER_MEGA_APP_KEY` is optional for this build.
 
-- Use **Sign in to MEGA** at the right of the top menu. The bottom status shows the login state or transfer balance when MEGA reports it. A free account may not have a numeric allowance to display.
-- Use **Add links** → **Use MEGA account (public files only)** for a direct public single-file link. The queued task stays assigned to that email. Folders, ELC, and anonymous downloads continue to use the existing path.
-- If you select **Keep me signed in on this device**, restart and verify the account is restored. Only the SDK session and email are stored with Windows current-user DPAPI. Sign out from the account dialog to clear the saved login.
-- Test downloading a small file not in this account's cloud drive, correct output bytes, cancellation, and sign-out. Account transfers use the SDK, not the original anonymous `.part` file format. Pausing or stopping an account transfer starts it again from the beginning on resume in this version. Anonymous resumption is unchanged.
+- Open **Sign in to MEGA** on the right of the menu bar. Add accounts, assign aliases, and set a default for new tasks. The account window shows the plan, storage usage, and transfer values returned by MEGA. The status strip summarizes the default account. A free account may have usage data shared by IP and no fixed transfer allowance.
+- In **Add links**, use **Download identity** to select anonymous download or a specific account for a public single-file link. Use anonymous for folders and ELC. The queue shows the identity per task. Use its **Change download identity** menu to reassign selected pending tasks or packages.
+- When an account reaches its transfer quota, the current task restarts with the next signed-in account that has no reported quota block. The queue shows the account used for the latest attempt. Changing the default keeps existing task assignments. If every account reaches its quota, refresh account details and retry the task when allowance is available.
+- **Keep me signed in on this device** saves that account's SDK session with Windows current-user DPAPI. The app saves account names, aliases, and the default separately from the decision to remember each session. Sign-out clears the remembered session and removal deletes the account entry.
+- To check the live flow, sign in with an authorized account, download a known small public file, compare the output bytes, stop a running transfer, then restart the app to check session restoration and sign out. Account transfers start over after a pause or a quota-driven account switch. Anonymous transfers use their existing partial files.
 
-Signed-in transfer quota attribution, online login and session restoration need real-account testing; offline regressions do not verify how the service attributes quota.
+The application reports the quota figures MEGA returns. A successful public download alone cannot establish how MEGA attributes the transferred bytes.

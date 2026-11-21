@@ -23,6 +23,19 @@ Public Class Fichero
     Public NombreFichero As String ' Solo el nombre del fichero, sin ruta
 
     Public MegaAccountEmail As String = String.Empty
+    Friend MegaAccountTransferEmail As String = String.Empty
+
+    Friend ReadOnly Property EffectiveMegaAccountEmail As String
+        Get
+            Return If(String.IsNullOrEmpty(MegaAccountTransferEmail), MegaAccountEmail, MegaAccountTransferEmail)
+        End Get
+    End Property
+
+    Friend ReadOnly Property IsMegaAccountConnecting As Boolean
+        Get
+            Return UsesMegaAccount AndAlso MegaAccountService.Current.GetStatus(EffectiveMegaAccountEmail).Connecting
+        End Get
+    End Property
 
     Friend ReadOnly Property UsesMegaAccount As Boolean
         Get
@@ -359,15 +372,20 @@ Public Class Fichero
 	
 	Private _Actualizando As Boolean = False
 	Public Sub ActualizarInformacionFichero(ByVal Config As Configuracion, ByRef ErrorObtenido As Conexion.TipoError, ByVal ComprobacionAntesDescarga As boolean, Optional ByVal ct As System.Threading.CancellationToken = Nothing)
-        If UsesMegaAccount Then
-            VerifyMegaAccountFile(ErrorObtenido, ct)
-            Return
-        End If
-		If Not _Actualizando Then
-			_Actualizando = True
-			Try
-				Dim EstadoAnterior As Estado = Me.DescargaEstado
-				Me.SetDescargaEstado = Estado.Verificando
+        Dim previous As Estado
+        Dim usesAccount As Boolean
+        SyncLock Mutex.FicheroDownloader
+            If _Actualizando OrElse disposedValue OrElse accountDownload IsNot Nothing Then Return
+            usesAccount = UsesMegaAccount
+            _Actualizando = True
+            previous = EstadoDescarga
+            EstadoDescarga = Estado.Verificando
+        End SyncLock
+        Try
+            If usesAccount Then
+                VerifyMegaAccountFile(ErrorObtenido, ct)
+                Return
+            End If
 				
 				Dim Info As Conexion.InformacionFichero = Conexion.ObtenerInformacionFichero(Config, Me.FileID, Me.FileKey, ComprobacionAntesDescarga, ct)
 				' B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
@@ -386,7 +404,7 @@ Public Class Fichero
 					End If
 					Me.MD5 = Info.MD5
 					Me.DescargaProcesada = True
-					Me.SetDescargaEstado = EstadoAnterior
+					Me.SetDescargaEstado = previous
 					Me.FileKey = Info.FileKey
 					Me.FileID = Info.FileID
 				ElseIf Info IsNot Nothing AndAlso Info.Err <> Conexion.TipoError.SinErrores Then
@@ -403,11 +421,13 @@ Public Class Fichero
 					End If
 				End If
 				End SyncLock
-			Finally
-				_Actualizando = False
-			End Try
-		End If
-	End Sub
+        Finally
+            SyncLock Mutex.FicheroDownloader
+                If EstadoDescarga = Estado.Verificando Then EstadoDescarga = previous
+                _Actualizando = False
+            End SyncLock
+        End Try
+    End Sub
 	
 	
 	
@@ -571,12 +591,37 @@ Public Class Fichero
     Private accountDownload As CancellationTokenSource
     Private accountCancelTarget As Estado?
 
-    Private Function ReadMegaAccountInfo(ByRef name As String, ByRef size As Long) As Integer
+    Friend Function CanChangeDownloadIdentity() As Boolean
+        Return Not disposedValue AndAlso Not _Actualizando AndAlso accountDownload Is Nothing AndAlso bgArranque Is Nothing AndAlso
+            (Downloader Is Nothing OrElse Downloader.CanStart) AndAlso
+            (EstadoDescarga = Estado.EnCola OrElse EstadoDescarga = Estado.Pausado OrElse EstadoDescarga = Estado.Erroneo) AndAlso
+            String.IsNullOrEmpty(completedFileName)
+    End Function
+
+    ' The caller holds the downloader lock across the selected tasks.
+    Friend Sub ChangeDownloadIdentity(email As String)
+        If String.Equals(MegaAccountEmail, email, StringComparison.OrdinalIgnoreCase) AndAlso MegaAccountTransferEmail = "" Then Return
+        ResetearDescarga(preserveProgress:=True)
+        Dim changeBackend As Boolean = UsesMegaAccount <> (email <> "")
+        MegaAccountEmail = email
+        MegaAccountTransferEmail = ""
+        If changeBackend Then
+            DescargaProcesada = False
+            If UsesMegaAccount Then ResetMegaAccountProgress()
+        End If
+        If EstadoDescarga = Estado.Erroneo OrElse (changeBackend AndAlso EstadoDescarga = Estado.Pausado) Then EstadoDescarga = Estado.EnCola
+    End Sub
+
+    Private Function ReadMegaAccountInfo(email As String, ByRef name As String, ByRef size As Long) As Integer
         Dim link As String = GetMegaAccountLink(Me.URL)
         If link Is Nothing Then Return -2
-        Dim code As Integer = MegaAccountService.Current.Inspect(MegaAccountEmail, link, name, size)
+        Dim code As Integer = MegaAccountService.Current.Inspect(email, link, name, size)
         Return If(code = 0 AndAlso (String.IsNullOrEmpty(name) OrElse size < 0), -2, code)
     End Function
+
+    Private Sub RecordMegaAccountTransfer(email As String)
+        MegaAccountTransferEmail = If(String.Equals(email, MegaAccountEmail, StringComparison.OrdinalIgnoreCase), "", email)
+    End Sub
 
     Private Sub ApplyMegaAccountInfo(name As String, size As Long)
         If String.IsNullOrEmpty(completedFileName) Then NombreFichero = PathGuard.SanitizeFileName(name, "file")
@@ -585,22 +630,27 @@ Public Class Fichero
     End Sub
 
     Private Sub VerifyMegaAccountFile(ByRef errorResult As Conexion.TipoError, ct As CancellationToken)
-        Dim previous As Estado
-        SyncLock Mutex.FicheroDownloader
-            If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing Then Return
-            _Actualizando = True
-            previous = EstadoDescarga
-            EstadoDescarga = Estado.Verificando
-        End SyncLock
         Try
             ct.ThrowIfCancellationRequested()
             Dim name As String = Nothing
             Dim size As Long
-            Dim code As Integer = ReadMegaAccountInfo(name, size)
+            Dim email As String = EffectiveMegaAccountEmail
+            Dim tried As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            Dim code As Integer
+            Do
+                ct.ThrowIfCancellationRequested()
+                tried.Add(email)
+                code = ReadMegaAccountInfo(email, name, size)
+                If code <> MegaAccountService.OverQuota Then Exit Do
+                Dim nextEmail = MegaAccountService.Current.NextTransferAccount(email, tried)
+                If nextEmail = "" Then Exit Do
+                email = nextEmail
+            Loop
             ct.ThrowIfCancellationRequested()
             SyncLock Mutex.FicheroDownloader
                 If disposedValue Then Return
                 If code = 0 Then
+                    RecordMegaAccountTransfer(email)
                     ApplyMegaAccountInfo(name, size)
                 Else
                     errorResult = Conexion.TipoError.Otros
@@ -614,16 +664,11 @@ Public Class Fichero
                 errorResult = Conexion.TipoError.Otros
                 SetMegaAccountLocalError()
             End SyncLock
-        Finally
-            SyncLock Mutex.FicheroDownloader
-                If EstadoDescarga = Estado.Verificando Then EstadoDescarga = previous
-                _Actualizando = False
-            End SyncLock
         End Try
     End Sub
 
     Private Sub StartMegaAccountDownload()
-        If MegaAccountService.Current.GetStatus().Connecting Then Return
+        If IsMegaAccountConnecting Then Return
         SyncLock Mutex.FicheroDownloader
             If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing OrElse
                (EstadoDescarga <> Estado.EnCola AndAlso EstadoDescarga <> Estado.Pausado) Then Return
@@ -652,24 +697,44 @@ Public Class Fichero
                 code = -2
                 Return
             End If
-            If Not DescargaProcesada Then
-                ' A manual retry can start a task whose initial metadata request failed.
-                Dim name As String = Nothing
-                Dim size As Long
-                code = ReadMegaAccountInfo(name, size)
-                If code <> 0 Then Return
-                token.ThrowIfCancellationRequested()
-                SyncLock Mutex.FicheroDownloader
-                    ApplyMegaAccountInfo(name, size)
-                End SyncLock
-            End If
+            Dim service = MegaAccountService.Current
+            Dim email As String = EffectiveMegaAccountEmail
+            Dim tried As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
             System.IO.Directory.CreateDirectory(RutaLocal)
             Do
-                staging = PathGuard.GetSafePathUnderRoot(RutaLocal, ".mega-sdk-" & Guid.NewGuid().ToString("N") & ".tmp", allowRoot:=False)
-            Loop While System.IO.File.Exists(staging) OrElse System.IO.Directory.Exists(staging)
-            token.ThrowIfCancellationRequested()
-            EstadoDescarga = Estado.Descargando
-            code = MegaAccountService.Current.Download(MegaAccountEmail, link, staging, AddressOf UpdateMegaAccountProgress, token)
+                token.ThrowIfCancellationRequested()
+                tried.Add(email)
+                SyncLock Mutex.FicheroDownloader
+                    RecordMegaAccountTransfer(email)
+                    ResetMegaAccountProgress()
+                End SyncLock
+                code = 0
+                If Not DescargaProcesada Then
+                    Dim name As String = Nothing
+                    Dim size As Long
+                    code = ReadMegaAccountInfo(email, name, size)
+                    If code = 0 Then
+                        SyncLock Mutex.FicheroDownloader
+                            ApplyMegaAccountInfo(name, size)
+                        End SyncLock
+                    End If
+                End If
+                If code = 0 Then
+                    staging = PathGuard.GetSafePathUnderRoot(RutaLocal, ".mega-sdk-" & Guid.NewGuid().ToString("N") & ".tmp", allowRoot:=False)
+                    token.ThrowIfCancellationRequested()
+                    EstadoDescarga = Estado.Descargando
+                    code = service.Download(email, link, staging, AddressOf UpdateMegaAccountProgress, token)
+                End If
+                If code <> MegaAccountService.OverQuota Then Exit Do
+                token.ThrowIfCancellationRequested()
+                Dim nextEmail As String = service.NextTransferAccount(email, tried)
+                If nextEmail = "" Then Return
+                If staging IsNot Nothing Then
+                    System.IO.File.Delete(staging)
+                    staging = Nothing
+                End If
+                email = nextEmail
+            Loop
             If code <> 0 Then Return
             token.ThrowIfCancellationRequested()
             If New System.IO.FileInfo(staging).Length <> TamanoBytes Then Throw New System.IO.IOException("Unexpected MEGA SDK output size.")
@@ -904,25 +969,26 @@ Public Class Fichero
 	End Sub
 	
 	
-	Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
-        If UsesMegaAccount Then
-            StartMegaAccountDownload()
-            Return
-        End If
-		If disposedValue OrElse Estado.Erroneo = Me.DescargaEstado Then Exit Sub
-
-		If bgArranque Is Nothing AndAlso (Me.Downloader Is Nothing OrElse Me.Downloader.CanStart) Then
-			Me.EstadoDescarga = Estado.CreandoLocal
-			Me.DescargaComenzada = True
-			Me._StartupCancelled = False
-			' B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
-			System.Threading.Interlocked.Exchange(_cancellationNotified, 0)
-			bgArranque = New DownloadWorker(Config, NumConexionesDisponibles)
-			bgArranque.WorkerSupportsCancellation = False
-			bgArranque.WorkerReportsProgress = False
-			bgArranque.RunWorkerAsync()
-		End If
-	End Sub
+    Public Sub Start(ByRef Config As Configuracion, NumConexionesDisponibles As Integer)
+        SyncLock Mutex.FicheroDownloader
+            If UsesMegaAccount Then
+                StartMegaAccountDownload()
+                Return
+            End If
+            If disposedValue OrElse Estado.Erroneo = Me.DescargaEstado Then Return
+            If bgArranque Is Nothing AndAlso (Downloader Is Nothing OrElse Downloader.CanStart) Then
+                EstadoDescarga = Estado.CreandoLocal
+                DescargaComenzada = True
+                _StartupCancelled = False
+                ' B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
+                Interlocked.Exchange(_cancellationNotified, 0)
+                bgArranque = New DownloadWorker(Config, NumConexionesDisponibles)
+                bgArranque.WorkerSupportsCancellation = False
+                bgArranque.WorkerReportsProgress = False
+                bgArranque.RunWorkerAsync()
+            End If
+        End SyncLock
+    End Sub
 
     Private Sub CaptureDownloaderProgress()
         SyncLock Mutex.FicheroDownloader
@@ -1547,6 +1613,7 @@ Public Class Fichero
 
 
         Me.MegaAccountEmail = LeerNodo(XML, "MegaAccountEmail", "")
+        Me.MegaAccountTransferEmail = If(UsesMegaAccount, LeerNodo(XML, "MegaAccountTransferEmail", ""), "")
         Me.NombreFichero = LeerNodo(XML, "NombreFichero", "")
         Me.PartialFileName = LeerNodo(XML, "PartialFileName", "")
         If Not String.IsNullOrEmpty(Me.PartialFileName) Then
@@ -1694,7 +1761,10 @@ Public Class Fichero
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
         End If
-        If UsesMegaAccount Then NodoFic.AppendChild(XML.CreateElement("MegaAccountEmail")).InnerText = MegaAccountEmail
+        If UsesMegaAccount Then
+            NodoFic.AppendChild(XML.CreateElement("MegaAccountEmail")).InnerText = MegaAccountEmail
+            If MegaAccountTransferEmail <> "" Then NodoFic.AppendChild(XML.CreateElement("MegaAccountTransferEmail")).InnerText = MegaAccountTransferEmail
+        End If
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName
         If completedFileName IsNot Nothing Then NodoFic.AppendChild(XML.CreateElement("CompletedFileName")).InnerText = completedFileName

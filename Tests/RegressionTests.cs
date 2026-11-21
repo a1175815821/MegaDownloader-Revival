@@ -1473,16 +1473,31 @@ public partial class RegressionTests {
         thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
         if(failure!=null)throw new Exception("Native feature dialog regression failed",failure);
     }
+    static object SeedMegaAccount(object service,string email,string alias,bool signedIn,bool quotaReached=false,long? remaining=null) {
+        var type=service.GetType();
+        var statusType=type.GetNestedType("Status",BindingFlags.NonPublic);
+        var entryType=type.GetNestedType("AccountEntry",BindingFlags.NonPublic);
+        var status=Activator.CreateInstance(statusType);
+        statusType.GetField("Email",hidden).SetValue(status,email);
+        statusType.GetField("AliasName",hidden).SetValue(status,alias);
+        statusType.GetField("SignedIn",hidden).SetValue(status,signedIn);
+        statusType.GetField("NeedsLogin",hidden).SetValue(status,!signedIn);
+        statusType.GetField("QuotaReached",hidden).SetValue(status,quotaReached);
+        statusType.GetField("Remaining",hidden).SetValue(status,remaining);
+        var entry=Activator.CreateInstance(entryType,true);
+        entryType.GetField("Value",hidden).SetValue(entry,status);
+        entryType.GetField("Saved",hidden).SetValue(entry,true);
+        ((System.Collections.IList)type.GetField("accounts",hidden).GetValue(service)).Add(entry);
+        return entry;
+    }
     static void MegaAccountDialogCases() {
         var assembly=typeof(Main).Assembly;
         var dialogType=assembly.GetType("MegaDownloader.MegaAccountForm",true);
         var serviceType=assembly.GetType("MegaDownloader.MegaAccountService",true);
         var service=serviceType.GetField("Current",shared).GetValue(null);
-        var current=serviceType.GetField("currentStatus",hidden);
-        var old=current.GetValue(service);
-        string oldKey=Environment.GetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY");
+        var accounts=(System.Collections.IList)serviceType.GetField("accounts",hidden).GetValue(service);
+        var defaultEmail=serviceType.GetField("selectedDefault",hidden);
         try {
-            Environment.SetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY",null);
             using(var form=(System.Windows.Forms.Form)Activator.CreateInstance(dialogType,true)) {
                 ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Light);
                 DrawFeatureDialog(form,"mega-account-login.png");
@@ -1491,23 +1506,43 @@ public partial class RegressionTests {
                 var remember=(System.Windows.Forms.CheckBox)form.Controls.Find("MegaAccountRemember",true).Single();
                 Check(password.UseSystemPasswordChar && !remember.Checked,"MEGA password is masked; remembering the session is opt-in");
                 var button=(System.Windows.Forms.Button)form.Controls.Find("MegaAccountAction",true).Single();
-                Check(!button.Enabled && form.Controls.Find("MegaAccountMessage",true).Single().Text.Length>0,"missing SDK or App Key is explained without submitting credentials");
+                Check(!button.Enabled && form.Controls.Find("MegaAccountMessage",true).Single().Text.Length>0,"missing SDK is explained without submitting credentials");
             }
-            object signedIn=Activator.CreateInstance(current.FieldType);
-            current.FieldType.GetField("Email",hidden).SetValue(signedIn,"fixture@example.invalid");
-            current.FieldType.GetField("Remaining",hidden).SetValue(signedIn,(long)2684354560);
-            current.SetValue(service,signedIn);
+            var first=SeedMegaAccount(service,"first@example.invalid","Primary",true,remaining:2684354560);
+            var value=first.GetType().GetField("Value",hidden);
+            var details=value.GetValue(first);
+            details.GetType().GetField("Plan",hidden).SetValue(details,1);
+            details.GetType().GetField("StorageUsed",hidden).SetValue(details,2147483648L);
+            details.GetType().GetField("StorageTotal",hidden).SetValue(details,2199023255552L);
+            details.GetType().GetField("TransferUsed",hidden).SetValue(details,2684354560L);
+            details.GetType().GetField("TransferTotal",hidden).SetValue(details,5368709120L);
+            value.SetValue(first,details);
+            SeedMegaAccount(service,"fixture@example.invalid","Other",true);
+            defaultEmail.SetValue(service,"first@example.invalid");
             using(var form=(System.Windows.Forms.Form)Activator.CreateInstance(dialogType,true)) {
                 ApplyFeatureTheme(form,ConfiguracionUI.ThemeModeType.Dark);
                 DrawFeatureDialog(form,"mega-account-details.png");
                 CheckActionButtons("MEGA account",form);
                 var controls=ControlTree(form).ToList();
-                Check(controls.Any(c=>c.Text=="fixture@example.invalid") && controls.Any(c=>c.Text.Contains("传输剩余") && c.Text.Contains("GiB")),"signed-in dialog shows the email and the numeric transfer balance");
-                Check(!controls.Any(c=>c.Name=="MegaAccountPassword"),"signed-in dialog does not show credential fields");
+                Check(controls.Any(c=>c.Text=="first@example.invalid") && controls.Any(c=>c.Text.Contains("传输剩余") && c.Text.Contains("GiB")),"account manager shows the full default email and numeric transfer balance");
+                Check(controls.Any(c=>c.Text=="Pro I") && controls.Any(c=>c.Text.Contains("2TiB")) && controls.Any(c=>c.Text.Contains("5GiB")),"account manager shows the SDK plan and both storage and transfer totals");
+                var roster=(System.Windows.Forms.ListBox)form.Controls.Find("MegaAccountRoster",true).Single();
+                Check(roster.Items.Count==2 && roster.SelectedIndex==0,"manager lists both accounts and selects the default");
+                roster.SelectedIndex=1;
+                Check(controls.Any(c=>c.Text=="fixture@example.invalid") && (string)defaultEmail.GetValue(service)=="first@example.invalid","viewing another account keeps the explicit default");
+                Check(!controls.Any(c=>c.Name=="MegaAccountPassword"),"signed-in manager hides credential fields");
+            }
+            using(var add=new PresentationAddLinks()) {
+                var identity=(System.Windows.Forms.ComboBox)add.Controls.Find("AddLinksDownloadIdentity",true).Single();
+                Check(identity.Items.Count==3 && identity.Text.Contains("first@example.invalid"),"Add Links offers anonymous and both accounts and selects the default");
+                identity.SelectedIndex=2;
+                Check((string)typeof(AddLinks).GetField("previewMegaAccountEmail",hidden).GetValue(add)=="fixture@example.invalid","Add Links captures the explicitly selected email");
+                identity.SelectedIndex=0;
+                Check((string)typeof(AddLinks).GetField("previewMegaAccountEmail",hidden).GetValue(add)=="","Add Links explicitly selects anonymous downloads");
             }
         } finally {
-            current.SetValue(service,old);
-            Environment.SetEnvironmentVariable("MEGADOWNLOADER_MEGA_APP_KEY",oldKey);
+            accounts.Clear();
+            defaultEmail.SetValue(service,"");
         }
     }
     static void FirstOpenUiCases() {
@@ -1532,6 +1567,14 @@ public partial class RegressionTests {
             Check(accountItem!=null && accountItem.Alignment==System.Windows.Forms.ToolStripItemAlignment.Right && accountItem.Text=="登录 MEGA","MEGA login is right-aligned in the command strip");
             var status=main.Controls.OfType<System.Windows.Forms.StatusStrip>().Single().Items["MegaAccountStatus"];
             Check(status!=null && status.Text=="MEGA：未登录","status strip identifies the anonymous session");
+            var queue=(BrightIdeasSoftware.TreeListView)type.GetProperty("ListaDescargas",hidden).GetValue(main,null);
+            var identity=queue.AllColumns.Single(c=>c.Name=="QueueDownloadIdentity");
+            using(var task=new Fichero()) {
+                Check(identity.IsVisible && identity.Text=="下载身份" && identity.GetStringValue(task)=="匿名","the visible queue identity column labels anonymous tasks");
+                task.MegaAccountEmail="first@example.invalid";
+                typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(task,"other@example.invalid");
+                Check(identity.GetStringValue(task)=="MEGA · other@example.invalid","the queue column displays the account used after a quota switch");
+            }
             type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
             main.ClientSize=new System.Drawing.Size(640,600);
@@ -1695,13 +1738,22 @@ public partial class RegressionTests {
                 Check(list.Items[0].SubItems[list.AllColumns[6].Index].Text=="32","combined progress keeps the numeric aspect after column reset");
                 type.GetMethod("UpdateNavCounts",hidden).Invoke(main,null);
                 Check(!list.AllColumns[5].IsVisible && list.AllColumns[6].IsVisible,"default progress has one visible column and retains the optional numeric column");
-                using(var child=new Fichero {NombreFichero="说明文件.txt"}) {
+                using(var child=new Fichero {NombreFichero="说明文件.txt",DescargaProcesada=true,MegaAccountEmail="first@example.invalid"})
+                using(var anonymous=new Fichero {NombreFichero="产品演示视频.mp4",DescargaProcesada=true}) {
                     packages[0].AgregarFichero(child);
+                    packages[1].AgregarFichero(anonymous);
                     list.Expand(packages[0]);
                     Check(list.Items.Count==7,"the task-name tree column still expands package children");
+                    var identity=list.AllColumns.Single(c=>c.Name=="QueueDownloadIdentity");
+                    Check(list.Items[1].SubItems[identity.Index].Text=="MEGA · first@example.invalid","the expanded task shows its assigned account");
+                    typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(child,"other@example.invalid");
+                    type.GetMethod("RefreshListaDescargas",hidden).Invoke(main,new object[]{false});
+                    Check(list.Items[1].SubItems[identity.Index].Text=="MEGA · other@example.invalid" && list.Items[2].SubItems[identity.Index].Text=="匿名","periodic refresh updates the rotated identity and the anonymous package label");
+                    if(mode==ConfiguracionUI.ThemeModeType.Light) DrawFeatureDialog(main,"mega-account-queue.png");
                     list.Collapse(packages[0]);
                     Check(list.Items.Count==6,"collapsing a package restores the six root rows");
                     packages[0].ListaFicheros.Clear();
+                    packages[1].ListaFicheros.Clear();
                 }
                 main.ClientSize=new System.Drawing.Size(1180,720);
                 type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
@@ -2146,6 +2198,13 @@ public partial class RegressionTests {
             var xml=new System.Xml.XmlDocument();var node=original.GuardarXML(xml,true);
             restored.CargarXML(node);
             Check(restored.MegaAccountEmail==original.MegaAccountEmail,"account selection round-trips with the queued task");
+            var transferEmail=typeof(Fichero).GetField("MegaAccountTransferEmail",hidden);
+            transferEmail.SetValue(original,"other@example.invalid");
+            var rotated=original.GuardarXML(xml,false);
+            Check(rotated["MegaAccountEmail"].InnerText==original.MegaAccountEmail && rotated["MegaAccountTransferEmail"].InnerText=="other@example.invalid","queue change detection includes original and rotated identities");
+            rotated=original.GuardarXML(xml,true);
+            restored.CargarXML(rotated);
+            Check(restored.MegaAccountEmail==original.MegaAccountEmail && (string)transferEmail.GetValue(restored)=="other@example.invalid","both download identities survive a queue restart");
             var result=Conexion.TipoError.SinErrores;
             var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
             restored.ActualizarInformacionFichero(cfg,ref result,false);
@@ -2158,7 +2217,42 @@ public partial class RegressionTests {
             node.RemoveChild(node.SelectSingleNode("MegaAccountEmail"));
             restored.CargarXML(node);
             Check(restored.MegaAccountEmail=="","legacy queued tasks still default to anonymous downloads");
+            typeof(Fichero).GetMethod("ChangeDownloadIdentity",hidden).Invoke(restored,new object[]{"reassigned@example.invalid"});
+            Check(restored.MegaAccountEmail=="reassigned@example.invalid" && !restored.DescargaProcesada && !restored.FailedByQuota,"explicit reassignment from anonymous reverifies through the account backend");
         }
+        MegaAccountStoreCases();
+    }
+    static void MegaAccountStoreCases() {
+        var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var folder=Path.Combine(root,"account-store");Directory.CreateDirectory(folder);
+        var legacy=Path.Combine(folder,"login.dat");
+        const string first="first@example.invalid", second="second@example.invalid";
+        const string session="fixture-session-not-a-credential";
+        var bytes=Encoding.UTF8.GetBytes("{\"Email\":\""+first+"\",\"Session\":\""+session+"\"}");
+        File.WriteAllBytes(legacy,ProtectedData.Protect(bytes,null,DataProtectionScope.CurrentUser));
+        var service=Activator.CreateInstance(type,hidden,null,new object[]{folder},null);
+        var restore=type.GetMethod("RestoreAsync",hidden);
+        var setDefault=type.GetMethod("SetDefault",hidden);
+        var setAlias=type.GetMethod("SetAlias",hidden);
+        var getDefault=type.GetProperty("DefaultEmail",hidden);
+        Check(((System.Threading.Tasks.Task<int>)restore.Invoke(service,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(service,null)==first && !File.Exists(legacy),"single-account store migrates locally and keeps its default");
+        SeedMegaAccount(service,second,"",true);
+        SeedMegaAccount(service,"quota@example.invalid","",true,quotaReached:true);
+        SeedMegaAccount(service,"offline@example.invalid","",false);
+        Check((int)setAlias.Invoke(service,new object[]{second,"  Secondary  "})==0 && (int)setDefault.Invoke(service,new object[]{second})==0,"multiple account aliases and the default save together");
+        var next=type.GetMethod("NextTransferAccount",hidden);
+        var attempted=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"QUOTA@EXAMPLE.INVALID"};
+        Check((string)next.Invoke(service,new object[]{"quota@example.invalid",attempted})==second,"quota rotation wraps and skips disconnected and exhausted accounts");
+        attempted.Add(second);
+        Check((string)next.Invoke(service,new object[]{second,attempted})=="","exhausted rotation ends without trying an account twice or starting anonymously");
+        var reopened=Activator.CreateInstance(type,hidden,null,new object[]{folder},null);
+        Check(((System.Threading.Tasks.Task<int>)restore.Invoke(reopened,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==second,"explicit default survives a restart");
+        var lookup=type.GetMethod("GetStatus",hidden,null,new[]{typeof(string)},null);
+        var status=lookup.Invoke(reopened,new object[]{second.ToUpperInvariant()});
+        Check((string)status.GetType().GetField("AliasName",hidden).GetValue(status)=="Secondary" && !(bool)status.GetType().GetField("Remember",hidden).GetValue(status),"case-insensitive identity and alias persist without remembering a session");
+        var stored=File.ReadAllBytes(Path.Combine(folder,"accounts.dat"));
+        Check(!Encoding.UTF8.GetString(stored).Contains(session) && Encoding.UTF8.GetString(ProtectedData.Unprotect(stored,null,DataProtectionScope.CurrentUser)).Contains(session),"migrated remembered session is protected by Windows DPAPI");
+        Check(((System.Threading.Tasks.Task<int>)type.GetMethod("RemoveAsync",hidden).Invoke(reopened,new object[]{second})).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==first,"removing the default promotes the first remaining account");
     }
     static void PartialPersistenceAndCleanup(byte[] plain,string key) {
         string d=Path.Combine(root,"partial-persistence"); Directory.CreateDirectory(d);

@@ -1,3 +1,4 @@
+Imports System.Drawing
 Imports System.Threading
 Imports System.Windows.Forms
 
@@ -34,32 +35,42 @@ Partial Public Class Main
 
     Private Sub UpdateMegaAccountUi()
         If megaAccountStatus Is Nothing Then Return
-        Dim account = MegaAccountService.Current.GetStatus()
+        Dim service = MegaAccountService.Current
+        Dim account = service.GetStatus()
         Dim summary As String = MegaAccountForm.Summary(account)
         If megaAccountStatus.Text <> summary Then megaAccountStatus.Text = summary
         megaAccountStatus.ForeColor = ThemeManager.GetColor(If(account.QuotaReached OrElse account.NeedsLogin, "ErrorFore", "Muted"))
         If megaAccountMenu Is Nothing Then Return
-        Dim caption As String = Language.GetText(If(account.NeedsLogin, "MegaAccount_Reconnect", "MegaAccount_Login"))
-        If account.Email <> "" Then
-            Dim email = account.Email
-            caption = "MEGA: " & If(email.Length > 25, email.Substring(0, 24) & "…", email)
+        Dim hasDefault = Not String.IsNullOrEmpty(account.Email)
+        Dim caption = Language.GetText(If(account.NeedsLogin, "MegaAccount_Reconnect", "MegaAccount_Login"))
+        Dim fullCaption = caption
+        If hasDefault Then
+            fullCaption = "MEGA: " & account.DisplayName
+            caption = fullCaption
+            If TextRenderer.MeasureText(caption, megaAccountMenu.Font, Size.Empty, TextFormatFlags.NoPrefix).Width > LogicalToDeviceUnits(220) Then
+                caption = Language.GetText("MegaAccount_Manage")
+            End If
+        ElseIf service.GetAccounts().Count > 0 Then
+            caption = Language.GetText("MegaAccount_Manage")
+            fullCaption = caption
         End If
+        caption = caption.Replace("&", "&&")
         If megaAccountMenu.Text <> caption Then megaAccountMenu.Text = caption
-        megaAccountMenu.ToolTipText = If(account.Email = "", caption, account.Email)
-        megaAccountMenu.AccessibleName = If(account.Email = "", caption, Language.GetText("MegaAccount_Title") & ": " & account.Email)
-        megaAccountMenu.Enabled = Not account.Connecting
+        megaAccountMenu.ToolTipText = If(hasDefault AndAlso account.DisplayName <> account.Email, fullCaption & " (" & account.Email & ")", fullCaption)
+        megaAccountMenu.AccessibleName = If(hasDefault, Language.GetText("MegaAccount_Manage") & ": " & account.DisplayName, fullCaption)
+        megaAccountMenu.Enabled = Not service.IsRestoring
     End Sub
 
     Private Async Sub RestoreMegaAccount()
-        Dim result = Await MegaAccountService.Current.RestoreAsync()
-        If result = 0 AndAlso MegaAccountService.Current.Email <> "" Then Await MegaAccountService.Current.RefreshQuotaAsync()
+        Await MegaAccountService.Current.RestoreAsync()
     End Sub
 
     Private Async Sub OpenMegaAccount(sender As Object, e As EventArgs)
+        Dim signedInEmail As String
         Using dialog As New MegaAccountForm()
-            If dialog.ShowDialog(Me) = DialogResult.OK AndAlso MegaAccountService.Current.Email <> "" Then
-                Await MegaAccountService.Current.RefreshQuotaAsync()
-            End If
+            If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
+            signedInEmail = dialog.SignedInEmail
         End Using
+        Await MegaAccountService.Current.RefreshQuotaAsync(signedInEmail)
     End Sub
 End Class

@@ -11,7 +11,7 @@ Partial Public Class AddLinks
     Private addLinksStepLabel As Label
     Private addLinksFeedback As Label
     Private addLinksCancel As Button
-    Private chkMegaAccount As CheckBox
+    Private downloadIdentity As ComboBox
 
     Private Sub InitAddLinksLayout()
         ' Use the designer's Segoe UI 9 / 96-DPI baseline, before automatic scaling.
@@ -77,11 +77,11 @@ Partial Public Class AddLinks
         Dim options As New TableLayoutPanel With {
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 3, .RowCount = 4, .Margin = New Padding(0)}
+            .ColumnCount = 3, .RowCount = 5, .Margin = New Padding(0)}
         options.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
         options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
         options.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-        For row As Integer = 0 To 3
+        For row As Integer = 0 To 4
             options.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         Next
         For Each caption As Label In New Label() {Label2, Label1}
@@ -107,9 +107,7 @@ Partial Public Class AddLinks
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
             .WrapContents = True, .Margin = New Padding(0)}
-        chkMegaAccount = New CheckBox With {.AutoSize = True, .Text = Language.GetText("AddLinks_UseMegaAccount")}
-        AddHandler chkMegaAccount.CheckedChanged, AddressOf MegaAccountChoiceChanged
-        flags.Controls.AddRange(New Control() {chkStartDownload, chkCrearDirectorio, chkUnZip, chkMegaAccount})
+        flags.Controls.AddRange(New Control() {chkStartDownload, chkCrearDirectorio, chkUnZip})
         For Each flag As Control In flags.Controls
             flag.MinimumSize = Size.Empty
             flag.Margin = New Padding(0, 6, 16, 4)
@@ -129,6 +127,15 @@ Partial Public Class AddLinks
         passwordRow.Controls.AddRange(New Control() {lblPassword, txtPassword, LinkLabel2})
         options.Controls.Add(passwordRow, 0, 3)
         options.SetColumnSpan(passwordRow, 3)
+        Dim identityLabel As New Label With {.Text = Language.GetText("DownloadIdentity"), .AutoSize = True, .Anchor = AnchorStyles.Left}
+        downloadIdentity = New ComboBox With {.Name = "AddLinksDownloadIdentity", .AccessibleName = identityLabel.Text,
+                                              .Dock = DockStyle.Fill, .DropDownStyle = ComboBoxStyle.DropDownList}
+        UiStyles.SetRole(downloadIdentity, UiStyles.Role.InputSurface)
+        options.Controls.Add(identityLabel, 0, 4)
+        options.Controls.Add(downloadIdentity, 1, 4)
+        options.SetColumnSpan(downloadIdentity, 2)
+        LoadDownloadIdentities(MegaAccountService.Current.DefaultEmail)
+        AddHandler downloadIdentity.DropDown, Sub() LoadDownloadIdentities(previewMegaAccountEmail)
         OpcionesPaquete.Controls.Add(options)
         addLinksContent.Controls.Add(OpcionesPaquete, 0, 3)
 

@@ -31,20 +31,52 @@ Partial Public Class AddLinks
         PreflightProgress.Display(snapshot, lblLinkCount, preflightProgressBar, warmRequest.Started)
     End Sub
 
+    Private Class IdentityOption
+        Friend ReadOnly Email As String
+        Private ReadOnly caption As String
+
+        Friend Sub New(email As String, caption As String)
+            Me.Email = email
+            Me.caption = caption
+        End Sub
+
+        Public Overrides Function ToString() As String
+            Return caption
+        End Function
+    End Class
+
+    Private Sub LoadDownloadIdentities(selectedEmail As String)
+        RemoveHandler downloadIdentity.SelectedIndexChanged, AddressOf MegaAccountChoiceChanged
+        downloadIdentity.Items.Clear()
+        downloadIdentity.Items.Add(New IdentityOption("", Language.GetText("MegaAccount_Anonymous")))
+        Dim selectedIndex As Integer = 0
+        For Each status In MegaAccountService.Current.GetAccounts()
+            Dim caption = If(status.AliasName = "", status.Email, status.AliasName & " (" & status.Email & ")")
+            If Not status.SignedIn Then caption &= " · " & MegaAccountForm.Summary(status)
+            Dim index = downloadIdentity.Items.Add(New IdentityOption(status.Email, caption))
+            If String.Equals(status.Email, selectedEmail, StringComparison.OrdinalIgnoreCase) Then selectedIndex = index
+        Next
+        If selectedEmail <> "" AndAlso selectedIndex = 0 Then
+            selectedIndex = downloadIdentity.Items.Add(New IdentityOption(selectedEmail, selectedEmail & " · " & Language.GetText("MegaAccount_Reconnect")))
+        End If
+        downloadIdentity.SelectedIndex = selectedIndex
+        previewMegaAccountEmail = DirectCast(downloadIdentity.SelectedItem, IdentityOption).Email
+        AddHandler downloadIdentity.SelectedIndexChanged, AddressOf MegaAccountChoiceChanged
+    End Sub
+
     Private Sub MegaAccountChoiceChanged(sender As Object, e As EventArgs)
-        previewMegaAccountEmail = If(chkMegaAccount.Checked, MegaAccountService.Current.Email, "")
-        chkMegaAccount.Text = Language.GetText("AddLinks_UseMegaAccount") & If(String.IsNullOrEmpty(previewMegaAccountEmail), "", " (" & previewMegaAccountEmail & ")")
+        previewMegaAccountEmail = DirectCast(downloadIdentity.SelectedItem, IdentityOption).Email
         PreflightInputChanged()
         If preflightSession IsNot Nothing Then preflightSession.Dispose()
         preflightSession = Nothing
-        Dim needsLogin As Boolean = chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail)
-        ShowInputNotice(If(needsLogin, MegaAccountService.ErrorText(-15), ""), needsLogin)
+        Dim needsLogin As Boolean = previewMegaAccountEmail <> "" AndAlso Not MegaAccountService.Current.GetStatus(previewMegaAccountEmail).SignedIn
+        ShowInputNotice(If(needsLogin, MegaAccountService.ErrorText(MegaAccountService.SessionExpired), ""), needsLogin)
         UpdateLinkCount()
     End Sub
 
     Private Function CurrentPreflightRequest() As PreflightSession.Request
         If preflightSession Is Nothing Then
-            If chkMegaAccount.Checked Then
+            If previewMegaAccountEmail <> "" Then
                 Dim email As String = previewMegaAccountEmail
                 preflightSession = New PreflightSession(Function(url, token) InspectMegaAccountLink(url, email, token))
             Else
@@ -91,7 +123,7 @@ Partial Public Class AddLinks
                 lblLinkCount.Text = ""
                 Return
             End If
-            If chkMegaAccount.Checked AndAlso String.IsNullOrEmpty(previewMegaAccountEmail) Then
+            If previewMegaAccountEmail <> "" AndAlso Not MegaAccountService.Current.GetStatus(previewMegaAccountEmail).SignedIn Then
                 lblLinkCount.Text = ""
                 preflightProgressBar.Visible = False
                 Return

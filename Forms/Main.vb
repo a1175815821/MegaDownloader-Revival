@@ -422,7 +422,14 @@ Public Class Main
 
         If Config.ConfigUI.EstadoLista IsNot Nothing Then
             Log.WriteDebug("Restoring columns")
-            ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista)
+            If Not ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista) Then
+                ' Single-account builds saved ten columns. Restore their layout before adding the identity column.
+                ListaDescargas.AllColumns.Remove(queueIdentityColumn)
+                ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista)
+                ListaDescargas.AllColumns.Add(queueIdentityColumn)
+                PlaceQueueIdentityColumn()
+                ListaDescargas.RebuildColumns()
+            End If
         End If
 
         ' P0-1 UI:一次性列默认集(开 Progreso%、藏 Descargado、Estado 加宽)。只跑一次,不覆盖用户之后的手动调整。
@@ -736,6 +743,7 @@ Public Class Main
         Me.OlvColumnProgreso.Text = Language.GetText("Progress")
         Me.OlvColumnProgresoPorc.Text = Language.GetText("Progress %")
         Me.OlvColumnEstado.Text = Language.GetText("Status")
+        queueIdentityColumn.Text = Language.GetText("DownloadIdentity")
         Me.OlvColumnTamano.Text = Language.GetText("Size")
         Me.OlvColumnDescargado.Text = Language.GetText("Downloaded")
         Me.OlvColumnNombre.Text = Language.GetText("Name")
@@ -1203,6 +1211,37 @@ Public Class Main
 
 #Region "Columnas del ListView"
 
+    Private ReadOnly queueIdentityColumn As New BrightIdeasSoftware.OLVColumn With {.Name = "QueueDownloadIdentity", .Width = 124}
+    Private ReadOnly queueIdentityMenu As New ToolStripMenuItem With {.Name = "ChangeDownloadIdentity"}
+
+    Private Sub PlaceQueueIdentityColumn()
+        Dim position = OlvColumnEstado.DisplayIndex + 1
+        For Each column In ListaDescargas.AllColumns
+            If column IsNot queueIdentityColumn AndAlso column.IsVisible AndAlso column.DisplayIndex >= position Then
+                column.LastDisplayIndex = column.DisplayIndex + 1
+            End If
+        Next
+        queueIdentityColumn.LastDisplayIndex = position
+    End Sub
+
+    Private Shared Function QueueDownloadIdentityText(email As String) As String
+        If String.IsNullOrEmpty(email) Then Return Language.GetText("MegaAccount_Anonymous")
+        Dim status = MegaAccountService.Current.GetStatus(email)
+        Return "MEGA · " & If(String.IsNullOrEmpty(status.DisplayName), email, status.DisplayName)
+    End Function
+
+    Private Shared Function QueueDownloadIdentity(ele As IDescarga) As String
+        Dim file = TryCast(ele, Fichero)
+        If file IsNot Nothing Then Return QueueDownloadIdentityText(file.EffectiveMegaAccountEmail)
+        Dim package = TryCast(ele, Paquete)
+        If package Is Nothing OrElse package.ListaFicheros.Count = 0 Then Return ""
+        Dim email = package.ListaFicheros(0).EffectiveMegaAccountEmail
+        For Each child In package.ListaFicheros
+            If Not String.Equals(child.EffectiveMegaAccountEmail, email, StringComparison.OrdinalIgnoreCase) Then Return Language.GetText("MegaAccount_MixedIdentities")
+        Next
+        Return QueueDownloadIdentityText(email)
+    End Function
+
     ''' <summary>
     ''' Define el comportamiento de las columnas del listview
     ''' </summary>
@@ -1377,6 +1416,18 @@ Public Class Main
 
 
 
+        queueIdentityColumn.Text = Language.GetText("DownloadIdentity")
+        ListaDescargas.AllColumns.Add(queueIdentityColumn)
+        Dim identity As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(queueIdentityColumn)
+        identity.AspectGetter = AddressOf QueueDownloadIdentity
+        ListaDescargas.CellToolTipGetter = Function(column, model)
+                                              Dim file = TryCast(model, Fichero)
+                                              If column IsNot queueIdentityColumn OrElse file Is Nothing OrElse Not file.UsesMegaAccount Then Return Nothing
+                                              If file.MegaAccountTransferEmail = "" Then Return file.MegaAccountEmail
+                                              Return file.MegaAccountEmail & " → " & file.EffectiveMegaAccountEmail
+                                          End Function
+        PlaceQueueIdentityColumn()
+        ListaDescargas.RebuildColumns()
         ListaDescargas.AllowColumnReorder = True
 
         ListaDescargas.CanExpandGetter = Function(ele As Object)
@@ -2154,6 +2205,7 @@ Public Class Main
         ResetColumnsMenuItem.Name = "ResetColumnsMenuItem"
         sepBatchMenuItem.Name = "sepBatchMenuItem"
         sepColumnsMenuItem.Name = "sepColumnsMenuItem"
+        MenuDescarga.Items.Add(queueIdentityMenu)
         MenuDescarga.Items.Add(sepBatchMenuItem)
         MenuDescarga.Items.Add(RetryAllFailedMenuItem)
         MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
@@ -2163,6 +2215,7 @@ Public Class Main
     End Sub
 
     Private Sub UpdateBatchMenuTexts()
+        queueIdentityMenu.Text = Language.GetText("MegaAccount_UseForSelection")
         RetryAllFailedMenuItem.Text = Language.GetText("Retry all failed")
         If String.IsNullOrEmpty(RetryAllFailedMenuItem.Text) Then RetryAllFailedMenuItem.Text = "Retry all failed"
         RemoveAllFailedMenuItem.Text = Language.GetText("Remove all failed")
@@ -2285,6 +2338,7 @@ Public Class Main
             SetColumnWidthLimit(7, 55, 120)
             SetColumnWidthLimit(8, 55, 120)
             SetColumnWidthLimit(9, 55, 120)
+            SetColumnWidthLimit(10, 96, 320)
             ' 文件名列保持自动吃剩余空间(窗口拉宽不留白);"反向"手感由上下限兜底:它永远不会被压成 0。
             ListaDescargas.AllColumns(0).FillsFreeSpace = True
         Catch ex As Exception
@@ -2332,6 +2386,9 @@ Public Class Main
                     End Try
                 End If
             Next
+            queueIdentityColumn.IsVisible = True
+            queueIdentityColumn.Width = CInt(124 * GetUiScale())
+            PlaceQueueIdentityColumn()
             ListaDescargas.RebuildColumns()
             ThemeManager.RefreshListTheme(ListaDescargas)
             Log.WriteWarning("Applied column defaults (widths/order/visibility).")
@@ -3084,12 +3141,11 @@ Public Class Main
                 Next
             End If
             If _verifyInflight.Count >= VerifyMaxParallel Then Return
-            Dim accountConnecting As Boolean = MegaAccountService.Current.GetStatus().Connecting
             Dim picked As VerifyJob = Nothing
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each fic As Fichero In paq.ListaFicheros
-                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not accountConnecting AndAlso fic.DescargaEstado = Estado.EnCola,
+                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso fic.DescargaEstado = Estado.EnCola,
                                                       anonymousAllowed AndAlso fic.DescargaEstado <> Estado.Erroneo)
                         If canVerify AndAlso Not fic.DescargaProcesada AndAlso Not _verifyInflight.ContainsKey(fic) Then
                             picked = New VerifyJob()
@@ -3580,7 +3636,6 @@ Public Class Main
         Dim ResetearErroresPeriodo As Integer = Config.ResetearErroresPeriodoMinutos
         ' v2.5 beta: 配额熔断状态。配额期内不唤醒配额失败项、不开新任务；到期后配额失败项立即唤醒。
         Dim quotaHold As Boolean = MegaQuotaManager.IsQuarantined()
-        Dim accountConnecting As Boolean = MegaAccountService.Current.GetStatus().Connecting
         ' P1:配额到期唤醒必须独立于自愈开关。WakeQuotaFailedItems 的唯一旧出口藏在下面
         ' If ResetearErrores 分支里,用户关掉"失败自愈"后横幅消失、倒计时归零,失败项却永久停在
         ' Erroneo——发布说明承诺的行为静默失效。此处熔断解除边沿直接复用 WakeQuotaFailedItems。
@@ -3628,7 +3683,7 @@ Public Class Main
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not accountConnecting, Not quotaHold)
+                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not Fichero.IsMegaAccountConnecting, Not quotaHold)
                     If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
@@ -4986,10 +5041,64 @@ Public Class Main
                     VerProgresoDescompresionToolStripMenuItem.Visible = True
                 End If
             Next
+            PopulateQueueIdentityMenu()
             e.MenuStrip = MenuDescarga
         End If
     End Sub
 
+    Private Sub PopulateQueueIdentityMenu()
+        While queueIdentityMenu.DropDownItems.Count > 0
+            queueIdentityMenu.DropDownItems(0).Dispose()
+        End While
+        AddQueueIdentityMenuItem(Language.GetText("MegaAccount_Anonymous"), "")
+        For Each status In MegaAccountService.Current.GetAccounts()
+            If status.Connecting Then Continue For
+            Dim caption = If(status.AliasName = "", status.Email, status.AliasName & " (" & status.Email & ")")
+            AddQueueIdentityMenuItem(caption, status.Email)
+        Next
+    End Sub
+
+    Private Sub AddQueueIdentityMenuItem(caption As String, email As String)
+        Dim item As New ToolStripMenuItem(caption.Replace("&", "&&"))
+        AddHandler item.Click, Sub() ChangeSelectedDownloadIdentity(email)
+        queueIdentityMenu.DropDownItems.Add(item)
+    End Sub
+
+    Private Sub ChangeSelectedDownloadIdentity(email As String)
+        Dim files As New Generic.HashSet(Of Fichero)()
+        Dim problem As String = ""
+        SyncLock Mutex.ListaDescargas
+            For Each selected In ListaDescargas.SelectedObjects
+                Dim file = TryCast(selected, Fichero)
+                Dim package = TryCast(selected, Paquete)
+                If file IsNot Nothing Then files.Add(file)
+                If package IsNot Nothing Then files.UnionWith(package.ListaFicheros)
+            Next
+            SyncLock Mutex.FicheroDownloader
+                files.RemoveWhere(Function(file) file.DescargaEstado() = Estado.Completado)
+                For Each file In files
+                    If Not file.CanChangeDownloadIdentity() Then
+                        problem = "MegaAccount_QueueAccountInUse"
+                        Exit For
+                    End If
+                    If email <> "" AndAlso Fichero.GetMegaAccountLink(file.URL) Is Nothing Then
+                        problem = "MegaAccount_QueueOnlyFiles"
+                        Exit For
+                    End If
+                Next
+                If problem = "" Then
+                    For Each file In files
+                        file.ChangeDownloadIdentity(email)
+                    Next
+                End If
+            End SyncLock
+        End SyncLock
+        If problem <> "" Then
+            ToastForm.ShowToast(Me, Language.GetText(problem))
+        Else
+            RefreshListaDescargas(False)
+        End If
+    End Sub
 
     ''' <summary>
     ''' Agregamos links con el menú contextual

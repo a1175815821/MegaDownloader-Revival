@@ -41,9 +41,11 @@ public:
         progress(transfer->getTransferredBytes(), transfer->getTotalBytes(), transfer->getSpeed());
     }
 
-    void onTransferTemporaryError(MegaApi*, MegaTransfer*, MegaError* error) override
+    void onTransferTemporaryError(MegaApi* api, MegaTransfer* transfer, MegaError* error) override
     {
-        if (error->getErrorCode() == MegaError::API_EOVERQUOTA) overQuota = true;
+        // Queue cancellation on the SDK worker so it wakes even during quota backoff.
+        if (error->getErrorCode() == MegaError::API_EOVERQUOTA && !overQuota.exchange(true))
+            api->cancelTransfer(transfer);
     }
 
     std::atomic<bool> overQuota{false};
@@ -107,6 +109,30 @@ MD_EXPORT int md_quota(MegaApi* api, long long* used, long long* total)
     return MegaError::API_OK;
 }
 
+MD_EXPORT int md_account_details(MegaApi* api, int* plan, long long* storageUsed,
+                                  long long* storageTotal, long long* transferUsed, long long* transferTotal)
+{
+    *plan = -1;
+    *storageUsed = *storageTotal = *transferUsed = *transferTotal = -1;
+
+    SynchronousRequestListener request;
+    api->getAccountDetails(&request);
+    const int result = finish(request);
+    if (result != MegaError::API_OK) return result;
+    std::unique_ptr<MegaAccountDetails> details(request.getRequest()->getMegaAccountDetails());
+    if (!details) return MegaError::API_EINTERNAL;
+
+    *plan = details->getProLevel();
+    *storageUsed = details->getStorageUsed();
+    *storageTotal = details->getStorageMax();
+    const auto transferMax = details->getTransferMax();
+    // Free IP-based quota has no fixed allowance, and the SDK may mark its usage history invalid.
+    *transferTotal = transferMax > 0 ? transferMax : -1;
+    if (transferMax > 0 || details->isTemporalBandwidthValid())
+        *transferUsed = details->getTransferUsed();
+    return MegaError::API_OK;
+}
+
 MD_EXPORT int md_inspect(MegaApi* api, const char* link, char* name, int nameCapacity, long long* size)
 {
     std::unique_ptr<MegaNode> node;
@@ -131,8 +157,10 @@ MD_EXPORT int md_download(MegaApi* api, const char* link, const char* destinatio
                        MegaTransfer::COLLISION_RESOLUTION_NEW_WITH_N, false, &transfer);
     while (transfer.trywait(100) != 0)
     {
-        if (isCancelled() || transfer.overQuota) token->cancel();
+        if (isCancelled()) token->cancel();
     }
-    if (transfer.overQuota) return MegaError::API_EOVERQUOTA;
-    return transfer.getError()->getErrorCode();
+    const int transferResult = transfer.getError()->getErrorCode();
+    if (transferResult == MegaError::API_EINCOMPLETE && transfer.overQuota)
+        return MegaError::API_EOVERQUOTA;
+    return transferResult;
 }
