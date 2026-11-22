@@ -585,20 +585,19 @@ Public Class Configuration
         Dim servidorStreamingPuerto As Integer = 0
         Integer.TryParse(txtStreamingPort.Text, servidorStreamingPuerto)
 
-        Dim servidorWebTimeout As Integer = 5
-        Integer.TryParse(txtServidorWebTimeout.Text, servidorWebTimeout)
+        Dim servidorWebTimeout As Integer
+        Dim validWebTimeout As Boolean = Integer.TryParse(txtServidorWebTimeout.Text, servidorWebTimeout) AndAlso
+                                         servidorWebTimeout >= 0 AndAlso servidorWebTimeout <= 99
 
         If Not chkServidorWeb.Checked Then
             If servidorWebPuerto < 1024 Or servidorWebPuerto > 65535 Then
                 servidorWebPuerto = 0
             End If
-            If servidorWebTimeout < 0 Or servidorWebTimeout > 99 Then
-                servidorWebTimeout = 5
-            End If
+            If Not validWebTimeout Then servidorWebTimeout = 5
         ElseIf servidorWebPuerto < 1024 Or servidorWebPuerto > 65535 Or String.IsNullOrEmpty(txtServidorWebPort.Text) Then
             MessageBox.Show(Language.GetText("Invalid server port"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
-        ElseIf servidorWebTimeout < 0 Or servidorWebTimeout > 99 Or String.IsNullOrEmpty(txtServidorWebTimeout.Text) Then
+        ElseIf Not validWebTimeout Then
             MessageBox.Show(Language.GetText("The value for interrumpting the session must be between 0 and %A. A value of 0 means that session is not interrupted").Replace("%A", "99"), _
                             Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub

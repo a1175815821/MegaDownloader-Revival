@@ -114,7 +114,7 @@ Partial Public Class Main
     End Function
 
     Private Shared Function CloudQuotaBlocks(file As Fichero) As Boolean
-        If Not file.MegaDriveNodeHandle.HasValue Then Return False
+        If Not file.MegaDriveNodeHandle.HasValue OrElse file.HasRecordedMegaAccountOutput Then Return False
         Dim account = MegaAccountService.Current.GetStatus(file.MegaAccountEmail)
         Return account.SignedIn AndAlso account.QuotaReached
     End Function
@@ -174,7 +174,10 @@ Partial Public Class Main
     End Sub
 
     Private Async Sub RestoreMegaAccount()
-        Await MegaAccountService.Current.RestoreAsync()
+        Dim result = Await MegaAccountService.Current.RestoreAsync()
+        If result = MegaAccountService.LocalError AndAlso Not IsDisposed AndAlso Not Cerrando Then
+            ToastForm.ShowToast(Me, Language.GetText("MegaAccount_RestoreError"))
+        End If
     End Sub
 
     Private Async Sub OpenMegaDrive(sender As Object, e As EventArgs)

@@ -3743,7 +3743,8 @@ Public Class Main
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not Fichero.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(Fichero), Not quotaHold)
+                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount,
+                        Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
                     If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
@@ -3863,7 +3864,7 @@ Public Class Main
                 Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
                 Fichero.PausaIndividual = True
                 Fichero.Pause()
-                ThrottledStreamController.GetController.Abortar(Fichero.FileID)
+                If Not Fichero.UsesMegaAccount Then ThrottledStreamController.GetController.Abortar(Fichero.FileID)
             End If
         End SyncLock
     End Sub

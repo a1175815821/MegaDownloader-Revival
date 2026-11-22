@@ -1600,7 +1600,7 @@ public partial class RegressionTests {
             defaultEmail.SetValue(service,"");
         }
     }
-    static object MakeDriveFixture() {
+    static object MakeDriveFixture(string clipName="剪辑视频.mp4") {
         var assembly=typeof(Main).Assembly;
         var nodeType=assembly.GetType("MegaDownloader.MegaDriveNode",true);
         var snapshotType=assembly.GetType("MegaDownloader.MegaDriveSnapshot",true);
@@ -1608,7 +1608,7 @@ public partial class RegressionTests {
             new object[]{1UL,ulong.MaxValue,"Cloud Drive",true,0L,0L},
             new object[]{2UL,1UL,"课程素材",true,0L,1700000000L},
             new object[]{3UL,1UL,"工作资料",true,0L,1701000000L},
-            new object[]{4UL,2UL,"剪辑视频.mp4",false,4096L,1702000000L},
+            new object[]{4UL,2UL,clipName,false,4096L,1702000000L},
             new object[]{5UL,2UL,"练习包.zip",false,1024L,1703000000L},
             new object[]{6UL,2UL,"参考",true,0L,1704000000L},
             new object[]{7UL,6UL,"参考文档.pdf",false,2048L,1705000000L},
@@ -2506,6 +2506,95 @@ public partial class RegressionTests {
         MegaAccountStoreCases();
         MegaAccountRestoreErrorCases();
         MegaAccountRetryCases();
+        MegaAccountOutputRecoveryCases(direct);
+        MegaAccountSpeedPropertiesCases();
+    }
+    static void MegaAccountOutputRecoveryCases(string direct) {
+        const string email="disconnected@example.invalid";
+        string directory=Directory.CreateDirectory(Path.Combine(root,"account-output-recovery")).FullName;
+        const string name="archive.part1.rar";
+        string output=Path.Combine(directory,name);
+        File.WriteAllBytes(output,new byte[32]);
+        var handle=typeof(Fichero).GetField("MegaDriveNodeHandle",hidden);
+        var accountDownload=typeof(Fichero).GetField("accountDownload",hidden);
+        foreach(bool privateNode in new[]{false,true})using(var original=new Fichero(direct))using(var restored=new Fichero()) {
+            original.MegaAccountEmail=email;original.RutaLocal=directory;original.NombreFichero=name;original.TamanoBytes=32;
+            original.DescargaComenzada=true;original.DescargaProcesada=true;original.ExtraccionFicheroAutomatica=true;
+            original.BytesDescargados=32;original.Porcentaje=100;original.EstadoDescarga=Estado.EsperandoVolumenes;
+            if(privateNode)handle.SetValue(original,42UL);
+            typeof(Fichero).GetField("completedFileName",hidden).SetValue(original,name);
+            restored.CargarXML(original.GuardarXML(new System.Xml.XmlDocument(),true));
+            var package=new Paquete();package.AgregarFichero(restored);
+            typeof(Paquete).GetMethod("MarcarFicherosComoParados",shared).Invoke(null,new object[]{new List<Paquete>{package}});
+            Configuracion config=null;
+            restored.Start(ref config,1);
+            Check(SpinWait.SpinUntil(()=>accountDownload.GetValue(restored)==null,5000),"the account recovery worker completes");
+            Check(restored.EstadoDescarga==Estado.Descomprimiendo && restored.Porcentaje==100 && Directory.GetFiles(directory).Length==1,
+                  "an already delivered volume resumes extraction without an account session");
+            InvokePrivate(restored,"RemovePendingExtraction");
+            restored.ResetearDescarga();
+            restored.EstadoDescarga=Estado.EnCola;
+            restored.Start(ref config,1);
+            Check(SpinWait.SpinUntil(()=>accountDownload.GetValue(restored)==null,5000) && restored.EstadoDescarga==Estado.Erroneo,
+                  "an explicit full reset makes the task start a fresh transfer");
+        }
+        using(var file=new Fichero())using(var cancellation=new CancellationTokenSource()) {
+            file.MegaAccountEmail=email;file.RutaLocal=directory;file.NombreFichero=name;file.EstadoDescarga=Estado.Descargando;
+            handle.SetValue(file,42UL);
+            accountDownload.SetValue(file,cancellation);
+            InvokePrivate(QueueFixture(file),"PonerFicheroEnPausa",file);
+            Check(cancellation.IsCancellationRequested && file.PausaIndividual,"pausing a drive task with no file ID uses SDK cancellation");
+            accountDownload.SetValue(file,null);
+
+            string staging=(string)InvokePrivate(file,"PrivateMegaStagingPath");
+            string marker=staging+".owner";
+            string binding=new string('A',44);
+            File.WriteAllBytes(marker,new byte[0]);
+            using(var partial=(FileStream)InvokePrivate(file,"OpenPrivateMegaCheckpoint",staging,binding,32L)) {
+                Check(partial.Position==0 && File.ReadAllText(marker).EndsWith(binding),"retry replaces a torn marker with a complete binding");
+            }
+            file.ResetearDescarga();
+            File.WriteAllBytes(marker,new byte[0]);
+            file.ResetearDescarga();
+            Check(!File.Exists(marker) && !File.Exists(staging),"full reset removes a torn marker when no partial exists");
+            File.WriteAllBytes(marker,new byte[0]);
+            File.WriteAllText(staging,"unverified partial");
+            file.ResetearDescarga();
+            Check(File.Exists(marker) && File.ReadAllText(staging)=="unverified partial","reset keeps a partial whose ownership cannot be verified");
+        }
+        using(var file=new Fichero(direct)) {
+            file.RutaLocal=directory;file.NombreFichero=name;
+            string partial=FileDownloader.GetPartialFilePath(directory,name,file.PartialFileName);
+            string unrelated=Path.Combine(directory,name+".part");
+            File.WriteAllText(partial,"owned anonymous partial");
+            File.WriteAllText(unrelated,"unrelated legacy partial");
+            InvokePrivate(file,"ChangeDownloadIdentity",email);
+            file.MarcadoParaBorrarFicheroLocal=true;
+            file.BorrarFicheroLocal();
+            Check(!File.Exists(partial) && File.Exists(unrelated) && File.Exists(output),"account task deletion cleans its old anonymous partial only");
+        }
+    }
+    static void MegaAccountSpeedPropertiesCases() {
+        using(var account=new Fichero {MegaAccountEmail="speed@example.invalid",LimiteVelocidad=64,RutaLocal=root})
+        using(var anonymous=new Fichero {FileID="FIXSPEED",NombreFichero="speed.bin",RutaLocal=root,LimiteVelocidad=128}) {
+            var package=new Paquete {Nombre="mixed-speed",RutaLocal=root};
+            package.AgregarFichero(account);
+            foreach(IDescarga target in new IDescarga[]{account,package})using(var dialog=new PropiedadesDescarga()) {
+                dialog.Descarga=target;
+                InvokePrivate(dialog,"PropiedadesDescarga_Load",null,EventArgs.Empty);
+                Check(!dialog.Controls.Find("chkLimitarVelocidad",true).Single().Enabled,"account-only task and package disable the unsupported limit");
+            }
+            package.AgregarFichero(anonymous);
+            using(var dialog=new PropiedadesDescarga()) {
+                dialog.Descarga=package;
+                InvokePrivate(dialog,"PropiedadesDescarga_Load",null,EventArgs.Empty);
+                var limit=(System.Windows.Forms.CheckBox)dialog.Controls.Find("chkLimitarVelocidad",true).Single();
+                Check(limit.Enabled && limit.Checked,"a mixed package shows the anonymous task's existing limit");
+                limit.Checked=false;
+                InvokePrivate(dialog,"btnGuardar_Click",null,EventArgs.Empty);
+                Check(account.LimiteVelocidad==64 && anonymous.LimiteVelocidad==0,"mixed package saves speed changes only for anonymous tasks");
+            }
+        }
     }
     static void MegaAccountRestoreErrorCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
@@ -2687,7 +2776,7 @@ public partial class RegressionTests {
         var history=service.GetType().GetField("DriveHistory",hidden).GetValue(service);
         string delivered=Path.Combine(destination,"剪辑视频 (2).mp4");
         File.WriteAllBytes(delivered,new byte[4096]);
-        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,4UL,delivered});
+        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,4UL,"剪辑视频.mp4",delivered});
         File.WriteAllBytes(Path.Combine(destination,"练习包.zip"),new byte[10]);
         var queueType=typeof(Main).Assembly.GetType("MegaDownloader.MegaDriveQueueItem",true);
         var queue=Array.CreateInstance(queueType,1);
@@ -2699,6 +2788,11 @@ public partial class RegressionTests {
         Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==3072M,"incremental scan skips a recorded delivery even when collision-safe naming changed its filename");
         Check(((HashSet<ulong>)changesType.GetField("Pending",hidden).GetValue(changes)).SetEquals(new[]{5UL}) &&
               ((HashSet<ulong>)changesType.GetField("Updated",hidden).GetValue(changes)).SetEquals(new[]{5UL}),"incremental preview distinguishes pending tasks and changed local destinations");
+        var renamedSnapshot=MakeDriveFixture(Path.GetFileName(delivered));
+        var renamedPlan=renamedSnapshot.GetType().GetMethod("PlanDownload",hidden).Invoke(renamedSnapshot,new object[]{new[]{2UL},2UL});
+        var renamedChanges=find.Invoke(history,new[]{email,renamedPlan,destination,queue});
+        Check(((HashSet<ulong>)changesType.GetField("Updated",hidden).GetValue(renamedChanges)).Contains(4UL),
+              "a cloud rename is reported even when the new name equals a previous collision-suffixed local name");
         File.SetLastWriteTimeUtc(delivered,DateTime.UtcNow.AddDays(-2));
         changes=find.Invoke(history,new[]{email,plan,destination,queue});
         Check(((HashSet<ulong>)changesType.GetField("Updated",hidden).GetValue(changes)).Contains(4UL),"a locally modified recorded file reappears in the incremental plan");
@@ -2717,7 +2811,7 @@ public partial class RegressionTests {
         string existing=Path.Combine(destination,"Photos","old.jpg");
         Directory.CreateDirectory(Path.GetDirectoryName(existing));
         File.WriteAllBytes(existing,new byte[3]);
-        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,31UL,existing});
+        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,31UL,null,existing});
         var paths=new Dictionary<ulong,string>();
         changes=history.GetType().GetMethod("FindBoundChanges",hidden).Invoke(history,
             new object[]{email,changed,1UL,destination,Array.CreateInstance(queueType,0),paths});
@@ -2771,6 +2865,18 @@ public partial class RegressionTests {
         File.WriteAllText(keptHistory,"fixture");
         Check(((System.Threading.Tasks.Task<int>)type.GetMethod("RemoveAsync",hidden).Invoke(reopened,new object[]{second.ToUpperInvariant()})).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==first,"removing the default promotes the first remaining account");
         Check(!Directory.Exists(removedCache) && !File.Exists(removedHistory) && Directory.Exists(keptCache) && File.Exists(keptHistory),"account removal clears only the matching SDK cache and drive history");
+
+        string damagedFolder=Directory.CreateDirectory(Path.Combine(root,"damaged-account-store")).FullName;
+        string damagedPath=Path.Combine(damagedFolder,"accounts.dat");
+        byte[] damaged={1,2,3};
+        File.WriteAllBytes(damagedPath,damaged);
+        var damagedService=Activator.CreateInstance(type,hidden,null,new object[]{damagedFolder},null);
+        Check(((System.Threading.Tasks.Task<int>)restore.Invoke(damagedService,null)).GetAwaiter().GetResult()==-1003 &&
+              File.ReadAllBytes(damagedPath).SequenceEqual(damaged),"unreadable account settings return the storage error and stay on disk");
+        SeedMegaAccount(damagedService,first,"",true);
+        Check((int)setAlias.Invoke(damagedService,new object[]{first,"New alias"})==0 &&
+              File.ReadAllBytes(Directory.GetFiles(damagedFolder,"accounts.dat.*.bak").Single()).SequenceEqual(damaged),
+              "saving new account settings backs up the unreadable original");
     }
     static void PartialPersistenceAndCleanup(byte[] plain,string key) {
         string d=Path.Combine(root,"partial-persistence"); Directory.CreateDirectory(d);

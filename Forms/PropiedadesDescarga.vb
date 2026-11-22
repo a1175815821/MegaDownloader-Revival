@@ -24,6 +24,8 @@ Public Class PropiedadesDescarga
         txtNombre.Text = _Descarga.DescargaNombre
         ' P2-6: 载入时的限速快照(见字段说明)。限速以 KB 记,与 Fichero.LimiteVelocidad 同单位。
         Dim limiteInicialKB As Integer = 0
+        Dim hasAccountDownloads As Boolean
+        Dim hasAnonymousDownloads As Boolean
         If TypeOf (_Descarga) Is Fichero Then
             GroupBox1.Text = Language.GetText("File properties")
             Dim f As Fichero = CType(_Descarga, Fichero)
@@ -38,7 +40,9 @@ Public Class PropiedadesDescarga
                 btnExaminar.Enabled = False
             End If
 
-            chkLimitarVelocidad.Checked = (f.LimiteVelocidad > 0)
+            hasAccountDownloads = f.UsesMegaAccount
+            hasAnonymousDownloads = Not hasAccountDownloads
+            chkLimitarVelocidad.Checked = hasAnonymousDownloads AndAlso f.LimiteVelocidad > 0
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
             If chkLimitarVelocidad.Checked Then
                 txtLimiteVelocidad.Text = Utils.FormatSpeedLimit(f.LimiteVelocidad)
@@ -53,8 +57,11 @@ Public Class PropiedadesDescarga
             ' ⑨:包模式初始化各文件公共限速(全一致才显示),否则保持未勾选;
             ' 保存侧按"用户是否动过"判断(见字段说明),只改路径/密码不会静默清零文件限速。
             Try
+                hasAccountDownloads = p.ListaFicheros.Any(Function(file) file.UsesMegaAccount)
+                hasAnonymousDownloads = p.ListaFicheros.Any(Function(file) Not file.UsesMegaAccount)
                 Dim commonLimit As Integer = -1
                 For Each ff As Fichero In p.ListaFicheros
+                    If ff.UsesMegaAccount Then Continue For
                     If commonLimit = -1 Then
                         commonLimit = ff.LimiteVelocidad
                     ElseIf commonLimit <> ff.LimiteVelocidad Then
@@ -75,6 +82,13 @@ Public Class PropiedadesDescarga
                 txtLimiteVelocidad.Text = String.Empty
             End Try
             txtLimiteVelocidad.Enabled = chkLimitarVelocidad.Checked
+        End If
+        chkLimitarVelocidad.Enabled = hasAnonymousDownloads
+        If hasAccountDownloads Then
+            Dim notice As New Label With {.AutoSize = True,
+                .Location = New Drawing.Point(Label15.Right + 8, Label15.Top),
+                .ForeColor = ThemeManager.GetColor("Muted"), .Text = Language.GetText("MegaAccount_AnonymousSpeedLimit")}
+            GroupBox2.Controls.Add(notice)
         End If
         ' P2-6: 快照落地。保存时只有相对这份快照发生了变化才动限速,
         ' 这样"用户从没碰过"与"用户主动取消勾选"才能区分开。
@@ -228,7 +242,7 @@ Public Class PropiedadesDescarga
             f.SetDescargaExtraccionAutomatica(txtPassword.Text) = chkUnZip.Checked
             ' P2-6: 同样按"用户是否动过"判断,避免没碰限速时被回写
             ' (回写会因 MB→KB 的四舍五入产生微小漂移)。取消勾选 = 清除限速。
-            If limiteCambiado Then
+            If limiteCambiado AndAlso Not f.UsesMegaAccount Then
                 f.LimiteVelocidad = LimiteVelocidad
                 ' ③:单文件限速同为 KB,控制器要字节。
                 ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
@@ -270,14 +284,9 @@ Public Class PropiedadesDescarga
                 ' 取消勾选 = 统一清除。此前"未勾选=不覆写"让取消勾选完全无效
                 ' (限速纹丝不动,重开窗口复选框又变回勾选),与单文件分支
                 ' "未勾选=清零"的语义正好相反。
-                If limiteCambiado Then
-                    If chkLimitarVelocidad.Checked Then
-                        f.LimiteVelocidad = LimiteVelocidad
-                        ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
-                    Else
-                        f.LimiteVelocidad = 0
-                        ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, 0)
-                    End If
+                If limiteCambiado AndAlso Not f.UsesMegaAccount Then
+                    f.LimiteVelocidad = LimiteVelocidad
+                    ThrottledStreamController.GetController.SetMaxSpeed(f.FileID, CLng(LimiteVelocidad) * 1024L)
                 End If
             Next
             If txtRuta.Text <> p.RutaLocal Then

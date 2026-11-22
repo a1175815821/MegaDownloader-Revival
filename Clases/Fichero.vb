@@ -40,6 +40,12 @@ Public Class Fichero
         End Get
     End Property
 
+    Friend ReadOnly Property HasRecordedMegaAccountOutput As Boolean
+        Get
+            Return UsesMegaAccount AndAlso Porcentaje = 100D AndAlso Not String.IsNullOrEmpty(completedFileName)
+        End Get
+    End Property
+
     Friend ReadOnly Property UsesMegaAccount As Boolean
         Get
             Return MegaDriveNodeHandle.HasValue OrElse Not String.IsNullOrEmpty(MegaAccountEmail)
@@ -462,7 +468,8 @@ Public Class Fichero
 			' 界面入口会先在后台线程 PrepareOutputOwnership() 预热,这里通常命中缓存。
 			Dim completado As String = GetCompletedFileForDeletion()
 			Ruta = If(completado, String.Empty)
-			Dim parcial As String = If(UsesMegaAccount, Nothing, FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName))
+			Dim parcial As String = If(UsesMegaAccount AndAlso String.IsNullOrEmpty(Me.PartialFileName), Nothing,
+			                           FileDownloader.GetPartialFilePath(Me.RutaLocal, Me.NombreFichero, Me.PartialFileName))
 			SyncLock Mutex.DeletingFiles
 				Try
 					If Not String.IsNullOrEmpty(completado) Then
@@ -618,7 +625,11 @@ Public Class Fichero
         MegaAccountTransferEmail = ""
         If changeBackend Then
             DescargaProcesada = False
-            If UsesMegaAccount Then ResetMegaAccountProgress()
+            If UsesMegaAccount Then
+                ResetMegaAccountProgress()
+            Else
+                ThrottledStreamController.GetController.SetMaxSpeed(FileID, CLng(LimiteVelocidad) * 1024L)
+            End If
         End If
         If EstadoDescarga = Estado.Erroneo OrElse (changeBackend AndAlso EstadoDescarga = Estado.Pausado) Then EstadoDescarga = Estado.EnCola
     End Sub
@@ -679,7 +690,7 @@ Public Class Fichero
     End Sub
 
     Private Sub StartMegaAccountDownload()
-        If IsMegaAccountConnecting Then Return
+        If Not HasRecordedMegaAccountOutput AndAlso IsMegaAccountConnecting Then Return
         SyncLock Mutex.FicheroDownloader
             If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing OrElse
                (EstadoDescarga <> Estado.EnCola AndAlso EstadoDescarga <> Estado.Pausado) Then Return
@@ -689,7 +700,7 @@ Public Class Fichero
             Interlocked.Exchange(_cancellationNotified, 0)
             EstadoDescarga = Estado.CreandoLocal
             DescargaComenzada = True
-            If Not MegaDriveNodeHandle.HasValue Then ResetMegaAccountProgress()
+            If Not MegaDriveNodeHandle.HasValue AndAlso Not HasRecordedMegaAccountOutput Then ResetMegaAccountProgress()
             MegaDriveWaitingForQuota = False
             FailedByQuota = False
             NumeroConexionesAbiertas = 1
@@ -701,29 +712,46 @@ Public Class Fichero
         Dim token As CancellationToken = source.Token
         Dim staging As String = Nothing
         Dim output As String = Nothing
+        Dim cloudName As String = Nothing
         Dim code As Integer = 0
         Dim localFailure As Boolean = False
         Dim privateNode As Boolean = MegaDriveNodeHandle.HasValue
         Try
             token.ThrowIfCancellationRequested()
-            If privateNode Then
-                code = DownloadPrivateMegaFile(token, staging)
-            Else
-                code = DownloadPublicMegaAccountFile(token, staging)
-            End If
-            If code <> 0 Then Return
-            token.ThrowIfCancellationRequested()
-            If New System.IO.FileInfo(staging).Length <> TamanoBytes Then Throw New System.IO.IOException("Unexpected MEGA SDK output size.")
             SyncLock Mutex.FicheroDownloader
                 If accountCancelTarget.HasValue Then Return
-                output = DeliverMegaAccountFile(staging)
-                completedFileName = System.IO.Path.GetFileName(output)
-                NombreFichero = completedFileName
-                RecordVerifiedOutput(output)
-                BytesDescargados = TamanoBytes
-                Porcentaje = 100D
+                If HasRecordedMegaAccountOutput Then
+                    Dim candidate As New System.IO.FileInfo(CompletedOutputPath(completedFileName))
+                    If candidate.Exists AndAlso candidate.Length = TamanoBytes Then
+                        output = candidate.FullName
+                        NombreFichero = completedFileName
+                        BytesDescargados = TamanoBytes
+                        Porcentaje = 100D
+                    Else
+                        completedFileName = ""
+                    End If
+                End If
             End SyncLock
-            If privateNode Then MegaAccountService.Current.RecordDriveDelivery(MegaAccountEmail, MegaDriveNodeHandle.Value, output)
+            If output Is Nothing Then
+                If privateNode Then
+                    code = DownloadPrivateMegaFile(token, staging, cloudName)
+                Else
+                    code = DownloadPublicMegaAccountFile(token, staging)
+                End If
+                If code <> 0 Then Return
+                token.ThrowIfCancellationRequested()
+                If New System.IO.FileInfo(staging).Length <> TamanoBytes Then Throw New System.IO.IOException("Unexpected MEGA SDK output size.")
+                SyncLock Mutex.FicheroDownloader
+                    If accountCancelTarget.HasValue Then Return
+                    output = DeliverMegaAccountFile(staging)
+                    completedFileName = System.IO.Path.GetFileName(output)
+                    NombreFichero = completedFileName
+                    RecordVerifiedOutput(output)
+                    BytesDescargados = TamanoBytes
+                    Porcentaje = 100D
+                End SyncLock
+                If privateNode Then MegaAccountService.Current.RecordDriveDelivery(MegaAccountEmail, MegaDriveNodeHandle.Value, cloudName, output)
+            End If
             downloader_Completed(Nothing, EventArgs.Empty)
         Catch ex As OperationCanceledException
             code = -13
@@ -818,18 +846,18 @@ Public Class Fichero
         Loop
     End Function
 
-    Private Function DownloadPrivateMegaFile(token As CancellationToken, ByRef staging As String) As Integer
+    Private Function DownloadPrivateMegaFile(token As CancellationToken, ByRef staging As String, ByRef cloudName As String) As Integer
         Dim service = MegaAccountService.Current
         Dim email = EffectiveMegaAccountEmail
         Dim node = MegaDriveNodeHandle.Value
-        Dim name As String = Nothing, key As String = Nothing
+        Dim key As String = Nothing
         Dim size As Long
-        Dim code = service.InspectPrivateDownload(email, node, name, size, key)
+        Dim code = service.InspectPrivateDownload(email, node, cloudName, size, key)
         If code <> 0 Then Return code
         token.ThrowIfCancellationRequested()
-        If String.IsNullOrEmpty(name) OrElse size < 0 Then Return -2
+        If String.IsNullOrEmpty(cloudName) OrElse size < 0 Then Return -2
         SyncLock Mutex.FicheroDownloader
-            ApplyMegaAccountInfo(name, size)
+            ApplyMegaAccountInfo(cloudName, size)
         End SyncLock
 
         System.IO.Directory.CreateDirectory(RutaLocal)
@@ -939,11 +967,19 @@ Public Class Fichero
         Dim exists = PrivateMegaFileExists(staging)
         If stored Is Nothing Then
             If exists Then Throw New System.IO.IOException("MEGA checkpoint has no task ownership marker.")
-            Using marker = System.IO.File.Open(staging & ".owner", System.IO.FileMode.CreateNew, System.IO.FileAccess.Write, System.IO.FileShare.None)
-                Dim bytes = System.Text.Encoding.ASCII.GetBytes(PrivateMegaOwnerPrefix() & binding)
-                marker.Write(bytes, 0, bytes.Length)
-                marker.Flush(flushToDisk:=True)
-            End Using
+            DeleteIncompletePrivateMegaMarker(staging)
+            Dim owner = staging & ".owner"
+            Dim temp = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(staging), ".mega-owner-" & Guid.NewGuid().ToString("N") & ".tmp")
+            Try
+                Using marker = System.IO.File.Open(temp, System.IO.FileMode.CreateNew, System.IO.FileAccess.Write, System.IO.FileShare.None)
+                    Dim bytes = System.Text.Encoding.ASCII.GetBytes(PrivateMegaOwnerPrefix() & binding)
+                    marker.Write(bytes, 0, bytes.Length)
+                    marker.Flush(flushToDisk:=True)
+                End Using
+                System.IO.File.Move(temp, owner)
+            Finally
+                If System.IO.File.Exists(temp) Then System.IO.File.Delete(temp)
+            End Try
         End If
         Dim file = System.IO.File.Open(staging, If(exists, System.IO.FileMode.Open, System.IO.FileMode.CreateNew),
                                       System.IO.FileAccess.Write, System.IO.FileShare.Read)
@@ -975,8 +1011,27 @@ Public Class Fichero
         End Try
     End Sub
 
+    ' Older versions created the owner file before opening the partial. A torn
+    ' marker can be reclaimed if the partial was never created and the prefix matches.
+    Private Sub DeleteIncompletePrivateMegaMarker(staging As String)
+        Dim owner = staging & ".owner"
+        If Not PrivateMegaFileExists(owner) Then Return
+        Dim prefix = PrivateMegaOwnerPrefix()
+        Using file = System.IO.File.Open(owner, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read)
+            If file.Length >= prefix.Length + 44 Then Return
+            Using reader As New System.IO.StreamReader(file, System.Text.Encoding.ASCII, detectEncodingFromByteOrderMarks:=False)
+                Dim text = reader.ReadToEnd()
+                If Not prefix.StartsWith(text, StringComparison.Ordinal) AndAlso Not text.StartsWith(prefix, StringComparison.Ordinal) Then Return
+            End Using
+        End Using
+        System.IO.File.Delete(owner)
+    End Sub
+
     Private Sub DeletePrivateMegaCheckpoint(staging As String)
-        If ReadPrivateMegaBinding(staging) Is Nothing Then Return
+        If ReadPrivateMegaBinding(staging) Is Nothing Then
+            If Not PrivateMegaFileExists(staging) Then DeleteIncompletePrivateMegaMarker(staging)
+            Return
+        End If
         If PrivateMegaFileExists(staging) Then System.IO.File.Delete(staging)
         System.IO.File.Delete(staging & ".owner")
     End Sub
@@ -1017,11 +1072,17 @@ Public Class Fichero
         VelocidadKBs = CDec(Math.Max(0L, speed)) / 1024D
     End Sub
 
-    Private Function DeliverMegaAccountFile(staging As String) As String
-        Dim leaf As String = PathGuard.SanitizeFileName(NombreFichero, "file")
+    Friend Shared Function MegaAccountCollisionLeaf(leaf As String, suffix As Integer) As String
         Dim dot As Integer = leaf.LastIndexOf("."c)
         Dim ext As String = If(dot > 0, leaf.Substring(dot), "")
         Dim stem As String = If(dot > 0, leaf.Substring(0, dot), leaf)
+        Dim tail As String = " (" & suffix.ToString(Globalization.CultureInfo.InvariantCulture) & ")" & ext
+        Dim keep As Integer = 240 - tail.Length
+        Return If(keep < 1, Nothing, stem.Substring(0, Math.Min(stem.Length, keep)) & tail)
+    End Function
+
+    Private Function DeliverMegaAccountFile(staging As String) As String
+        Dim leaf As String = PathGuard.SanitizeFileName(NombreFichero, "file")
         Dim candidate As String = CompletedOutputPath(leaf)
         Dim suffix As Integer = 1
         Do
@@ -1034,10 +1095,7 @@ Public Class Fichero
                 End Try
             End If
             suffix += 1
-            Dim tail As String = " (" & suffix.ToString() & ")" & ext
-            Dim keep As Integer = 240 - tail.Length
-            Dim nextLeaf As String = If(keep < 1, Guid.NewGuid().ToString("N"), stem.Substring(0, Math.Min(stem.Length, Math.Max(0, keep))) & tail)
-            candidate = CompletedOutputPath(nextLeaf)
+            candidate = CompletedOutputPath(If(MegaAccountCollisionLeaf(leaf, suffix), Guid.NewGuid().ToString("N")))
         Loop
     End Function
 

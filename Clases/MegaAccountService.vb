@@ -78,6 +78,7 @@ Friend NotInheritable Class MegaAccountService
     Private ReadOnly accounts As New List(Of AccountEntry)()
     Private selectedDefault As String = ""
     Private restoring As Boolean
+    Private preserveUnreadableStore As Boolean
 
     Friend ReadOnly DriveHistory As MegaDriveHistory
 
@@ -159,9 +160,6 @@ Friend NotInheritable Class MegaAccountService
     End Function
 
     Friend Async Function RestoreAsync() As Task(Of Integer)
-        Dim legacyPath As String = Path.Combine(accountFolder, "login.dat")
-        Dim legacy As Boolean = Not File.Exists(storePath) AndAlso File.Exists(legacyPath)
-        If Not legacy AndAlso Not File.Exists(storePath) Then Return 0
         SyncLock gate
             If restoring OrElse accounts.Count > 0 Then Return Busy
             restoring = True
@@ -169,8 +167,14 @@ Friend NotInheritable Class MegaAccountService
         RaiseEvent Changed(Me, EventArgs.Empty)
         Dim pending As List(Of AccountEntry)
         Try
-            pending = Await Task.Run(Function() LoadSavedAccounts(legacyPath, legacy)).ConfigureAwait(False)
+            pending = Await Task.Run(AddressOf LoadSavedAccounts).ConfigureAwait(False)
+            SyncLock gate
+                preserveUnreadableStore = False
+            End SyncLock
         Catch ex As Exception When IsStorageError(ex)
+            SyncLock gate
+                preserveUnreadableStore = True
+            End SyncLock
             Return LocalError
         Finally
             SyncLock gate
@@ -183,16 +187,28 @@ Friend NotInheritable Class MegaAccountService
         Return results.FirstOrDefault(Function(result) result <> 0)
     End Function
 
-    Private Function LoadSavedAccounts(legacyPath As String, legacy As Boolean) As List(Of AccountEntry)
+    Private Function LoadSavedAccounts() As List(Of AccountEntry)
+        Dim legacyPath As String = Path.Combine(accountFolder, "login.dat")
+        Dim legacy As Boolean = False
         Dim store As AccountStore
-        If legacy Then
-            Dim saved = ReadProtected(Of SavedLogin)(legacyPath)
-            store = New AccountStore With {.DefaultEmail = saved.Email, .Accounts = New List(Of SavedLogin) From {saved}}
-        Else
+        Dim pending As New List(Of AccountEntry)()
+        Try
             store = ReadProtected(Of AccountStore)(storePath)
+        Catch ex As IOException When TypeOf ex Is FileNotFoundException OrElse TypeOf ex Is DirectoryNotFoundException
+            Dim saved As SavedLogin
+            Try
+                saved = ReadProtected(Of SavedLogin)(legacyPath)
+            Catch missing As IOException When TypeOf missing Is FileNotFoundException OrElse TypeOf missing Is DirectoryNotFoundException
+                Return pending
+            End Try
+            legacy = True
+            store = New AccountStore With {.DefaultEmail = saved?.Email, .Accounts = New List(Of SavedLogin) From {saved}}
+        End Try
+        If store Is Nothing OrElse store.Accounts Is Nothing OrElse
+           store.Accounts.Any(Function(saved) saved Is Nothing OrElse String.IsNullOrWhiteSpace(saved.Email)) Then
+            Throw New InvalidDataException("Invalid saved MEGA account list.")
         End If
         Dim sessionAvailable As Boolean = Availability() = 0
-        Dim pending As New List(Of AccountEntry)()
         SyncLock gate
             For Each saved In store.Accounts
                 Dim entry As New AccountEntry With {
@@ -317,10 +333,10 @@ Friend NotInheritable Class MegaAccountService
         Return result
     End Function
 
-    Friend Sub RecordDriveDelivery(email As String, node As ULong, output As String)
+    Friend Sub RecordDriveDelivery(email As String, node As ULong, cloudName As String, output As String)
         SyncLock gate
             Dim entry = FindAccount(email)
-            If entry IsNot Nothing AndAlso entry.Saved Then DriveHistory.Record(email, node, output)
+            If entry IsNot Nothing AndAlso entry.Saved Then DriveHistory.Record(email, node, cloudName, output)
         End SyncLock
     End Sub
 
@@ -473,10 +489,12 @@ Friend NotInheritable Class MegaAccountService
             Directory.CreateDirectory(accountFolder)
             File.WriteAllBytes(tempPath, ProtectedData.Protect(bytes, Nothing, DataProtectionScope.CurrentUser))
             If File.Exists(storePath) Then
-                File.Replace(tempPath, storePath, Nothing)
+                Dim backup = If(preserveUnreadableStore, storePath & "." & Guid.NewGuid().ToString("N") & ".bak", Nothing)
+                File.Replace(tempPath, storePath, backup)
             Else
                 File.Move(tempPath, storePath)
             End If
+            preserveUnreadableStore = False
             Return 0
         Catch ex As Exception When IsStorageError(ex)
             Return LocalError

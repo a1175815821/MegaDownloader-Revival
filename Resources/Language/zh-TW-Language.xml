@@ -91,6 +91,8 @@
   <Text key="MegaAccount_BackendMissing"><![CDATA[此版本未包含 Windows x64 MEGA 帳號模組，仍可匿名下載。]]></Text>
   <Text key="MegaAccount_Busy"><![CDATA[請等待目前的 MEGA 操作完成，或先停止帳號下載。]]></Text>
   <Text key="MegaAccount_LocalError"><![CDATA[無法讀取或儲存此裝置上的 MEGA 帳號設定。]]></Text>
+  <Text key="MegaAccount_RestoreError"><![CDATA[無法讀取已儲存的 MEGA 帳號。原設定檔已保留。]]></Text>
+  <Text key="MegaAccount_AnonymousSpeedLimit"><![CDATA[僅對匿名下載生效]]></Text>
   <Text key="MegaAccount_AuthenticationFailed"><![CDATA[MEGA 登入失敗。請檢查電子郵件、密碼和驗證碼。]]></Text>
   <Text key="MegaAccount_FileUnavailable"><![CDATA[MEGA 無法開啟此公開檔案。請檢查連結及其金鑰。]]></Text>
   <Text key="MegaAccount_RequestFailed"><![CDATA[MEGA 未能完成請求（錯誤 %N%）。]]></Text>

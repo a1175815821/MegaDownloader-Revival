@@ -33,6 +33,7 @@ End Class
 Friend NotInheritable Class MegaDriveHistory
     Private NotInheritable Class Delivery
         Public Property Handle As ULong
+        Public Property CloudName As String
         Public Property LocalPath As String
         Public Property Bytes As Long
         Public Property WriteUtcTicks As Long
@@ -50,10 +51,10 @@ Friend NotInheritable Class MegaDriveHistory
         Return Path.Combine(folder, key & ".jsonl")
     End Function
 
-    Friend Sub Record(email As String, handle As ULong, output As String)
+    Friend Sub Record(email As String, handle As ULong, cloudName As String, output As String)
         Try
             Dim info As New FileInfo(output)
-            Dim entry As New Delivery With {.Handle = handle, .LocalPath = info.FullName, .Bytes = info.Length,
+            Dim entry As New Delivery With {.Handle = handle, .CloudName = cloudName, .LocalPath = info.FullName, .Bytes = info.Length,
                                            .WriteUtcTicks = info.LastWriteTimeUtc.Ticks}
             Dim line = JsonConvert.SerializeObject(entry)
             SyncLock gate
@@ -98,6 +99,15 @@ Friend NotInheritable Class MegaDriveHistory
     Private Shared Function LocalFileMatches(path As String, bytes As Long, Optional writeUtcTicks As Long? = Nothing) As Boolean
         Dim info As New FileInfo(path)
         Return info.Exists AndAlso info.Length = bytes AndAlso (Not writeUtcTicks.HasValue OrElse info.LastWriteTimeUtc.Ticks = writeUtcTicks.Value)
+    End Function
+
+    Private Shared Function MatchesLegacyDeliveryName(cloudName As String, localName As String) As Boolean
+        Dim leaf = PathGuard.SanitizeFileName(cloudName, "file")
+        If String.Equals(leaf, localName, StringComparison.Ordinal) Then Return True
+        Dim suffix = System.Text.RegularExpressions.Regex.Match(localName, " \(([0-9]+)\)(?:\.[^.]*)?\z")
+        Dim number As Integer
+        Return suffix.Success AndAlso Integer.TryParse(suffix.Groups(1).Value, number) AndAlso number >= 2 AndAlso
+            String.Equals(Fichero.MegaAccountCollisionLeaf(leaf, number), localName, StringComparison.Ordinal)
     End Function
 
     Private Shared Function IsInDirectory(candidate As String, canonicalDirectory As String) As Boolean
@@ -170,11 +180,14 @@ Friend NotInheritable Class MegaDriveHistory
                     destinations.Add(file.Value, parent)
                 End If
                 Dim previous = delivered(node.Id).Where(Function(item) IsInDirectory(Path.GetDirectoryName(item.LocalPath), parent)).ToArray()
-                If previous.Any(Function(item) item.Bytes = node.Bytes AndAlso LocalFileMatches(item.LocalPath, item.Bytes, item.WriteUtcTicks)) Then Return False
+                If previous.Any(Function(item) item.Bytes = node.Bytes AndAlso
+                    If(item.CloudName Is Nothing, MatchesLegacyDeliveryName(node.Name, Path.GetFileName(item.LocalPath)),
+                       String.Equals(item.CloudName, node.Name, StringComparison.Ordinal)) AndAlso
+                    LocalFileMatches(item.LocalPath, item.Bytes, item.WriteUtcTicks)) Then Return False
                 Dim tasks = queued(node.Id).Where(Function(item) IsInDirectory(item.LocalDirectory, parent)).ToArray()
                 ' Queue entries from before delivery history was introduced can still account for existing files.
                 If previous.Length = 0 AndAlso tasks.Any(Function(item) item.Completed AndAlso item.Bytes = node.Bytes AndAlso
-                    LocalFileMatches(Path.Combine(parent, item.FileName), node.Bytes)) Then Return False
+                    MatchesLegacyDeliveryName(node.Name, item.FileName) AndAlso LocalFileMatches(Path.Combine(parent, item.FileName), node.Bytes)) Then Return False
                 If tasks.Any(Function(item) Not item.Completed) Then pending.Add(node.Id)
                 If previous.Length > 0 OrElse IO.File.Exists(PathGuard.GetSafeFilePathUnderRoot(parent, node.Name)) Then updated.Add(node.Id)
                 Return True

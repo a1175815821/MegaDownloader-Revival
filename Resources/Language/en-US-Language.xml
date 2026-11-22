@@ -91,6 +91,8 @@
   <Text key="MegaAccount_BackendMissing"><![CDATA[This build does not include the Windows x64 MEGA account module. Anonymous downloads are still available.]]></Text>
   <Text key="MegaAccount_Busy"><![CDATA[Wait for the current MEGA operation or stop the account downloads first.]]></Text>
   <Text key="MegaAccount_LocalError"><![CDATA[The MEGA account settings could not be read or saved.]]></Text>
+  <Text key="MegaAccount_RestoreError"><![CDATA[Could not read your saved MEGA accounts. The original settings file was kept.]]></Text>
+  <Text key="MegaAccount_AnonymousSpeedLimit"><![CDATA[Anonymous downloads only]]></Text>
   <Text key="MegaAccount_AuthenticationFailed"><![CDATA[MEGA could not sign you in. Check your email, password and verification code.]]></Text>
   <Text key="MegaAccount_FileUnavailable"><![CDATA[MEGA could not open this public file. Check the link and its key.]]></Text>
   <Text key="MegaAccount_RequestFailed"><![CDATA[MEGA did not complete the request (error %N%).]]></Text>
