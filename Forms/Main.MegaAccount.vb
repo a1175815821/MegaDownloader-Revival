@@ -53,7 +53,7 @@ Partial Public Class Main
             Dim result = Await service.RefreshQuotaAsync(account.Key)
             If IsDisposed OrElse Cerrando Then Return
             If result <> 0 Then
-                ToastForm.ShowToast(Me, MegaAccountService.ErrorText(result))
+                ToastForm.ShowToast(Me, MegaAccountService.ErrorText(result, connecting:=True))
                 Continue For
             End If
             Dim info = service.GetStatus(account.Key)
@@ -91,6 +91,16 @@ Partial Public Class Main
         If file.DescargaEstado() <> Estado.EnCola AndAlso file.DescargaEstado() <> Estado.Pausado Then Return Nothing
         Dim account = MegaAccountService.Current.GetStatus(file.MegaAccountEmail)
         Return If(account.SignedIn AndAlso account.QuotaReached, CloudQuotaText(account), Nothing)
+    End Function
+
+    Private Shared Function CanRetryMegaAccountFailure(file As Fichero, retryDue As Boolean, autoRetry As Boolean) As Boolean
+        If file.PausaIndividual Then Return False
+        Dim status = MegaAccountService.Current.GetStatus(file.EffectiveMegaAccountEmail)
+        If Not status.SignedIn OrElse status.Connecting OrElse status.QuotaReached Then Return False
+        If file.FailedByQuota Then Return Not status.QuotaDelayUnknown OrElse retryDue
+        Dim code = file.MegaAccountErrorCode.GetValueOrDefault()
+        Return code = MegaAccountService.SessionExpired OrElse code = MegaAccountService.Busy OrElse
+            (autoRetry AndAlso retryDue AndAlso Fichero.IsTransientMegaAccountError(code))
     End Function
 
     Private Shared Function CloudQuotaBlocks(file As Fichero) As Boolean

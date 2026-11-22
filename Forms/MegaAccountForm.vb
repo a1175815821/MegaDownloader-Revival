@@ -22,6 +22,7 @@ Friend NotInheritable Class MegaAccountForm
 
     Private roster As ListBox
     Private accounts As New List(Of MegaAccountService.Status)
+    Private ReadOnly refreshingDetails As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
     Private updatingRoster As Boolean
     Private selectedEmail As String
     Private details As TableLayoutPanel
@@ -173,7 +174,7 @@ Friend NotInheritable Class MegaAccountForm
         removeAccount = MakeButton("MegaAccount_Remove", UiStyles.Role.QuietButton)
         AddHandler makeDefault.Click, Sub() ShowResult(account.SetDefault(selectedEmail))
         AddHandler signInAgain.Click, Sub() OpenSignIn(SelectedAccount())
-        AddHandler refreshDetails.Click, Async Sub() Await RunAccountOperationAsync(account.RefreshQuotaAsync(selectedEmail))
+        AddHandler refreshDetails.Click, Async Sub() Await RefreshDetailsAsync(selectedEmail)
         AddHandler signOut.Click, Async Sub() Await RunAccountOperationAsync(account.LogoutAsync(selectedEmail))
         AddHandler removeAccount.Click, AddressOf RemoveSelected
         AddRow(details, MakeButtons(FlowDirection.LeftToRight, makeDefault, signInAgain, refreshDetails))
@@ -352,14 +353,10 @@ Friend NotInheritable Class MegaAccountForm
 
     Private Sub UpdateManagerButtons()
         Dim status = SelectedAccount()
-        Dim idle = Not working AndAlso Not account.IsRestoring
-        Dim canEdit = idle AndAlso Not String.IsNullOrEmpty(status.Email) AndAlso Not status.Connecting
-        roster.Enabled = Not working
-        dismiss.Enabled = Not working
-        addAccount.Enabled = idle
+        Dim canEdit = Not String.IsNullOrEmpty(status.Email) AndAlso Not status.Connecting
         makeDefault.Enabled = canEdit AndAlso Not SameEmail(status.Email, account.DefaultEmail)
         signInAgain.Enabled = canEdit
-        refreshDetails.Enabled = canEdit AndAlso status.SignedIn
+        refreshDetails.Enabled = canEdit AndAlso status.SignedIn AndAlso Not refreshingDetails.Contains(status.Email)
         signOut.Enabled = canEdit AndAlso status.SignedIn
         removeAccount.Enabled = canEdit
         aliasInput.Enabled = canEdit
@@ -372,16 +369,24 @@ Friend NotInheritable Class MegaAccountForm
     End Sub
 
     Private Async Function RunAccountOperationAsync(operation As Task(Of Integer)) As Task
-        working = True
+        message.Text = ""
+        Dim result = Await operation
+        If Not IsDisposed Then ShowResult(result)
+    End Function
+
+    Private Async Function RefreshDetailsAsync(email As String) As Task
+        If Not refreshingDetails.Add(email) Then Return
         message.Text = ""
         UpdateManagerButtons()
-        Dim result As Integer
         Try
-            result = Await operation
+            Dim result = Await account.RefreshQuotaAsync(email)
+            If Not IsDisposed AndAlso SameEmail(email, selectedEmail) Then
+                message.Text = If(result = 0, "", MegaAccountService.ErrorText(result, connecting:=True))
+            End If
         Finally
-            working = False
+            refreshingDetails.Remove(email)
+            If Not IsDisposed Then UpdateManagerButtons()
         End Try
-        ShowResult(result)
     End Function
 
     Private Async Sub RemoveSelected(sender As Object, e As EventArgs)
@@ -399,7 +404,7 @@ Friend NotInheritable Class MegaAccountForm
             signedInEmail = dialog.SignedInEmail
         End Using
         RefreshAccounts(signedInEmail)
-        Await RunAccountOperationAsync(account.RefreshQuotaAsync(signedInEmail))
+        Await RefreshDetailsAsync(signedInEmail)
     End Sub
 
     Private Sub SetLoginWorking(value As Boolean)

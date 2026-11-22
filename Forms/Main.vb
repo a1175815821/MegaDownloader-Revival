@@ -3700,36 +3700,28 @@ Public Class Main
         End Try
         quotaHoldPrev = quotaHold
 
-        ' Reset de descargas erroneas
-        ' 突破模式下配额失败项不依赖自愈开关(否则关掉自愈=突破模式静默失效);
-        ' 普通失败仍只跟自愈开关,用户关掉就不再碰。
-        If ResetearErrores OrElse MegaQuotaManager.IsBreakthroughMode() Then
-            SyncLock Mutex.ListaDescargas
-                For Each paq As Paquete In Me.ListaPaquetes
-                    For Each Fichero As Fichero In paq.ListaFicheros
-                        If Not Fichero.UsesMegaAccount AndAlso Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                            If Fichero.FailedByQuota Then
-                                If MegaQuotaManager.IsBreakthroughMode() Then
-                                    ' 突破模式:无熔断,按普通失败的自愈节拍复活(旧版行为)。
-                                    ' 禁止紧循环:此前无时间门,每调度节拍复活一次,锤得比旧版凶数百倍。
-                                    If Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then ColaReseteo.Add(Fichero)
-                                ElseIf Not quotaHold Then
-                                    ColaReseteo.Add(Fichero)
-                                End If
-                            ElseIf ResetearErrores AndAlso (Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now) Then
-                                ColaReseteo.Add(Fichero)
-                            End If
-                        End If
-                    Next
-                Next
-            End SyncLock
-            For Each Fichero In ColaReseteo
-                ' P0-1:自愈保留断点续传,不删 .part/不清分块(否则大文件超时后无限重下)。
-                Fichero.ResetearDescarga(True)
-                Fichero.SetDescargaEstado = Estado.EnCola
-                Log.WriteInfo("Reseting file " & Fichero.FileID & " automatically.")
+        Dim breakthrough = MegaQuotaManager.IsBreakthroughMode()
+        Dim retryBefore = Now.AddMinutes(-Math.Max(1, ResetearErroresPeriodo))
+        SyncLock Mutex.ListaDescargas
+            For Each Fichero In ListaPaquetes.SelectMany(Function(package) package.ListaFicheros)
+                If Fichero.DescargaEstado <> Estado.Erroneo OrElse Fichero.EsErrorPermanente Then Continue For
+                Dim retryDue = Fichero.FechaUltimoError.GetValueOrDefault() < retryBefore
+                If Fichero.UsesMegaAccount Then
+                    If CanRetryMegaAccountFailure(Fichero, retryDue, ResetearErrores) Then ColaReseteo.Add(Fichero)
+                ElseIf ResetearErrores OrElse breakthrough Then
+                    If Fichero.FailedByQuota Then
+                        If If(breakthrough, retryDue, Not quotaHold) Then ColaReseteo.Add(Fichero)
+                    ElseIf ResetearErrores AndAlso retryDue Then
+                        ColaReseteo.Add(Fichero)
+                    End If
+                End If
             Next
-        End If
+        End SyncLock
+        For Each Fichero In ColaReseteo
+            Fichero.ResetearDescarga(preserveProgress:=True)
+            Fichero.SetDescargaEstado = Estado.EnCola
+            Log.WriteInfo("Retrying file " & Fichero.FileID & " automatically.")
+        Next
 
 
         SyncLock Mutex.ListaDescargas

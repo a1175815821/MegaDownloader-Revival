@@ -66,6 +66,16 @@ Friend NotInheritable Class MegaDriveHistory
         End Try
     End Sub
 
+    Friend Sub RemoveAccount(email As String)
+        SyncLock gate
+            Try
+                File.Delete(AccountFile(email))
+            Catch ex As DirectoryNotFoundException
+                ' No history has been recorded yet.
+            End Try
+        End SyncLock
+    End Sub
+
     Private Function ReadDeliveries(email As String) As ILookup(Of ULong, Delivery)
         Dim delivered As New Dictionary(Of String, Delivery)(StringComparer.OrdinalIgnoreCase)
         Dim history = AccountFile(email)

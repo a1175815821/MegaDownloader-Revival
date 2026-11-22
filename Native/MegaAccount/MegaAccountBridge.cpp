@@ -48,12 +48,17 @@ public:
 
     void onTransferTemporaryError(MegaApi* api, MegaTransfer* transfer, MegaError* error) override
     {
-        // Queue cancellation on the SDK worker so it wakes even during quota backoff.
-        if (error->getErrorCode() == MegaError::API_EOVERQUOTA && !overQuota.exchange(true))
+        if (error->getErrorCode() == MegaError::API_EOVERQUOTA && !overQuota)
+        {
+            quotaWaitSeconds = error->getValue();
+            overQuota = true;
+            // Queue cancellation on the SDK worker so it wakes even during quota backoff.
             api->cancelTransfer(transfer);
+        }
     }
 
     std::atomic<bool> overQuota{false};
+    long long quotaWaitSeconds = 0;
 private:
     Progress progress;
 };
@@ -175,7 +180,7 @@ int describeFile(MegaNode& node, char* name, int nameCapacity, long long* size)
 }
 
 int downloadFile(MegaApi* api, MegaNode* node, const char* destination,
-                 Progress progress, IsCancelled isCancelled)
+                 Progress progress, IsCancelled isCancelled, long long& quotaWaitSeconds)
 {
     if (isCancelled()) return MegaError::API_EINCOMPLETE;
     std::unique_ptr<MegaCancelToken> token(MegaCancelToken::createInstance());
@@ -187,10 +192,14 @@ int downloadFile(MegaApi* api, MegaNode* node, const char* destination,
     {
         if (isCancelled()) token->cancel();
     }
-    const int transferResult = transfer.getError()->getErrorCode();
-    if (transferResult == MegaError::API_EINCOMPLETE && transfer.overQuota)
+    const int result = transfer.getError()->getErrorCode();
+    if (result == MegaError::API_EOVERQUOTA || (result == MegaError::API_EINCOMPLETE && transfer.overQuota))
+    {
+        const auto seconds = transfer.overQuota ? transfer.quotaWaitSeconds : transfer.getError()->getValue();
+        quotaWaitSeconds = seconds > 0 ? seconds : api->getBandwidthOverquotaDelay();
         return MegaError::API_EOVERQUOTA;
-    return transferResult;
+    }
+    return result;
 }
 }
 
@@ -201,12 +210,21 @@ MD_EXPORT int md_inspect(MegaApi* api, const char* link, char* name, int nameCap
     return result == MegaError::API_OK ? describeFile(*node, name, nameCapacity, size) : result;
 }
 
+MD_EXPORT int md_download_with_quota(MegaApi* api, const char* link, const char* destination,
+                                      Progress progress, IsCancelled isCancelled, long long* quotaWaitSeconds)
+{
+    *quotaWaitSeconds = 0;
+    std::unique_ptr<MegaNode> node;
+    const int result = publicFile(*api, link, node);
+    if (result == MegaError::API_EOVERQUOTA) *quotaWaitSeconds = api->getBandwidthOverquotaDelay();
+    return result == MegaError::API_OK ? downloadFile(api, node.get(), destination, progress, isCancelled, *quotaWaitSeconds) : result;
+}
+
 MD_EXPORT int md_download(MegaApi* api, const char* link, const char* destination,
                            Progress progress, IsCancelled isCancelled)
 {
-    std::unique_ptr<MegaNode> node;
-    const int result = publicFile(*api, link, node);
-    return result == MegaError::API_OK ? downloadFile(api, node.get(), destination, progress, isCancelled) : result;
+    long long quotaWaitSeconds;
+    return md_download_with_quota(api, link, destination, progress, isCancelled, &quotaWaitSeconds);
 }
 
 MD_EXPORT int md_list_drive(MegaApi* api, DriveNode visit, MegaHandle* rootHandle)
@@ -251,7 +269,8 @@ MD_EXPORT int md_download_node(MegaApi* api, MegaHandle handle, const char* dest
 {
     if (!api->isLoggedIn()) return MegaError::API_ESID;
     std::unique_ptr<MegaNode> node(api->getNodeByHandle(handle));
-    return node && node->isFile() ? downloadFile(api, node.get(), destination, progress, isCancelled) : MegaError::API_ENOENT;
+    long long quotaWaitSeconds;
+    return node && node->isFile() ? downloadFile(api, node.get(), destination, progress, isCancelled, quotaWaitSeconds) : MegaError::API_ENOENT;
 }
 
 namespace

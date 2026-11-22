@@ -203,6 +203,7 @@ Partial Public Class AddLinks
         shell.Controls.Add(addLinksPageHost, 0, 2)
         Controls.Add(shell)
         shell.BringToFront()
+        ShowIdentityNotice()
         For Each surface As Control In New Control() {
                 layout, addLinksViewport, addLinksContent, inputHeader, options, flags,
                 passwordRow, actions, progress, OpcionesPaquete, shell, addLinksPageHost}

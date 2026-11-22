@@ -1475,7 +1475,7 @@ public partial class RegressionTests {
         thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
         if(failure!=null)throw new Exception("Native feature dialog regression failed",failure);
     }
-    static object SeedMegaAccount(object service,string email,string alias,bool signedIn,bool quotaReached=false,long? remaining=null) {
+    static object SeedMegaAccount(object service,string email,string alias,bool signedIn,long? remaining=null) {
         var type=service.GetType();
         var statusType=type.GetNestedType("Status",BindingFlags.NonPublic);
         var entryType=type.GetNestedType("AccountEntry",BindingFlags.NonPublic);
@@ -1484,7 +1484,6 @@ public partial class RegressionTests {
         statusType.GetField("AliasName",hidden).SetValue(status,alias);
         statusType.GetField("SignedIn",hidden).SetValue(status,signedIn);
         statusType.GetField("NeedsLogin",hidden).SetValue(status,!signedIn);
-        statusType.GetField("QuotaReached",hidden).SetValue(status,quotaReached);
         statusType.GetField("Remaining",hidden).SetValue(status,remaining);
         var entry=Activator.CreateInstance(entryType,true);
         entryType.GetField("Value",hidden).SetValue(entry,status);
@@ -1541,6 +1540,21 @@ public partial class RegressionTests {
                 Check((string)typeof(AddLinks).GetField("previewMegaAccountEmail",hidden).GetValue(add)=="fixture@example.invalid","Add Links captures the explicitly selected email");
                 identity.SelectedIndex=0;
                 Check((string)typeof(AddLinks).GetField("previewMegaAccountEmail",hidden).GetValue(add)=="","Add Links explicitly selects anonymous downloads");
+            }
+            details.GetType().GetField("SignedIn",hidden).SetValue(details,false);
+            value.SetValue(first,details);
+            using(var add=new PresentationAddLinks()) {
+                var notice=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksFeedback",hidden).GetValue(add);
+                var identity=(System.Windows.Forms.ComboBox)add.Controls.Find("AddLinksDownloadIdentity",true).Single();
+                Check(notice.Text==Language.GetText("MegaAccount_SessionExpired"),"Add Links immediately explains a signed-out default");
+                identity.SelectedIndex=0;
+                Check(notice.Text=="","choosing anonymous clears the account notice");
+            }
+            details.GetType().GetField("Connecting",hidden).SetValue(details,true);
+            value.SetValue(first,details);
+            using(var add=new PresentationAddLinks()) {
+                var notice=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksFeedback",hidden).GetValue(add);
+                Check(notice.Text==Language.GetText("MegaAccount_Connecting"),"Add Links shows connecting for a default account still restoring");
             }
         } finally {
             accounts.Clear();
@@ -2395,6 +2409,62 @@ public partial class RegressionTests {
             Check(restored.MegaAccountEmail=="reassigned@example.invalid" && !restored.DescargaProcesada && !restored.FailedByQuota,"explicit reassignment from anonymous reverifies through the account backend");
         }
         MegaAccountStoreCases();
+        MegaAccountRetryCases();
+    }
+    static void MegaAccountRetryCases() {
+        var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var service=type.GetField("Current",shared).GetValue(null);
+        var entries=(System.Collections.IList)type.GetField("accounts",hidden).GetValue(service);
+        const string email="retry@example.invalid";
+        var entry=SeedMegaAccount(service,email,"",true);
+        var value=entry.GetType().GetField("Value",hidden);
+        var status=value.GetValue(entry);
+        var connecting=status.GetType().GetField("Connecting",hidden);
+        var signedIn=status.GetType().GetField("SignedIn",hidden);
+        var deadline=status.GetType().GetField("QuotaRetryUtc",hidden);
+        var quotaDelayUnknown=status.GetType().GetField("QuotaDelayUnknown",hidden);
+        var retry=typeof(Main).GetMethod("CanRetryMegaAccountFailure",shared);
+        var setError=typeof(Fichero).GetMethod("SetMegaAccountError",hidden);
+        var errorCode=typeof(Fichero).GetField("MegaAccountErrorCode",hidden);
+        try {
+            using(var task=new Fichero {MegaAccountEmail=email}) {
+                setError.Invoke(task,new object[]{-17});
+                deadline.SetValue(status,DateTime.UtcNow.AddMinutes(5));
+                value.SetValue(entry,status);
+                Check(task.FailedByQuota && !(bool)retry.Invoke(null,new object[]{task,true,true}),"public quota errors wait for their account deadline");
+                deadline.SetValue(status,DateTime.UtcNow.AddSeconds(-1));
+                value.SetValue(entry,status);
+                Check((bool)retry.Invoke(null,new object[]{task,false,false}),"reported quota expiry wakes the task with self-heal disabled");
+                deadline.SetValue(status,null);
+                quotaDelayUnknown.SetValue(status,true);
+                value.SetValue(entry,status);
+                Check(!(bool)retry.Invoke(null,new object[]{task,false,true}) && (bool)retry.Invoke(null,new object[]{task,true,false}),"unreported quota delay reuses the retry interval without requiring self-heal");
+                setError.Invoke(task,new object[]{-18});
+                Check(!task.FailedByQuota && !(bool)retry.Invoke(null,new object[]{task,false,true}) &&
+                      !(bool)retry.Invoke(null,new object[]{task,true,false}) && (bool)retry.Invoke(null,new object[]{task,true,true}),"temporary account errors honor the existing self-heal settings");
+                var serialized=task.GuardarXML(new System.Xml.XmlDocument(),true);
+                using(var restored=new Fichero()) {
+                    restored.CargarXML(serialized);
+                    Check((int)errorCode.GetValue(restored)==-18,"SDK retry classification survives queue serialization");
+                }
+                setError.Invoke(task,new object[]{-15});
+                signedIn.SetValue(status,false);
+                value.SetValue(entry,status);
+                Check(!(bool)retry.Invoke(null,new object[]{task,true,true}),"expired session waits for user sign-in");
+                connecting.SetValue(status,true);
+                value.SetValue(entry,status);
+                var refresh=(System.Threading.Tasks.Task<int>)type.GetMethod("RefreshQuotaAsync",hidden).Invoke(service,new object[]{email});
+                Check(refresh.GetAwaiter().GetResult()==-1002 && !(bool)retry.Invoke(null,new object[]{task,true,true}),"connecting returns Busy and cannot wake the task");
+                connecting.SetValue(status,false);
+                signedIn.SetValue(status,true);
+                value.SetValue(entry,status);
+                Check((bool)retry.Invoke(null,new object[]{task,false,false}),"user sign-in releases the expired-session task");
+                setError.Invoke(task,new object[]{-9});
+                Check(task.EsErrorPermanente && !(bool)retry.Invoke(null,new object[]{task,true,true}),"permanent account errors do not retry");
+            }
+        } finally {
+            entries.Remove(entry);
+        }
     }
     static void MegaDriveQueueCases() {
         var snapshot=MakeDriveFixture();
@@ -2457,9 +2527,17 @@ public partial class RegressionTests {
               "locations, favorites and incremental bindings stay isolated by account after restart");
         Check((DateTime)deadline.GetValue(status.Invoke(reloaded,new object[]{email}))>DateTime.UtcNow,"a reported private quota wait survives restart");
         var value=account.GetType().GetField("Value",hidden);
+        var remaining=held.GetType().GetField("Remaining",hidden);
+        var quotaReached=held.GetType().GetField("QuotaReached",hidden);
+        remaining.SetValue(held,0L);
         deadline.SetValue(held,DateTime.UtcNow.AddSeconds(-1));
         value.SetValue(account,held);
-        Check(!(bool)held.GetType().GetField("QuotaReached",hidden).GetValue(status.Invoke(service,new object[]{email})),"elapsed wait releases the account to the scheduler");
+        var elapsed=status.Invoke(service,new object[]{email});
+        Check(!(bool)quotaReached.GetValue(elapsed) && remaining.GetValue(elapsed)==null,"elapsed SDK wait releases even an account with a stale zero balance");
+        account.GetType().GetField("Operations",hidden).SetValue(account,1);
+        serviceType.GetMethod("Release",hidden).Invoke(service,new object[]{account,-17,false,0L});
+        var unknown=status.Invoke(service,new object[]{email});
+        Check(deadline.GetValue(unknown)==null && !(bool)quotaReached.GetValue(unknown),"SDK quota with no delay does not leave a permanent hold");
         MegaDriveIncrementalCases(snapshot,service,email);
     }
     static void MegaDriveIncrementalCases(object snapshot,object service,string email) {
@@ -2503,7 +2581,7 @@ public partial class RegressionTests {
         var getDefault=type.GetProperty("DefaultEmail",hidden);
         Check(((System.Threading.Tasks.Task<int>)restore.Invoke(service,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(service,null)==first && !File.Exists(legacy),"single-account store migrates locally and keeps its default");
         SeedMegaAccount(service,second,"",true);
-        SeedMegaAccount(service,"quota@example.invalid","",true,quotaReached:true);
+        SeedMegaAccount(service,"quota@example.invalid","",true,remaining:0L);
         SeedMegaAccount(service,"offline@example.invalid","",false);
         Check((int)setAlias.Invoke(service,new object[]{second,"  Secondary  "})==0 && (int)setDefault.Invoke(service,new object[]{second})==0,"multiple account aliases and the default save together");
         var next=type.GetMethod("NextTransferAccount",hidden);
@@ -2518,7 +2596,21 @@ public partial class RegressionTests {
         Check((string)status.GetType().GetField("AliasName",hidden).GetValue(status)=="Secondary" && !(bool)status.GetType().GetField("Remember",hidden).GetValue(status),"case-insensitive identity and alias persist without remembering a session");
         var stored=File.ReadAllBytes(Path.Combine(folder,"accounts.dat"));
         Check(!Encoding.UTF8.GetString(stored).Contains(session) && Encoding.UTF8.GetString(ProtectedData.Unprotect(stored,null,DataProtectionScope.CurrentUser)).Contains(session),"migrated remembered session is protected by Windows DPAPI");
-        Check(((System.Threading.Tasks.Task<int>)type.GetMethod("RemoveAsync",hidden).Invoke(reopened,new object[]{second})).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==first,"removing the default promotes the first remaining account");
+        var cachePath=type.GetMethod("AccountCachePath",hidden);
+        string removedCache=(string)cachePath.Invoke(reopened,new object[]{second});
+        string keptCache=(string)cachePath.Invoke(reopened,new object[]{first});
+        Directory.CreateDirectory(removedCache);
+        Directory.CreateDirectory(keptCache);
+        File.WriteAllText(Path.Combine(removedCache,"sdk-cache"),"fixture");
+        var history=type.GetField("DriveHistory",hidden).GetValue(reopened);
+        var historyFile=history.GetType().GetMethod("AccountFile",hidden);
+        string removedHistory=(string)historyFile.Invoke(history,new object[]{second});
+        string keptHistory=(string)historyFile.Invoke(history,new object[]{first});
+        Directory.CreateDirectory(Path.GetDirectoryName(removedHistory));
+        File.WriteAllText(removedHistory,"fixture");
+        File.WriteAllText(keptHistory,"fixture");
+        Check(((System.Threading.Tasks.Task<int>)type.GetMethod("RemoveAsync",hidden).Invoke(reopened,new object[]{second.ToUpperInvariant()})).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==first,"removing the default promotes the first remaining account");
+        Check(!Directory.Exists(removedCache) && !File.Exists(removedHistory) && Directory.Exists(keptCache) && File.Exists(keptHistory),"account removal clears only the matching SDK cache and drive history");
     }
     static void PartialPersistenceAndCleanup(byte[] plain,string key) {
         string d=Path.Combine(root,"partial-persistence"); Directory.CreateDirectory(d);

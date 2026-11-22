@@ -26,6 +26,7 @@ Public Class Fichero
     Friend MegaAccountTransferEmail As String = String.Empty
     Friend MegaDriveNodeHandle As ULong?
     Friend MegaDriveWaitingForQuota As Boolean
+    Friend MegaAccountErrorCode As Integer?
 
     Friend ReadOnly Property EffectiveMegaAccountEmail As String
         Get
@@ -58,6 +59,13 @@ Public Class Fichero
 
     Friend Shared Function IsPermanentMegaAccountError(code As Integer) As Boolean
         Return code = -9 OrElse code = -11 OrElse code = -14 OrElse code = -16
+    End Function
+
+    ' SDK internal/network, rate/connection limits, incomplete and temporary failures.
+    Private Shared ReadOnly transientMegaAccountErrors As Integer() = {-1, -3, -4, -6, -13, -18, -19}
+
+    Friend Shared Function IsTransientMegaAccountError(code As Integer) As Boolean
+        Return Array.IndexOf(transientMegaAccountErrors, code) >= 0
     End Function
 
     Public PartialFileName As String = FileDownloader.CreatePartialFileName()
@@ -652,8 +660,8 @@ Public Class Fichero
             ct.ThrowIfCancellationRequested()
             SyncLock Mutex.FicheroDownloader
                 If disposedValue Then Return
+                If Not MegaDriveNodeHandle.HasValue Then RecordMegaAccountTransfer(email)
                 If code = 0 Then
-                    RecordMegaAccountTransfer(email)
                     ApplyMegaAccountInfo(name, size)
                 Else
                     errorResult = Conexion.TipoError.Otros
@@ -683,6 +691,7 @@ Public Class Fichero
             DescargaComenzada = True
             If Not MegaDriveNodeHandle.HasValue Then ResetMegaAccountProgress()
             MegaDriveWaitingForQuota = False
+            FailedByQuota = False
             NumeroConexionesAbiertas = 1
             System.Threading.Tasks.Task.Run(Sub() RunMegaAccountDownload(source))
         End SyncLock
@@ -714,7 +723,7 @@ Public Class Fichero
                 BytesDescargados = TamanoBytes
                 Porcentaje = 100D
             End SyncLock
-            If privateNode Then MegaAccountService.Current.DriveHistory.Record(MegaAccountEmail, MegaDriveNodeHandle.Value, output)
+            If privateNode Then MegaAccountService.Current.RecordDriveDelivery(MegaAccountEmail, MegaDriveNodeHandle.Value, output)
             downloader_Completed(Nothing, EventArgs.Empty)
         Catch ex As OperationCanceledException
             code = -13
@@ -745,8 +754,10 @@ Public Class Fichero
                         EstadoDescarga = accountCancelTarget.Value
                     ElseIf localFailure Then
                         SetMegaAccountLocalError()
-                    ElseIf privateNode AndAlso code = MegaAccountService.OverQuota Then
+                    ElseIf privateNode AndAlso code = MegaAccountService.OverQuota AndAlso
+                        MegaAccountService.Current.GetStatus(MegaAccountEmail).QuotaReached Then
                         MegaDriveWaitingForQuota = True
+                        FailedByQuota = True
                         EstadoDescarga = Estado.EnCola
                     Else
                         SetMegaAccountError(code)
@@ -1038,13 +1049,12 @@ Public Class Fichero
     End Sub
 
     Private Sub SetMegaAccountError(code As Integer)
-        ' SDK quota never enters the anonymous quota manager or its automatic retry path.
-        Dim message As String = MegaAccountService.ErrorText(code)
+        Dim message As String = MegaAccountService.ErrorText(code, connecting:=True)
         If MegaDriveNodeHandle.HasValue Then
             If code = -9 OrElse code = -11 Then message = Language.GetText("MegaDrive_FileUnavailable")
             If code = MegaAccountService.BackendMissing Then message = Language.GetText("MegaDrive_BackendMissing")
         End If
-        EstablecerError(message, IsPermanentMegaAccountError(code), False)
+        EstablecerError(message, IsPermanentMegaAccountError(code), code = MegaAccountService.OverQuota, code)
     End Sub
 
     Private Sub SetMegaAccountLocalError()
@@ -1648,13 +1658,13 @@ Public Class Fichero
 		EstablecerError(msj, IsPermanentErrorText(msj), IsQuotaErrorText(msj))
 	End Sub
 
-	Private Sub EstablecerError(ByVal msj As String, ByVal esPermanente As Boolean, ByVal esQuota As Boolean)
-		Me.EstadoDescarga = Estado.Erroneo
+	Private Sub EstablecerError(ByVal msj As String, ByVal esPermanente As Boolean, ByVal esQuota As Boolean, Optional accountCode As Integer? = Nothing)
 		Me.DescripcionError = msj
 		Me.FechaUltimoError = Now
-		Me.EsErrorPermanente = esPermanente
+		Me.EsErrorPermanente = esPermanente AndAlso Not esQuota
 		Me.FailedByQuota = esQuota
-		If esQuota Then Me.EsErrorPermanente = False
+		Me.MegaAccountErrorCode = accountCode
+		Me.EstadoDescarga = Estado.Erroneo
 	End Sub
 
 	''' <summary>v2.5 beta: 永久失败码 -9 ENOENT / -11 EACCESS / -14 EKEY / -16 EBLOCKED。仅匹配错误码语义,不做泛文本匹配。</summary>
@@ -1698,6 +1708,7 @@ Public Class Fichero
 			Me.FechaUltimoError = Nothing
 			Me.EsErrorPermanente = False
 			Me.FailedByQuota = False
+			Me.MegaAccountErrorCode = Nothing
 			Me.TiempoEstimadoDescarga = ""
 			Return
 		End If
@@ -1724,6 +1735,7 @@ Public Class Fichero
 		Me.FechaUltimoError = Nothing
 		Me.EsErrorPermanente = False
 		Me.FailedByQuota = False
+		Me.MegaAccountErrorCode = Nothing
 		Me.TiempoEstimadoDescarga = ""
 
 		' 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
@@ -1927,8 +1939,23 @@ Public Class Fichero
         If String.IsNullOrEmpty(Me.DescripcionError) Then Me.DescripcionError = Nothing
         Boolean.TryParse(LeerNodo(XML, "EsErrorPermanente", "false"), EsErrorPermanente)
         Boolean.TryParse(LeerNodo(XML, "FailedByQuota", "false"), FailedByQuota)
-        ' 兼容旧版派生标记:老队列无标记时按描述文本回推,避免重启后永久失败被自愈捞起。
-        If Not UsesMegaAccount AndAlso Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
+        MegaAccountErrorCode = Nothing
+        If UsesMegaAccount Then
+            Dim code As Integer
+            If Integer.TryParse(LeerNodo(XML, "MegaAccountErrorCode", ""), code) Then
+                MegaAccountErrorCode = code
+            ElseIf EstadoDescarga = Estado.Erroneo AndAlso Not String.IsNullOrEmpty(DescripcionError) Then
+                ' Older account tasks stored only the localized description.
+                If DescripcionError = MegaAccountService.ErrorText(MegaAccountService.OverQuota) Then
+                    FailedByQuota = True
+                ElseIf DescripcionError = MegaAccountService.ErrorText(MegaAccountService.SessionExpired) Then
+                    MegaAccountErrorCode = MegaAccountService.SessionExpired
+                Else
+                    code = transientMegaAccountErrors.FirstOrDefault(Function(value) DescripcionError = MegaAccountService.ErrorText(value))
+                    If code <> 0 Then MegaAccountErrorCode = code
+                End If
+            End If
+        ElseIf Not EsErrorPermanente AndAlso Not FailedByQuota AndAlso Not String.IsNullOrEmpty(Me.DescripcionError) Then
             EsErrorPermanente = IsPermanentErrorText(Me.DescripcionError)
             If Not EsErrorPermanente Then FailedByQuota = IsQuotaErrorText(Me.DescripcionError)
             If FailedByQuota Then EsErrorPermanente = False
@@ -2038,6 +2065,9 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("DescripcionError")).InnerText = descToSave
         NodoFic.AppendChild(XML.CreateElement("EsErrorPermanente")).InnerText = EsErrorPermanente.ToString
         NodoFic.AppendChild(XML.CreateElement("FailedByQuota")).InnerText = FailedByQuota.ToString
+        If MegaAccountErrorCode.HasValue Then
+            NodoFic.AppendChild(XML.CreateElement("MegaAccountErrorCode")).InnerText = MegaAccountErrorCode.Value.ToString(Globalization.CultureInfo.InvariantCulture)
+        End If
         NodoFic.AppendChild(XML.CreateElement("MarcadoParaBorrarFicheroLocal")).InnerText = MarcadoParaBorrarFicheroLocal.ToString
         NodoFic.AppendChild(XML.CreateElement("TiempoEstimadoDescarga")).InnerText = TiempoEstimadoDescarga
         NodoFic.AppendChild(XML.CreateElement("PausaIndividual")).InnerText = PausaIndividual.ToString

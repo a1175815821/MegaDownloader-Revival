@@ -59,6 +59,7 @@ Public Class AddLinks
 		
 		FitAddLinksToWorkingArea(True)
         addLinksLayoutReady = True
+        ObserveDownloadIdentities()
         UpdateAddLinksInputHeight()
 		
     End Sub
