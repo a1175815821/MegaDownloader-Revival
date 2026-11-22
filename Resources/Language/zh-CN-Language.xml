@@ -54,6 +54,7 @@
   <Text key="MegaDrive_NoAccounts"><![CDATA[请通过「管理 MEGA 账号」登录后打开云盘。]]></Text>
   <Text key="MegaDrive_BackendMissing"><![CDATA[请安装此版本对应的 Windows x64 MEGA 模块后打开云盘。]]></Text>
   <Text key="MegaDrive_Loading"><![CDATA[正在读取云盘…]]></Text>
+  <Text key="MegaDrive_PreparingList"><![CDATA[正在整理文件列表…]]></Text>
   <Text key="MegaDrive_LoadFailed"><![CDATA[无法读取云盘。]]></Text>
   <Text key="MegaDrive_AccountBound"><![CDATA[云盘任务使用添加时所选的 MEGA 账号。]]></Text>
   <Text key="MegaDrive_FileUnavailable"><![CDATA[所选 MEGA 账号已无法访问此文件。]]></Text>
@@ -77,6 +78,9 @@
   <Text key="MegaAccount_Reconnect"><![CDATA[重新登录 MEGA]]></Text>
   <Text key="MegaAccount_Code"><![CDATA[两步验证码]]></Text>
   <Text key="MegaAccount_Remember"><![CDATA[在此设备上保持登录]]></Text>
+  <Text key="MegaAccount_Remembered"><![CDATA[已保存会话]]></Text>
+  <Text key="MegaAccount_ConnectionFailed"><![CDATA[MEGA：连接失败]]></Text>
+  <Text key="MegaAccount_Removed"><![CDATA[账号已移除]]></Text>
   <Text key="MegaAccount_EnterCredentials"><![CDATA[请输入 MEGA 邮箱和密码。]]></Text>
   <Text key="MegaAccount_MfaRequired"><![CDATA[请输入验证器应用中的验证码。]]></Text>
   <Text key="MegaAccount_RefreshQuota"><![CDATA[刷新配额]]></Text>

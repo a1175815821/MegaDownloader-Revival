@@ -26,6 +26,7 @@ Friend NotInheritable Class MegaAccountService
         Friend SignedIn As Boolean
         Friend Connecting As Boolean
         Friend NeedsLogin As Boolean
+        Friend LastError As Integer
         Friend Remember As Boolean
         Friend Remaining As Long?
         Friend QuotaReached As Boolean
@@ -189,10 +190,11 @@ Friend NotInheritable Class MegaAccountService
                 Dim entry As New AccountEntry With {
                     .Saved = True, .Session = If(saved.Session, ""),
                     .DrivePreferences = If(saved.DrivePreferences, New MegaDrivePreferences()),
-                    .Value = New Status With {.Email = saved.Email, .AliasName = If(saved.AliasName, ""), .NeedsLogin = True,
+                    .Value = New Status With {.Email = saved.Email, .AliasName = If(saved.AliasName, ""),
                                               .QuotaRetryUtc = saved.QuotaRetryUtc}}
                 entry.Value.Remember = entry.Session.Length > 0
                 entry.Value.Connecting = sessionAvailable AndAlso entry.Value.Remember
+                If entry.Value.Remember AndAlso Not sessionAvailable Then entry.Value.LastError = BackendMissing
                 accounts.Add(entry)
                 If entry.Value.Connecting Then pending.Add(entry)
             Next
@@ -209,7 +211,7 @@ Friend NotInheritable Class MegaAccountService
     End Function
 
     Private Async Function RestoreAccountAsync(entry As AccountEntry) As Task(Of Integer)
-        Dim result As Integer = Await RunConnectionAsync(entry, Function() Connect(entry, "", "", entry.Session, True)).ConfigureAwait(False)
+        Dim result As Integer = Await RunConnectionAsync(entry, Function() Connect(entry, "", "", entry.Session, True), restoringSession:=True).ConfigureAwait(False)
         If result = 0 Then Await RefreshQuotaAsync(entry.Value.Email).ConfigureAwait(False)
         Return result
     End Function
@@ -268,7 +270,7 @@ Friend NotInheritable Class MegaAccountService
                                                      selectedDefault = previousDefault
                                                      Return stored
                                                  End If
-                                                 entry.Value = New Status With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName, .NeedsLogin = True,
+                                                 entry.Value = New Status With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName,
                                                                                 .Connecting = True, .QuotaRetryUtc = entry.Value.QuotaRetryUtc}
                                              End SyncLock
                                              Dim result As Integer
@@ -348,22 +350,28 @@ Friend NotInheritable Class MegaAccountService
         Return 0
     End Function
 
-    Private Function RunConnectionAsync(entry As AccountEntry, operation As Func(Of Integer)) As Task(Of Integer)
+    Private Function RunConnectionAsync(entry As AccountEntry, operation As Func(Of Integer), Optional restoringSession As Boolean = False) As Task(Of Integer)
         RaiseEvent Changed(Me, EventArgs.Empty)
         Return Task.Run(Function()
+                            Dim result As Integer = LocalError
                             Try
-                                Return operation()
+                                result = operation()
                             Catch ex As Exception When IsStorageError(ex)
-                                Return LocalError
+                                result = LocalError
                             Catch ex As Exception When IsLibraryError(ex)
-                                Return BackendMissing
+                                result = BackendMissing
                             Finally
                                 SyncLock gate
+                                    If restoringSession Then
+                                        entry.Value.LastError = result
+                                        entry.Value.NeedsLogin = result = SessionExpired OrElse result = -9 OrElse result = -11
+                                    End If
                                     entry.Value.Connecting = False
                                     If Not entry.Saved Then accounts.Remove(entry)
                                 End SyncLock
                                 RaiseEvent Changed(Me, EventArgs.Empty)
                             End Try
+                            Return result
                         End Function)
     End Function
 
@@ -508,6 +516,7 @@ Friend NotInheritable Class MegaAccountService
             If result = SessionExpired AndAlso entry.Value.SignedIn Then
                 entry.Value.SignedIn = False
                 entry.Value.NeedsLogin = True
+                entry.Value.LastError = result
                 detailsChanged = True
             ElseIf result = OverQuota Then
                 If quotaWaitSeconds > 0 Then

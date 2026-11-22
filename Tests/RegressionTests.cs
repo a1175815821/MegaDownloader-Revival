@@ -1512,6 +1512,7 @@ public partial class RegressionTests {
             var first=SeedMegaAccount(service,"first@example.invalid","Primary",true,remaining:2684354560);
             var value=first.GetType().GetField("Value",hidden);
             var details=value.GetValue(first);
+            details.GetType().GetField("Remember",hidden).SetValue(details,true);
             details.GetType().GetField("Plan",hidden).SetValue(details,1);
             details.GetType().GetField("StorageUsed",hidden).SetValue(details,2147483648L);
             details.GetType().GetField("StorageTotal",hidden).SetValue(details,2199023255552L);
@@ -1529,6 +1530,7 @@ public partial class RegressionTests {
                 Check(controls.Any(c=>c.Text=="Pro I") && controls.Any(c=>c.Text.Contains("2TiB")) && controls.Any(c=>c.Text.Contains("5GiB")),"account manager shows the SDK plan and both storage and transfer totals");
                 var roster=(System.Windows.Forms.ListBox)form.Controls.Find("MegaAccountRoster",true).Single();
                 Check(roster.Items.Count==2 && roster.SelectedIndex==0,"manager lists both accounts and selects the default");
+                Check(roster.Items[0].ToString().Contains(Language.GetText("MegaAccount_Remembered")),"manager marks the remembered session");
                 roster.SelectedIndex=1;
                 Check(controls.Any(c=>c.Text=="fixture@example.invalid") && (string)defaultEmail.GetValue(service)=="first@example.invalid","viewing another account keeps the explicit default");
                 Check(!controls.Any(c=>c.Name=="MegaAccountPassword"),"signed-in manager hides credential fields");
@@ -1543,12 +1545,25 @@ public partial class RegressionTests {
             }
             details.GetType().GetField("SignedIn",hidden).SetValue(details,false);
             value.SetValue(first,details);
+            using(var main=new PresentationMain()) {
+                typeof(Main).GetMethod("PopulateQueueIdentityMenu",hidden).Invoke(main,null);
+                var menu=(System.Windows.Forms.ToolStripMenuItem)typeof(Main).GetField("queueIdentityMenu",hidden).GetValue(main);
+                Check(menu.DropDownItems.Count==3 && !menu.DropDownItems[1].Enabled && menu.DropDownItems[2].Enabled,"queue identity menu shows but disables a signed-out account");
+                var text=(string)typeof(Main).GetMethod("QueueDownloadIdentityText",shared).Invoke(null,new object[]{"removed@example.invalid"});
+                Check(text.Contains("removed@example.invalid") && text.Contains(Language.GetText("MegaAccount_Removed")),"queue identity distinguishes a removed account");
+            }
             using(var add=new PresentationAddLinks()) {
                 var notice=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksFeedback",hidden).GetValue(add);
                 var identity=(System.Windows.Forms.ComboBox)add.Controls.Find("AddLinksDownloadIdentity",true).Single();
                 Check(notice.Text==Language.GetText("MegaAccount_SessionExpired"),"Add Links immediately explains a signed-out default");
                 identity.SelectedIndex=0;
                 Check(notice.Text=="","choosing anonymous clears the account notice");
+            }
+            details.GetType().GetField("LastError",hidden).SetValue(details,-3);
+            value.SetValue(first,details);
+            using(var add=new PresentationAddLinks()) {
+                var notice=(System.Windows.Forms.Label)typeof(AddLinks).GetField("addLinksFeedback",hidden).GetValue(add);
+                Check(notice.Text.Contains(Language.GetText("MegaAccount_ConnectionFailed")) && notice.Text.Contains("-3"),"Add Links reports a restore connection failure with the original SDK error");
             }
             details.GetType().GetField("Connecting",hidden).SetValue(details,true);
             value.SetValue(first,details);
@@ -1581,6 +1596,25 @@ public partial class RegressionTests {
         return Activator.CreateInstance(snapshotType,hidden,null,new object[]{1UL,nodes},null);
     }
     static void MegaDriveDialogCases() {
+        Exception failure=null;
+        var thread=new Thread(()=>{
+            using(var loop=new System.Windows.Forms.ApplicationContext()) {
+                EventHandler run=null;
+                run=(sender,e)=>{
+                    System.Windows.Forms.Application.Idle-=run;
+                    try { VerifyMegaDriveDialog(); }
+                    catch(Exception ex) { failure=ex; }
+                    finally { loop.ExitThread(); }
+                };
+                System.Windows.Forms.Application.Idle+=run;
+                System.Windows.Forms.Application.Run(loop);
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();thread.Join();
+        if(failure!=null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+    static void VerifyMegaDriveDialog() {
         var assembly=typeof(Main).Assembly;
         var browserType=assembly.GetType("MegaDownloader.MegaDriveForm",true);
         var serviceType=assembly.GetType("MegaDownloader.MegaAccountService",true);
@@ -1646,9 +1680,34 @@ public partial class RegressionTests {
             foreach(var commands in new[]{source.Parent,scope.Parent,crumbs.Parent}) {
                 Check(commands.Controls.Cast<System.Windows.Forms.Control>().Where(c=>c.Visible).All(c=>c.Right<=commands.ClientSize.Width && c.Bottom<=commands.ClientSize.Height) && grid.Width>=600,"navigation, filters and file table fit the compact browser");
             }
+            var nodeType=assembly.GetType("MegaDownloader.MegaDriveNode",true);
+            var nodes=Array.CreateInstance(nodeType,50002);
+            nodes.SetValue(Activator.CreateInstance(nodeType,hidden,null,new object[]{1UL,ulong.MaxValue,"Drive",true,0L,0L},null),0);
+            nodes.SetValue(Activator.CreateInstance(nodeType,hidden,null,new object[]{2UL,1UL,"Folder",true,0L,0L},null),1);
+            for(int i=2;i<nodes.Length;i++) {
+                string name=i==2?"Target.txt":"Sample"+i+".txt";
+                nodes.SetValue(Activator.CreateInstance(nodeType,hidden,null,new object[]{(ulong)i+2,2UL,name,false,1L,0L},null),i);
+            }
+            driveType.GetField("Snapshot",hidden).SetValue(drive,Activator.CreateInstance(snapshot.GetType(),hidden,null,new object[]{1UL,nodes},null));
+            var rowBuild=browserType.GetField("rowBuildCancellation",hidden);
+            scope.SelectedIndex=1;
+            Check(rowBuild.GetValue(form)!=null && grid.RowCount==0,"large drive searches leave the UI thread while the list is prepared");
+            search.Text="Target";
+            browserType.GetMethod("RefreshRows",hidden).Invoke(form,null);
+            PumpUntil(()=>rowBuild.GetValue(form)==null);
+            Check(grid.RowCount==1 && Convert.ToString(grid[1,0].Value)=="Target.txt","a superseded large search cannot publish its rows");
+            navigate.Invoke(form,new object[]{2UL,4UL});
+            PumpUntil(()=>rowBuild.GetValue(form)==null);
+            Check(grid.RowCount==50000 && grid.CurrentCell!=null && Convert.ToString(grid.CurrentCell.Value)=="Target.txt","opening a wide directory keeps all results and focuses the requested file");
             form.Close();
             var saved=serviceType.GetMethod("GetDrivePreferences",hidden).Invoke(service,new object[]{fixtureEmail});
             Check((ulong)saved.GetType().GetProperty("LastFolder").GetValue(saved,null)==2UL,"closing the picker remembers the last folder for this account");
+        }
+        using(var expiredForm=(System.Windows.Forms.Form)Activator.CreateInstance(browserType,hidden,null,new object[]{null,config,service,"drive@example.invalid"},null)) {
+            expiredForm.StartPosition=System.Windows.Forms.FormStartPosition.Manual;
+            expiredForm.Location=new System.Drawing.Point(-30000,-30000);
+            expiredForm.Show();System.Windows.Forms.Application.DoEvents();
+            Check(expiredForm.Controls.Find("MegaDriveStatus",true).Single().Text==Language.GetText("MegaAccount_Reconnect"),"cloud drive keeps the expired identity and requests sign-in again");
         }
         var plan=snapshot.GetType().GetMethod("PlanDownload",hidden).Invoke(snapshot,new object[]{new[]{4UL,5UL,7UL},null});
         var confirmType=assembly.GetType("MegaDownloader.MegaDriveDownloadForm",true);
@@ -1691,7 +1750,7 @@ public partial class RegressionTests {
                 Check(identity.IsVisible && identity.Text=="下载身份" && identity.GetStringValue(task)=="匿名","the visible queue identity column labels anonymous tasks");
                 task.MegaAccountEmail="first@example.invalid";
                 typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(task,"other@example.invalid");
-                Check(identity.GetStringValue(task)=="MEGA · other@example.invalid","the queue column displays the account used after a quota switch");
+                Check(identity.GetStringValue(task)==Language.GetText("MegaAccount_Removed")+" · MEGA · other@example.invalid","the queue column labels the removed account used after a quota switch");
             }
             type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
@@ -1914,10 +1973,11 @@ public partial class RegressionTests {
                     list.Expand(packages[0]);
                     Check(list.Items.Count==7,"the task-name tree column still expands package children");
                     var identity=list.AllColumns.Single(c=>c.Name=="QueueDownloadIdentity");
-                    Check(list.Items[1].SubItems[identity.Index].Text=="MEGA · first@example.invalid","the expanded task shows its assigned account");
+                    var removed=Language.GetText("MegaAccount_Removed")+" · MEGA · ";
+                    Check(list.Items[1].SubItems[identity.Index].Text==removed+"first@example.invalid","the expanded task shows its removed assigned account");
                     typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(child,"other@example.invalid");
                     type.GetMethod("RefreshListaDescargas",hidden).Invoke(main,new object[]{false});
-                    Check(list.Items[1].SubItems[identity.Index].Text=="MEGA · other@example.invalid" && list.Items[2].SubItems[identity.Index].Text=="匿名","periodic refresh updates the rotated identity and the anonymous package label");
+                    Check(list.Items[1].SubItems[identity.Index].Text==removed+"other@example.invalid" && list.Items[2].SubItems[identity.Index].Text=="匿名","periodic refresh updates the rotated identity and the anonymous package label");
                     if(mode==ConfiguracionUI.ThemeModeType.Light) DrawFeatureDialog(main,"mega-account-queue.png");
                     list.Collapse(packages[0]);
                     Check(list.Items.Count==6,"collapsing a package restores the six root rows");
@@ -2409,7 +2469,29 @@ public partial class RegressionTests {
             Check(restored.MegaAccountEmail=="reassigned@example.invalid" && !restored.DescargaProcesada && !restored.FailedByQuota,"explicit reassignment from anonymous reverifies through the account backend");
         }
         MegaAccountStoreCases();
+        MegaAccountRestoreErrorCases();
         MegaAccountRetryCases();
+    }
+    static void MegaAccountRestoreErrorCases() {
+        var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var service=Activator.CreateInstance(type,hidden,null,new object[]{Path.Combine(root,"account-restore-errors")},null);
+        const string email="restore@example.invalid";
+        var entry=SeedMegaAccount(service,email,"",false);
+        var value=entry.GetType().GetField("Value",hidden);
+        var run=type.GetMethod("RunConnectionAsync",hidden);
+        var summary=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountForm",true).GetMethod("Summary",shared);
+        foreach(int code in new[]{-15,-9,-11,-3,-1000,0}) {
+            var task=(System.Threading.Tasks.Task<int>)run.Invoke(service,new object[]{entry,(Func<int>)(()=>code),true});
+            var result=task.GetAwaiter().GetResult();
+            var status=value.GetValue(entry);
+            bool needsLogin=code==-15 || code==-9 || code==-11;
+            Check(result==code && (int)status.GetType().GetField("LastError",hidden).GetValue(status)==code &&
+                  (bool)status.GetType().GetField("NeedsLogin",hidden).GetValue(status)==needsLogin,"restore keeps SDK result and classifies sign-in requirements for "+code);
+            if(code!=0) {
+                var caption=(string)summary.Invoke(null,new[]{status,(object)false});
+                Check(caption==Language.GetText(needsLogin?"MegaAccount_Reconnect":"MegaAccount_ConnectionFailed"),"restore shows the matching sign-in or connection status for "+code);
+            }
+        }
     }
     static void MegaAccountRetryCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);

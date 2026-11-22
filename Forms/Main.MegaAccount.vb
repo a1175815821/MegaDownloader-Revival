@@ -141,7 +141,7 @@ Partial Public Class Main
         Dim account = service.GetStatus()
         Dim summary As String = MegaAccountForm.Summary(account)
         If megaAccountStatus.Text <> summary Then megaAccountStatus.Text = summary
-        megaAccountStatus.ForeColor = ThemeManager.GetColor(If(account.QuotaReached OrElse account.NeedsLogin, "ErrorFore", "Muted"))
+        megaAccountStatus.ForeColor = ThemeManager.GetColor(If(account.QuotaReached OrElse account.NeedsLogin OrElse account.LastError <> 0, "ErrorFore", "Muted"))
         If megaAccountMenu Is Nothing Then Return
         Dim hasDefault = Not String.IsNullOrEmpty(account.Email)
         Dim caption = Language.GetText(If(account.NeedsLogin, "MegaAccount_Reconnect", "MegaAccount_Login"))

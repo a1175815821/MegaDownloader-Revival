@@ -16,7 +16,8 @@ Friend NotInheritable Class MegaDriveForm
         End Sub
 
         Public Overrides Function ToString() As String
-            Return If(Status.DisplayName = Status.Email, Status.Email, Status.DisplayName & " (" & Status.Email & ")")
+            Dim caption = If(Status.DisplayName = Status.Email, Status.Email, Status.DisplayName & " (" & Status.Email & ")")
+            Return If(Status.NeedsLogin, caption & " · " & Language.GetText("MegaAccount_Reconnect"), caption)
         End Function
     End Class
 
@@ -43,15 +44,19 @@ Friend NotInheritable Class MegaDriveForm
     Private ReadOnly config As Configuracion
     Private ReadOnly service As MegaAccountService
     Private ReadOnly drives As New Dictionary(Of String, AccountDrive)(StringComparer.OrdinalIgnoreCase)
+    Private Const BackgroundBrowseCount As Integer = 50000
+    Private ReadOnly rowBuildGate As New SemaphoreSlim(1)
     Private currentEmail As String = ""
     Private drive As AccountDrive
     Private loadCancellation As CancellationTokenSource
+    Private rowBuildCancellation As CancellationTokenSource
     Private changingAccount As Boolean
     Private showingSelected As Boolean
     Private submitting As Boolean
     Private sortByTime As Boolean
     Private descending As Boolean
     Private shownNodes As MegaDriveNode() = {}
+    Private pendingFocusNode As ULong?
     Private selectionAnchor As Integer = -1
     Private loadMessage As String = ""
 
@@ -203,7 +208,10 @@ Friend NotInheritable Class MegaDriveForm
                                    SavePreferences()
                                    searchTimer.Stop()
                                End Sub
-        AddHandler Disposed, Sub() searchTimer.Dispose()
+        AddHandler Disposed, Sub()
+                                 If rowBuildCancellation IsNot Nothing Then rowBuildCancellation.Cancel()
+                                 searchTimer.Dispose()
+                             End Sub
         RefreshRows()
     End Sub
 
@@ -244,19 +252,24 @@ Friend NotInheritable Class MegaDriveForm
     End Sub
 
     Private Sub SetAccounts(preferred As String, Optional reload As Boolean = True)
-        Dim available = service.GetAccounts().Where(Function(item) item.SignedIn AndAlso Not item.Connecting).
-            Select(Function(item) New AccountChoice(item)).ToArray()
-        Dim same = available.Select(Function(item) item.ToString()).SequenceEqual(
+        Dim roster = service.GetAccounts()
+        Dim available = roster.Where(Function(item) item.SignedIn AndAlso Not item.Connecting).ToList()
+        Dim expired = roster.Find(Function(item) item.NeedsLogin AndAlso String.Equals(item.Email, preferred, StringComparison.OrdinalIgnoreCase))
+        If available.Count = 0 AndAlso String.IsNullOrEmpty(expired.Email) Then expired = roster.Find(Function(item) item.NeedsLogin)
+        If Not String.IsNullOrEmpty(expired.Email) AndAlso (currentEmail <> "" OrElse available.Count = 0) Then available.Add(expired)
+        Dim choices = available.Select(Function(item) New AccountChoice(item)).ToArray()
+        Dim same = choices.Select(Function(item) item.ToString()).SequenceEqual(
                    accounts.Items.Cast(Of AccountChoice)().Select(Function(item) item.ToString()))
         If Not reload AndAlso same Then
             If drive Is Nothing Then LoadDrive()
             Return
         End If
 
+        Dim previous = TryCast(accounts.SelectedItem, AccountChoice)
         changingAccount = True
         Try
             accounts.Items.Clear()
-            For Each choice In available
+            For Each choice In choices
                 Dim index = accounts.Items.Add(choice)
                 If String.Equals(choice.Status.Email, preferred, StringComparison.OrdinalIgnoreCase) Then accounts.SelectedIndex = index
             Next
@@ -264,7 +277,8 @@ Friend NotInheritable Class MegaDriveForm
         Finally
             changingAccount = False
         End Try
-        ChooseAccount(reload)
+        Dim selected = TryCast(accounts.SelectedItem, AccountChoice)
+        ChooseAccount(reload OrElse (previous IsNot Nothing AndAlso selected IsNot Nothing AndAlso previous.Status.NeedsLogin <> selected.Status.NeedsLogin))
     End Sub
 
     Private Sub ChooseAccount(Optional reload As Boolean = True)
@@ -274,6 +288,7 @@ Friend NotInheritable Class MegaDriveForm
         If email <> currentEmail Then
             reload = True
             SavePreferences()
+            If drive IsNot Nothing Then drive.Snapshot = Nothing
             currentEmail = email
             drive = Nothing
             If email <> "" AndAlso Not drives.TryGetValue(email, drive) Then
@@ -292,8 +307,22 @@ Friend NotInheritable Class MegaDriveForm
         loadCancellation = Nothing
         loadMessage = ""
         If drive Is Nothing Then
-            loadMessage = Language.GetText(If(service.IsRestoring, "MegaAccount_Connecting",
-                If(MegaAccountService.Availability() = 0, "MegaDrive_NoAccounts", "MegaDrive_BackendMissing")))
+            Dim accountStatus = service.GetStatus()
+            If accountStatus.LastError = MegaAccountService.BackendMissing Then
+                loadMessage = DriveLoadError(accountStatus.LastError)
+            ElseIf accountStatus.Connecting OrElse accountStatus.NeedsLogin OrElse accountStatus.LastError <> 0 Then
+                loadMessage = MegaAccountForm.Summary(accountStatus)
+            Else
+                loadMessage = Language.GetText(If(MegaAccountService.Availability() = 0, "MegaDrive_NoAccounts", "MegaDrive_BackendMissing"))
+            End If
+            RefreshRows()
+            Return
+        End If
+
+        Dim access = service.GetAccessError(currentEmail)
+        If access <> 0 Then
+            drive.Snapshot = Nothing
+            loadMessage = DriveLoadError(access)
             RefreshRows()
             Return
         End If
@@ -302,6 +331,7 @@ Friend NotInheritable Class MegaDriveForm
         loadCancellation = source
         Dim email = currentEmail
         Dim target = drive
+        target.Snapshot = Nothing
         Dim incoming = driveSource.SelectedIndex = 1
         target.Incoming = incoming
         loadMessage = Language.GetText("MegaDrive_Loading")
@@ -318,8 +348,7 @@ Friend NotInheritable Class MegaDriveForm
                 target.Selected.RemoveWhere(Function(id) snapshot.Find(id) Is Nothing)
             Else
                 target.Snapshot = Nothing
-                loadMessage = Language.GetText(If(code = MegaAccountService.BackendMissing, "MegaDrive_BackendMissing", "MegaDrive_LoadFailed"))
-                If code <> MegaAccountService.BackendMissing Then loadMessage &= " " & MegaAccountService.ErrorText(code)
+                loadMessage = DriveLoadError(code)
             End If
         Catch ex As Exception
             If source.IsCancellationRequested OrElse IsDisposed Then Return
@@ -334,6 +363,15 @@ Friend NotInheritable Class MegaDriveForm
             source.Dispose()
         End Try
     End Sub
+
+    Private Shared Function DriveLoadError(code As Integer) As String
+        Select Case code
+            Case MegaAccountService.SessionExpired : Return Language.GetText("MegaAccount_Reconnect")
+            Case MegaAccountService.BackendMissing : Return Language.GetText("MegaDrive_BackendMissing")
+            Case MegaAccountService.Busy : Return Language.GetText("MegaAccount_Connecting")
+            Case Else : Return Language.GetText("MegaDrive_LoadFailed") & " " & MegaAccountService.ErrorText(code)
+        End Select
+    End Function
 
     Private Sub ManageAccounts(sender As Object, e As EventArgs)
         Dim preferred = currentEmail
@@ -379,17 +417,21 @@ Friend NotInheritable Class MegaDriveForm
         Else
             drive.Preferences.LastFolder = folder
         End If
+        pendingFocusNode = focusNode
         search.Clear()
-        scope.SelectedIndex = 0
-        RefreshRows()
-        If focusNode.HasValue Then
-            Dim index = Array.FindIndex(shownNodes, Function(node) node.Id = focusNode.Value)
-            If index >= 0 Then grid.CurrentCell = grid(grid.Columns("Name").Index, index)
+        If scope.SelectedIndex = 0 Then
+            RefreshRows()
+        Else
+            scope.SelectedIndex = 0
         End If
     End Sub
 
-    Private Sub RefreshRows()
+    Private Async Sub RefreshRows()
         searchTimer.Stop()
+        If rowBuildCancellation IsNot Nothing Then rowBuildCancellation.Cancel()
+        rowBuildCancellation = Nothing
+        Dim focusNode = pendingFocusNode
+        pendingFocusNode = Nothing
         selectionAnchor = -1
         Dim ready = loadCancellation Is Nothing AndAlso drive IsNot Nothing AndAlso drive.Snapshot IsNot Nothing
         Dim wholeDrive = scope.SelectedIndex = 1
@@ -397,15 +439,56 @@ Friend NotInheritable Class MegaDriveForm
         grid.Columns("Location").Visible = wholeDrive OrElse showingSelected
         grid.Columns("Jump").Visible = wholeDrive OrElse showingSelected
         shownNodes = {}
+        UpdateBrowseControls(ready)
         If ready Then
-            If showingSelected Then
-                shownNodes = MegaDriveSnapshot.Sort(drive.Selected.Select(AddressOf drive.Snapshot.Find), sortByTime, descending)
+            Dim snapshot = drive.Snapshot
+            Dim folder = drive.Folder
+            Dim byTime = sortByTime
+            Dim reverse = descending
+            Dim query = search.Text.Trim()
+            Dim kind = CType(typeFilter.SelectedIndex, MegaDriveNode.FileKind)
+            Dim selected = If(showingSelected, drive.Selected.ToArray(), Nothing)
+            Dim candidateCount = If(selected Is Nothing, snapshot.BrowseCount(folder, wholeDrive), selected.Length)
+            Dim build As Func(Of MegaDriveNode()) = Function()
+                                                        If selected IsNot Nothing Then
+                                                            Return MegaDriveSnapshot.Sort(selected.Select(AddressOf snapshot.Find), byTime, reverse)
+                                                        End If
+                                                        Return snapshot.Browse(folder, query, wholeDrive, kind, byTime, reverse)
+                                                    End Function
+            If candidateCount < BackgroundBrowseCount Then
+                shownNodes = build()
             Else
-                shownNodes = drive.Snapshot.Browse(drive.Folder, search.Text.Trim(), wholeDrive,
-                    CType(typeFilter.SelectedIndex, MegaDriveNode.FileKind), sortByTime, descending)
+                Dim source As New CancellationTokenSource()
+                rowBuildCancellation = source
+                UpdateSelectionActions()
+                Try
+                    ' Keep one sort active even when the user changes the search or account repeatedly.
+                    Await rowBuildGate.WaitAsync(source.Token)
+                    Dim rows As MegaDriveNode()
+                    Try
+                        rows = Await Task.Run(build, source.Token)
+                    Finally
+                        rowBuildGate.Release()
+                    End Try
+                    If source.IsCancellationRequested OrElse IsDisposed Then Return
+                    shownNodes = rows
+                Catch ex As OperationCanceledException When source.IsCancellationRequested
+                    Return
+                Finally
+                    If rowBuildCancellation Is source Then rowBuildCancellation = Nothing
+                    source.Dispose()
+                End Try
             End If
         End If
         grid.RowCount = shownNodes.Length
+        UpdateSelectionActions()
+        If focusNode.HasValue Then
+            Dim index = Array.FindIndex(shownNodes, Function(node) node.Id = focusNode.Value)
+            If index >= 0 Then grid.CurrentCell = grid(grid.Columns("Name").Index, index)
+        End If
+    End Sub
+
+    Private Sub UpdateBrowseControls(ready As Boolean)
         grid.Columns("Name").HeaderCell.SortGlyphDirection = If(sortByTime, SortOrder.None, If(descending, SortOrder.Descending, SortOrder.Ascending))
         grid.Columns("Modified").HeaderCell.SortGlyphDirection = If(sortByTime, If(descending, SortOrder.Descending, SortOrder.Ascending), SortOrder.None)
         searchFrame.Enabled = ready AndAlso Not showingSelected
@@ -419,18 +502,17 @@ Friend NotInheritable Class MegaDriveForm
         manage.Enabled = loadCancellation Is Nothing
         accounts.Enabled = accounts.Items.Count > 0
         RefreshBreadcrumbs()
-        UpdateSelectionActions()
     End Sub
 
     Private Sub UpdateSelectionActions()
         Dim count = If(drive Is Nothing, 0, drive.Selected.Count)
-        Dim ready = loadCancellation Is Nothing AndAlso drive IsNot Nothing AndAlso drive.Snapshot IsNot Nothing
+        Dim ready = loadCancellation Is Nothing AndAlso rowBuildCancellation Is Nothing AndAlso drive IsNot Nothing AndAlso drive.Snapshot IsNot Nothing
         bulk.Enabled = ready AndAlso shownNodes.Length > 0
         review.Enabled = ready AndAlso (count > 0 OrElse showingSelected)
         review.Text = Language.GetText(If(showingSelected, "MegaDrive_BackToFiles", "MegaDrive_ViewSelected"))
         add.Enabled = ready AndAlso count > 0 AndAlso Not submitting
         If Not ready Then
-            status.Text = loadMessage
+            status.Text = If(rowBuildCancellation IsNot Nothing, Language.GetText("MegaDrive_PreparingList"), loadMessage)
         ElseIf shownNodes.Length = 0 AndAlso count = 0 Then
             Dim key = If(drive.Incoming AndAlso drive.Folder = drive.Snapshot.Root AndAlso Not drive.Snapshot.InDirectory(drive.Folder).Any(),
                          "MegaDrive_NoShares", "MegaDrive_EmptyFolder")

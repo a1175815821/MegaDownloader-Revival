@@ -102,6 +102,10 @@ Friend NotInheritable Class MegaDriveSnapshot
         Return trail
     End Function
 
+    Friend Function BrowseCount(folder As ULong, wholeDrive As Boolean) As Integer
+        Return If(wholeDrive, nodes.Count, children(folder).Count())
+    End Function
+
     Friend Function Browse(folder As ULong, query As String, wholeDrive As Boolean, kind As MegaDriveNode.FileKind,
                            sortByTime As Boolean, descending As Boolean) As MegaDriveNode()
         Dim candidates As IEnumerable(Of MegaDriveNode) = If(wholeDrive, nodes.Values.AsEnumerable(), InDirectory(folder))

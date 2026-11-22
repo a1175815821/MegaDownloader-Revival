@@ -25,7 +25,7 @@ Partial Public Class AddLinks
         End If
         Dim access = MegaAccountService.Current.GetAccessError(previewMegaAccountEmail)
         If access <> 0 Then
-            ShowInputNotice(MegaAccountService.ErrorText(access, connecting:=True), True)
+            ShowInputNotice(AccountAccessNotice(previewMegaAccountEmail, access), True)
             Return
         End If
         ShowInputNotice("")
@@ -156,7 +156,7 @@ Partial Public Class AddLinks
         Dim megaAccountEmail As String = previewMegaAccountEmail
         Dim access = MegaAccountService.Current.GetAccessError(megaAccountEmail)
         If access <> 0 Then
-            preflightView.ShowNotice(MegaAccountService.ErrorText(access, connecting:=True), True)
+            preflightView.ShowNotice(AccountAccessNotice(megaAccountEmail, access), True)
             Return
         End If
         importBusy = True

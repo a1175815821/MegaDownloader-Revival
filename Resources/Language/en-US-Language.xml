@@ -54,6 +54,7 @@
   <Text key="MegaDrive_NoAccounts"><![CDATA[Sign in through Manage MEGA accounts to open your drive.]]></Text>
   <Text key="MegaDrive_BackendMissing"><![CDATA[Install the Windows x64 MEGA module from this version to open the drive.]]></Text>
   <Text key="MegaDrive_Loading"><![CDATA[Reading cloud drive…]]></Text>
+  <Text key="MegaDrive_PreparingList"><![CDATA[Preparing the file list…]]></Text>
   <Text key="MegaDrive_LoadFailed"><![CDATA[Could not read the cloud drive.]]></Text>
   <Text key="MegaDrive_AccountBound"><![CDATA[Cloud drive tasks use the MEGA account they were added from.]]></Text>
   <Text key="MegaDrive_FileUnavailable"><![CDATA[This file is no longer available in the selected MEGA account.]]></Text>
@@ -77,6 +78,9 @@
   <Text key="MegaAccount_Reconnect"><![CDATA[Sign in to MEGA again]]></Text>
   <Text key="MegaAccount_Code"><![CDATA[Two-factor code]]></Text>
   <Text key="MegaAccount_Remember"><![CDATA[Keep me signed in on this device]]></Text>
+  <Text key="MegaAccount_Remembered"><![CDATA[Session saved]]></Text>
+  <Text key="MegaAccount_ConnectionFailed"><![CDATA[MEGA: connection failed]]></Text>
+  <Text key="MegaAccount_Removed"><![CDATA[Account removed]]></Text>
   <Text key="MegaAccount_EnterCredentials"><![CDATA[Enter your MEGA email and password.]]></Text>
   <Text key="MegaAccount_MfaRequired"><![CDATA[Enter the code from your authenticator app.]]></Text>
   <Text key="MegaAccount_RefreshQuota"><![CDATA[Refresh quota]]></Text>

@@ -1277,7 +1277,17 @@ Public Class Main
     Private Shared Function QueueDownloadIdentityText(email As String) As String
         If String.IsNullOrEmpty(email) Then Return Language.GetText("MegaAccount_Anonymous")
         Dim status = MegaAccountService.Current.GetStatus(email)
-        Return "MEGA · " & If(String.IsNullOrEmpty(status.DisplayName), email, status.DisplayName)
+        Dim caption = "MEGA · " & If(String.IsNullOrEmpty(status.DisplayName), email, status.DisplayName)
+        Dim availability = QueueAccountAvailability(status)
+        If availability <> "" Then caption = availability & " · " & caption
+        If status.Remember Then caption &= " · " & Language.GetText("MegaAccount_Remembered")
+        Return caption
+    End Function
+
+    Private Shared Function QueueAccountAvailability(status As MegaAccountService.Status) As String
+        If status.Connecting Then Return Language.GetText("MegaAccount_Connecting")
+        If String.IsNullOrEmpty(status.Email) Then Return Language.GetText("MegaAccount_Removed")
+        Return If(status.SignedIn, "", MegaAccountForm.Summary(status))
     End Function
 
     Private Shared Function QueueDownloadIdentity(ele As IDescarga) As String
@@ -1474,9 +1484,14 @@ Public Class Main
         identity.AspectGetter = AddressOf QueueDownloadIdentity
         ListaDescargas.CellToolTipGetter = Function(column, model)
                                               Dim file = TryCast(model, Fichero)
-                                              If column IsNot queueIdentityColumn OrElse file Is Nothing OrElse Not file.UsesMegaAccount Then Return Nothing
-                                              If file.MegaAccountTransferEmail = "" Then Return file.MegaAccountEmail
-                                              Return file.MegaAccountEmail & " → " & file.EffectiveMegaAccountEmail
+                                              If column IsNot queueIdentityColumn Then Return Nothing
+                                              If file Is Nothing Then Return QueueDownloadIdentity(TryCast(model, IDescarga))
+                                              If Not file.UsesMegaAccount Then Return Nothing
+                                              Dim caption = QueueDownloadIdentityText(file.EffectiveMegaAccountEmail)
+                                              If file.MegaAccountTransferEmail = "" Then
+                                                  Return If(caption.Contains(file.MegaAccountEmail), caption, caption & " (" & file.MegaAccountEmail & ")")
+                                              End If
+                                              Return file.MegaAccountEmail & " → " & file.EffectiveMegaAccountEmail & vbNewLine & caption
                                           End Function
         PlaceQueueIdentityColumn()
         ListaDescargas.RebuildColumns()
@@ -5103,21 +5118,30 @@ Public Class Main
         While queueIdentityMenu.DropDownItems.Count > 0
             queueIdentityMenu.DropDownItems(0).Dispose()
         End While
-        AddQueueIdentityMenuItem(Language.GetText("MegaAccount_Anonymous"), "")
+        AddQueueIdentityMenuItem(Language.GetText("MegaAccount_Anonymous"), "", True)
         For Each status In MegaAccountService.Current.GetAccounts()
-            If status.Connecting Then Continue For
             Dim caption = If(status.AliasName = "", status.Email, status.AliasName & " (" & status.Email & ")")
-            AddQueueIdentityMenuItem(caption, status.Email)
+            Dim availability = QueueAccountAvailability(status)
+            If availability <> "" Then caption &= " · " & availability
+            If status.Remember Then caption &= " · " & Language.GetText("MegaAccount_Remembered")
+            AddQueueIdentityMenuItem(caption, status.Email, status.SignedIn AndAlso Not status.Connecting)
         Next
     End Sub
 
-    Private Sub AddQueueIdentityMenuItem(caption As String, email As String)
-        Dim item As New ToolStripMenuItem(caption.Replace("&", "&&"))
+    Private Sub AddQueueIdentityMenuItem(caption As String, email As String, enabled As Boolean)
+        Dim item As New ToolStripMenuItem(caption.Replace("&", "&&")) With {.Enabled = enabled}
         AddHandler item.Click, Sub() ChangeSelectedDownloadIdentity(email)
         queueIdentityMenu.DropDownItems.Add(item)
     End Sub
 
     Private Sub ChangeSelectedDownloadIdentity(email As String)
+        If email <> "" Then
+            Dim availability = QueueAccountAvailability(MegaAccountService.Current.GetStatus(email))
+            If availability <> "" Then
+                ToastForm.ShowToast(Me, availability)
+                Return
+            End If
+        End If
         Dim files As New Generic.HashSet(Of Fichero)()
         Dim problem As String = ""
         SyncLock Mutex.ListaDescargas

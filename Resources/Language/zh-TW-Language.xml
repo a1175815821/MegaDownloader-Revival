@@ -54,6 +54,7 @@
   <Text key="MegaDrive_NoAccounts"><![CDATA[請透過「管理 MEGA 帳號」登入後開啟雲端硬碟。]]></Text>
   <Text key="MegaDrive_BackendMissing"><![CDATA[請安裝此版本對應的 Windows x64 MEGA 模組後開啟雲端硬碟。]]></Text>
   <Text key="MegaDrive_Loading"><![CDATA[正在讀取雲端硬碟…]]></Text>
+  <Text key="MegaDrive_PreparingList"><![CDATA[正在整理檔案清單…]]></Text>
   <Text key="MegaDrive_LoadFailed"><![CDATA[無法讀取雲端硬碟。]]></Text>
   <Text key="MegaDrive_AccountBound"><![CDATA[雲端硬碟任務使用加入時選取的 MEGA 帳號。]]></Text>
   <Text key="MegaDrive_FileUnavailable"><![CDATA[所選 MEGA 帳號已無法存取此檔案。]]></Text>
@@ -77,6 +78,9 @@
   <Text key="MegaAccount_Reconnect"><![CDATA[重新登入 MEGA]]></Text>
   <Text key="MegaAccount_Code"><![CDATA[兩步驗證碼]]></Text>
   <Text key="MegaAccount_Remember"><![CDATA[在此裝置上保持登入]]></Text>
+  <Text key="MegaAccount_Remembered"><![CDATA[已儲存工作階段]]></Text>
+  <Text key="MegaAccount_ConnectionFailed"><![CDATA[MEGA：連線失敗]]></Text>
+  <Text key="MegaAccount_Removed"><![CDATA[帳號已移除]]></Text>
   <Text key="MegaAccount_EnterCredentials"><![CDATA[請輸入 MEGA 電子郵件和密碼。]]></Text>
   <Text key="MegaAccount_MfaRequired"><![CDATA[請輸入驗證器應用程式中的驗證碼。]]></Text>
   <Text key="MegaAccount_RefreshQuota"><![CDATA[更新配額]]></Text>

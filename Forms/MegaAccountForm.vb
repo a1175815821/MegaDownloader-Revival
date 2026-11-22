@@ -257,6 +257,7 @@ Friend NotInheritable Class MegaAccountForm
     Friend Shared Function Summary(status As MegaAccountService.Status, Optional showUnknown As Boolean = False) As String
         If status.Connecting Then Return Language.GetText("MegaAccount_Connecting")
         If status.NeedsLogin Then Return Language.GetText("MegaAccount_Reconnect")
+        If status.LastError <> 0 Then Return Language.GetText("MegaAccount_ConnectionFailed")
         If Not status.SignedIn Then Return Language.GetText("MegaAccount_SignedOut")
         If status.QuotaReached Then Return Language.GetText("MegaAccount_QuotaReached")
         If status.Remaining.HasValue Then Return Language.GetText("MegaAccount_QuotaRemaining").Replace("%N%", FormatBytes(status.Remaining.Value))
@@ -303,8 +304,10 @@ Friend NotInheritable Class MegaAccountForm
         Try
             roster.Items.Clear()
             For Each status In accounts
-                roster.Items.Add(If(SameEmail(status.Email, defaultEmail),
-                                    Language.GetText("MegaAccount_DefaultEntry").Replace("%NAME%", status.DisplayName), status.DisplayName))
+                Dim caption = If(SameEmail(status.Email, defaultEmail),
+                                 Language.GetText("MegaAccount_DefaultEntry").Replace("%NAME%", status.DisplayName), status.DisplayName)
+                If status.Remember Then caption &= " · " & Language.GetText("MegaAccount_Remembered")
+                roster.Items.Add(caption)
             Next
             Dim index = accounts.FindIndex(Function(status) SameEmail(status.Email, keep))
             If index < 0 Then index = accounts.FindIndex(Function(status) SameEmail(status.Email, defaultEmail))
@@ -344,12 +347,23 @@ Friend NotInheritable Class MegaAccountForm
         accountEmail.Text = If(thisAlias.Length > 0, status.Email, "")
         accountEmail.Visible = thisAlias.Length > 0
         accountSummary.Text = Summary(status)
-        UiStyles.SetRole(accountSummary, If(status.NeedsLogin OrElse status.QuotaReached, UiStyles.Role.ErrorText, UiStyles.Role.Muted))
+        If Not status.Connecting AndAlso status.LastError <> 0 AndAlso Not status.NeedsLogin Then
+            accountSummary.Text &= vbNewLine & MegaAccountService.ErrorText(status.LastError, signingIn:=True)
+        End If
+        UiStyles.SetRole(accountSummary, If(status.NeedsLogin OrElse status.QuotaReached OrElse status.LastError <> 0, UiStyles.Role.ErrorText, UiStyles.Role.Muted))
         planValue.Text = PlanName(status.Plan)
         storageValue.Text = FormatUsage(status.StorageUsed, status.StorageTotal)
         transferValue.Text = FormatUsage(status.TransferUsed, status.TransferTotal)
         UpdateManagerButtons()
     End Sub
+
+    Protected Overrides Function ProcessCmdKey(ByRef msg As Message, keyData As Keys) As Boolean
+        If keyData = Keys.Enter AndAlso aliasInput IsNot Nothing AndAlso aliasInput.Focused Then
+            saveAlias.PerformClick()
+            Return True
+        End If
+        Return MyBase.ProcessCmdKey(msg, keyData)
+    End Function
 
     Private Sub UpdateManagerButtons()
         Dim status = SelectedAccount()

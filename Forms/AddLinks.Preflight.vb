@@ -84,7 +84,10 @@ Partial Public Class AddLinks
         Dim email = DirectCast(downloadIdentity.SelectedItem, IdentityOption).Email
         Dim access = MegaAccountService.Current.GetAccessError(email)
         Dim identityChanged = Not String.Equals(email, previewMegaAccountEmail, StringComparison.OrdinalIgnoreCase)
-        If Not identityChanged AndAlso access = previewMegaAccountAccess Then Return
+        If Not identityChanged AndAlso access = previewMegaAccountAccess Then
+            If access <> 0 Then ShowIdentityNotice()
+            Return
+        End If
         previewMegaAccountEmail = email
         previewMegaAccountAccess = access
         PreflightInputChanged()
@@ -98,8 +101,18 @@ Partial Public Class AddLinks
 
     Private Sub ShowIdentityNotice()
         Dim access = previewMegaAccountAccess
-        ShowInputNotice(If(access = 0, "", MegaAccountService.ErrorText(access, connecting:=True)), access <> 0)
+        ShowInputNotice(If(access = 0, "", AccountAccessNotice(previewMegaAccountEmail, access)), access <> 0)
     End Sub
+
+    Private Shared Function AccountAccessNotice(email As String, access As Integer) As String
+        If access = MegaAccountService.SessionExpired Then
+            Dim status = MegaAccountService.Current.GetStatus(email)
+            If status.LastError <> 0 AndAlso Not status.NeedsLogin Then
+                Return MegaAccountForm.Summary(status) & " " & MegaAccountService.ErrorText(status.LastError, signingIn:=True)
+            End If
+        End If
+        Return MegaAccountService.ErrorText(access, connecting:=True)
+    End Function
 
     Private Function CurrentPreflightRequest() As PreflightSession.Request
         If preflightSession Is Nothing Then
