@@ -576,6 +576,35 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <!-- 预构建的原生 MEGA 账号模块（x64）。存在就随包分发并内嵌进单文件版；
+       不存在时项目照常构建，只是账号入口提示缺少模块。用
+       /p:MegaAccountPrebuiltDir=... 可指向别处的构建产物。 -->
+  <PropertyGroup Condition="'$(MegaAccountPrebuiltDir)' == ''">
+    <MegaAccountPrebuiltDir>$(MSBuildProjectDirectory)\Native\MegaAccount\prebuilt\x64</MegaAccountPrebuiltDir>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll')">
+    <Content Include="$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll">
+      <Link>MegaAccountBridge.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MegaAccountPrebuiltDir)\msvcp140.dll">
+      <Link>msvcp140.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MegaAccountPrebuiltDir)\vcruntime140.dll">
+      <Link>vcruntime140.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MegaAccountPrebuiltDir)\vcruntime140_1.dll">
+      <Link>vcruntime140_1.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll" />
+    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\msvcp140.dll" />
+    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\vcruntime140.dll" />
+    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\vcruntime140_1.dll" />
+    <None Include="$(MegaAccountPrebuiltDir)\MEGA-SDK-LICENSE.txt" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>
     <PostBuildEvent>if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"

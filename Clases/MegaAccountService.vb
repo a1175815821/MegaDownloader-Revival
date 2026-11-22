@@ -1,5 +1,6 @@
 Imports System.Collections.Generic
 Imports System.IO
+Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Security.Cryptography
 Imports System.Text
@@ -155,8 +156,9 @@ Friend NotInheritable Class MegaAccountService
     End Function
 
     Friend Shared Function Availability() As Integer
-        If Not Environment.Is64BitProcess OrElse Not File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, MegaAccountNative.Library)) Then Return BackendMissing
-        Return 0
+        If Not Environment.Is64BitProcess Then Return BackendMissing
+        MegaAccountNative.EnsureNative()
+        Return If(MegaAccountNative.IsReady, 0, BackendMissing)
     End Function
 
     Friend Async Function RestoreAsync() As Task(Of Integer)
@@ -832,6 +834,95 @@ End Class
 
 Friend Module MegaAccountNative
     Friend Const Library As String = "MegaAccountBridge.dll"
+
+    ''' <summary>单文件版把原生模块和 VC++ 运行库内嵌进 exe。首次使用时释放到
+    ''' %LOCALAPPDATA%\MegaDownloader\native\，再从绝对路径预加载，P/Invoke 才会命中。
+    ''' 便携版由构建直接复制到程序目录，这里检测到文件已存在就不再释放。</summary>
+    Private ReadOnly nativeGate As New Object()
+    Private nativeReady As Integer
+    Private nativeDirectory As String
+
+    Friend ReadOnly Property IsReady As Boolean
+        Get
+            EnsureNative()
+            Return Threading.Volatile.Read(nativeReady) = 1
+        End Get
+    End Property
+
+    Friend Sub EnsureNative()
+        If Threading.Volatile.Read(nativeReady) <> 0 Then Return
+        SyncLock nativeGate
+            If nativeReady <> 0 Then Return
+            If Not Environment.Is64BitProcess Then Return
+            Try
+                Dim beside As String = IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Library)
+                If IO.File.Exists(beside) Then
+                    Preload(beside)
+                Else
+                    Dim extracted As String = ExtractEmbedded()
+                    If extracted Is Nothing Then Return
+                    Preload(extracted)
+                End If
+                Threading.Volatile.Write(nativeReady, 1)
+            Catch ex As Exception
+                Log.WriteWarning("Could not prepare the MEGA account module: " & Log.SafeException(ex))
+            End Try
+        End SyncLock
+    End Sub
+
+    ''' <summary>释放内嵌模块。内容按程序版本分目录缓存，升级后不会复用旧文件。</summary>
+    Private Function ExtractEmbedded() As String
+        Dim resources = Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames()
+        Dim moduleName As String = resources.FirstOrDefault(Function(name) name.EndsWith("." & Library, StringComparison.OrdinalIgnoreCase))
+        If moduleName Is Nothing Then Return Nothing
+        Dim target As String = IO.Path.Combine(IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader"),
+            IO.Path.Combine("native", Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString()))
+        IO.Directory.CreateDirectory(target)
+        Dim modulePath As String = IO.Path.Combine(target, Library)
+        ' The runtime DLLs must land before the module is loaded from this folder.
+        For Each runtime As String In New String() {"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"}
+            ExtractResource(resources, runtime, IO.Path.Combine(target, runtime))
+        Next
+        ExtractResource(resources, Library, modulePath)
+        nativeDirectory = target
+        Return modulePath
+    End Function
+
+    Private Sub ExtractResource(resources As String(), fileName As String, destination As String)
+        Dim resourceName As String = resources.FirstOrDefault(
+            Function(name) name.EndsWith("." & fileName, StringComparison.OrdinalIgnoreCase))
+        If resourceName Is Nothing Then Return
+        Using source = Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
+            If source Is Nothing Then Return
+            Dim bytes(CInt(source.Length) - 1) As Byte
+            source.Read(bytes, 0, bytes.Length)
+            If IO.File.Exists(destination) AndAlso New IO.FileInfo(destination).Length = bytes.Length Then Return
+            Dim temp As String = destination & "." & Guid.NewGuid().ToString("N") & ".tmp"
+            Try
+                IO.File.WriteAllBytes(temp, bytes)
+                If IO.File.Exists(destination) Then IO.File.Delete(destination)
+                IO.File.Move(temp, destination)
+            Finally
+                If IO.File.Exists(temp) Then IO.File.Delete(temp)
+            End Try
+        End Using
+    End Sub
+
+    ''' <summary>用绝对路径加载，避免依赖 DLL 搜索顺序。</summary>
+    Private Sub Preload(modulePath As String)
+        If nativeDirectory IsNot Nothing Then SetDllDirectory(nativeDirectory)
+        Dim handle = LoadLibraryW(modulePath)
+        If handle = IntPtr.Zero Then Throw New IO.IOException("Could not load " & Library & " (" & Marshal.GetLastWin32Error() & ").")
+    End Sub
+
+    <System.Runtime.InteropServices.DllImport("kernel32", CharSet:=System.Runtime.InteropServices.CharSet.Unicode, SetLastError:=True)>
+    Private Function LoadLibraryW(path As String) As IntPtr
+    End Function
+
+    <System.Runtime.InteropServices.DllImport("kernel32", CharSet:=System.Runtime.InteropServices.CharSet.Unicode, SetLastError:=True)>
+    Private Function SetDllDirectory(path As String) As Boolean
+    End Function
 
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
     Friend Delegate Sub Progress(received As Long, total As Long, speed As Long)

@@ -33,6 +33,10 @@ __pycache__/
 [Rr]elease/
 x64/
 x86/
+# 预构建的原生 MEGA 账号模块随发布包分发，必须入库（上面的 x64/ 规则会误伤它）
+!Native/MegaAccount/prebuilt/x64/
+!Native/MegaAccount/prebuilt/x64/*.dll
+!Native/MegaAccount/prebuilt/x64/*.txt
 *.dll.config
 *.exe.config
 *.pdb

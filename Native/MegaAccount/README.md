@@ -1,23 +1,29 @@
 # MEGA account module (Windows x64)
 
-This optional native DLL connects the WinForms app to the official [MEGA SDK v10.21.1](https://github.com/meganz/sdk/releases/tag/v10.21.1). The application can also build and download anonymously without the DLL.
+This native DLL connects the WinForms app to the official [MEGA SDK v10.21.1](https://github.com/meganz/sdk/releases/tag/v10.21.1). A prebuilt copy lives in `prebuilt/x64/`, so a normal build of the application ships the account feature without any extra tooling; the application can also build and download anonymously when those files are absent.
+
+## Prebuilt copy
+
+`prebuilt/x64/` contains `MegaAccountBridge.dll`, the three VC++ runtime DLLs it links against (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`), and `MEGA-SDK-LICENSE.txt`. The project copies them beside the portable build and embeds them into the single-file EXE, which unpacks them to `%LOCALAPPDATA%\MegaDownloader\native\<version>\` on first use. Regenerate the folder only when the bridge source or the SDK pin changes.
 
 ## Build
 
 Use Visual Studio 2022 with desktop C++, CMake, and a bootstrapped vcpkg repository with the SDK's `builtin-baseline` available (`ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0`). Obtain the SDK at tag `v10.21.1` separately from this repository. From the application root, substitute your source and vcpkg paths:
 
 ```powershell
-cmake -S Native/MegaAccount -B bin/MegaAccountNative -G 'Visual Studio 17 2022' -A x64 -DMEGA_SDK_DIR=C:/src/mega-sdk -DVCPKG_ROOT=C:/src/vcpkg
+cmake -S Native/MegaAccount -B bin/MegaAccountNative -G 'Visual Studio 17 2022' -A x64 -DMEGA_SDK_DIR=C:/src/mega-sdk -DVCPKG_ROOT=C:/src/vcpkg -DUSE_OPENSSL=OFF
 cmake --build bin/MegaAccountNative --config Release --target MegaAccountBridge
 ```
 
-Pass the resulting absolute DLL path as `MegaAccountBridgePath` when building the application. For example:
+`USE_OPENSSL=OFF` is the supported configuration on Windows: the SDK's curl uses the system Schannel backend, which avoids an OpenSSL dependency entirely. If vcpkg fails while downloading a source archive behind a proxy, place the archive in the vcpkg `downloads` folder under the name its portfile expects and re-run the configure step.
+
+Copy the new DLL over `prebuilt/x64/MegaAccountBridge.dll`, or pass a different folder with `/p:MegaAccountPrebuiltDir=...` when building the application. A one-off path also works:
 
 ```powershell
-dotnet msbuild MegaDownloader.vbproj /p:Configuration=Release /p:Platform=x86 "/p:MegaAccountBridgePath=$PWD\bin\MegaAccountNative\Release\MegaAccountBridge.dll"
+dotnet msbuild MegaDownloader.vbproj /p:Configuration=Release /p:Platform=x86 "/p:MegaAccountPrebuiltDir=$PWD\bin\MegaAccountNative\Release"
 ```
 
-The managed project uses AnyCPU with Prefer 32-bit disabled, including in the solution configuration named `x86`. The native module currently supports the x64 process. When distributing it, include the [SDK license](https://github.com/meganz/sdk/blob/v10.21.1/LICENSE) and dependency notices from vcpkg. The DLL uses the Microsoft Visual C++ runtime.
+The managed project uses AnyCPU with Prefer 32-bit disabled, including in the solution configuration named `x86`. The native module currently supports the x64 process. When distributing it, keep the [SDK license](https://github.com/meganz/sdk/blob/v10.21.1/LICENSE) with the binaries.
 
 ## Try it locally
 

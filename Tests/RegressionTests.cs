@@ -1531,7 +1531,11 @@ public partial class RegressionTests {
                 var remember=(System.Windows.Forms.CheckBox)form.Controls.Find("MegaAccountRemember",true).Single();
                 Check(password.UseSystemPasswordChar && !remember.Checked,"MEGA password is masked; remembering the session is opt-in");
                 var button=(System.Windows.Forms.Button)form.Controls.Find("MegaAccountAction",true).Single();
-                Check(!button.Enabled && form.Controls.Find("MegaAccountMessage",true).Single().Text.Length>0,"missing SDK is explained without submitting credentials");
+                int availability=(int)serviceType.GetMethod("Availability",shared).Invoke(null,null);
+                if(availability!=0)
+                    Check(!button.Enabled && form.Controls.Find("MegaAccountMessage",true).Single().Text.Length>0,"missing SDK is explained without submitting credentials");
+                else
+                    Check(button.Enabled,"a build with the native module allows signing in");
             }
             var first=SeedMegaAccount(service,"first@example.invalid","Primary",true,remaining:2684354560);
             var value=first.GetType().GetField("Value",hidden);
@@ -2833,7 +2837,11 @@ public partial class RegressionTests {
         var setDefault=type.GetMethod("SetDefault",hidden);
         var setAlias=type.GetMethod("SetAlias",hidden);
         var getDefault=type.GetProperty("DefaultEmail",hidden);
-        Check(((System.Threading.Tasks.Task<int>)restore.Invoke(service,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(service,null)==first && !File.Exists(legacy),"single-account store migrates locally and keeps its default");
+        // The fixture session is deliberately invalid, so a build that ships the native module
+        // reports a connection error here. The local migration must happen either way.
+        int migrated=((System.Threading.Tasks.Task<int>)restore.Invoke(service,null)).GetAwaiter().GetResult();
+        Check(migrated!=-1003 && (string)getDefault.GetValue(service,null)==first && !File.Exists(legacy) && File.Exists(Path.Combine(folder,"accounts.dat")),
+              "single-account store migrates locally and keeps its default");
         SeedMegaAccount(service,second,"",true);
         SeedMegaAccount(service,"quota@example.invalid","",true,remaining:0L);
         SeedMegaAccount(service,"offline@example.invalid","",false);
@@ -2844,7 +2852,8 @@ public partial class RegressionTests {
         attempted.Add(second);
         Check((string)next.Invoke(service,new object[]{second,attempted,true})=="","exhausted rotation ends without trying an account twice or starting anonymously");
         var reopened=Activator.CreateInstance(type,hidden,null,new object[]{folder},null);
-        Check(((System.Threading.Tasks.Task<int>)restore.Invoke(reopened,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==second,"explicit default survives a restart");
+        int reopenedResult=((System.Threading.Tasks.Task<int>)restore.Invoke(reopened,null)).GetAwaiter().GetResult();
+        Check(reopenedResult!=-1003 && (string)getDefault.GetValue(reopened,null)==second,"explicit default survives a restart");
         var lookup=type.GetMethod("GetStatus",hidden,null,new[]{typeof(string)},null);
         var status=lookup.Invoke(reopened,new object[]{second.ToUpperInvariant()});
         Check((string)status.GetType().GetField("AliasName",hidden).GetValue(status)=="Secondary" && !(bool)status.GetType().GetField("Remember",hidden).GetValue(status),"case-insensitive identity and alias persist without remembering a session");
