@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/%E5%85%8D%E8%B4%B9%E4%B8%8B%E8%BD%BD-%E6%9C%80%E6%96%B0%E7%89%88-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.4-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.5-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. 复制一个 MEGA 链接，程序会自动识别。
 3. 确认链接 → 勾选要的文件 → 开始下载。
 
-> v2.6.4 重点：侧栏不再周期性闪烁、更快更准的回归测试套件，以及更整齐的文档——基于 2.6 工作台的维护版。
+> v2.6.5 重点：可登录一个或多个 MEGA 账号、浏览云盘、下载网盘私有文件并断点续传；公开链接仍可匿名下载。
 
 <table>
 <tr>
@@ -46,13 +46,16 @@
 
 ---
 
-## ✨ 2.6.4 新在哪
+## ✨ 2.6.5 新在哪
 
-- **侧栏不再闪烁**：选中任务或配额横幅显示期间，工作区不再每 430ms 全量重排，仅在选中 / 配额状态真正翻转时重排一次；长时间配额暂停时侧栏保持稳定，倒计时照常刷新。
-- **回归套件更快更准**：测试改为 53 个命名用例逐用例计时，失败不再中断整轮——一轮即可报告全部问题，附逐用例耗时与最慢用例汇总；重复轮按内容哈希缓存跳过重新编译，`-NoBuild` 再跳过应用构建。
-- **测试更精准**：设置首开守卫不再因冷进程 JIT 耗时误报；下载夹具改为等待真实成品文件而非固定 sleep；端口分配避开 Windows 保留端口段并重试，修复「Error starting web server」套接字错误。
-- **覆盖更全面**：新增失败横幅行为（关闭 / 重现 / 重试过滤 / 配额续传）、永久 vs 配额错误分类、配额倒计时格式边界等用例（+38 断言）。Debug / Release 完整回归各通过 **1135 项断言**（53 用例全过）。
-- **文档更整齐**：审计 / 性能笔记归入 `docs/audits/`，语言 / 自测指南归入 `docs/guides/`；三语 README 恢复完整徽章行与首屏 Star 请求。[完整变更](CHANGELOG.md)。
+- **MEGA 账号**：在菜单栏登录一个或多个账号，添加链接时按任务选择下载身份，之后可在队列中改选；记住登录使用 Windows DPAPI 保存在本机。
+- **云盘**：浏览「我的云盘」与「分享给我的」，支持搜索、筛选、Shift 连选与批量选择；入队前预览会列出本地子目录与已排队文件。
+- **私有文件断点续传**：暂停、重置与重启后保留任务专属断点，只请求缺失区间，交付前校验整文件 MetaMAC。
+- **跨账号配额**：公开链接配额用尽时自动换下一个可用账号；私有任务留在原账号，并显示 SDK 给出的重试倒计时。
+- **绑定目录**：把收藏的云盘目录绑定到本地目录后检查新增与更新，已交付文件会被记录，不会重复下载。
+- **修复**：批量暂停不再卡在第一个网盘任务；重启后已交付的分卷直接复用，不再重下整卷；断点标记或账号配置损坏时改为可恢复，而不是卡住任务。[完整变更](CHANGELOG.md)。
+
+> 账号下载需要可选的 x64 `MegaAccountBridge.dll` 与程序放在同一目录，官方发布包不包含它。缺少该模块时匿名功能照常可用；构建方法见 [Native/MegaAccount](../Native/MegaAccount/README.md)。
 
 ## 2.6 引入的工作台功能
 
@@ -153,17 +156,19 @@
 - **多线程加速** —— 同一文件多路并发连接，吃满带宽
 - **真断点续传** —— 暂停 / 恢复 / 出错重试，重启程序接着下，中断的半成品会被复用
 - **文件夹下载** —— 递归解析整个分享文件夹，可只选其中部分子文件夹或文件
-- **限速** —— 全局或单任务限速
+- **限速** —— 全局限速，匿名任务还可单独限速
 - **失败自愈** —— 失败任务定时自动重试，永久失败自动排除（v2.5）
 - **配额熔断** —— MEGA 配额耗尽时自动暂停并倒计时，到点自动恢复；旧版「配额突破」持续重试模式仍可开启，默认关闭（v2.5）
 - **自动解压** —— 下完自动解压 RAR / 7Z / ZIP，支持分卷与密码，且不会覆盖已有同名文件
 - **成品校验** —— 链接包含 MetaMAC 时，下载文件会先经过校验，再标记为完成（v2.5.9）
+- **MEGA 账号** —— 登录一个或多个账号，用账号下载公开链接，配额用尽时自动换账号（v2.6.5）
 
 **链接接入**
 
 - **四种方式** —— 剪贴板自动识别 · 拖拽 · 手动粘贴 · `mega://` 协议
 - **批量预检** —— 大型分享先看清再勾选，不再盲下（v2.6）
 - **ELC 容器** —— 加密链接容器的导入与导出；`enc` / `enc2` / `fenc` / `fenc2` / `elc` 全支持
+- **云盘** —— 浏览我的云盘与分享目录，绑定本地目录后检查新增与更新文件（v2.6.5）
 
 **工作台**
 
@@ -218,10 +223,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.4 settings" src="screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.5 settings" src="screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>2.6.4 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
+<p align="center"><sub>2.6.5 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
+
+<table>
+<tr>
+  <td align="center" width="50%"><b>云盘</b><br><img src="screenshots/mega-drive.png" alt="云盘浏览与批量选择" width="100%"></td>
+  <td align="center" width="50%"><b>按任务选择下载身份</b><br><img src="screenshots/mega-account.png" alt="队列中的匿名与账号下载身份" width="100%"></td>
+</tr>
+</table>
+
+<p align="center"><sub>账号与云盘截图为示例数据，未连接真实 MEGA 账号。</sub></p>
 
 ---
 
@@ -231,7 +245,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.4** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.5** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
@@ -239,6 +253,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 | 添加大型分享 | 粘完就下，全凭运气 | ✅ 批量预检 + 文件夹树（v2.6） |
 | 找任务 | 整队翻找 | ✅ 按包名 / 文件 / 路径搜索（v2.6） |
 | 无人值守下载 | — | ✅ 每日时段或一次性预约（v2.6） |
+| 登录账号下载 | — | ✅ 多账号、云盘、私有文件断点续传（v2.6.5） |
 | 启动体验 | 首屏同步阻塞 | ✅ 先显示窗口，再后台恢复队列（v2.6.2） |
 | 界面主题 | 仅系统灰 | ✅ 深 / 浅色，跟随系统（v2.0） |
 | 稳定性 | — | ✅ 200+ 项崩溃 / 丢数据 / 安全修复 |
@@ -301,6 +316,8 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 回归验证：在 PowerShell 中运行 `.\Tests\Run-RegressionTests.ps1`（需要 .NET SDK）。测试使用临时文件与本机 HTTP 服务，无需 MEGA 账号。详见 [Tests/README.md](../Tests/README.md)。
 
+MEGA 账号模块是可选的独立 x64 原生 DLL，基于 MEGA SDK v10.21.1 单独构建，见 [Native/MegaAccount/README.md](../Native/MegaAccount/README.md)；不带它也能正常编译并匿名下载。
+
 **技术栈**：VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（加密）· Newtonsoft.Json · ObjectListView · SharpCompress（解压）· HttpServer/Fadd（Web）· F5Lib（隐写）
 
 </details>
@@ -340,7 +357,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6.4 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.4) | v2.6.4 的更新亮点与下载 |
+| [2.6.5 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.5) | v2.6.5 的更新亮点与下载 |
 
 README 为三种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 

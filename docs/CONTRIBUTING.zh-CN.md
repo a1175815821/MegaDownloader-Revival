@@ -260,7 +260,8 @@ git push origin feature/你的功能名称
 3. 在 `MegaDownloader.vbproj` 中添加嵌入资源：
 
 ```xml
-<EmbeddedResource Include="Resources\Languageu-RU-Language.xml" />
+<EmbeddedResource Include="Resources\Language
+u-RU-Language.xml" />
 ```
 
 4. 重新构建并运行程序，在 **设置 → 语言** 中选择新语言
@@ -292,9 +293,9 @@ git push origin feature/你的功能名称
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
-git tag -a v2.6.4 -m "Release v2.6.4"
+git tag -a v2.6.5 -m "Release v2.6.5"
 git push origin main
-git push origin v2.6.4
+git push origin v2.6.5
 ```
 
 CI 在 tag `v*` 上会自动：

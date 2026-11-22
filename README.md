@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Free%20download-Latest-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.4-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.5-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. Copy a MEGA link — the app detects it automatically.
 3. Confirm the link → choose files → start the download.
 
-> v2.6.4: a steady sidebar (no more periodic flicker), a faster and sharper regression suite, and tidier docs — a maintenance release on the 2.6 workbench.
+> v2.6.5: sign in with one or more MEGA accounts, browse the cloud drive, and download private files with resumable checkpoints — public links keep working anonymously.
 
 <table>
 <tr>
@@ -46,13 +46,16 @@
 
 ---
 
-## ✨ What's new in 2.6.4
+## ✨ What's new in 2.6.5
 
-- **No more sidebar flicker** — the workbench no longer re-lays itself out every 430ms while a task is selected or the quota banner is showing. It relayouts only when the selection or quota state actually flips, so the sidebar stays steady through long quota pauses while the countdown keeps updating.
-- **A faster, sharper regression suite** — the test run is now 53 named, individually timed cases that no longer stop at the first failure: one round reports every problem with per-case timing and a slowest-case summary. Repeat rounds skip recompilation via a content-hash cache, and `-NoBuild` skips the app build.
-- **More precise tests** — the settings first-open guard no longer false-fails on a cold process's JIT cost; download fixtures wait for the real output file instead of fixed sleeps; port allocation retries around Windows reserved-port ranges, fixing "Error starting web server" socket errors.
-- **Broader coverage** — new checks for the failure banner (dismiss / re-show / retry filter / quota resume), permanent-vs-quota error classification and quota countdown formatting (+38 assertions). Debug / Release each pass **1135 assertions** across 53 cases.
-- **Tidier docs** — audit and performance notes moved under `docs/audits/`, language and self-test guides under `docs/guides/`; the three READMEs regain the full badge row and first-screen star request. [Full changelog](docs/CHANGELOG.md).
+- **MEGA accounts** — sign in with one or more accounts from the menu bar. Choose the download identity per task in Add Links, switch it later from the queue, and keep sessions on this device with Windows DPAPI.
+- **Cloud drive** — browse your drive or the folders shared with you, filter, search and range-select, then queue files through a preview that shows local subfolders and anything already queued.
+- **Private downloads that resume** — private files keep a task-owned checkpoint across pause, reset and restart, stream only the missing range, and verify the whole file's MetaMAC before delivery.
+- **Quota across accounts** — a public link rotates to the next eligible account when quota runs out; a private task stays with its account and shows the SDK retry countdown.
+- **Bound folders** — bind a favorite cloud folder to a local directory and check for new or updated files; completed deliveries are remembered so nothing is fetched twice.
+- **Fixes** — pausing a batch no longer stops at the first cloud task, a restarted task reuses its delivered file instead of downloading the volume again, and a damaged checkpoint marker or account store now recovers instead of blocking the task. [Full changelog](docs/CHANGELOG.md).
+
+> Account downloads need the optional x64 `MegaAccountBridge.dll` beside the executable, which the official build does not bundle. Without it, every anonymous feature works as before; see [Native/MegaAccount](Native/MegaAccount/README.md) to build it.
 
 ## Workbench features introduced in 2.6
 
@@ -153,17 +156,19 @@ Besides clipboard detection, links can be added by dragging them onto the window
 - **Multi-threaded** — several concurrent connections per file to saturate your bandwidth
 - **Resume that actually works** — pause, resume, retry; survives restarts and recovers partial files
 - **Folder downloads** — recursive parsing of shared folders, pick only the subfolders or files you need
-- **Speed limits** — global or per task
+- **Speed limits** — global, or per task for anonymous downloads
 - **Failure self-healing** — failed tasks retry on a schedule, permanently dead ones are excluded (v2.5)
 - **Quota circuit breaker** — when MEGA's quota runs out the app pauses with a countdown and resumes automatically; the legacy retry mode is still there, off by default (v2.5)
 - **Automatic extraction** — RAR / 7Z / ZIP on completion, including multi-volume and password-protected archives, without overwriting existing files
 - **Verified output** — when the link contains a MetaMAC, downloaded files are verified before they are marked complete (v2.5.9)
+- **MEGA accounts** — sign in with one or more accounts, download public links through them, and rotate accounts when quota runs out (v2.6.5)
 
 **Getting links in**
 
 - **Four ways** — clipboard monitoring · drag and drop · manual paste · `mega://` protocol
 - **Batch pre-flight** — inspect and choose files before committing a large share (v2.6)
 - **ELC containers** — import and export encrypted link containers; `enc` / `enc2` / `fenc` / `fenc2` / `elc` all supported
+- **Cloud drive** — browse your drive or shared folders, bind a folder to a local directory, and check for new or updated files (v2.6.5)
 
 **Workbench**
 
@@ -218,10 +223,19 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.4 settings" src="docs/screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.5 settings" src="docs/screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>Settings in 2.6.4 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+<p align="center"><sub>Settings in 2.6.5 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+
+<table>
+<tr>
+  <td align="center" width="50%"><b>Cloud drive</b><br><img src="docs/screenshots/mega-drive.png" alt="Cloud drive browser with batch selection" width="100%"></td>
+  <td align="center" width="50%"><b>Download identity per task</b><br><img src="docs/screenshots/mega-account.png" alt="Queue showing anonymous and account download identities" width="100%"></td>
+</tr>
+</table>
+
+<p align="center"><sub>Account and cloud screens use sample data; no MEGA account is connected.</sub></p>
 
 ---
 
@@ -231,7 +245,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.4** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.5** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -239,6 +253,7 @@ This repository brings it back: v1.8 was decompiled to recover the source, and f
 | Adding a big share | paste and hope | ✅ batch pre-flight with folder tree (v2.6) |
 | Finding a task | scroll the whole queue | ✅ search by package, file or path (v2.6) |
 | Unattended downloads | — | ✅ daily window or one-off schedule (v2.6) |
+| Signed-in MEGA downloads | — | ✅ multiple accounts, cloud drive, private resume (v2.6.5) |
 | Startup | blocking first paint | ✅ window paints before background queue recovery (v2.6.2) |
 | UI theme | system grey only | ✅ dark / light, follows system (v2.0) |
 | Stability | — | ✅ 200+ crash / data-loss / security fixes |
@@ -298,6 +313,8 @@ Output goes to `bin/<Configuration>/MegaDownloader.exe`. Build configurations: `
 
 Regression checks: run `.\Tests\Run-RegressionTests.ps1` in PowerShell (requires the .NET SDK). Tests use temporary files and a local HTTP server; no MEGA account is needed. See [Tests/README.md](Tests/README.md).
 
+The optional MEGA account module is a separate x64 native DLL built against MEGA SDK v10.21.1; see [Native/MegaAccount/README.md](Native/MegaAccount/README.md). Build without it and the app still compiles and downloads anonymously.
+
 **Tech stack**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle (crypto) · Newtonsoft.Json · ObjectListView · SharpCompress (decompression) · HttpServer/Fadd (web) · F5Lib (steganography)
 
 </details>
@@ -337,7 +354,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.4](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.4) | Highlights and downloads for v2.6.4 |
+| [Release notes 2.6.5](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.5) | Highlights and downloads for v2.6.5 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 
