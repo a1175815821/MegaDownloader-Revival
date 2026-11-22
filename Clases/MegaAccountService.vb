@@ -627,7 +627,14 @@ Friend NotInheritable Class MegaAccountService
                previous.FolderDestinations.All(Function(item)
                                                    Dim path As String = Nothing
                                                    Return preferences.FolderDestinations.TryGetValue(item.Key, path) AndAlso path = item.Value
-                                               End Function) Then Return 0
+                                               End Function) AndAlso
+               previous.BoundFolderPaths.Count = preferences.BoundFolderPaths.Count AndAlso
+               previous.BoundFolderPaths.All(Function(binding)
+                                                 Dim paths As Dictionary(Of ULong, String) = Nothing
+                                                 Return preferences.BoundFolderPaths.TryGetValue(binding.Key, paths) AndAlso
+                                                     paths.Count = binding.Value.Count AndAlso
+                                                     binding.Value.All(Function(item) paths.ContainsKey(item.Key) AndAlso paths(item.Key) = item.Value)
+                                             End Function) Then Return 0
             entry.DrivePreferences = preferences.Copy()
             Dim result = SaveStore()
             If result <> 0 Then entry.DrivePreferences = previous
