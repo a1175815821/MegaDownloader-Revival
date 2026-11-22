@@ -69,7 +69,14 @@ Public Partial Class ELCAccountControl
 			dgELCUsers.EnableHeadersVisualStyles = False
 			FillELCAccountDataGridView()
 			dgELCUsers.ClearSelection()
-			
+
+			ELCAccountAction = ""
+			txtELCAccountKey.Clear()
+			txtELCAccountUser.Clear()
+			txtELCAccountURL.Clear()
+			txtELCAccountAlias.Clear()
+			chkELCAccountShowPassword.Checked = False
+			chkELCAccountMain.Checked = False
 			txtELCAccountKey.Enabled = False
 			txtELCAccountUser.Enabled = False
 			txtELCAccountURL.Enabled = False

@@ -25,6 +25,22 @@ Public Class ThrottledStreamController
     ' Velocidad máxima
     Private _htMaxSpeed As Generic.Dictionary(Of String, Long)
     Private _globalMaxSpeed As Long
+    Private ReadOnly _accountDownloads As New Generic.HashSet(Of AccountDownloadBudget)()
+
+    ' The SDK applies its limit to the entire client, including concurrent downloads.
+    Friend NotInheritable Class AccountDownloadBudget
+        Friend Transfers As Integer
+        Private _bytesPerSecond As Long
+
+        Friend Property BytesPerSecond As Long
+            Get
+                Return Threading.Volatile.Read(_bytesPerSecond)
+            End Get
+            Set(value As Long)
+                Threading.Volatile.Write(_bytesPerSecond, value)
+            End Set
+        End Property
+    End Class
 
     Private Sub New()
         SyncLock Mutex
@@ -64,10 +80,11 @@ Public Class ThrottledStreamController
 
         SyncLock Mutex
 
-            If _StreamList.Count = 0 Then Exit Sub
+            Dim participants = _StreamList.Count + _accountDownloads.Count
+            If participants = 0 Then Exit Sub
 
             ' Velocidad maxima global de cada stream
-            Dim SpeedGlobalIndividual As Long = CLng(_globalMaxSpeed / _StreamList.Count)
+            Dim SpeedGlobalIndividual As Long = _globalMaxSpeed \ participants
 
             Dim MaxSpeed As Long
 
@@ -105,23 +122,18 @@ Public Class ThrottledStreamController
                 End If
             Next
 
-            Dim StreamsRestantes As Integer = 0
-            For Each stream As ThrottledStream In _StreamList
-                If Not StreamsConLimiteIndividual.Contains(stream) Then
-                    StreamsRestantes += 1
-                End If
-            Next
+            Dim StreamsRestantes = participants - StreamsConLimiteIndividual.Count
             If StreamsRestantes > 0 Then
-
-                MaxSpeed = CLng((_globalMaxSpeed - SpeedAsignada) / StreamsRestantes)
-                If MaxSpeed < 0 Then MaxSpeed = 0
+                MaxSpeed = Math.Max(0L, _globalMaxSpeed - SpeedAsignada) \ StreamsRestantes
 
                 For Each stream As ThrottledStream In _StreamList
                     If Not StreamsConLimiteIndividual.Contains(stream) Then
                         stream.MaximumBytesPerSecond = MaxSpeed
                     End If
                 Next
-
+                For Each budget In _accountDownloads
+                    budget.BytesPerSecond = MaxSpeed
+                Next
             End If
 
 
@@ -184,6 +196,24 @@ Public Class ThrottledStreamController
             End If
         End SyncLock
         _RecalcularVelocidad()
+    End Sub
+
+    Friend Sub BeginAccountDownload(budget As AccountDownloadBudget)
+        SyncLock Mutex
+            budget.Transfers += 1
+            If budget.Transfers > 1 Then Return
+            _accountDownloads.Add(budget)
+            _RecalcularVelocidad()
+        End SyncLock
+    End Sub
+
+    Friend Sub EndAccountDownload(budget As AccountDownloadBudget)
+        SyncLock Mutex
+            budget.Transfers -= 1
+            If budget.Transfers > 0 Then Return
+            _accountDownloads.Remove(budget)
+            _RecalcularVelocidad()
+        End SyncLock
     End Sub
 
     ' Llamar cuando se establece velocidad máxima global

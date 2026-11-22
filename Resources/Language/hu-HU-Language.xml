@@ -340,6 +340,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Chec&amp;k for updates"><![CDATA[Chec&k for updates]]></Text>
   <Text key="Check for updates"><![CDATA[Check for updates]]></Text>
   <Text key="Manual check only"><![CDATA[Csak kézi ellenőrzés]]></Text>
+  <Text key="Check interval"><![CDATA[Ellenőrzési időköz]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Linkek elrejtése képekben]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[Linkek &kinyerése képből]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[LAN-hozzáférés engedélyezéséhez webkiszolgáló-jelszó szükséges.]]></Text>

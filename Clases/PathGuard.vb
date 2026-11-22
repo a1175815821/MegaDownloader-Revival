@@ -70,7 +70,7 @@ Public NotInheritable Class PathGuard
         Dim dotIndex As Integer = baseName.IndexOf("."c)
         If dotIndex >= 0 Then baseName = baseName.Substring(0, dotIndex)
         If ReservedNames.Contains(baseName) Then
-            cleaned = "_" & cleaned
+            cleaned = "_" & cleaned.Substring(0, Math.Min(cleaned.Length, MaxSegmentLength - 1)).TrimEnd(" "c, "."c)
         End If
 
         Return cleaned

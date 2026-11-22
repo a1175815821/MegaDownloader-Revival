@@ -22,6 +22,11 @@ Public Class Main
 
     ''' <summary>B1/B2: 启动期文件被瞬时占用时,驱动"锁释放后自动重载"的计时器与状态提示。</summary>
     Private _recoveryTimer As System.Windows.Forms.Timer = Nothing
+
+    ''' <summary>复用的设置窗口实例(关闭时隐藏,主窗口退出时释放)。</summary>
+    Private _settingsForm As Configuration = Nothing
+    ''' <summary>主窗口空闲/失焦时预建设置窗口，让第一次点击也接近复用窗口的速度。</summary>
+    Private _settingsPrewarmTimer As System.Windows.Forms.Timer = Nothing
     Private _recoveryBusy As Boolean = False
     Private _recoveryStatusLabel As System.Windows.Forms.ToolStripStatusLabel = Nothing
 
@@ -422,7 +427,14 @@ Public Class Main
 
         If Config.ConfigUI.EstadoLista IsNot Nothing Then
             Log.WriteDebug("Restoring columns")
-            ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista)
+            If Not ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista) Then
+                ' Single-account builds saved ten columns. Restore their layout before adding the identity column.
+                ListaDescargas.AllColumns.Remove(queueIdentityColumn)
+                ListaDescargas.RestoreState(Config.ConfigUI.EstadoLista)
+                ListaDescargas.AllColumns.Add(queueIdentityColumn)
+                PlaceQueueIdentityColumn()
+                ListaDescargas.RebuildColumns()
+            End If
         End If
 
         ' P0-1 UI:一次性列默认集(开 Progreso%、藏 Descargado、Estado 加宽)。只跑一次,不覆盖用户之后的手动调整。
@@ -455,11 +467,47 @@ Public Class Main
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
+        StartSettingsPrewarm()
         If _startupQueueLoading Then
             BeginStartupQueueLoad()
         Else
             ContinueStartupAfterQueueLoad()
         End If
+    End Sub
+
+    ''' <summary>
+    ''' 主窗口显示后启动一个低频检查：用户离开本程序且没有其它可见窗口时，
+    ''' 先把设置窗体的控件树建好。这样首次点击设置不再承担约 0.55 秒的构造，
+    ''' 而用户不在看这个窗口，构造期间的可感知卡顿为零。
+    ''' </summary>
+    Private Sub StartSettingsPrewarm()
+        If _settingsPrewarmTimer IsNot Nothing Then Return
+        _settingsPrewarmTimer = New System.Windows.Forms.Timer With {.Interval = 5000}
+        AddHandler _settingsPrewarmTimer.Tick, AddressOf SettingsPrewarmTimer_Tick
+        _settingsPrewarmTimer.Start()
+    End Sub
+
+    <DllImport("user32.dll")>
+    Private Shared Function GetForegroundWindow() As IntPtr
+    End Function
+
+    Private Sub SettingsPrewarmTimer_Tick(sender As Object, e As EventArgs)
+        If _settingsForm IsNot Nothing OrElse Cerrando OrElse Me.IsDisposed Then
+            _settingsPrewarmTimer.Stop()
+            Return
+        End If
+        ' 只在用户不在本窗口、没有其它可见窗口、也没有禁用主窗体的模态框时预建，
+        ' 避免可感知卡顿。
+        If Not Me.Enabled Then Return
+        If GetForegroundWindow() = Me.Handle Then Return
+        If Application.OpenForms.Cast(Of Form)().Any(Function(f) f IsNot Me AndAlso f.Visible) Then Return
+        _settingsPrewarmTimer.Stop()
+        Try
+            _settingsForm = New Configuration()
+            _settingsForm.PreloadForFirstShow(Config)
+        Catch ex As Exception
+            Log.WriteError("Settings prewarm failed: " & Log.SafeException(ex))
+        End Try
     End Sub
 
     Private Sub CompleteStartup()
@@ -503,6 +551,7 @@ Public Class Main
         End If
 
         ApplyRuntimeDownloadSettings()
+        RestoreMegaAccount()
         If Config.ComenzarDescargando AndAlso Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then
             Me.EstadoAplicacion = TipoEstadoAplicacion.Descargando
         End If
@@ -735,6 +784,7 @@ Public Class Main
         Me.OlvColumnProgreso.Text = Language.GetText("Progress")
         Me.OlvColumnProgresoPorc.Text = Language.GetText("Progress %")
         Me.OlvColumnEstado.Text = Language.GetText("Status")
+        queueIdentityColumn.Text = Language.GetText("DownloadIdentity")
         Me.OlvColumnTamano.Text = Language.GetText("Size")
         Me.OlvColumnDescargado.Text = Language.GetText("Downloaded")
         Me.OlvColumnNombre.Text = Language.GetText("Name")
@@ -1012,6 +1062,15 @@ Public Class Main
         'SkinEngine.Dispose()
         ' 第19项:置位必须在 DoEvents 之前,否则泵出的托盘点击会复活窗口
         Cerrando = True
+        If _settingsPrewarmTimer IsNot Nothing Then
+            _settingsPrewarmTimer.Stop()
+            _settingsPrewarmTimer.Dispose()
+            _settingsPrewarmTimer = Nothing
+        End If
+        If _settingsForm IsNot Nothing AndAlso Not _settingsForm.IsDisposed Then
+            _settingsForm.Dispose()
+            _settingsForm = Nothing
+        End If
         CancelStartupQueueLoad()
         Application.DoEvents()
 
@@ -1202,6 +1261,47 @@ Public Class Main
 
 #Region "Columnas del ListView"
 
+    Private ReadOnly queueIdentityColumn As New BrightIdeasSoftware.OLVColumn With {.Name = "QueueDownloadIdentity", .Width = 124}
+    Private ReadOnly queueIdentityMenu As New ToolStripMenuItem With {.Name = "ChangeDownloadIdentity"}
+
+    Private Sub PlaceQueueIdentityColumn()
+        Dim position = OlvColumnEstado.DisplayIndex + 1
+        For Each column In ListaDescargas.AllColumns
+            If column IsNot queueIdentityColumn AndAlso column.IsVisible AndAlso column.DisplayIndex >= position Then
+                column.LastDisplayIndex = column.DisplayIndex + 1
+            End If
+        Next
+        queueIdentityColumn.LastDisplayIndex = position
+    End Sub
+
+    Private Shared Function QueueDownloadIdentityText(email As String) As String
+        If String.IsNullOrEmpty(email) Then Return Language.GetText("MegaAccount_Anonymous")
+        Dim status = MegaAccountService.Current.GetStatus(email)
+        Dim caption = "MEGA · " & If(String.IsNullOrEmpty(status.DisplayName), email, status.DisplayName)
+        Dim availability = QueueAccountAvailability(status)
+        If availability <> "" Then caption = availability & " · " & caption
+        If status.Remember Then caption &= " · " & Language.GetText("MegaAccount_Remembered")
+        Return caption
+    End Function
+
+    Private Shared Function QueueAccountAvailability(status As MegaAccountService.Status) As String
+        If status.Connecting Then Return Language.GetText("MegaAccount_Connecting")
+        If String.IsNullOrEmpty(status.Email) Then Return Language.GetText("MegaAccount_Removed")
+        Return If(status.SignedIn, "", MegaAccountForm.Summary(status))
+    End Function
+
+    Private Shared Function QueueDownloadIdentity(ele As IDescarga) As String
+        Dim file = TryCast(ele, Fichero)
+        If file IsNot Nothing Then Return QueueDownloadIdentityText(file.EffectiveMegaAccountEmail)
+        Dim package = TryCast(ele, Paquete)
+        If package Is Nothing OrElse package.ListaFicheros.Count = 0 Then Return ""
+        Dim email = package.ListaFicheros(0).EffectiveMegaAccountEmail
+        For Each child In package.ListaFicheros
+            If Not String.Equals(child.EffectiveMegaAccountEmail, email, StringComparison.OrdinalIgnoreCase) Then Return Language.GetText("MegaAccount_MixedIdentities")
+        Next
+        Return QueueDownloadIdentityText(email)
+    End Function
+
     ''' <summary>
     ''' Define el comportamiento de las columnas del listview
     ''' </summary>
@@ -1292,6 +1392,8 @@ Public Class Main
         Dim ColEstado As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(ListaDescargas.AllColumns(IndiceColumnaEstado))
         ColEstado.AspectGetter = Function(ele As IDescarga)
                                      Try
+                                         Dim cloudState = CloudQueueStatus(ele)
+                                         If cloudState IsNot Nothing Then Return cloudState
                                          Dim Estado As Estado = ele.DescargaEstado()
                                          Select Case Estado
                                              Case MegaDownloader.Estado.EnCola
@@ -1376,6 +1478,23 @@ Public Class Main
 
 
 
+        queueIdentityColumn.Text = Language.GetText("DownloadIdentity")
+        ListaDescargas.AllColumns.Add(queueIdentityColumn)
+        Dim identity As New BrightIdeasSoftware.TypedColumn(Of IDescarga)(queueIdentityColumn)
+        identity.AspectGetter = AddressOf QueueDownloadIdentity
+        ListaDescargas.CellToolTipGetter = Function(column, model)
+                                              Dim file = TryCast(model, Fichero)
+                                              If column IsNot queueIdentityColumn Then Return Nothing
+                                              If file Is Nothing Then Return QueueDownloadIdentity(TryCast(model, IDescarga))
+                                              If Not file.UsesMegaAccount Then Return Nothing
+                                              Dim caption = QueueDownloadIdentityText(file.EffectiveMegaAccountEmail)
+                                              If file.MegaAccountTransferEmail = "" Then
+                                                  Return If(caption.Contains(file.MegaAccountEmail), caption, caption & " (" & file.MegaAccountEmail & ")")
+                                              End If
+                                              Return file.MegaAccountEmail & " → " & file.EffectiveMegaAccountEmail & vbNewLine & caption
+                                          End Function
+        PlaceQueueIdentityColumn()
+        ListaDescargas.RebuildColumns()
         ListaDescargas.AllowColumnReorder = True
 
         ListaDescargas.CanExpandGetter = Function(ele As Object)
@@ -2132,7 +2251,7 @@ Public Class Main
         SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each fic As Fichero In paq.ListaFicheros
-                    If fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
+                    If Not fic.UsesMegaAccount AndAlso fic.DescargaEstado = Estado.Erroneo AndAlso fic.FailedByQuota Then
                         pend.Add(fic)
                     End If
                 Next
@@ -2153,6 +2272,8 @@ Public Class Main
         ResetColumnsMenuItem.Name = "ResetColumnsMenuItem"
         sepBatchMenuItem.Name = "sepBatchMenuItem"
         sepColumnsMenuItem.Name = "sepColumnsMenuItem"
+        MenuDescarga.Items.Add(queueIdentityMenu)
+        InitCloudQuotaActions()
         MenuDescarga.Items.Add(sepBatchMenuItem)
         MenuDescarga.Items.Add(RetryAllFailedMenuItem)
         MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
@@ -2162,6 +2283,7 @@ Public Class Main
     End Sub
 
     Private Sub UpdateBatchMenuTexts()
+        queueIdentityMenu.Text = Language.GetText("MegaAccount_UseForSelection")
         RetryAllFailedMenuItem.Text = Language.GetText("Retry all failed")
         If String.IsNullOrEmpty(RetryAllFailedMenuItem.Text) Then RetryAllFailedMenuItem.Text = "Retry all failed"
         RemoveAllFailedMenuItem.Text = Language.GetText("Remove all failed")
@@ -2203,7 +2325,7 @@ Public Class Main
         Try
             Dim lista As Generic.List(Of Fichero) = CollectErroneoFiles()
             For Each fic As Fichero In lista
-                fic.ResetearDescarga()
+                fic.ResetearDescarga(preserveProgress:=fic.MegaDriveNodeHandle.HasValue)
                 fic.SetDescargaEstado = Estado.EnCola
             Next
             Log.WriteWarning("Retrying all failed files: " & lista.Count)
@@ -2284,6 +2406,7 @@ Public Class Main
             SetColumnWidthLimit(7, 55, 120)
             SetColumnWidthLimit(8, 55, 120)
             SetColumnWidthLimit(9, 55, 120)
+            SetColumnWidthLimit(10, 96, 320)
             ' 文件名列保持自动吃剩余空间(窗口拉宽不留白);"反向"手感由上下限兜底:它永远不会被压成 0。
             ListaDescargas.AllColumns(0).FillsFreeSpace = True
         Catch ex As Exception
@@ -2331,6 +2454,9 @@ Public Class Main
                     End Try
                 End If
             Next
+            queueIdentityColumn.IsVisible = True
+            queueIdentityColumn.Width = CInt(124 * GetUiScale())
+            PlaceQueueIdentityColumn()
             ListaDescargas.RebuildColumns()
             ThemeManager.RefreshListTheme(ListaDescargas)
             Log.WriteWarning("Applied column defaults (widths/order/visibility).")
@@ -2981,12 +3107,9 @@ Public Class Main
                 Dim quotaHoldVerify As Boolean = MegaQuotaManager.IsQuarantined()
                 If quotaHoldVerify Then TiempoDormir = 5000
 
-                If Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify Then
-                    ' 原来单 worker 串行逐个验：几百文件的文件夹 × 每次 API 往返 = 十几分钟"转圈"。
-                    ' 现跨包最多 4 并发；同包靠投递序号保命名确定性（与串行时代"首个验完命名"一致）。
-                    PumpVerifyQueue(verifyCts.Token)
-                    If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
-                End If
+                ' Account metadata follows the SDK session, not the anonymous quota/credential gate.
+                PumpVerifyQueue(verifyCts.Token, Not NecesitaCambiarUsuarioYPassword AndAlso Not quotaHoldVerify)
+                If _verifyInflight.Count > 0 Then TiempoDormir = Math.Min(TiempoDormir, 100)
 
                     ' Miramos si hay que guardar el fichero de downloads
                     ' Se guarda cada 5 segundos siempre O
@@ -3075,7 +3198,7 @@ Public Class Main
     ''' 投递按列表顺序编号；包命名只认"同包最早投递且无更早在途者"的完成，
     ''' 与串行时代"首个验完命名"结果一致。字典只在 worker 线程碰，无需加锁。
     ''' </summary>
-    Private Sub PumpVerifyQueue(ByVal ct As System.Threading.CancellationToken)
+    Private Sub PumpVerifyQueue(ByVal ct As System.Threading.CancellationToken, anonymousAllowed As Boolean)
         Try
             If _verifyInflight.Count > 0 Then
                 For Each job As VerifyJob In New Generic.List(Of VerifyJob)(_verifyInflight.Values)
@@ -3090,7 +3213,9 @@ Public Class Main
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each fic As Fichero In paq.ListaFicheros
-                        If fic.DescargaProcesada = False AndAlso fic.DescargaEstado <> Estado.Erroneo AndAlso Not _verifyInflight.ContainsKey(fic) Then
+                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(fic) AndAlso fic.DescargaEstado = Estado.EnCola,
+                                                      anonymousAllowed AndAlso fic.DescargaEstado <> Estado.Erroneo)
+                        If canVerify AndAlso Not fic.DescargaProcesada AndAlso Not _verifyInflight.ContainsKey(fic) Then
                             picked = New VerifyJob()
                             picked.Fic = fic
                             picked.Paq = paq
@@ -3458,7 +3583,8 @@ Public Class Main
                 Dim fic As Fichero = newFailures(0)
                 _recentBalloonTimes.Add(now)
                 ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
-                    fic.NombreFichero & vbCrLf & DownloadAdvice.Describe(fic.DescripcionError, fic.FailedByQuota, fic.EsErrorPermanente), ToolTipIcon.Warning)
+                    fic.NombreFichero & vbCrLf & If(fic.UsesMegaAccount, DownloadAdvice.FirstLine(fic.DescripcionError),
+                        DownloadAdvice.Describe(fic.DescripcionError, fic.FailedByQuota, fic.EsErrorPermanente)), ToolTipIcon.Warning)
             ElseIf newFailures.Count > 1 AndAlso _recentBalloonTimes.Count < 3 Then
                 _recentBalloonTimes.Add(now)
                 ShowBalloonTip(Language.GetText("Notify_Failed_Title"), _
@@ -3589,57 +3715,50 @@ Public Class Main
         End Try
         quotaHoldPrev = quotaHold
 
-        ' Reset de descargas erroneas
-        ' 突破模式下配额失败项不依赖自愈开关(否则关掉自愈=突破模式静默失效);
-        ' 普通失败仍只跟自愈开关,用户关掉就不再碰。
-        If ResetearErrores OrElse MegaQuotaManager.IsBreakthroughMode() Then
-            SyncLock Mutex.ListaDescargas
-                For Each paq As Paquete In Me.ListaPaquetes
-                    For Each Fichero As Fichero In paq.ListaFicheros
-                        If Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                            If Fichero.FailedByQuota Then
-                                If MegaQuotaManager.IsBreakthroughMode() Then
-                                    ' 突破模式:无熔断,按普通失败的自愈节拍复活(旧版行为)。
-                                    ' 禁止紧循环:此前无时间门,每调度节拍复活一次,锤得比旧版凶数百倍。
-                                    If Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now Then ColaReseteo.Add(Fichero)
-                                ElseIf Not quotaHold Then
-                                    ColaReseteo.Add(Fichero)
-                                End If
-                            ElseIf ResetearErrores AndAlso (Not Fichero.FechaUltimoError.HasValue OrElse Fichero.FechaUltimoError.Value.AddMinutes(ResetearErroresPeriodo) < Now) Then
-                                ColaReseteo.Add(Fichero)
-                            End If
-                        End If
-                    Next
-                Next
-            End SyncLock
-            For Each Fichero In ColaReseteo
-                ' P0-1:自愈保留断点续传,不删 .part/不清分块(否则大文件超时后无限重下)。
-                Fichero.ResetearDescarga(True)
-                Fichero.SetDescargaEstado = Estado.EnCola
-                Log.WriteInfo("Reseting file " & Fichero.FileID & " automatically.")
+        Dim breakthrough = MegaQuotaManager.IsBreakthroughMode()
+        Dim retryBefore = Now.AddMinutes(-Math.Max(1, ResetearErroresPeriodo))
+        SyncLock Mutex.ListaDescargas
+            For Each Fichero In ListaPaquetes.SelectMany(Function(package) package.ListaFicheros)
+                If Fichero.DescargaEstado <> Estado.Erroneo OrElse Fichero.EsErrorPermanente Then Continue For
+                Dim retryDue = Fichero.FechaUltimoError.GetValueOrDefault() < retryBefore
+                If Fichero.UsesMegaAccount Then
+                    If CanRetryMegaAccountFailure(Fichero, retryDue, ResetearErrores) Then ColaReseteo.Add(Fichero)
+                ElseIf ResetearErrores OrElse breakthrough Then
+                    If Fichero.FailedByQuota Then
+                        If If(breakthrough, retryDue, Not quotaHold) Then ColaReseteo.Add(Fichero)
+                    ElseIf ResetearErrores AndAlso retryDue Then
+                        ColaReseteo.Add(Fichero)
+                    End If
+                End If
             Next
-        End If
+        End SyncLock
+        For Each Fichero In ColaReseteo
+            Fichero.ResetearDescarga(preserveProgress:=True)
+            Fichero.SetDescargaEstado = Estado.EnCola
+            Log.WriteInfo("Retrying file " & Fichero.FileID & " automatically.")
+        Next
 
 
         SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
 
-                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
+                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount, Not Fichero.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(Fichero), Not quotaHold)
+                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
-                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso Not quotaHold Then
+                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescargaPausa.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
                         ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
                         NumFicherosDescargando += 1
                         Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
                         If NumConAbiertas = 0 Then
-                            NumConAbiertas = configConexionesPorFichero ' Todavía no está descargando pero empezará en breve
+                            NumConAbiertas = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero) ' Todavía no está descargando pero empezará en breve
                         End If
                         NumConexionesAbiertas += NumConAbiertas
                     ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
                         NumFicherosDescargando += 1
-                        NumConexionesAbiertas += configConexionesPorFichero
+                        NumConexionesAbiertas += If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
                     End If
 
                 Next
@@ -3662,14 +3781,15 @@ Public Class Main
                 If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
                     Log.WriteInfo("Continuing paused file download " & Fichero.NombreFichero)
                     Fichero.[Resume]()
-                    ConexionesPorAbrir -= Fichero.NumeroConexionesAbiertas
+                    ConexionesPorAbrir -= If(Fichero.UsesMegaAccount, 1, Fichero.NumeroConexionesAbiertas)
                     FicherosPorAbrir -= 1
                 End If
             Next
             For Each Fichero As Fichero In ColaDescarga
                 If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
-                    Dim ConexionesParaEstaDescarga As Integer = configConexionesPorFichero
-                    If ConexionesPorAbrir < configConexionesPorFichero Then ConexionesParaEstaDescarga = ConexionesPorAbrir
+                    ' One logical queue slot per SDK transfer; socket scheduling belongs to the SDK.
+                    Dim ConexionesParaEstaDescarga As Integer = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
+                    If ConexionesPorAbrir < ConexionesParaEstaDescarga Then ConexionesParaEstaDescarga = ConexionesPorAbrir
                     Log.WriteInfo("Starting file download " & Fichero.NombreFichero)
                     Fichero.Start(Me.Config, ConexionesParaEstaDescarga)
                     ConexionesPorAbrir -= ConexionesParaEstaDescarga
@@ -3683,6 +3803,10 @@ Public Class Main
 
     Private Sub ForzarDescarga(Fichero As Fichero)
         If Not ScheduleAllowsStart(True) Then Return
+        If CloudQuotaBlocks(Fichero) Then
+            ToastForm.ShowToast(Me, CloudQuotaText(MegaAccountService.Current.GetStatus(Fichero.MegaAccountEmail)))
+            Return
+        End If
         Log.WriteInfo("Forcing download" & Fichero.NombreFichero)
         SyncLock Mutex.ListaDescargas
             If Fichero.DescargaEstado = Estado.Pausado Then
@@ -3694,8 +3818,7 @@ Public Class Main
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             ElseIf Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                ' ⑧:红字强制=手动全量重置后按单个强制起(删 .part 从头来,顺带修尺寸不符类错误)。
-                Fichero.ResetearDescarga()
+                Fichero.ResetearDescarga(preserveProgress:=Fichero.MegaDriveNodeHandle.HasValue)
                 Fichero.PausaIndividual = False
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Fichero.DescargaIndividual = True
@@ -3749,9 +3872,9 @@ Public Class Main
         SyncLock Mutex.ListaDescargas
             For Each paq As Paquete In Me.ListaPaquetes
                 For Each Fichero As Fichero In paq.ListaFicheros
-                    If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or _
-                       Fichero.DescargaEstado = Estado.Pausado Or _
-                       Fichero.DescargaEstado = Estado.CreandoLocal Then
+                    If (Fichero.DescargaEstado = Estado.Descargando AndAlso
+                        (Not Fichero.DescargaIndividual OrElse (Cerrando AndAlso Fichero.MegaDriveNodeHandle.HasValue))) OrElse
+                       Fichero.DescargaEstado = Estado.Pausado OrElse Fichero.DescargaEstado = Estado.CreandoLocal Then
                         Log.WriteInfo("Stopping file " & Fichero.NombreFichero)
                         Fichero.Stop()
                     End If
@@ -3849,7 +3972,8 @@ Public Class Main
 
                 Dim AbortClose As Boolean = False
                 For Each frm As Form In My.Application.OpenForms
-                    If TypeOf frm Is Configuration Then ' No cerramos hasta que el usuario quite la pantalla de configuración
+                    ' 复用的设置窗口平时是隐藏的;只阻止真正可见的设置窗口。
+                    If TypeOf frm Is Configuration AndAlso frm.Visible Then ' No cerramos hasta que el usuario quite la pantalla de configuración
                         AbortClose = True
                     End If
                 Next
@@ -4327,6 +4451,7 @@ Public Class Main
                     fic.Stop()
                     Log.WriteDebug("File download stopped " & fic.NombreFichero)
                 Case Else
+                    If BorrarFicheros Then fic.DiscardPrivateMegaCheckpoint()
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                     fic.BorrarFicheroLocal()
                     fic.Dispose()
@@ -4347,6 +4472,7 @@ Public Class Main
                         fic.Stop()
                         Log.WriteDebug("File download stopped " & fic.NombreFichero)
                     Case Else
+                        If BorrarFicheros Then fic.DiscardPrivateMegaCheckpoint()
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                         fic.BorrarFicheroLocal()
                         fic.Dispose()
@@ -4418,6 +4544,7 @@ Public Class Main
                 If System.Threading.Interlocked.Exchange(fic.DisposalHandled, 1) <> 0 Then Return
                 Log.WriteDebug("Download file stopped " & fic.NombreFichero & ", pending delete")
                 If fic.MarcadoParaBorrarFicheroLocal Then
+                    fic.DiscardPrivateMegaCheckpoint()
                     fic.BorrarFicheroLocal()
                 End If
                 Dim paqLimpieza As Paquete = fic.LimpiezaPaquete
@@ -4981,10 +5108,78 @@ Public Class Main
                     VerProgresoDescompresionToolStripMenuItem.Visible = True
                 End If
             Next
+            PopulateQueueIdentityMenu()
+            PrepareCloudQuotaActions()
             e.MenuStrip = MenuDescarga
         End If
     End Sub
 
+    Private Sub PopulateQueueIdentityMenu()
+        While queueIdentityMenu.DropDownItems.Count > 0
+            queueIdentityMenu.DropDownItems(0).Dispose()
+        End While
+        AddQueueIdentityMenuItem(Language.GetText("MegaAccount_Anonymous"), "", True)
+        For Each status In MegaAccountService.Current.GetAccounts()
+            Dim caption = If(status.AliasName = "", status.Email, status.AliasName & " (" & status.Email & ")")
+            Dim availability = QueueAccountAvailability(status)
+            If availability <> "" Then caption &= " · " & availability
+            If status.Remember Then caption &= " · " & Language.GetText("MegaAccount_Remembered")
+            AddQueueIdentityMenuItem(caption, status.Email, status.SignedIn AndAlso Not status.Connecting)
+        Next
+    End Sub
+
+    Private Sub AddQueueIdentityMenuItem(caption As String, email As String, enabled As Boolean)
+        Dim item As New ToolStripMenuItem(caption.Replace("&", "&&")) With {.Enabled = enabled}
+        AddHandler item.Click, Sub() ChangeSelectedDownloadIdentity(email)
+        queueIdentityMenu.DropDownItems.Add(item)
+    End Sub
+
+    Private Sub ChangeSelectedDownloadIdentity(email As String)
+        If email <> "" Then
+            Dim availability = QueueAccountAvailability(MegaAccountService.Current.GetStatus(email))
+            If availability <> "" Then
+                ToastForm.ShowToast(Me, availability)
+                Return
+            End If
+        End If
+        Dim files As New Generic.HashSet(Of Fichero)()
+        Dim problem As String = ""
+        SyncLock Mutex.ListaDescargas
+            For Each selected In ListaDescargas.SelectedObjects
+                Dim file = TryCast(selected, Fichero)
+                Dim package = TryCast(selected, Paquete)
+                If file IsNot Nothing Then files.Add(file)
+                If package IsNot Nothing Then files.UnionWith(package.ListaFicheros)
+            Next
+            SyncLock Mutex.FicheroDownloader
+                files.RemoveWhere(Function(file) file.DescargaEstado() = Estado.Completado)
+                For Each file In files
+                    If file.MegaDriveNodeHandle.HasValue Then
+                        problem = "MegaDrive_AccountBound"
+                        Exit For
+                    End If
+                    If Not file.CanChangeDownloadIdentity() Then
+                        problem = "MegaAccount_QueueAccountInUse"
+                        Exit For
+                    End If
+                    If email <> "" AndAlso Fichero.GetMegaAccountLink(file.URL) Is Nothing Then
+                        problem = "MegaAccount_QueueOnlyFiles"
+                        Exit For
+                    End If
+                Next
+                If problem = "" Then
+                    For Each file In files
+                        file.ChangeDownloadIdentity(email)
+                    Next
+                End If
+            End SyncLock
+        End SyncLock
+        If problem <> "" Then
+            ToastForm.ShowToast(Me, Language.GetText(problem))
+        Else
+            RefreshListaDescargas(False)
+        End If
+    End Sub
 
     ''' <summary>
     ''' Agregamos links con el menú contextual
@@ -5095,13 +5290,16 @@ Public Class Main
     ''' <param name="e"></param>
     ''' <remarks></remarks>
     Private Sub btnConfig_Click(sender As System.Object, e As System.EventArgs) Handles btnConfig.Click
-        Dim frmName As New Configuration
-        frmName.MainForm = Me
-        frmName.Config = Config
-        frmName.RequiereConfiguracion = False
-        frmName.ShowDialog()
-        ' Hasta que no se cierre la ventana no continuamos la ejecución
-        frmName.Dispose()
+        ' 设置窗口复用同一个实例：首次打开先构建，之后只刷新字段并重新显示。
+        ' 关闭时窗体由 ShowDialog 隐藏而不销毁，重开实测约 0.2 秒。
+        If _settingsForm Is Nothing OrElse _settingsForm.IsDisposed Then
+            _settingsForm = New Configuration()
+        End If
+        _settingsForm.MainForm = Me
+        _settingsForm.Config = Config
+        _settingsForm.RequiereConfiguracion = False
+        _settingsForm.PrepareForReopen()
+        _settingsForm.ShowDialog(Me)
     End Sub
 
 
@@ -5202,11 +5400,7 @@ Public Class Main
 
     Public Sub StartDownload()
         If Not ScheduleAllowsStart(True) Then Return
-        ' P3-11: 配额熔断守卫此前只挂在工具栏 Play 上,AddLinks 的"立即下载"直接
-        ' 调 StartDownload 绕过了它 —— 熔断期里一个任务都不会开,状态栏却显示
-        ' "Downloading",配额 Toast 也不弹,用户完全得不到解释。
-        ' 守卫下沉到 StartDownload,所有入口(工具栏/AddLinks/其它调用方)行为一致。
-        If MegaQuotaManager.IsQuarantined() Then
+        If MegaQuotaManager.IsQuarantined() AndAlso Not HasPendingMegaAccountDownload() Then
             ShowQuotaBlockedToast()
             Return
         End If
@@ -5237,13 +5431,23 @@ Public Class Main
     End Sub
 
     Private Sub btnPlay_Click(sender As System.Object, e As System.EventArgs) Handles btnPlay.Click
-        ' 熔断期点开始此前零反馈(调度器静默不开新任务)。给明确提示,不改状态。
-        If MegaQuotaManager.IsQuarantined() Then
-            ShowQuotaBlockedToast()
-            Return
-        End If
         StartDownload()
     End Sub
+
+    Private Function HasPendingMegaAccountDownload() As Boolean
+        SyncLock Mutex.ListaDescargas
+            For Each package As Paquete In ListaPaquetes
+                For Each fic As Fichero In package.ListaFicheros
+                    If Not fic.UsesMegaAccount Then Continue For
+                    Select Case fic.DescargaEstado()
+                        Case Estado.EnCola, Estado.Pausado, Estado.Verificando, Estado.CreandoLocal, Estado.Descargando
+                            Return True
+                    End Select
+                Next
+            Next
+        End SyncLock
+        Return False
+    End Function
 
     ''' <summary>配额熔断提示。工具栏 Play 与"立即下载"(AddLinks)共用同一出口,
     ''' 免得两边的文案/倒计时格式走样。</summary>

@@ -432,6 +432,7 @@ De momento solo funciona con ficheros ZIPs y RARs, pero no con volumenes RAR (fi
 
   <Text key="Check for updates"><![CDATA[Comprobar actualizaciones automáticamente]]></Text>
   <Text key="Manual check only"><![CDATA[Comprobar manualmente]]></Text>
+  <Text key="Check interval"><![CDATA[Intervalo de comprobación]]></Text>
 
 
   <Text key="Steganograph&amp;y"><![CDATA[Esteganogra&fía]]></Text>

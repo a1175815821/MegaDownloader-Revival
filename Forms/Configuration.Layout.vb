@@ -1,7 +1,18 @@
-Imports System.Drawing
+﻿Imports System.Drawing
 Imports System.Windows.Forms
 
 Partial Public Class Configuration
+    ' 首次打开只物化可见的“一般”页；其余页面的控件仍在字段里存活，
+    ' 但暂时离开布局/句柄树，等第一次选中该页时再构建（见 EnsureSettingsPage）。
+    ' 实测这能把首次打开的构造期从约 1.0 秒降到约 0.67 秒。
+    Private connectionPage As TabPage
+    Private settingsLayoutReady As Boolean
+    Private ReadOnly settingsPagesBuilt As New HashSet(Of TabPage)
+    ' 懒建页第一次选中时必须强制布局一次：页面的布局引擎不会在
+    ' “页面原本为空、随后在 SelectedIndexChanged 里加入 body”时自动重跑，
+    ' 否则 body 会停在默认高度 20px，整页看起来是空白。
+    Private ReadOnly settingsPagesLaidOut As New HashSet(Of TabPage)
+
     Private Sub InitConfigurationLayout()
         FormBorderStyle = FormBorderStyle.Sizable
         MaximizeBox = True
@@ -34,74 +45,36 @@ Partial Public Class Configuration
         heading.Controls.Add(search, 1, 0)
         shell.Controls.Add(heading, 0, 0)
 
-        Dim connectionPage As New TabPage With {.Name = "ConnectionPage", .Text = ConexionGroup.Text}
+        connectionPage = New TabPage With {.Name = "ConnectionPage", .Text = ConexionGroup.Text}
         AddHandler ConexionGroup.TextChanged, Sub() connectionPage.Text = ConexionGroup.Text
-        TabControl1.TabPages.Clear()
-        TabControl1.TabPages.AddRange(New TabPage() {TabPage1, connectionPage, TabPage2, TabPage3, TabPage4, TabPage5})
+        ' 只移动“连接”页后面的 4 个页；原先的 Clear + AddRange 会把 6 个页连同
+        ' 174 个子控件全部拆掉重加，单是这一步就要约 50 ms。TabPages.Insert 在
+        ' 这个窗体上不可靠(页会进入 Controls 却不进入 TabPages)，故用移除/重加。
+        TabControl1.TabPages.Add(connectionPage)
+        Dim trailingPages As TabPage() = {TabPage2, TabPage3, TabPage4, TabPage5}
+        For Each trailing As TabPage In trailingPages
+            TabControl1.TabPages.Remove(trailing)
+        Next
+        For Each trailing As TabPage In trailingPages
+            TabControl1.TabPages.Add(trailing)
+        Next
         TabControl1.Dock = DockStyle.Fill
         TabControl1.Margin = New Padding(0)
         TabControl1.Multiline = True
         TabControl1.Padding = New Point(16, 9)
 
-        SettingsSection(GroupBox1, FieldRow(Label2, txtUsuario), FieldRow(Label3, txtPassword, chkShowPassword))
-        Dim options As New TableLayoutPanel With {.Dock = DockStyle.Top, .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .ColumnCount = 2, .RowCount = 4, .Margin = New Padding(0)}
-        options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
-        UiStyles.SetRole(options, UiStyles.Role.Surface)
-        For index As Integer = 0 To 3
-            options.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        Next
-        options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
-        Dim checks As Control() = {chkAnalisisPortapapeles, chkCrearDirectorio, chkComenzarPlay,
-                                  InlineControls(chkApagarPC, linkApagarPC), chkStartWindows,
-                                  InlineControls(chkUltimaConfig, linkUltConfig), chkCheckUpdates,
-                                  InlineControls(chkUnZip, comboPrioridad)}
-        ' 6: 更新检查行：间隔（小时） + 仅手动。Interval>0 有意义，ManualOnly 独立于 CheckUpdates。
-        ' “h” 在区域设置下无意义：翻译后长尾巴会把复选框挤出可视区，沿用本语言的 hours 词。
-        Dim updateIntervalLabel As New Label With {.Text = Language.GetText("hours"), .AutoSize = True}
-        Dim updateRow As New FlowLayoutPanel With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .Dock = DockStyle.Top, .WrapContents = True, .Margin = New Padding(0)}
-        updateRow.Controls.AddRange(New Control() {chkUpdateManualOnly, txtUpdateCheckInterval, updateIntervalLabel})
-        UiStyles.SetRole(updateRow, UiStyles.Role.Surface)
-        For Each c As Control In updateRow.Controls
-            c.Margin = New Padding(0, 3, 8, 3)
-            If TypeOf c Is TextBox Then c.Width = 44
-        Next
+        ' 未选中的页面先清空。控件本身仍由窗体字段持有，Configuration_Load
+        ' 照旧给它们赋值；等页面第一次被选中时再重新放进分区布局。
+        TabPage2.Controls.Clear()
+        TabPage3.Controls.Clear()
+        TabPage4.Controls.Clear()
+        TabPage5.Controls.Clear()
 
-        For index As Integer = 0 To checks.Length - 1
-            checks(index).Margin = New Padding(0, 6, 16, 6)
-            options.Controls.Add(checks(index), index Mod 2, index \ 2)
-        Next
-        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), Divider(),
-                        options, updateRow, Divider(),
-                        FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
-        SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
-                        InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
-                        FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1)
-        SettingsSection(GroupBox2, chkProxy, Divider(), FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
-                        FieldRow(Label23, txtProxyName), FieldRow(Label22, txtProxyPassword))
-        UiStyles.SetAppFont(Label8)
-        UiStyles.SetRole(Label8, UiStyles.Role.Muted)
-        SettingsSection(GroupBox3, Label8, FieldRow(Label4, txtTamanoPaquete, Label5),
-                        FieldRow(Label6, txtTamanoBuffer, Label7), FieldRow(Label11, comboLog))
-        SettingsSection(GroupBox5, chkServidorWeb, chkServidorWebLAN, Divider(),
-                        FieldRow(lblServidorWebBindIP, txtServidorWebBindIP), FieldRow(Label16, txtServidorWebPort),
-                        FieldRow(Label18, txtServidorWebTimeout, Label19), FieldRow(Label17, txtServidorWebPassword),
-                        FieldRow(Label20, txtServidorWebNombre), FieldRow(Label21, txtServidorWebTemplate, btnExaminarTemplate))
-        txtKeyList.MinimumSize = New Size(0, 200)
-        txtKeyList.Dock = DockStyle.Top
-        SettingsSection(GroupBox, txtKeyList)
-        SettingsSection(GroupBox6, chkStreamingServer, FieldRow(lblStreamingPort, txtStreamingPort), FieldRow(lblStreamingPassword, txtStreamingPassword))
-        SettingsSection(GroupBox8, FieldRow(Label26, txtVLCPath, btnExaminarVLCPath), linkDownloadVLC)
-        UiStyles.SetRole(lblInfoStreaming, UiStyles.Role.Muted)
-        SettingsSection(GroupBox7, lblInfoStreaming)
+        EnsureSettingsPage(TabPage1)
+        ' 一般页由外壳的首次布局负责，避免在 Shown 里再强制排一遍。
+        settingsPagesLaidOut.Add(TabPage1)
+        settingsLayoutReady = True
 
-        SettingsPage(TabPage1, GroupBox4, GroupBox1)
-        SettingsPage(connectionPage, ConexionGroup, GroupBox2)
-        SettingsPage(TabPage2, GroupBox3, GroupBox5)
-        SettingsPage(TabPage3, lblDesc, GroupBox)
-        SettingsPage(TabPage4, GroupBox6, GroupBox8, GroupBox7)
-        ElcAccountControl.Dock = DockStyle.Fill
-        TabPage5.Padding = New Padding(12)
-        UiStyles.SetRole(TabPage5, UiStyles.Role.Surface)
         shell.Controls.Add(TabControl1, 0, 1)
 
         Dim actions As New FlowLayoutPanel With {.Dock = DockStyle.Fill, .AutoSize = True, .FlowDirection = FlowDirection.RightToLeft, .Margin = New Padding(0, 20, 0, 0)}
@@ -121,6 +94,145 @@ Partial Public Class Configuration
         AcceptButton = btnGuardar
         CancelButton = btnCancel
         AddHandler Shown, Sub() FitConfigurationWindow()
+    End Sub
+
+    ''' <summary>
+    ''' 第一次选中某个标签页时才构建它的分区布局。外壳、标签页和控件字段
+    ''' 在构造期已经存在，所以这里不需要再创建控件，只做分区/页面重排。
+    ''' </summary>
+    Private Sub EnsureSettingsPage(page As TabPage)
+        If page Is Nothing OrElse settingsPagesBuilt.Contains(page) Then Return
+        settingsPagesBuilt.Add(page)
+        If page Is TabPage1 Then
+            BuildGeneralPage()
+        ElseIf page Is connectionPage Then
+            BuildConnectionPage()
+        ElseIf page Is TabPage2 Then
+            BuildAdvancedPage()
+        ElseIf page Is TabPage3 Then
+            BuildPresharedKeysPage()
+        ElseIf page Is TabPage4 Then
+            BuildStreamingPage()
+        ElseIf page Is TabPage5 Then
+            BuildElcPage()
+        End If
+        ' 页面构建发生在 Load 的主题应用之后时，需要单独补一次主题；否则
+        ' 未参与首次 ApplyTheme 递归的这棵子树会保留默认浅色。
+        If themeApplied Then ThemeManager.ApplyThemeToControl(page)
+        ' 窗体还隐藏时不强制布局（此时宽度可能不是最终值）；Shown 时会补。
+        If settingsLayoutReady AndAlso Me.Visible AndAlso page Is TabControl1.SelectedTab Then ForceSettingsPageLayout(page)
+    End Sub
+
+    ''' <summary>
+    ''' 懒建页面第一次显示时补一次真实布局。SettingsPage 里的
+    ''' body.ResumeLayout(False) 只恢复挂起计数，不执行布局；页面从空变有内容时
+    ''' WinForms 也不会替我们重排这棵树，必须显式 PerformLayout。
+    ''' </summary>
+    Private Sub ForceSettingsPageLayout(page As TabPage)
+        If page Is Nothing OrElse settingsPagesLaidOut.Contains(page) Then Return
+        settingsPagesLaidOut.Add(page)
+        If page.Controls.Count = 0 Then Return
+        page.Controls(0).PerformLayout()
+        page.Invalidate(True)
+    End Sub
+
+    Private Sub BuildGeneralPage()
+        Dim options As New TableLayoutPanel With {.Dock = DockStyle.Top, .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink, .ColumnCount = 2, .RowCount = 4, .Margin = New Padding(0)}
+        options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
+        UiStyles.SetRole(options, UiStyles.Role.Surface)
+        For index As Integer = 0 To 3
+            options.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        Next
+        options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
+        Dim intervalCaption As New Label With {.Text = Language.GetText("Check interval"), .AutoSize = True}
+        Dim hours As New Label With {.Text = Language.GetText("hours"), .AutoSize = True}
+        Dim intervalFields = InlineControls(intervalCaption, txtUpdateCheckInterval, hours)
+        intervalFields.WrapContents = False
+        txtUpdateCheckInterval.Width = 44
+        txtUpdateCheckInterval.AccessibleName = intervalCaption.Text & " (" & hours.Text & ")"
+        For Each field As Control In intervalFields.Controls
+            field.Anchor = AnchorStyles.None
+            field.Margin = New Padding(0, 0, 6, 0)
+        Next
+        Dim updatePreferences = InlineControls(chkUpdateManualOnly, intervalFields)
+        updatePreferences.Padding = New Padding(20, 0, 0, 0)
+        updatePreferences.Margin = New Padding(0)
+        updatePreferences.TabIndex = 1
+        chkUpdateManualOnly.Anchor = AnchorStyles.None
+        chkUpdateManualOnly.Margin = New Padding(0, 4, 12, 4)
+        chkUpdateManualOnly.TabIndex = 0
+        intervalFields.Anchor = AnchorStyles.None
+        intervalFields.Margin = New Padding(0, 4, 0, 4)
+        intervalFields.TabIndex = 1
+        Dim updateOptions = StackLayout()
+        updateOptions.TabIndex = chkCheckUpdates.TabIndex
+        chkCheckUpdates.Margin = New Padding(0)
+        chkCheckUpdates.TabIndex = 0
+        updateOptions.Controls.AddRange(New Control() {chkCheckUpdates, updatePreferences})
+        Dim refreshUpdateOptions As Action =
+            Sub()
+                chkUpdateManualOnly.Enabled = chkCheckUpdates.Checked
+                intervalFields.Enabled = chkCheckUpdates.Checked AndAlso Not chkUpdateManualOnly.Checked
+            End Sub
+        AddHandler chkCheckUpdates.CheckedChanged, Sub() refreshUpdateOptions()
+        AddHandler chkUpdateManualOnly.CheckedChanged, Sub() refreshUpdateOptions()
+        refreshUpdateOptions()
+
+        Dim checks As Control() = {chkAnalisisPortapapeles, chkCrearDirectorio, chkComenzarPlay,
+                                  InlineControls(chkApagarPC, linkApagarPC), chkStartWindows,
+                                  InlineControls(chkUltimaConfig, linkUltConfig), updateOptions,
+                                  InlineControls(chkUnZip, comboPrioridad)}
+        For index As Integer = 0 To checks.Length - 1
+            checks(index).Margin = New Padding(0, 6, 16, 6)
+            options.Controls.Add(checks(index), index Mod 2, index \ 2)
+        Next
+        SettingsSection(GroupBox4, FieldRow(Label1, txtRuta, btnExaminar), Divider(),
+                        options, Divider(), FieldRow(Label24, comboIdiomas), FieldRow(Label25, comboTheme))
+        SettingsPage(TabPage1, GroupBox4)
+        ' Keep the historical fields owned by the form, but sign in from the main window.
+        GroupBox1.Visible = False
+        TabPage1.Controls.Add(GroupBox1)
+    End Sub
+
+    Private Sub BuildConnectionPage()
+        SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
+                        InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
+                        FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1)
+        SettingsSection(GroupBox2, chkProxy, Divider(), FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
+                        FieldRow(Label23, txtProxyName), FieldRow(Label22, txtProxyPassword))
+        SettingsPage(connectionPage, ConexionGroup, GroupBox2)
+    End Sub
+
+    Private Sub BuildAdvancedPage()
+        UiStyles.SetAppFont(Label8)
+        UiStyles.SetRole(Label8, UiStyles.Role.Muted)
+        SettingsSection(GroupBox3, Label8, FieldRow(Label4, txtTamanoPaquete, Label5),
+                        FieldRow(Label6, txtTamanoBuffer, Label7), FieldRow(Label11, comboLog))
+        SettingsSection(GroupBox5, chkServidorWeb, chkServidorWebLAN, Divider(),
+                        FieldRow(lblServidorWebBindIP, txtServidorWebBindIP), FieldRow(Label16, txtServidorWebPort),
+                        FieldRow(Label18, txtServidorWebTimeout, Label19), FieldRow(Label17, txtServidorWebPassword),
+                        FieldRow(Label20, txtServidorWebNombre), FieldRow(Label21, txtServidorWebTemplate, btnExaminarTemplate))
+        SettingsPage(TabPage2, GroupBox3, GroupBox5)
+        comboLog.SelectedValue = Config.NivelLog.ToString
+    End Sub
+
+    Private Sub BuildPresharedKeysPage()
+        txtKeyList.MinimumSize = New Size(0, 200)
+        txtKeyList.Dock = DockStyle.Top
+        SettingsSection(GroupBox, txtKeyList)
+        SettingsPage(TabPage3, lblDesc, GroupBox)
+    End Sub
+
+    Private Sub BuildStreamingPage()
+        SettingsSection(GroupBox6, chkStreamingServer, FieldRow(lblStreamingPort, txtStreamingPort), FieldRow(lblStreamingPassword, txtStreamingPassword))
+        SettingsSection(GroupBox8, FieldRow(Label26, txtVLCPath, btnExaminarVLCPath), linkDownloadVLC)
+        UiStyles.SetRole(lblInfoStreaming, UiStyles.Role.Muted)
+        SettingsSection(GroupBox7, lblInfoStreaming)
+        SettingsPage(TabPage4, GroupBox6, GroupBox8, GroupBox7)
+    End Sub
+
+    Private Sub BuildElcPage()
+        EnsureElcControl()
     End Sub
 
     Private Sub FitConfigurationWindow()

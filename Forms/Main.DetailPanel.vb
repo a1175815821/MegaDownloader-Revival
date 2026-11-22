@@ -16,7 +16,7 @@ Partial Public Class Main
     Private detailLayoutCaptionKey As String = Nothing
 
     ''' <summary>按需构建结构化详情面板(挂在 detailGroup 内,与空态 detailLabel 互斥显示)。
-    ''' 行数固定为 状态/进度/大小/速度/剩余/路径,内容在 UpdateDetailContent 里填。</summary>
+    ''' 行数固定为 状态/进度/大小/速度/剩余/路径/下载身份,内容在 UpdateDetailContent 里填。</summary>
     Private Sub EnsureDetailContentPanel()
         If detailContentPanel IsNot Nothing AndAlso Not detailContentPanel.IsDisposed Then Return
         If detailGroup Is Nothing Then Return
@@ -39,7 +39,7 @@ Partial Public Class Main
         detailContentPanel.Controls.Add(detailTitleLabel)
 
         detailRows.Clear()
-        For i As Integer = 0 To 5
+        For i As Integer = 0 To 6
             Dim cap As New Label()
             cap.Name = "detailCap" & i.ToString()
             cap.AutoSize = False
@@ -184,7 +184,8 @@ Partial Public Class Main
                 Language.GetText("Size"),
                 Language.GetText("Speed"),
                 Language.GetText("Remaining"),
-                Language.GetText("Detail_Path")
+                Language.GetText("Detail_Path"),
+                Language.GetText("DownloadIdentity")
             }
             ' 空字符串统一显示为 "-",避免详情出现空白行(速度/剩余在未下载时本就无值)。
             Dim speedTxt As String = PintarVelocidadDescarga(ele)
@@ -193,12 +194,13 @@ Partial Public Class Main
             If String.IsNullOrEmpty(remainTxt) Then remainTxt = "-"
 
             Dim values() As String = {
-                EstadoDisplayText(st),
+                If(CloudQueueStatus(ele), EstadoDisplayText(st)),
                 pct.ToString("F2") & "%",
                 done,
                 speedTxt,
                 remainTxt,
-                ruta
+                ruta,
+                QueueDownloadIdentity(ele)
             }
 
             For i As Integer = 0 To Math.Min(captions.Length, detailRows.Count) - 1
@@ -206,6 +208,11 @@ Partial Public Class Main
                 If detailRows(i).Value.Text <> values(i) Then
                     detailRows(i).Value.Text = values(i)
                     If i = 5 Then ToolTipBotones.SetToolTip(detailRows(i).Value, values(i))
+                End If
+                If i = 6 Then
+                    Dim accountEmail As String = If(fic Is Nothing, "", fic.EffectiveMegaAccountEmail)
+                    If fic IsNot Nothing AndAlso fic.MegaAccountTransferEmail <> "" Then accountEmail = fic.MegaAccountEmail & " → " & accountEmail
+                    If ToolTipBotones.GetToolTip(detailRows(i).Value) <> accountEmail Then ToolTipBotones.SetToolTip(detailRows(i).Value, accountEmail)
                 End If
                 ' 失败态用语义色标注,与列表"状态"列的着色保持一致
                 If i = 0 AndAlso st = Estado.Erroneo Then

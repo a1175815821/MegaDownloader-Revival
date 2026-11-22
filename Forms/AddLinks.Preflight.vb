@@ -1,8 +1,12 @@
 Imports System.Collections.Generic
+Imports System.Threading
 Imports System.Threading.Tasks
 
 Partial Public Class AddLinks
     Private preflightSession As PreflightSession
+    Private previewMegaAccountEmail As String = ""
+    Private previewMegaAccountAccess As Integer
+    Private accountIdentityChanged As EventHandler
     Private warmRequest As PreflightSession.Request
     Private inputGeneration As Integer
     Private importBusy As Boolean
@@ -29,10 +33,125 @@ Partial Public Class AddLinks
         PreflightProgress.Display(snapshot, lblLinkCount, preflightProgressBar, warmRequest.Started)
     End Sub
 
+    Private Class IdentityOption
+        Friend ReadOnly Email As String
+        Private ReadOnly caption As String
+
+        Friend Sub New(email As String, caption As String)
+            Me.Email = email
+            Me.caption = caption
+        End Sub
+
+        Public Overrides Function ToString() As String
+            Return caption
+        End Function
+    End Class
+
+    Private Sub LoadDownloadIdentities(selectedEmail As String)
+        RemoveHandler downloadIdentity.SelectedIndexChanged, AddressOf MegaAccountChoiceChanged
+        downloadIdentity.Items.Clear()
+        downloadIdentity.Items.Add(New IdentityOption("", Language.GetText("MegaAccount_Anonymous")))
+        Dim selectedIndex As Integer = 0
+        For Each status In MegaAccountService.Current.GetAccounts()
+            Dim caption = If(status.AliasName = "", status.Email, status.AliasName & " (" & status.Email & ")")
+            If Not status.SignedIn Then caption &= " · " & MegaAccountForm.Summary(status)
+            Dim index = downloadIdentity.Items.Add(New IdentityOption(status.Email, caption))
+            If String.Equals(status.Email, selectedEmail, StringComparison.OrdinalIgnoreCase) Then selectedIndex = index
+        Next
+        If selectedEmail <> "" AndAlso selectedIndex = 0 Then
+            selectedIndex = downloadIdentity.Items.Add(New IdentityOption(selectedEmail, selectedEmail & " · " & Language.GetText("MegaAccount_Reconnect")))
+        End If
+        downloadIdentity.SelectedIndex = selectedIndex
+        AddHandler downloadIdentity.SelectedIndexChanged, AddressOf MegaAccountChoiceChanged
+        NotifyDownloadIdentityChanged()
+    End Sub
+
+    Private Sub MegaAccountChoiceChanged(sender As Object, e As EventArgs)
+        NotifyDownloadIdentityChanged()
+    End Sub
+
+    Private Sub ObserveDownloadIdentities()
+        Dim context = SynchronizationContext.Current
+        accountIdentityChanged = Sub(sender, e) context.Post(Sub(state)
+                                                                  If Not preflightDisposed AndAlso Not importBusy Then LoadDownloadIdentities(previewMegaAccountEmail)
+                                                              End Sub, Nothing)
+        AddHandler MegaAccountService.Current.Changed, accountIdentityChanged
+        LoadDownloadIdentities(MegaAccountService.Current.DefaultEmail)
+        ShowIdentityNotice()
+    End Sub
+
+    Private Sub NotifyDownloadIdentityChanged()
+        Dim email = DirectCast(downloadIdentity.SelectedItem, IdentityOption).Email
+        Dim access = MegaAccountService.Current.GetAccessError(email)
+        Dim identityChanged = Not String.Equals(email, previewMegaAccountEmail, StringComparison.OrdinalIgnoreCase)
+        If Not identityChanged AndAlso access = previewMegaAccountAccess Then
+            If access <> 0 Then ShowIdentityNotice()
+            Return
+        End If
+        previewMegaAccountEmail = email
+        previewMegaAccountAccess = access
+        PreflightInputChanged()
+        If identityChanged AndAlso preflightSession IsNot Nothing Then
+            preflightSession.Dispose()
+            preflightSession = Nothing
+        End If
+        ShowIdentityNotice()
+        UpdateLinkCount()
+    End Sub
+
+    Private Sub ShowIdentityNotice()
+        Dim access = previewMegaAccountAccess
+        ShowInputNotice(If(access = 0, "", AccountAccessNotice(previewMegaAccountEmail, access)), access <> 0)
+    End Sub
+
+    Private Shared Function AccountAccessNotice(email As String, access As Integer) As String
+        If access = MegaAccountService.SessionExpired Then
+            Dim status = MegaAccountService.Current.GetStatus(email)
+            If status.LastError <> 0 AndAlso Not status.NeedsLogin Then
+                Return MegaAccountForm.Summary(status) & " " & MegaAccountService.ErrorText(status.LastError, signingIn:=True)
+            End If
+        End If
+        Return MegaAccountService.ErrorText(access, connecting:=True)
+    End Function
+
     Private Function CurrentPreflightRequest() As PreflightSession.Request
-        If preflightSession Is Nothing Then preflightSession = New PreflightSession(Config)
+        If preflightSession Is Nothing Then
+            If previewMegaAccountEmail <> "" Then
+                Dim email As String = previewMegaAccountEmail
+                preflightSession = New PreflightSession(Function(url, token) InspectMegaAccountLink(url, email, token))
+            Else
+                preflightSession = New PreflightSession(Config)
+            End If
+        End If
         warmRequest = preflightSession.Prepare(txtLinks.Text & vbNewLine & HiddenLinks)
         Return warmRequest
+    End Function
+
+    Private Shared Function InspectMegaAccountLink(url As String, email As String, token As CancellationToken) As List(Of BatchLinkPreflight.Entry)
+        Dim entry As New BatchLinkPreflight.Entry With {.Name = "—", .State = BatchLinkPreflight.LinkState.Invalid}
+        Dim link As String = Fichero.GetMegaAccountLink(url)
+        If link Is Nothing Then
+            entry.Detail = Language.GetText("AddLinks_MegaAccountFilesOnly")
+        Else
+            token.ThrowIfCancellationRequested()
+            Dim name As String = Nothing
+            Dim size As Long
+            Dim code As Integer = MegaAccountService.Current.Inspect(email, link, name, size)
+            token.ThrowIfCancellationRequested()
+            entry.Name = Fichero.ExtraerFileID(url)
+            entry.Source = New URLProcessor.FileURL(url, "")
+            If code = 0 AndAlso Not String.IsNullOrEmpty(name) AndAlso size >= 0 Then
+                entry.Name = PathGuard.SanitizeFileName(name, "file")
+                entry.SizeBytes = size
+                entry.Source.DisplayName = entry.Name
+                entry.Source.SizeBytes = size
+                entry.State = BatchLinkPreflight.LinkState.Ready
+            Else
+                entry.Detail = MegaAccountService.ErrorText(If(code = 0, -2, code), connecting:=True)
+                If Not Fichero.IsPermanentMegaAccountError(code) Then entry.State = BatchLinkPreflight.LinkState.Unavailable
+            End If
+        End If
+        Return New List(Of BatchLinkPreflight.Entry) From {entry}
     End Function
 
     Private Async Sub UpdateLinkCount()
@@ -42,6 +161,11 @@ Partial Public Class AddLinks
             If String.IsNullOrWhiteSpace(txtLinks.Text) Then
                 HiddenLinks = String.Empty
                 lblLinkCount.Text = ""
+                Return
+            End If
+            If MegaAccountService.Current.GetAccessError(previewMegaAccountEmail) <> 0 Then
+                lblLinkCount.Text = ""
+                preflightProgressBar.Visible = False
                 Return
             End If
             Dim request As PreflightSession.Request = CurrentPreflightRequest()
@@ -99,6 +223,7 @@ Partial Public Class AddLinks
     Private Sub DisposePreflight()
         If preflightDisposed Then Return
         preflightDisposed = True
+        If accountIdentityChanged IsNot Nothing Then RemoveHandler MegaAccountService.Current.Changed, accountIdentityChanged
         inputGeneration += 1
         warmRequest = Nothing
         preflightProgressTimer.Dispose()

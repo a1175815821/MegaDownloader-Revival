@@ -191,11 +191,7 @@ Partial Public Class Main
                 Next
             End SyncLock
             For Each fic As Fichero In pend
-                If fic.FailedByQuota Then
-                    fic.ResetearDescarga(preserveProgress:=True)
-                Else
-                    fic.ResetearDescarga()
-                End If
+                fic.ResetearDescarga(preserveProgress:=fic.FailedByQuota OrElse fic.MegaDriveNodeHandle.HasValue)
                 fic.PausaIndividual = False
                 fic.SetDescargaEstado = Estado.EnCola
                 retried += 1

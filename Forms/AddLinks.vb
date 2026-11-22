@@ -59,6 +59,7 @@ Public Class AddLinks
 		
 		FitAddLinksToWorkingArea(True)
         addLinksLayoutReady = True
+        ObserveDownloadIdentities()
         UpdateAddLinksInputHeight()
 		
     End Sub
@@ -437,7 +438,7 @@ Public Class AddLinks
     End Function
 
 
-    Private Async Function FinishAddPackageAsync(urls As Generic.List(Of URLProcessor.FileURL)) As System.Threading.Tasks.Task(Of Boolean)
+    Private Async Function FinishAddPackageAsync(urls As Generic.List(Of URLProcessor.FileURL), megaAccountEmail As String) As System.Threading.Tasks.Task(Of Boolean)
         Dim name As String = txtNombre.Text
         Dim path As String = txtRuta.Text
         Dim create As Boolean = chkCrearDirectorio.Checked
@@ -445,7 +446,7 @@ Public Class AddLinks
         Dim password As String = txtPassword.Text
         Dim token As System.Threading.CancellationToken = importCancellation.Token
         Dim progress As New PreflightProgress.ItemReporter(Sub(count) System.Threading.Volatile.Write(importCompleted, count))
-        Dim package As Paquete = Await System.Threading.Tasks.Task.Run(Function() DownloadPackageBuilder.Build(urls, name, path, create, extract, password, token, progress), token)
+        Dim package As Paquete = Await System.Threading.Tasks.Task.Run(Function() DownloadPackageBuilder.Build(urls, name, path, create, extract, password, token, progress, megaAccountEmail), token)
         importCommitting = True
         RefreshImportProgress()
         ' Give the final stage a paint turn before the synchronous queue publication.

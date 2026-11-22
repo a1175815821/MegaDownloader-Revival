@@ -58,7 +58,7 @@ Public Class Conexion
         Public Cookies As String
     End Class
 
-    Private Class ProxySettings
+    Friend Class ProxySettings
         Public ReadOnly Address As Uri
         Public ReadOnly Username As String
         Public ReadOnly Password As String
@@ -81,8 +81,17 @@ Public Class Conexion
             If host IsNot Nothing Then TryCreateProxyAddress(host, port, address)
             settings = New ProxySettings(address, Config.ProxyUser, Config.ProxyPassword)
         End If
+        Dim previous = GetMegaAccountProxy()
+        If previous Is Nothing AndAlso settings Is Nothing Then Return
+        If previous IsNot Nothing AndAlso settings IsNot Nothing AndAlso
+           Object.Equals(previous.Address, settings.Address) AndAlso previous.Username = settings.Username AndAlso previous.Password = settings.Password Then Return
         System.Threading.Volatile.Write(_proxy, settings)
+        MegaAccountService.Current.UpdateProxies()
     End Sub
+
+    Friend Shared Function GetMegaAccountProxy() As ProxySettings
+        Return System.Threading.Volatile.Read(_proxy)
+    End Function
 
     ''' <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.
     ''' An inline port ("127.0.0.1:8000", "[::1]:8000") is stripped; the configured port wins.</summary>

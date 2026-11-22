@@ -282,6 +282,15 @@ Public NotInheritable Class ThemeManager
     End Sub
 
     ''' <summary>
+    ''' 给一个尚未进入窗体可视树的子树补主题。设置窗口按需构建标签页时，
+    ''' 这些控件没有参与首次 ApplyTheme 的递归，需要单独补一次。
+    ''' </summary>
+    Friend Shared Sub ApplyThemeToControl(control As Control)
+        If control Is Nothing Then Return
+        ApplyThemeRecursive(control, CurrentColors(), _current)
+    End Sub
+
+    ''' <summary>
     ''' 显式主题化 ContextMenuStrip(不在 Form.Controls 树中)。
     ''' </summary>
     Public Shared Sub ApplyThemeToContextMenuStrip(cms As ContextMenuStrip)

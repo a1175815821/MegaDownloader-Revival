@@ -11,6 +11,7 @@ Partial Public Class AddLinks
     Private addLinksStepLabel As Label
     Private addLinksFeedback As Label
     Private addLinksCancel As Button
+    Private downloadIdentity As ComboBox
 
     Private Sub InitAddLinksLayout()
         ' Use the designer's Segoe UI 9 / 96-DPI baseline, before automatic scaling.
@@ -29,18 +30,28 @@ Partial Public Class AddLinks
         addLinksContent = New TableLayoutPanel With {
             .Dock = DockStyle.Top, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 1, .RowCount = 5, .Margin = New Padding(0), .TabIndex = 0}
+            .ColumnCount = 1, .RowCount = 4, .Margin = New Padding(0), .TabIndex = 0}
         addLinksContent.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
         addLinksContent.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         addLinksContent.RowStyles.Add(New RowStyle(SizeType.Absolute, 160))
         addLinksContent.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         addLinksContent.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        addLinksContent.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+        Dim inputHeader As New TableLayoutPanel With {
+            .Dock = DockStyle.Fill, .AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .ColumnCount = 2, .RowCount = 1, .Margin = New Padding(0, 0, 0, 8), .TabIndex = 1}
+        inputHeader.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+        inputHeader.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        inputHeader.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         Dim heading As New Label With {
-            .Text = Language.GetText("AddLinks_InputHint"), .AutoSize = True, .Dock = DockStyle.Fill,
-            .Margin = New Padding(0, 0, 0, 12)}
+            .Text = Language.GetText("AddLinks_InputHint"), .AutoSize = True, .Anchor = AnchorStyles.Left,
+            .Margin = New Padding(0, 0, 12, 0)}
         UiStyles.SetRole(heading, UiStyles.Role.Muted)
-        addLinksContent.Controls.Add(heading, 0, 0)
+        linkStegano.MinimumSize = Size.Empty
+        linkStegano.Margin = New Padding(0)
+        linkStegano.Anchor = AnchorStyles.Right
+        inputHeader.Controls.Add(heading, 0, 0)
+        inputHeader.Controls.Add(linkStegano, 1, 0)
+        addLinksContent.Controls.Add(inputHeader, 0, 0)
         txtLinks.Size = New Size(100, 160)
         txtLinks.Dock = DockStyle.Fill
         txtLinks.MinimumSize = New Size(0, 160)
@@ -52,12 +63,12 @@ Partial Public Class AddLinks
         Dim progress As New TableLayoutPanel With {
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 1, .RowCount = 2, .Margin = New Padding(0, 4, 0, 10)}
+            .ColumnCount = 1, .RowCount = 2, .Margin = New Padding(0, 4, 0, 4)}
         progress.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
         progress.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         progress.RowStyles.Add(New RowStyle(SizeType.Absolute, 6))
         lblLinkCount.AutoSize = True
-        lblLinkCount.MinimumSize = New Size(0, 36)
+        lblLinkCount.MinimumSize = New Size(0, 22)
         lblLinkCount.Dock = DockStyle.Fill
         lblLinkCount.Margin = New Padding(0)
         preflightProgressBar.Dock = DockStyle.Fill
@@ -70,29 +81,35 @@ Partial Public Class AddLinks
         OpcionesPaquete.Dock = DockStyle.Fill
         OpcionesPaquete.AutoSize = True
         OpcionesPaquete.AutoSizeMode = AutoSizeMode.GrowAndShrink
-        OpcionesPaquete.Padding = New Padding(12, 16, 12, 12)
-        OpcionesPaquete.Margin = New Padding(0, 0, 0, 12)
+        OpcionesPaquete.Padding = New Padding(12, 8, 12, 8)
+        OpcionesPaquete.Margin = New Padding(0)
         OpcionesPaquete.TabIndex = 1
+        ' Top docking lets the rows keep their preferred heights inside the group box.
         Dim options As New TableLayoutPanel With {
-            .Dock = DockStyle.Fill, .AutoSize = True,
+            .Dock = DockStyle.Top, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .ColumnCount = 3, .RowCount = 4, .Margin = New Padding(0)}
+            .ColumnCount = 3, .RowCount = 5, .Margin = New Padding(0)}
         options.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
         options.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
         options.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-        For row As Integer = 0 To 3
+        For row As Integer = 0 To 4
             options.RowStyles.Add(New RowStyle(SizeType.AutoSize))
         Next
-        For Each caption As Label In New Label() {Label2, Label1}
+        Dim identityLabel As New Label With {.Text = Language.GetText("DownloadIdentity"), .AutoSize = True}
+        For Each caption As Label In New Label() {Label2, Label1, identityLabel, lblPassword}
             caption.Anchor = AnchorStyles.Left
+            caption.Margin = New Padding(0, 3, 12, 3)
             caption.MinimumSize = Size.Empty
             caption.TextAlign = ContentAlignment.MiddleLeft
         Next
         ' Discard widths inherited from the old absolute-position layout.
         For Each input As TextBox In New TextBox() {txtNombre, txtRuta}
             input.Width = 100
-            input.Dock = DockStyle.Fill
+            input.Anchor = AnchorStyles.Left Or AnchorStyles.Right
+            input.Margin = New Padding(0, 3, 0, 3)
         Next
+        txtNombre.TabIndex = 0
+        txtRuta.TabIndex = 1
         options.Controls.Add(Label2, 0, 0)
         options.Controls.Add(txtNombre, 1, 0)
         options.SetColumnSpan(txtNombre, 2)
@@ -101,40 +118,49 @@ Partial Public Class AddLinks
         btnExaminar.AutoSize = True
         btnExaminar.AutoSizeMode = AutoSizeMode.GrowAndShrink
         btnExaminar.Padding = New Padding(8, 2, 8, 2)
+        btnExaminar.Margin = New Padding(8, 3, 0, 3)
+        btnExaminar.TabIndex = 2
         options.Controls.Add(btnExaminar, 2, 1)
+
+        downloadIdentity = New ComboBox With {
+            .Name = "AddLinksDownloadIdentity", .AccessibleName = identityLabel.Text,
+            .Anchor = AnchorStyles.Left Or AnchorStyles.Right, .Margin = New Padding(0, 3, 0, 3),
+            .DropDownStyle = ComboBoxStyle.DropDownList, .TabIndex = 3}
+        UiStyles.SetRole(downloadIdentity, UiStyles.Role.InputSurface)
+        options.Controls.Add(identityLabel, 0, 2)
+        options.Controls.Add(downloadIdentity, 1, 2)
+        options.SetColumnSpan(downloadIdentity, 2)
+        LoadDownloadIdentities(MegaAccountService.Current.DefaultEmail)
+        AddHandler downloadIdentity.DropDown, Sub() LoadDownloadIdentities(previewMegaAccountEmail)
+
         Dim flags As New FlowLayoutPanel With {
             .Dock = DockStyle.Fill, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .WrapContents = True, .Margin = New Padding(0)}
+            .WrapContents = True, .Margin = New Padding(0), .TabIndex = 4}
         flags.Controls.AddRange(New Control() {chkStartDownload, chkCrearDirectorio, chkUnZip})
-        For Each flag As Control In flags.Controls
+        For index As Integer = 0 To flags.Controls.Count - 1
+            Dim flag As Control = flags.Controls(index)
             flag.MinimumSize = Size.Empty
             flag.Margin = New Padding(0, 6, 16, 4)
+            flag.TabIndex = index
         Next
-        options.Controls.Add(flags, 0, 2)
-        options.SetColumnSpan(flags, 3)
+        options.Controls.Add(flags, 1, 3)
+        options.SetColumnSpan(flags, 2)
+
         Dim passwordRow As New FlowLayoutPanel With {
-            .Dock = DockStyle.Fill, .AutoSize = True,
+            .Anchor = AnchorStyles.Left, .AutoSize = True,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            .WrapContents = True, .Margin = New Padding(0)}
-        lblPassword.MinimumSize = Size.Empty
-        lblPassword.Margin = New Padding(0, 6, 6, 0)
-        lblPassword.TextAlign = ContentAlignment.MiddleLeft
+            .WrapContents = False, .Margin = New Padding(0), .TabIndex = 5}
         txtPassword.Width = 180
-        txtPassword.Margin = New Padding(0, 3, 6, 3)
-        LinkLabel2.Margin = New Padding(0, 6, 0, 0)
-        passwordRow.Controls.AddRange(New Control() {lblPassword, txtPassword, LinkLabel2})
-        options.Controls.Add(passwordRow, 0, 3)
-        options.SetColumnSpan(passwordRow, 3)
+        txtPassword.Margin = New Padding(0, 3, 8, 3)
+        LinkLabel2.Anchor = AnchorStyles.None
+        LinkLabel2.Margin = New Padding(0)
+        passwordRow.Controls.AddRange(New Control() {txtPassword, LinkLabel2})
+        options.Controls.Add(lblPassword, 0, 4)
+        options.Controls.Add(passwordRow, 1, 4)
+        options.SetColumnSpan(passwordRow, 2)
         OpcionesPaquete.Controls.Add(options)
         addLinksContent.Controls.Add(OpcionesPaquete, 0, 3)
-
-        linkStegano.MinimumSize = Size.Empty
-        linkStegano.Margin = New Padding(0)
-        linkStegano.Dock = DockStyle.Fill
-        linkStegano.TextAlign = ContentAlignment.MiddleLeft
-        linkStegano.TabIndex = 2
-        addLinksContent.Controls.Add(linkStegano, 0, 4)
         addLinksViewport.Controls.Add(addLinksContent)
         layout.Controls.Add(addLinksViewport, 0, 0)
 
@@ -177,8 +203,9 @@ Partial Public Class AddLinks
         shell.Controls.Add(addLinksPageHost, 0, 2)
         Controls.Add(shell)
         shell.BringToFront()
+        ShowIdentityNotice()
         For Each surface As Control In New Control() {
-                layout, addLinksViewport, addLinksContent, options, flags,
+                layout, addLinksViewport, addLinksContent, inputHeader, options, flags,
                 passwordRow, actions, progress, OpcionesPaquete, shell, addLinksPageHost}
             UiStyles.SetRole(surface, UiStyles.Role.Surface)
         Next

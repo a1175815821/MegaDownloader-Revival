@@ -338,6 +338,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Chec&amp;k for updates"><![CDATA[Vérifier mise à &jour]]></Text>
   <Text key="Check for updates"><![CDATA[Vérifier mise à jour]]></Text>
   <Text key="Manual check only"><![CDATA[Vérifier manuellement]]></Text>
+  <Text key="Check interval"><![CDATA[Intervalle de vérification]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[&Masquer les liens dans une image]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[&Extraire les liens d'une image]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[Un mot de passe de serveur web est requis pour autoriser l'accès LAN.]]></Text>
