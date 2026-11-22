@@ -105,9 +105,58 @@ Friend NotInheritable Class MegaDriveHistory
             String.Equals(PathGuard.GetSafePathUnderRoot(candidate, ""), canonicalDirectory, StringComparison.OrdinalIgnoreCase)
     End Function
 
+    Friend Function FindBoundChanges(email As String, snapshot As MegaDriveSnapshot, folder As ULong, destination As String,
+                                     queue As IEnumerable(Of MegaDriveQueueItem), paths As Dictionary(Of ULong, String)) As MegaDriveChanges
+        Dim delivered = ReadDeliveries(email)
+        Dim root = PathGuard.GetSafePathUnderRoot(destination, "").TrimEnd(Path.DirectorySeparatorChar) & Path.DirectorySeparatorChar
+        For Each item In queue
+            RecoverFolderPaths(snapshot, folder, root, item.Handle, item.LocalDirectory, paths)
+        Next
+        For Each group In delivered
+            For Each item In group
+                RecoverFolderPaths(snapshot, folder, root, item.Handle, Path.GetDirectoryName(item.LocalPath), paths)
+            Next
+        Next
+        Dim fullPlan = snapshot.PlanBoundDownload(folder, paths)
+        paths.Clear()
+        For Each binding In fullPlan.FolderPaths
+            paths.Add(binding.Key, binding.Value)
+        Next
+        Return ComparePlan(fullPlan, destination, queue, delivered)
+    End Function
+
+    Private Shared Sub RecoverFolderPaths(snapshot As MegaDriveSnapshot, boundFolder As ULong, root As String,
+                                          fileHandle As ULong, directory As String, paths As Dictionary(Of ULong, String))
+        Dim file = snapshot.Find(fileHandle)
+        If file Is Nothing OrElse paths.ContainsKey(file.ParentId) OrElse String.IsNullOrEmpty(directory) OrElse
+           Not directory.StartsWith(root, StringComparison.OrdinalIgnoreCase) Then Return
+        Dim relative = directory.Substring(root.Length)
+        Dim folder = snapshot.Find(file.ParentId)
+        Dim recovered As New List(Of KeyValuePair(Of ULong, String))()
+        While folder IsNot Nothing AndAlso folder.Id <> boundFolder
+            If String.IsNullOrEmpty(relative) OrElse Not MegaDriveSnapshot.MatchesFolderName(folder, Path.GetFileName(relative)) Then Return
+            Dim known As String = Nothing
+            If paths.TryGetValue(folder.Id, known) Then
+                If Not String.Equals(known, relative, StringComparison.OrdinalIgnoreCase) Then Return
+                Exit While
+            End If
+            recovered.Add(New KeyValuePair(Of ULong, String)(folder.Id, relative))
+            relative = Path.GetDirectoryName(relative)
+            folder = snapshot.Find(folder.ParentId)
+        End While
+        If folder Is Nothing OrElse (folder.Id = boundFolder AndAlso relative <> "") Then Return
+        For Each binding In recovered
+            paths.Add(binding.Key, binding.Value)
+        Next
+    End Sub
+
     Friend Function FindChanges(email As String, fullPlan As MegaDriveDownload, destination As String,
                                 queue As IEnumerable(Of MegaDriveQueueItem)) As MegaDriveChanges
-        Dim delivered = ReadDeliveries(email)
+        Return ComparePlan(fullPlan, destination, queue, ReadDeliveries(email))
+    End Function
+
+    Private Shared Function ComparePlan(fullPlan As MegaDriveDownload, destination As String, queue As IEnumerable(Of MegaDriveQueueItem),
+                                        delivered As ILookup(Of ULong, Delivery)) As MegaDriveChanges
         Dim queued = queue.ToLookup(Function(item) item.Handle)
         Dim pending As New HashSet(Of ULong)()
         Dim updated As New HashSet(Of ULong)()

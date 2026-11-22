@@ -63,7 +63,11 @@ Friend NotInheritable Class MegaAccountService
         Friend Session As String = ""
         Friend Saved As Boolean
         Friend Client As MegaAccountHandle
+        Friend AppliedProxy As Conexion.ProxySettings
+        Friend ReadOnly ProxyGate As New Object()
+        Friend ReadOnly DownloadBudget As New ThrottledStreamController.AccountDownloadBudget()
         Friend Operations As Integer
+        Friend ZeroBalanceExpiresUtc As Date
         Friend ReadOnly StreamingNodes As New HashSet(Of ULong)()
         Friend DrivePreferences As New MegaDrivePreferences()
     End Class
@@ -122,8 +126,11 @@ Friend NotInheritable Class MegaAccountService
     Private Function SnapshotStatus(entry As AccountEntry) As Status
         If entry Is Nothing Then Return New Status With {.Email = "", .Connecting = restoring}
         Dim status = entry.Value
-        If status.QuotaRetryUtc.HasValue AndAlso status.QuotaRetryUtc.Value <= Date.UtcNow Then
+        Dim utcNow = Date.UtcNow
+        If status.QuotaRetryUtc.HasValue AndAlso status.QuotaRetryUtc.Value <= utcNow Then
             status.QuotaRetryUtc = Nothing
+            status.Remaining = Nothing
+        ElseIf status.Remaining.GetValueOrDefault(1L) = 0 AndAlso entry.ZeroBalanceExpiresUtc <= utcNow Then
             status.Remaining = Nothing
         End If
         status.QuotaReached = status.QuotaRetryUtc.HasValue OrElse status.Remaining.GetValueOrDefault(1L) = 0
@@ -134,12 +141,13 @@ Friend NotInheritable Class MegaAccountService
         Return accounts.Find(Function(entry) String.Equals(entry.Value.Email, email, StringComparison.OrdinalIgnoreCase))
     End Function
 
-    Friend Function NextTransferAccount(email As String, attempted As HashSet(Of String)) As String
+    Friend Function NextTransferAccount(email As String, attempted As HashSet(Of String), Optional allowUnknownDelay As Boolean = True) As String
         SyncLock gate
             Dim start As Integer = accounts.IndexOf(FindAccount(email))
             For offset As Integer = 1 To accounts.Count
                 Dim status = SnapshotStatus(accounts((start + offset) Mod accounts.Count))
-                If status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached AndAlso Not attempted.Contains(status.Email) Then Return status.Email
+                If status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached AndAlso
+                   (allowUnknownDelay OrElse Not status.QuotaDelayUnknown) AndAlso Not attempted.Contains(status.Email) Then Return status.Email
             Next
             Return ""
         End SyncLock
@@ -387,10 +395,11 @@ Friend NotInheritable Class MegaAccountService
         Dim email = entry.Value.Email
         Dim cache = AccountCachePath(email)
         Directory.CreateDirectory(cache)
-        Dim proxyUrl As String = "", proxyUser As String = "", proxyPassword As String = ""
-        Conexion.GetMegaAccountProxy(proxyUrl, proxyUser, proxyPassword)
+        Dim proxy = Conexion.GetMegaAccountProxy()
+        If proxy IsNot Nothing AndAlso proxy.Address Is Nothing Then Return LocalError
         Dim appKey = If(Environment.GetEnvironmentVariable(AppKeyVariable), "").Trim()
-        Dim opened As MegaAccountHandle = MegaAccountNative.md_open(appKey, cache, proxyUrl, proxyUser, proxyPassword)
+        Dim opened As MegaAccountHandle = MegaAccountNative.md_open(appKey, cache, If(proxy?.Address.AbsoluteUri, ""),
+                                                                   If(proxy?.Username, ""), If(proxy?.Password, ""))
         Dim replaced As MegaAccountHandle = Nothing
         Try
             If opened.IsInvalid Then Return LocalError
@@ -429,6 +438,7 @@ Friend NotInheritable Class MegaAccountService
                 End If
                 replaced = entry.Client
                 entry.Client = opened
+                entry.AppliedProxy = proxy
                 opened = Nothing
             End SyncLock
             Return 0
@@ -493,13 +503,44 @@ Friend NotInheritable Class MegaAccountService
         Return If(status.SignedIn, 0, SessionExpired)
     End Function
 
+    Friend Sub UpdateProxies()
+        For Each status In GetAccounts()
+            If Not status.SignedIn OrElse status.Connecting Then Continue For
+            Dim entry As AccountEntry = Nothing
+            Dim result = Acquire(status.Email, entry)
+            If result = 0 Then
+                Release(entry, result)
+            ElseIf result <> Busy AndAlso result <> SessionExpired Then
+                Log.WriteWarning("Could not update the MEGA account proxy: " & result.ToString())
+            End If
+        Next
+    End Sub
+
     Private Function Acquire(email As String, ByRef entry As AccountEntry) As Integer
         SyncLock gate
             entry = FindAccount(email)
-            Dim result = AccessError(SnapshotStatus(entry))
-            If result = 0 Then entry.Operations += 1
-            Return result
+            Dim access = AccessError(SnapshotStatus(entry))
+            If access <> 0 Then Return access
+            entry.Operations += 1
         End SyncLock
+        Dim result As Integer = LocalError
+        Try
+            SyncLock entry.ProxyGate
+                Dim proxy = Conexion.GetMegaAccountProxy()
+                If proxy Is entry.AppliedProxy Then
+                    result = 0
+                ElseIf proxy Is Nothing OrElse proxy.Address IsNot Nothing Then
+                    result = MegaAccountNative.md_set_proxy(entry.Client, If(proxy?.Address.AbsoluteUri, ""),
+                                                            If(proxy?.Username, ""), If(proxy?.Password, ""))
+                    If result = 0 Then entry.AppliedProxy = proxy
+                End If
+            End SyncLock
+            Return result
+        Catch ex As Exception When IsLibraryError(ex)
+            Return BackendMissing
+        Finally
+            If result <> 0 Then Release(entry, result)
+        End Try
     End Function
 
     Private Sub Release(entry As AccountEntry, result As Integer, Optional detailsChanged As Boolean = False, Optional quotaWaitSeconds As Long = 0)
@@ -554,7 +595,9 @@ Friend NotInheritable Class MegaAccountService
                                         entry.Value.TransferUsed = If(transferUsed >= 0, CType(transferUsed, Long?), Nothing)
                                         entry.Value.TransferTotal = If(transferTotal > 0, CType(transferTotal, Long?), Nothing)
                                         entry.Value.Remaining = If(transferTotal > 0 AndAlso transferUsed >= 0, CType(Math.Max(0L, transferTotal - transferUsed), Long?), Nothing)
-                                        If entry.Value.QuotaRetryUtc.GetValueOrDefault() <= Date.UtcNow Then entry.Value.QuotaRetryUtc = Nothing
+                                        Dim utcNow = Date.UtcNow
+                                        If entry.Value.Remaining.GetValueOrDefault(1L) = 0 Then entry.ZeroBalanceExpiresUtc = utcNow.AddMinutes(5)
+                                        If entry.Value.QuotaRetryUtc.GetValueOrDefault() <= utcNow Then entry.Value.QuotaRetryUtc = Nothing
                                         entry.Value.QuotaDelayUnknown = False
                                     End SyncLock
                                 End If
@@ -642,20 +685,22 @@ Friend NotInheritable Class MegaAccountService
         If access <> 0 Then Return access
         Dim result As Integer = LocalError
         Dim quotaWaitSeconds As Long
+        Dim controller = ThrottledStreamController.GetController()
+        Dim budget = entry.DownloadBudget
+        Dim registered As Boolean = False
         Try
             If GetStatus(email).QuotaReached Then Return OverQuota
             Dim report As MegaAccountNative.Progress = Sub(received, total, speed) progress(received, total, speed)
             Dim cancelled As MegaAccountNative.Cancelled = Function() If(ct.IsCancellationRequested, 1, 0)
-            Try
-                result = MegaAccountNative.md_download_with_quota(entry.Client, link, destination, report, cancelled, quotaWaitSeconds)
-            Catch ex As EntryPointNotFoundException
-                ' Older bridges can still download, but cannot report the quota deadline.
-                result = MegaAccountNative.md_download(entry.Client, link, destination, report, cancelled)
-            End Try
+            controller.BeginAccountDownload(budget)
+            registered = True
+            result = MegaAccountNative.md_download_with_limit(entry.Client, link, destination, report, cancelled, quotaWaitSeconds,
+                                                               Function() budget.BytesPerSecond)
             Return result
         Catch ex As Exception When IsLibraryError(ex)
             Return BackendMissing
         Finally
+            If registered Then controller.EndAccountDownload(budget)
             Release(entry, result, quotaWaitSeconds:=quotaWaitSeconds)
         End Try
     End Function
@@ -695,6 +740,9 @@ Friend NotInheritable Class MegaAccountService
         Dim result As Integer = LocalError
         Dim started As Boolean = False
         Dim quotaWaitSeconds As Long
+        Dim controller = ThrottledStreamController.GetController()
+        Dim budget = entry.DownloadBudget
+        Dim registered As Boolean = False
         Try
             ' SDK streaming cancellation is by node and range, not by listener. Do not
             ' let a second task for the same node be stopped by the first task's pause.
@@ -708,11 +756,17 @@ Friend NotInheritable Class MegaAccountService
             End SyncLock
             If offset < size AndAlso GetStatus(email).QuotaReached Then Return OverQuota
             Dim cancelled As MegaAccountNative.Cancelled = Function() If(ct.IsCancellationRequested, 1, 0)
-            result = MegaAccountNative.md_stream_node(entry.Client, node, key, size, offset, write, cancelled, quotaWaitSeconds)
+            If offset < size Then
+                controller.BeginAccountDownload(budget)
+                registered = True
+            End If
+            result = MegaAccountNative.md_stream_node_with_limit(entry.Client, node, key, size, offset, write, cancelled, quotaWaitSeconds,
+                                                                 Function() budget.BytesPerSecond)
             Return result
         Catch ex As Exception When IsLibraryError(ex)
             Return BackendMissing
         Finally
+            If registered Then controller.EndAccountDownload(budget)
             If started Then
                 SyncLock entry.StreamingNodes
                     entry.StreamingNodes.Remove(node)
@@ -758,6 +812,8 @@ Friend Module MegaAccountNative
     Friend Delegate Sub Progress(received As Long, total As Long, speed As Long)
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
     Friend Delegate Function Cancelled() As Integer
+    <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
+    Friend Delegate Function DownloadLimit() As Long
 
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
     Friend Delegate Function DriveNode(id As ULong, parent As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> name As String,
@@ -772,6 +828,10 @@ Friend Module MegaAccountNative
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
     Friend Sub md_close(handle As IntPtr)
     End Sub
+    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
+    Friend Function md_set_proxy(handle As MegaAccountHandle, <MarshalAs(UnmanagedType.LPUTF8Str)> url As String,
+                                 <MarshalAs(UnmanagedType.LPUTF8Str)> user As String, <MarshalAs(UnmanagedType.LPUTF8Str)> password As String) As Integer
+    End Function
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
     Friend Sub md_free_string(value As IntPtr)
     End Sub
@@ -795,10 +855,6 @@ Friend Module MegaAccountNative
                                 <Out> name As Byte(), capacity As Integer, ByRef size As Long) As Integer
     End Function
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
-    Friend Function md_download(handle As MegaAccountHandle, <MarshalAs(UnmanagedType.LPUTF8Str)> link As String,
-                                 <MarshalAs(UnmanagedType.LPUTF8Str)> path As String, progressCallback As Progress, cancelCallback As Cancelled) As Integer
-    End Function
-    <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
     Friend Function md_list_drive(handle As MegaAccountHandle, visit As DriveNode, ByRef root As ULong) As Integer
     End Function
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
@@ -808,9 +864,9 @@ Friend Module MegaAccountNative
     Friend Function md_inspect_node(handle As MegaAccountHandle, node As ULong, <Out> name As Byte(), capacity As Integer, ByRef size As Long) As Integer
     End Function
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
-    Friend Function md_download_with_quota(handle As MegaAccountHandle, <MarshalAs(UnmanagedType.LPUTF8Str)> link As String,
-                                            <MarshalAs(UnmanagedType.LPUTF8Str)> path As String, progressCallback As Progress,
-                                            cancelCallback As Cancelled, ByRef quotaWaitSeconds As Long) As Integer
+    Friend Function md_download_with_limit(handle As MegaAccountHandle, <MarshalAs(UnmanagedType.LPUTF8Str)> link As String,
+                                           <MarshalAs(UnmanagedType.LPUTF8Str)> path As String, progressCallback As Progress,
+                                           cancelCallback As Cancelled, ByRef quotaWaitSeconds As Long, readLimit As DownloadLimit) As Integer
     End Function
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
     Friend Delegate Function StreamData(buffer As IntPtr, count As Integer, speed As Long) As Integer
@@ -819,8 +875,8 @@ Friend Module MegaAccountNative
                                                ByRef size As Long, <Out> key As Byte(), keyCapacity As Integer) As Integer
     End Function
     <DllImport(Library, CallingConvention:=CallingConvention.Cdecl)>
-    Friend Function md_stream_node(handle As MegaAccountHandle, node As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> key As String,
-                                    size As Long, offset As Long, write As StreamData, cancelCallback As Cancelled,
-                                    ByRef quotaWaitSeconds As Long) As Integer
+    Friend Function md_stream_node_with_limit(handle As MegaAccountHandle, node As ULong, <MarshalAs(UnmanagedType.LPUTF8Str)> key As String,
+                                              size As Long, offset As Long, write As StreamData, cancelCallback As Cancelled,
+                                              ByRef quotaWaitSeconds As Long, readLimit As DownloadLimit) As Integer
     End Function
 End Module

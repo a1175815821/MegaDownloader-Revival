@@ -197,7 +197,7 @@ Public Class Configuration
             chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
             chkComenzarPlay.Checked = Config.ComenzarDescargando
             chkStartWindows.Checked = Config.IniciarConWindows
-            comboLog.SelectedValue = Config.NivelLog.ToString
+            If settingsPagesBuilt.Contains(TabPage2) Then comboLog.SelectedValue = Config.NivelLog.ToString
             comboPrioridad.SelectedValue = Config.PrioridadDescompresion.ToString
             comboIdiomas.SelectedValue = Language.NormalizeLanguagePreference(Config.Idioma)
             If String.IsNullOrEmpty(CStr(comboIdiomas.SelectedValue)) Then

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <limits>
+#include <mutex>
 #include <string>
 #include <unordered_set>
 
@@ -12,6 +13,7 @@ using namespace mega;
 #define MD_EXPORT extern "C" __declspec(dllexport)
 using Progress = void (__cdecl *)(long long, long long, long long);
 using IsCancelled = int (__cdecl *)();
+using DownloadLimit = long long (__cdecl *)();
 using StreamData = int (__cdecl *)(const char*, int, long long);
 using DriveNode = int (__cdecl *)(MegaHandle, MegaHandle, const char*, int, long long, long long);
 
@@ -64,22 +66,27 @@ private:
 };
 }
 
+MD_EXPORT int md_set_proxy(MegaApi* api, const char* proxyUrl, const char* proxyUser, const char* proxyPassword)
+{
+    MegaProxy proxy;
+    proxy.setProxyType(*proxyUrl ? MegaProxy::PROXY_CUSTOM : MegaProxy::PROXY_NONE);
+    if (*proxyUrl)
+    {
+        proxy.setProxyURL(proxyUrl);
+        proxy.setCredentials(proxyUser, proxyPassword);
+    }
+    SynchronousRequestListener request;
+    api->setProxySettings(&proxy, &request);
+    return finish(request);
+}
+
 MD_EXPORT MegaApi* md_open(const char* appKey, const char* cache,
                             const char* proxyUrl, const char* proxyUser, const char* proxyPassword)
 {
     auto api = std::make_unique<MegaApi>(appKey, cache, "MegaDownloader-Revival");
     // Private downloads use streaming as a ranged read, not for real-time playback.
     api->setStreamingMinimumRate(0);
-    if (*proxyUrl)
-    {
-        MegaProxy proxy;
-        proxy.setProxyType(MegaProxy::PROXY_CUSTOM);
-        proxy.setProxyURL(proxyUrl);
-        proxy.setCredentials(proxyUser, proxyPassword);
-        SynchronousRequestListener request;
-        api->setProxySettings(&proxy, &request);
-        if (finish(request) != MegaError::API_OK) return nullptr;
-    }
+    if (*proxyUrl && md_set_proxy(api.get(), proxyUrl, proxyUser, proxyPassword) != MegaError::API_OK) return nullptr;
     return api.release();
 }
 
@@ -179,10 +186,35 @@ int describeFile(MegaNode& node, char* name, int nameCapacity, long long* size)
     return MegaError::API_OK;
 }
 
+// Read the allocation on the bridge caller thread, outside SDK callbacks.
+class DownloadRate
+{
+public:
+    DownloadRate(MegaApi* api, DownloadLimit limit) : api(api), limit(limit) { update(); }
+
+    void update()
+    {
+        if (!limit) return;
+        if (limit() == applied) return;
+        // Concurrent transfers on the same client share one allocation. Sample
+        // again under the lock so a stale sample cannot overwrite a newer cap.
+        static std::mutex rateUpdates;
+        const std::lock_guard lock(rateUpdates);
+        applied = limit();
+        api->setMaxDownloadSpeed(applied);
+    }
+
+private:
+    MegaApi* api;
+    DownloadLimit limit;
+    long long applied = -1;
+};
+
 int downloadFile(MegaApi* api, MegaNode* node, const char* destination,
-                 Progress progress, IsCancelled isCancelled, long long& quotaWaitSeconds)
+                 Progress progress, IsCancelled isCancelled, long long& quotaWaitSeconds, DownloadLimit limit = nullptr)
 {
     if (isCancelled()) return MegaError::API_EINCOMPLETE;
+    DownloadRate rate(api, limit);
     std::unique_ptr<MegaCancelToken> token(MegaCancelToken::createInstance());
     Transfer transfer(progress);
     api->startDownload(node, destination, nullptr, nullptr, false, token.get(),
@@ -191,6 +223,7 @@ int downloadFile(MegaApi* api, MegaNode* node, const char* destination,
     while (transfer.trywait(100) != 0)
     {
         if (isCancelled()) token->cancel();
+        rate.update();
     }
     const int result = transfer.getError()->getErrorCode();
     if (result == MegaError::API_EOVERQUOTA || (result == MegaError::API_EINCOMPLETE && transfer.overQuota))
@@ -210,14 +243,20 @@ MD_EXPORT int md_inspect(MegaApi* api, const char* link, char* name, int nameCap
     return result == MegaError::API_OK ? describeFile(*node, name, nameCapacity, size) : result;
 }
 
-MD_EXPORT int md_download_with_quota(MegaApi* api, const char* link, const char* destination,
-                                      Progress progress, IsCancelled isCancelled, long long* quotaWaitSeconds)
+MD_EXPORT int md_download_with_limit(MegaApi* api, const char* link, const char* destination,
+                                      Progress progress, IsCancelled isCancelled, long long* quotaWaitSeconds, DownloadLimit limit)
 {
     *quotaWaitSeconds = 0;
     std::unique_ptr<MegaNode> node;
     const int result = publicFile(*api, link, node);
     if (result == MegaError::API_EOVERQUOTA) *quotaWaitSeconds = api->getBandwidthOverquotaDelay();
-    return result == MegaError::API_OK ? downloadFile(api, node.get(), destination, progress, isCancelled, *quotaWaitSeconds) : result;
+    return result == MegaError::API_OK ? downloadFile(api, node.get(), destination, progress, isCancelled, *quotaWaitSeconds, limit) : result;
+}
+
+MD_EXPORT int md_download_with_quota(MegaApi* api, const char* link, const char* destination,
+                                      Progress progress, IsCancelled isCancelled, long long* quotaWaitSeconds)
+{
+    return md_download_with_limit(api, link, destination, progress, isCancelled, quotaWaitSeconds, nullptr);
 }
 
 MD_EXPORT int md_download(MegaApi* api, const char* link, const char* destination,
@@ -330,8 +369,9 @@ MD_EXPORT int md_inspect_node_for_resume(MegaApi* api, MegaHandle handle, char* 
     return describeFile(*node, name, nameCapacity, size);
 }
 
-MD_EXPORT int md_stream_node(MegaApi* api, MegaHandle handle, const char* expectedKey, long long expectedSize,
-                              long long offset, StreamData write, IsCancelled cancelled, long long* quotaWaitSeconds)
+MD_EXPORT int md_stream_node_with_limit(MegaApi* api, MegaHandle handle, const char* expectedKey, long long expectedSize,
+                                         long long offset, StreamData write, IsCancelled cancelled, long long* quotaWaitSeconds,
+                                         DownloadLimit limit)
 {
     *quotaWaitSeconds = 0;
     if (cancelled()) return MegaError::API_EINCOMPLETE;
@@ -344,6 +384,7 @@ MD_EXPORT int md_stream_node(MegaApi* api, MegaHandle handle, const char* expect
     if (offset < 0 || offset > expectedSize) return MegaError::API_EARGS;
     if (offset == expectedSize) return MegaError::API_OK; // already complete or empty; managed code verifies it
 
+    DownloadRate rate(api, limit);
     RangeTransfer transfer(write, cancelled);
     api->startStreaming(node.get(), offset, expectedSize - offset, &transfer);
     bool cancelSent = false;
@@ -355,6 +396,7 @@ MD_EXPORT int md_stream_node(MegaApi* api, MegaHandle handle, const char* expect
             cancelSent = true;
             api->cancelTransferByTag(tag);
         }
+        rate.update();
     }
 
     const int result = transfer.getError()->getErrorCode();
@@ -367,4 +409,10 @@ MD_EXPORT int md_stream_node(MegaApi* api, MegaHandle handle, const char* expect
     if (cancelled()) return MegaError::API_EINCOMPLETE;
     if (transfer.writeFailed) return MegaError::API_EWRITE;
     return result;
+}
+
+MD_EXPORT int md_stream_node(MegaApi* api, MegaHandle handle, const char* expectedKey, long long expectedSize,
+                              long long offset, StreamData write, IsCancelled cancelled, long long* quotaWaitSeconds)
+{
+    return md_stream_node_with_limit(api, handle, expectedKey, expectedSize, offset, write, cancelled, quotaWaitSeconds, nullptr);
 }

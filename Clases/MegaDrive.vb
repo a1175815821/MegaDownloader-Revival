@@ -8,10 +8,12 @@ Friend NotInheritable Class MegaDrivePreferences
     Public Property LastSharedFolder As ULong?
     Public Property Favorites As New List(Of ULong)()
     Public Property FolderDestinations As New Dictionary(Of ULong, String)()
+    Public Property BoundFolderPaths As New Dictionary(Of ULong, Dictionary(Of ULong, String))()
 
     Friend Function Copy() As MegaDrivePreferences
         Return New MegaDrivePreferences With {.LastFolder = LastFolder, .LastSharedFolder = LastSharedFolder,
-            .Favorites = New List(Of ULong)(Favorites), .FolderDestinations = New Dictionary(Of ULong, String)(FolderDestinations)}
+            .Favorites = New List(Of ULong)(Favorites), .FolderDestinations = New Dictionary(Of ULong, String)(FolderDestinations),
+            .BoundFolderPaths = BoundFolderPaths.ToDictionary(Function(binding) binding.Key, Function(binding) New Dictionary(Of ULong, String)(binding.Value))}
     End Function
 End Class
 
@@ -128,6 +130,15 @@ Friend NotInheritable Class MegaDriveSnapshot
     End Function
 
     Friend Function PlanDownload(selection As IEnumerable(Of ULong), Optional relativeToFolder As ULong? = Nothing) As MegaDriveDownload
+        Return PlanDownloadCore(selection, relativeToFolder, Nothing)
+    End Function
+
+    Friend Function PlanBoundDownload(folder As ULong, previousPaths As Dictionary(Of ULong, String)) As MegaDriveDownload
+        Return PlanDownloadCore({folder}, folder, previousPaths)
+    End Function
+
+    Private Function PlanDownloadCore(selection As IEnumerable(Of ULong), relativeToFolder As ULong?,
+                                      previousPaths As Dictionary(Of ULong, String)) As MegaDriveDownload
         Dim selected As New HashSet(Of ULong)(selection)
         Dim download As New MegaDriveDownload()
         Dim paths As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -147,28 +158,57 @@ Friend NotInheritable Class MegaDriveSnapshot
 
             Dim path = item.Value
             If Not relativeToFolder.HasValue OrElse node.Id <> relativeToFolder.Value Then
-                Dim name = PathGuard.SanitizeFileName(node.Name, "folder")
-                path = PathGuard.CombineSafeRelativePath(item.Value, name)
-                Dim number As Integer = 1
-                While Not paths.Add(path)
-                    number += 1
-                    Dim suffix = " (" & number.ToString(CultureInfo.InvariantCulture) & ")"
-                    Dim leaf = name.Substring(0, Math.Min(name.Length, 240 - suffix.Length)) & suffix
-                    path = PathGuard.CombineSafeRelativePath(item.Value, leaf)
-                End While
+                If Not download.FolderPaths.TryGetValue(node.Id, path) Then
+                    Dim name = PathGuard.SanitizeFileName(node.Name, "folder")
+                    path = PathGuard.CombineSafeRelativePath(item.Value, name)
+                    Dim number As Integer = 1
+                    While Not paths.Add(path)
+                        number += 1
+                        path = PathGuard.CombineSafeRelativePath(item.Value, SuffixedFolderName(name, number))
+                    End While
+                    If previousPaths IsNot Nothing Then download.FolderPaths.Add(node.Id, path)
+                End If
                 download.Directories.Add(path)
             End If
-            For Each child In InDirectory(node.Id).OrderByDescending(Function(value) value.Id)
+            Dim descendants = InDirectory(node.Id).OrderByDescending(Function(value) value.Id).ToArray()
+            If previousPaths IsNot Nothing Then
+                ' Reserve existing sibling paths before assigning any newly discovered names.
+                For Each child In descendants
+                    Dim previousPath As String = Nothing
+                    If child.IsFolder AndAlso previousPaths.TryGetValue(child.Id, previousPath) AndAlso
+                       String.Equals(IO.Path.GetDirectoryName(previousPath), path, StringComparison.OrdinalIgnoreCase) AndAlso
+                       MatchesFolderName(child, IO.Path.GetFileName(previousPath)) AndAlso paths.Add(previousPath) Then
+                        download.FolderPaths.Add(child.Id, previousPath)
+                    End If
+                Next
+            End If
+            For Each child In descendants
                 pending.Push(New KeyValuePair(Of MegaDriveNode, String)(child, path))
             Next
         End While
         Return download
+    End Function
+
+    Private Shared Function SuffixedFolderName(name As String, number As Integer) As String
+        Dim suffix = " (" & number.ToString(CultureInfo.InvariantCulture) & ")"
+        Return name.Substring(0, Math.Min(name.Length, 240 - suffix.Length)) & suffix
+    End Function
+
+    Friend Shared Function MatchesFolderName(folder As MegaDriveNode, leaf As String) As Boolean
+        Dim name = PathGuard.SanitizeFileName(folder.Name, "folder")
+        If String.Equals(leaf, name, StringComparison.OrdinalIgnoreCase) Then Return True
+        Dim suffix = leaf.LastIndexOf(" (", StringComparison.Ordinal)
+        Dim number As Integer
+        Return suffix >= 0 AndAlso leaf.EndsWith(")", StringComparison.Ordinal) AndAlso
+            Integer.TryParse(leaf.Substring(suffix + 2, leaf.Length - suffix - 3), NumberStyles.None, CultureInfo.InvariantCulture, number) AndAlso
+            number >= 2 AndAlso String.Equals(leaf, SuffixedFolderName(name, number), StringComparison.OrdinalIgnoreCase)
     End Function
 End Class
 
 Friend NotInheritable Class MegaDriveDownload
     Friend ReadOnly Files As New List(Of KeyValuePair(Of MegaDriveNode, String))()
     Friend ReadOnly Directories As New List(Of String)()
+    Friend ReadOnly FolderPaths As New Dictionary(Of ULong, String)()
     Friend TotalBytes As Decimal
 
     Friend Function KeepFiles(include As Func(Of KeyValuePair(Of MegaDriveNode, String), Boolean), preserveEmpty As Boolean) As MegaDriveDownload

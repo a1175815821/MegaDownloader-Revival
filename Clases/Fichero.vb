@@ -630,7 +630,7 @@ Public Class Fichero
         Return If(code = 0 AndAlso (String.IsNullOrEmpty(name) OrElse size < 0), -2, code)
     End Function
 
-    Private Sub RecordMegaAccountTransfer(email As String)
+    Friend Sub RecordMegaAccountTransfer(email As String)
         MegaAccountTransferEmail = If(String.Equals(email, MegaAccountEmail, StringComparison.OrdinalIgnoreCase), "", email)
     End Sub
 
@@ -1051,7 +1051,7 @@ Public Class Fichero
     Private Sub SetMegaAccountError(code As Integer)
         Dim message As String = MegaAccountService.ErrorText(code, connecting:=True)
         If MegaDriveNodeHandle.HasValue Then
-            If code = -9 OrElse code = -11 Then message = Language.GetText("MegaDrive_FileUnavailable")
+            If code = -9 OrElse code = -11 OrElse code = -14 Then message = Language.GetText("MegaDrive_FileUnavailable")
             If code = MegaAccountService.BackendMissing Then message = Language.GetText("MegaDrive_BackendMissing")
         End If
         EstablecerError(message, IsPermanentMegaAccountError(code), code = MegaAccountService.OverQuota, code)

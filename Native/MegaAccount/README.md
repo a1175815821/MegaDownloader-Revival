@@ -21,7 +21,7 @@ The managed project uses AnyCPU with Prefer 32-bit disabled, including in the so
 
 ## Try it locally
 
-Run the x64 application with `MegaAccountBridge.dll` beside it and enter account credentials in the sign-in dialog. The pinned SDK constructor ignores its App Key parameter, so `MEGADOWNLOADER_MEGA_APP_KEY` is optional for this build.
+Run the x64 application with the `MegaAccountBridge.dll` built from the same version of this repository beside it and enter account credentials in the sign-in dialog. The pinned SDK constructor ignores its App Key parameter, so `MEGADOWNLOADER_MEGA_APP_KEY` is optional for this build.
 
 - Open **Sign in to MEGA** on the right of the menu bar. Add accounts, assign aliases, and set a default for new tasks. The account window shows the plan, storage usage, and transfer values returned by MEGA. The status strip summarizes the default account. A free account may have usage data shared by IP and no fixed transfer allowance.
 - In **Add links**, use **Download identity** to select anonymous download or a specific account for a public single-file link. Use anonymous for folders and ELC. The queue shows the identity per task. Use its **Change download identity** menu to reassign selected pending public file tasks or packages.

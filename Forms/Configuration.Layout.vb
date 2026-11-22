@@ -213,6 +213,7 @@ Partial Public Class Configuration
                         FieldRow(Label18, txtServidorWebTimeout, Label19), FieldRow(Label17, txtServidorWebPassword),
                         FieldRow(Label20, txtServidorWebNombre), FieldRow(Label21, txtServidorWebTemplate, btnExaminarTemplate))
         SettingsPage(TabPage2, GroupBox3, GroupBox5)
+        comboLog.SelectedValue = Config.NivelLog.ToString
     End Sub
 
     Private Sub BuildPresharedKeysPage()

@@ -664,6 +664,7 @@ Friend NotInheritable Class MegaDriveForm
                 menu.Items.Add(Language.GetText("MegaDrive_UnbindFolder"), Nothing,
                                Sub()
                                    drive.Preferences.FolderDestinations.Remove(folder)
+                                   drive.Preferences.BoundFolderPaths.Remove(folder)
                                    SavePreferences()
                                    RefreshRows()
                                End Sub)
@@ -694,7 +695,9 @@ Friend NotInheritable Class MegaDriveForm
         settings.TryGetValue(folder, current)
         Using picker As New FolderBrowserDialog With {.Description = Language.GetText("MegaDrive_BindFolder"), .SelectedPath = If(current, config.RutaDefecto)}
             If picker.ShowDialog(Me) <> DialogResult.OK Then Return
-            settings(folder) = PathGuard.GetSafePathUnderRoot(picker.SelectedPath, "")
+            Dim destination = PathGuard.GetSafePathUnderRoot(picker.SelectedPath, "")
+            If Not String.Equals(current, destination, StringComparison.OrdinalIgnoreCase) Then drive.Preferences.BoundFolderPaths.Remove(folder)
+            settings(folder) = destination
         End Using
         SavePreferences()
         RefreshRows()
@@ -716,15 +719,18 @@ Friend NotInheritable Class MegaDriveForm
             Dim plan As MegaDriveDownload
             Dim queued As IEnumerable(Of ULong) = queue.Select(Function(file) file.Handle)
             Dim updated As HashSet(Of ULong) = Nothing
+            Dim paths As New Dictionary(Of ULong, String)()
             If tracked Then
                 status.Text = Language.GetText("MegaDrive_CheckingFolder")
+                Dim previousPaths As Dictionary(Of ULong, String) = Nothing
+                If selectedDrive.Preferences.BoundFolderPaths.TryGetValue(ids(0), previousPaths) Then paths = New Dictionary(Of ULong, String)(previousPaths)
                 Dim incoming = selectedDrive.Incoming
                 Dim changes = Await Task.Run(Function()
                                                  Dim latest As MegaDriveSnapshot = Nothing
                                                  Dim result = service.ReadDrive(email, CancellationToken.None, latest, incomingShares:=incoming)
                                                  If result <> 0 Then Throw New ApplicationException(MegaAccountService.ErrorText(result))
                                                  If Not latest.IsFolder(ids(0)) Then Throw New ApplicationException(Language.GetText("MegaDrive_FileUnavailable"))
-                                                 Return service.DriveHistory.FindChanges(email, latest.PlanDownload(ids, ids(0)), boundDestination, queue)
+                                                 Return service.DriveHistory.FindBoundChanges(email, latest, ids(0), boundDestination, queue, paths)
                                              End Function)
                 plan = changes.Plan
                 queued = changes.Pending
@@ -760,6 +766,10 @@ Friend NotInheritable Class MegaDriveForm
                     End Try
                 Else
                     MessageBox.Show(Me, Language.GetText("MegaDrive_FoldersCreated"), Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
+                If tracked Then
+                    selectedDrive.Preferences.BoundFolderPaths(ids(0)) = paths
+                    SavePreferences()
                 End If
                 selectedDrive.Selected.ExceptWith(ids)
             End Using

@@ -743,7 +743,30 @@ public partial class RegressionTests {
         controller.AddStream(ref s1,"B2PERF");controller.AddStream(ref s2,"OTHER");
         try {
             Check(s1.MaximumBytesPerSecond>=0&&s2.MaximumBytesPerSecond>=0,"P-08 HashSet recalculation still assigns limits");
+            var type=controller.GetType();
+            var budgetType=type.GetNestedType("AccountDownloadBudget",BindingFlags.NonPublic);
+            var account=Activator.CreateInstance(budgetType,true);
+            var other=Activator.CreateInstance(budgetType,true);
+            var begin=type.GetMethod("BeginAccountDownload",hidden);
+            var end=type.GetMethod("EndAccountDownload",hidden);
+            var rate=budgetType.GetProperty("BytesPerSecond",hidden);
+            begin.Invoke(controller,new[]{account});
+            begin.Invoke(controller,new[]{account});
+            begin.Invoke(controller,new[]{other});
+            try {
+                controller.SetMaxGlobalSpeed(16384L);
+                Check((long)rate.GetValue(account,null)==4096L && (long)rate.GetValue(other,null)==4096L &&
+                    s1.MaximumBytesPerSecond+s2.MaximumBytesPerSecond==8192L,"concurrent SDK and anonymous transfers share the global budget");
+                controller.SetMaxGlobalSpeed(8192L);
+                Check((long)rate.GetValue(account,null)==2048L && s2.MaximumBytesPerSecond==2048L,"budget changes reach active account and anonymous downloads");
+            } finally {
+                end.Invoke(controller,new[]{account});
+                end.Invoke(controller,new[]{other});
+                end.Invoke(controller,new[]{account});
+            }
+            Check(s1.MaximumBytesPerSecond+s2.MaximumBytesPerSecond==8192L,"account downloads return their bandwidth when the last transfer ends");
         } finally {
+            controller.SetMaxGlobalSpeed(0);
             controller.RemoveStream(ref s1);controller.RemoveStream(ref s2);
             controller.RemoveId("B2PERF");controller.RemoveId("OTHER");controller.Continuar();
             s1.Dispose();s2.Dispose();
@@ -1487,6 +1510,7 @@ public partial class RegressionTests {
         statusType.GetField("Remaining",hidden).SetValue(status,remaining);
         var entry=Activator.CreateInstance(entryType,true);
         entryType.GetField("Value",hidden).SetValue(entry,status);
+        if(remaining==0)entryType.GetField("ZeroBalanceExpiresUtc",hidden).SetValue(entry,DateTime.UtcNow.AddMinutes(5));
         entryType.GetField("Saved",hidden).SetValue(entry,true);
         ((System.Collections.IList)type.GetField("accounts",hidden).GetValue(service)).Add(entry);
         return entry;
@@ -1803,8 +1827,19 @@ public partial class RegressionTests {
             Check(tabs.SelectedTab.Controls.Count>0 && tabs.SelectedTab.Controls[0].Height>100,"first visit to the account page lays out its body");
             accountControl=(ELCAccountControl)typeof(Configuration).GetProperty("ElcAccountControl",hidden).GetValue(settings,null);
             Check(accountControl!=null,"selecting the account tab builds the account control");
+            var addAccount=accountControl.Controls.Find("btnELCAccountAddNew",true).OfType<System.Windows.Forms.Button>().Single();
+            var draftUrl=accountControl.Controls.Find("txtELCAccountURL",true).OfType<System.Windows.Forms.TextBox>().Single();
+            addAccount.PerformClick();
+            draftUrl.Text="https://example.invalid/cancelled";
+            typeof(Configuration).GetMethod("PrepareForReopen",hidden).Invoke(settings,null);
+            tabs.SelectedIndex=tabs.TabPages.Count-1;
+            Check(draftUrl.Text=="" && !draftUrl.Enabled && (string)typeof(ELCAccountControl).GetField("ELCAccountAction",hidden).GetValue(accountControl)=="",
+                "reopening settings discards an unsubmitted ELC account and exits add mode");
             accountControl.Cerrar();accountControl.Cerrar();
             Check(true,"account cleanup is safe before or after repeated close calls");
+            tabs.SelectedTab=(System.Windows.Forms.TabPage)typeof(Configuration).GetProperty("TabPage2",hidden).GetValue(settings,null);
+            var logChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboLog",hidden).GetValue(settings,null);
+            Check((string)logChoice.SelectedValue==cfg.NivelLog.ToString(),"the first visit to advanced settings selects the saved log level");
             tabs.SelectedIndex=0;
             var checkUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkCheckUpdates",true).Single();
             var manualUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkUpdateManualOnly",true).Single();
@@ -2543,6 +2578,29 @@ public partial class RegressionTests {
                 Check((bool)retry.Invoke(null,new object[]{task,false,false}),"user sign-in releases the expired-session task");
                 setError.Invoke(task,new object[]{-9});
                 Check(task.EsErrorPermanente && !(bool)retry.Invoke(null,new object[]{task,true,true}),"permanent account errors do not retry");
+
+                const string blocked="blocked-retry@example.invalid";
+                var fallback=SeedMegaAccount(service,blocked,"",true,remaining:0L);
+                try {
+                    quotaDelayUnknown.SetValue(status,false);
+                    value.SetValue(entry,status);
+                    var transfer=typeof(Fichero).GetField("MegaAccountTransferEmail",hidden);
+                    transfer.SetValue(task,blocked);
+                    setError.Invoke(task,new object[]{-17});
+                    Check((bool)retry.Invoke(null,new object[]{task,true,true}) && (string)transfer.GetValue(task)=="",
+                          "public quota retry selects the recovered original account before requeueing");
+                    task.MegaAccountEmail=blocked;
+                    typeof(Fichero).GetField("MegaDriveNodeHandle",hidden).SetValue(task,5UL);
+                    var cloudBlocks=typeof(Main).GetMethod("CloudQuotaBlocks",shared);
+                    Check((bool)cloudBlocks.Invoke(null,new object[]{task}),"a fresh zero balance temporarily blocks private downloads");
+                    fallback.GetType().GetField("ZeroBalanceExpiresUtc",hidden).SetValue(fallback,DateTime.UtcNow.AddSeconds(-1));
+                    Check(!(bool)cloudBlocks.Invoke(null,new object[]{task}),"an expired zero balance allows a new private transfer attempt");
+                    setError.Invoke(task,new object[]{-14});
+                    Check(task.DescripcionError==Language.GetText("MegaDrive_FileUnavailable") && (int)errorCode.GetValue(task)==-14,
+                          "private key errors describe the cloud file and retain the SDK code");
+                } finally {
+                    entries.Remove(fallback);
+                }
             }
         } finally {
             entries.Remove(entry);
@@ -2647,6 +2705,26 @@ public partial class RegressionTests {
         var foreign=find.Invoke(history,new[]{"other@example.invalid",plan,destination,Array.CreateInstance(queueType,0)});
         result=changesType.GetField("Plan",hidden).GetValue(foreign);
         Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==7168M,"incremental history is isolated by account");
+
+        var snapshotType=snapshot.GetType();
+        var nodeType=snapshotType.Assembly.GetType("MegaDownloader.MegaDriveNode",true);
+        var nodes=Array.CreateInstance(nodeType,6);
+        object[][] fixture={new object[]{1UL,0UL,"root",true,0L,0L},new object[]{30UL,1UL,"Photos",true,0L,0L},
+            new object[]{31UL,30UL,"old.jpg",false,3L,0L},new object[]{20UL,1UL,"photos",true,0L,0L},
+            new object[]{21UL,20UL,"new.jpg",false,4L,0L},new object[]{40UL,1UL,"CON."+new string('x',236),true,0L,0L}};
+        for(int i=0;i<fixture.Length;i++)nodes.SetValue(Activator.CreateInstance(nodeType,hidden,null,fixture[i],null),i);
+        var changed=Activator.CreateInstance(snapshotType,hidden,null,new object[]{1UL,nodes},null);
+        string existing=Path.Combine(destination,"Photos","old.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(existing));
+        File.WriteAllBytes(existing,new byte[3]);
+        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,31UL,existing});
+        var paths=new Dictionary<ulong,string>();
+        changes=history.GetType().GetMethod("FindBoundChanges",hidden).Invoke(history,
+            new object[]{email,changed,1UL,destination,Array.CreateInstance(queueType,0),paths});
+        result=changesType.GetField("Plan",hidden).GetValue(changes);
+        Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==4M && paths[30UL]=="Photos" && paths[20UL]=="photos (2)",
+              "older deliveries keep their directory when a lower-handle case collision is added");
+        Check(paths[40UL].StartsWith("_CON.") && paths[40UL].Length==240,"reserved-name sanitizing stays within the planner's segment limit");
     }
     static void MegaAccountStoreCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
@@ -2668,9 +2746,9 @@ public partial class RegressionTests {
         Check((int)setAlias.Invoke(service,new object[]{second,"  Secondary  "})==0 && (int)setDefault.Invoke(service,new object[]{second})==0,"multiple account aliases and the default save together");
         var next=type.GetMethod("NextTransferAccount",hidden);
         var attempted=new HashSet<string>(StringComparer.OrdinalIgnoreCase){"QUOTA@EXAMPLE.INVALID"};
-        Check((string)next.Invoke(service,new object[]{"quota@example.invalid",attempted})==second,"quota rotation wraps and skips disconnected and exhausted accounts");
+        Check((string)next.Invoke(service,new object[]{"quota@example.invalid",attempted,true})==second,"quota rotation wraps and skips disconnected and exhausted accounts");
         attempted.Add(second);
-        Check((string)next.Invoke(service,new object[]{second,attempted})=="","exhausted rotation ends without trying an account twice or starting anonymously");
+        Check((string)next.Invoke(service,new object[]{second,attempted,true})=="","exhausted rotation ends without trying an account twice or starting anonymously");
         var reopened=Activator.CreateInstance(type,hidden,null,new object[]{folder},null);
         Check(((System.Threading.Tasks.Task<int>)restore.Invoke(reopened,null)).GetAwaiter().GetResult()==0 && (string)getDefault.GetValue(reopened,null)==second,"explicit default survives a restart");
         var lookup=type.GetMethod("GetStatus",hidden,null,new[]{typeof(string)},null);

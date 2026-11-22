@@ -4451,7 +4451,7 @@ Public Class Main
                     fic.Stop()
                     Log.WriteDebug("File download stopped " & fic.NombreFichero)
                 Case Else
-                    fic.DiscardPrivateMegaCheckpoint()
+                    If BorrarFicheros Then fic.DiscardPrivateMegaCheckpoint()
                     fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                     fic.BorrarFicheroLocal()
                     fic.Dispose()
@@ -4472,7 +4472,7 @@ Public Class Main
                         fic.Stop()
                         Log.WriteDebug("File download stopped " & fic.NombreFichero)
                     Case Else
-                        fic.DiscardPrivateMegaCheckpoint()
+                        If BorrarFicheros Then fic.DiscardPrivateMegaCheckpoint()
                         fic.MarcadoParaBorrarFicheroLocal = BorrarFicheros
                         fic.BorrarFicheroLocal()
                         fic.Dispose()
@@ -4542,9 +4542,9 @@ Public Class Main
                 ' BorrarFicheroLocal / Dispose 只执行一次(原代码会执行两遍)。
                 RemoveHandler fic.CancellationComplete, AddressOf DisposeFichero
                 If System.Threading.Interlocked.Exchange(fic.DisposalHandled, 1) <> 0 Then Return
-                fic.DiscardPrivateMegaCheckpoint()
                 Log.WriteDebug("Download file stopped " & fic.NombreFichero & ", pending delete")
                 If fic.MarcadoParaBorrarFicheroLocal Then
+                    fic.DiscardPrivateMegaCheckpoint()
                     fic.BorrarFicheroLocal()
                 End If
                 Dim paqLimpieza As Paquete = fic.LimpiezaPaquete
