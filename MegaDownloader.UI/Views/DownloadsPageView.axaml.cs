@@ -20,4 +20,19 @@ public partial class DownloadsPageView : UserControl
         if (sender is Control { DataContext: DownloadItemViewModel row })
             row.PropertiesCommand.Execute(null);
     }
+
+    /// <summary>Keeps the page's batch selection in sync with the list's selection.</summary>
+    private void QueueSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel model || sender is not ListBox list)
+            return;
+
+        model.SelectedDownloads.Clear();
+        foreach (var item in list.SelectedItems)
+        {
+            if (item is DownloadItemViewModel row)
+                model.SelectedDownloads.Add(row);
+        }
+        model.UpdateBatchSelection();
+    }
 }

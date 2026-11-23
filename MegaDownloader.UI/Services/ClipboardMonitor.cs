@@ -6,12 +6,13 @@ using Avalonia.Threading;
 using MegaDownloader.UI.ViewModels;
 using MegaDownloader.UI.Views;
 
+
 namespace MegaDownloader.UI.Services;
 
 public sealed class ClipboardMonitor : IDisposable
 {
     private readonly DownloadEngineService _engine;
-    private readonly LinkIntakeService _intake;
+    private readonly AddLinksCoordinator _coordinator;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private readonly CancellationTokenSource _shutdown = new();
     private uint? _handledSequence;
@@ -22,14 +23,15 @@ public sealed class ClipboardMonitor : IDisposable
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
 
-    public ClipboardMonitor(DownloadEngineService engine, LinkIntakeService intake)
+    public ClipboardMonitor(DownloadEngineService engine, AddLinksCoordinator coordinator)
     {
         _engine = engine;
-        _intake = intake;
+        _coordinator = coordinator;
         _timer.Tick += async (_, _) => await PollAsync();
     }
 
-    public event Action<LinkIntakeResult>? IntakeCompleted;
+    /// <summary>Raised with the number of links found; the confirmation window does the rest.</summary>
+    public event Action<int>? LinksFound;
 
     public void Start() => _timer.Start();
     public void Stop() => _timer.Stop();
@@ -55,18 +57,17 @@ public sealed class ClipboardMonitor : IDisposable
             var links = LinkIntakeService.ExtractLinks(text);
             if (links.Count > 0)
             {
-                var editor = desktop.Windows.OfType<AddLinksWindow>().FirstOrDefault(w => w.IsVisible);
-                if (editor?.DataContext is AddLinksViewModel model)
+                string joined = string.Join(Environment.NewLine, links);
+                if (_coordinator.IsOpen)
                 {
-                    if (model.LinksText.Length == 0 && !model.IsInspecting && !model.IsImporting)
-                        model.LinksText = string.Join(Environment.NewLine, links);
+                    // The window is open: hold these for the next batch instead of
+                    // queueing them behind the user's back.
+                    _coordinator.Stage(joined);
                 }
                 else
                 {
-                    var result = await _intake.AddAsync(text, cancellationToken: _shutdown.Token);
-                    if (_disposed || result.Status == LinkIntakeStatus.NotReady)
-                        return;
-                    IntakeCompleted?.Invoke(result);
+                    _ = _coordinator.ShowAsync(joined);
+                    LinksFound?.Invoke(links.Count);
                 }
             }
             _handledSequence = sequence;

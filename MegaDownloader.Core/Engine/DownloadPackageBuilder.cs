@@ -8,6 +8,79 @@ namespace MegaDownloader
     /// <summary>Construct an unpublished package off the UI thread; create each directory once.</summary>
     public sealed class DownloadPackageBuilder
     {
+        /// <summary>
+        /// Where the package and its files would land, computed without touching the
+        /// disk so the preflight can show the real destination before anything is added.
+        /// <see cref="PackageRoot"/> is null when the name is only known after the first
+        /// file is verified (single unnamed link with "create subfolder").
+        /// </summary>
+        public sealed class DestinationPreview
+        {
+            public string PackageRoot;
+            public string PackageName;
+            public bool NamePending;
+            public readonly List<string> SampleFiles = new List<string>();
+        }
+
+        public static DestinationPreview PreviewDestination(List<URLProcessor.FileURL> urls, string packageName, string destination, bool createDirectory)
+        {
+            var preview = new DestinationPreview { PackageRoot = destination };
+            if (urls is null || urls.Count == 0)
+                return preview;
+
+            string folderName = URLProcessor.GetCommonFolderName(urls);
+            bool namePending = string.IsNullOrEmpty(packageName);
+            string name = packageName;
+
+            bool folderNamePending = namePending && !string.IsNullOrEmpty(folderName) && urls.Count > 1;
+            if (namePending && createDirectory && urls.Count > 1)
+            {
+                bool allFlat = true;
+                foreach (URLProcessor.FileURL url in urls)
+                {
+                    if (!string.IsNullOrEmpty(url.Path))
+                    {
+                        allFlat = false;
+                        break;
+                    }
+                }
+                if (allFlat)
+                {
+                    name = string.IsNullOrEmpty(folderName) ? Language.GetText("New package") : folderName;
+                    if (string.IsNullOrEmpty(name))
+                        name = "New package";
+                    namePending = false;
+                }
+            }
+
+            if (folderNamePending && namePending)
+            {
+                name = folderName;
+                namePending = false;
+            }
+
+            preview.NamePending = namePending && urls.Count == 1;
+            preview.PackageName = name;
+
+            if (createDirectory && !string.IsNullOrEmpty(name))
+                preview.PackageRoot = PathGuard.GetSafePathUnderRoot(destination, PathGuard.SanitizeFileName(name, "package"), allowRoot: false);
+            else if (namePending && urls.Count == 1)
+                preview.PackageRoot = null;
+
+            if (preview.PackageRoot is not null)
+            {
+                int samples = Math.Min(3, urls.Count);
+                for (int index = 0; index < samples; index++)
+                {
+                    string relative = urls[index].Path ?? string.Empty;
+                    string display = urls[index].DisplayName ?? string.Empty;
+                    preview.SampleFiles.Add(PathGuard.GetSafePathUnderRoot(preview.PackageRoot, System.IO.Path.Combine(relative, display), allowRoot: true));
+                }
+            }
+
+            return preview;
+        }
+
         public static Paquete Build(List<URLProcessor.FileURL> URLs2, string packageName, string destination, bool createDirectory, bool extractArchives, string password, CancellationToken cancellation, IProgress<int> progress = null)
         {
             cancellation.ThrowIfCancellationRequested();

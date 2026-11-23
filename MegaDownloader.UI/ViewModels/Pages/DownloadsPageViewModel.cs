@@ -5,20 +5,24 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MegaDownloader.Platform;
 using MegaDownloader.UI.Services;
 
 namespace MegaDownloader.UI.ViewModels;
 
 /// <summary>
-/// Queue page backed by <see cref="DownloadEngineService"/>. The engine does not raise
-/// change notifications, so the page polls it on a dispatcher timer and reconciles a
-/// stable row set (rows are reused per engine object so selection survives refreshes).
+/// Queue page backed by <see cref="DownloadEngineService"/>. The engine publishes its
+/// queue summary once per tick; this page only walks the rows it actually displays and
+/// rebuilds the visible row list when the queue or the filter changes, so selection and
+/// scroll survive ordinary progress updates.
 /// </summary>
 public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 {
     private readonly DownloadEngineService _engine;
     private readonly IDialogService _dialogs;
+    private readonly IPlatformServices _platform;
     private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _searchTimer;
     private readonly Dictionary<object, DownloadItemViewModel> _rowCache = new(ReferenceEqualityComparer.Instance);
     private bool _loading;
     private bool _disposed;
@@ -26,6 +30,9 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     private string? _actionFeedback;
     private DateTime _feedbackUntil;
     private readonly Queue<double> _speedSamples = new(60);
+    private int _lastSummaryVersion = -1;
+    private int _lastQueueVersion = -1;
+    private string _appliedSearch = string.Empty;
 
     [ObservableProperty]
     private IReadOnlyList<double> speedHistory = Array.Empty<double>();
@@ -38,6 +45,12 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private int queuedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFailed))]
+    private int failedCount;
+
+    public bool HasFailed => FailedCount > 0;
 
     [ObservableProperty]
     private int completedCount;
@@ -84,6 +97,39 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string emptyMessage = string.Empty;
 
+    [ObservableProperty]
+    private string searchText = string.Empty;
+
+    [ObservableProperty]
+    private bool hasSearch;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailsToggleText))]
+    private bool showDetails = true;
+
+    public string DetailsToggleText => UiText.Get(ShowDetails ? "Collapse details" : "Show details");
+
+    [ObservableProperty]
+    private string detailTitle = string.Empty;
+
+    [ObservableProperty]
+    private string detailState = string.Empty;
+
+    [ObservableProperty]
+    private string detailPath = string.Empty;
+
+    [ObservableProperty]
+    private string detailSize = string.Empty;
+
+    [ObservableProperty]
+    private string detailError = string.Empty;
+
+    [ObservableProperty]
+    private bool hasDetailError;
+
+    [ObservableProperty]
+    private int selectionCount;
+
     public IReadOnlyList<QueueFilterOption> Filters { get; } =
     [
         new(QueueFilter.All, "All statuses"),
@@ -94,13 +140,20 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         new(QueueFilter.Failed, "Failed")
     ];
 
-    public DownloadsPageViewModel(DownloadEngineService engine, IDialogService dialogs)
+    public DownloadsPageViewModel(DownloadEngineService engine, IDialogService dialogs, IPlatformServices platform)
     {
         _engine = engine;
         _dialogs = dialogs;
+        _platform = platform;
 
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _refreshTimer.Tick += (_, _) => Refresh(sampleSpeed: true);
+        _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _searchTimer.Tick += (_, _) =>
+        {
+            _searchTimer.Stop();
+            ApplySearch();
+        };
         selectedFilter = Filters[0];
         UiText.Changed += ApplyLanguage;
 
@@ -108,6 +161,14 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     }
 
     public ObservableCollection<DownloadItemViewModel> Downloads { get; } = new();
+
+    /// <summary>Rows the user selected; batch commands act on this set.</summary>
+    public ObservableCollection<DownloadItemViewModel> SelectedDownloads { get; } = new();
+
+    public bool CanBatch => SelectionCount > 1;
+
+    /// <summary>Called by the view after the list selection changed.</summary>
+    public void UpdateBatchSelection() => SelectionCount = SelectedDownloads.Count;
 
     private async Task LoadAsync()
     {
@@ -117,7 +178,6 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         try
         {
             await _engine.LoadAsync();
-
         }
         catch (Exception ex)
         {
@@ -129,20 +189,28 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             IsBusy = false;
         }
 
-        // The servers are started even when the queue failed to load: they are
-        // configured separately, and a broken DownloadList.xml must not keep the
-        // browser remote control down until the next settings save.
-        await Task.Run(() =>
-        {
-            string error = WebServerHost.Start(_engine, _engine.Config);
-            if (!string.IsNullOrEmpty(error))
-                Log.WriteError("Web server did not start: " + error);
-        });
-
         if (_disposed)
             return;
+
+        // The queue is ready to show now; the optional servers start afterwards so a
+        // slow bind never delays the workbench.
         Refresh();
         _refreshTimer.Start();
+        _ = StartServersAsync();
+    }
+
+    private async Task StartServersAsync()
+    {
+        try
+        {
+            string error = await Task.Run(() => WebServerHost.Start(_engine, _engine.Config));
+            if (!string.IsNullOrEmpty(error))
+                Log.WriteError("Web server did not start: " + error);
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Starting the web server failed: " + Log.SafeException(ex));
+        }
     }
 
     private void ApplyLanguage(object? sender, EventArgs args)
@@ -151,7 +219,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             filter.ApplyLanguage();
         foreach (var item in _rowCache.Values)
             item.ApplyLanguage();
-        Refresh();
+        Refresh(forceRebuild: true);
     }
 
     [ObservableProperty]
@@ -170,12 +238,21 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         {
             DraftLinks = string.Empty;
             SetFeedback(result);
-            Refresh();
+            Refresh(forceRebuild: true);
         }
     }
 
     [RelayCommand]
     private void ResetFilter() => SelectedFilter = Filters[0];
+
+    [RelayCommand]
+    private void ClearSearch()
+    {
+        SearchText = string.Empty;
+    }
+
+    [RelayCommand]
+    private void ToggleDetails() => ShowDetails = !ShowDetails;
 
     [RelayCommand]
     private void StartAll()
@@ -204,6 +281,113 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         _engine.StopAll();
         Refresh();
     }
+
+    [RelayCommand]
+    private void RetryFailed()
+    {
+        int retried = _engine.RetryFailed();
+        SetFeedback(retried > 0
+            ? UiText.Format("Retrying {0} failed task(s).", retried)
+            : UiText.Get("Nothing to retry: the remaining failures are permanent."));
+        Refresh();
+    }
+
+    [RelayCommand]
+    private async Task BatchPauseAsync()
+    {
+        var items = SelectedDownloads.Select(row => row.Item).ToArray();
+        if (items.Length == 0)
+            return;
+        await Task.Run(() =>
+        {
+            foreach (var item in items)
+            {
+                switch (item)
+                {
+                    case Fichero file:
+                        _engine.PauseFile(file);
+                        break;
+                    case Paquete package:
+                        foreach (Fichero child in package.SnapshotFicheros())
+                            _engine.PauseFile(child);
+                        break;
+                }
+            }
+        });
+        SetFeedback(UiText.Format("Paused {0} item(s).", items.Length));
+        Refresh(forceRebuild: true);
+    }
+
+    [RelayCommand]
+    private async Task BatchRetryAsync()
+    {
+        var items = SelectedDownloads.Select(row => row.Item).ToArray();
+        if (items.Length == 0)
+            return;
+        int retried = await Task.Run(() =>
+        {
+            int count = 0;
+            foreach (var item in items)
+            {
+                switch (item)
+                {
+                    case Fichero file:
+                        if (_engine.RetryFile(file))
+                            count++;
+                        break;
+                    case Paquete package:
+                        foreach (Fichero child in package.SnapshotFicheros())
+                        {
+                            if (_engine.RetryFile(child))
+                                count++;
+                        }
+                        break;
+                }
+            }
+            return count;
+        });
+        SetFeedback(retried > 0
+            ? UiText.Format("Retrying {0} task(s).", retried)
+            : UiText.Get("Nothing to retry: the remaining failures are permanent."));
+        Refresh(forceRebuild: true);
+    }
+
+    [RelayCommand]
+    private async Task BatchRemoveAsync()
+    {
+        var items = SelectedDownloads.Select(row => row.Item).ToArray();
+        if (items.Length == 0)
+            return;
+        bool confirmed = await _dialogs.ConfirmAsync(
+            UiText.Get("Remove download"),
+            UiText.Format("Remove {0} item(s) from the queue? Files already downloaded are kept.", items.Length),
+            UiText.Get("Remove"),
+            UiText.Get("Cancel"));
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                foreach (var item in items)
+                    _engine.Remove(item, deleteFiles: false);
+            });
+            SetFeedback(UiText.Format("Removed {0} item(s).", items.Length));
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Removing downloads failed: " + Log.SafeException(ex));
+            SetFeedback(UiText.Get("Could not remove the download."));
+        }
+        Refresh(forceRebuild: true);
+    }
+
+    [RelayCommand]
+    private void OpenSelectedFile() => OpenOutput(SelectedDownload, openFolder: false);
+
+    [RelayCommand]
+    private void OpenSelectedFolder() => OpenOutput(SelectedDownload, openFolder: true);
 
     internal void StartItem(object item)
     {
@@ -240,10 +424,70 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         Refresh();
     }
 
+    internal void RetryItem(object item)
+    {
+        switch (item)
+        {
+            case Fichero file:
+                if (!_engine.RetryFile(file))
+                    SetFeedback(UiText.Get("This failure is permanent: the link is no longer valid."));
+                break;
+            case Paquete package:
+                foreach (Fichero file in package.SnapshotFicheros())
+                    _engine.RetryFile(file);
+                break;
+        }
+
+        Refresh(forceRebuild: true);
+    }
+
+    internal void OpenOutput(object? item, bool openFolder)
+    {
+        string? path = null;
+        try
+        {
+            switch (item)
+            {
+                case Fichero file:
+                    string? directory = file.RutaLocal;
+                    string? name = file.NombreFichero;
+                    path = openFolder
+                        ? directory
+                        : (directory is not null && name is not null ? Path.Combine(directory, name) : directory);
+                    break;
+                case Paquete package:
+                    path = package.RutaLocal;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.WriteWarning("Resolving the output path failed: " + Log.SafeException(ex));
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            SetFeedback(UiText.Get("This task has no local output yet."));
+            Refresh();
+            return;
+        }
+
+        try
+        {
+            _platform.OpenWithDefaultApplication(path);
+        }
+        catch (Exception ex)
+        {
+            Log.WriteWarning("Opening the output failed: " + Log.SafeException(ex));
+            SetFeedback(UiText.Get("Could not open the output."));
+            Refresh();
+        }
+    }
+
     internal async Task ShowPropertiesAsync(object item)
     {
         if (await _dialogs.ShowPropertiesAsync(item))
-            Refresh();
+            Refresh(forceRebuild: true);
     }
 
     internal async Task RemoveItemAsync(object item, bool deleteFiles)
@@ -282,7 +526,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             Log.WriteError("Removing a download failed: " + Log.SafeException(ex));
             SetFeedback(UiText.Get("Could not remove the download."));
         }
-        Refresh();
+        Refresh(forceRebuild: true);
     }
 
     /// <summary>
@@ -346,7 +590,60 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         _feedbackUntil = DateTime.UtcNow.AddSeconds(10);
     }
 
-    internal void Refresh(bool sampleSpeed = false)
+    partial void OnSearchTextChanged(string value)
+    {
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void ApplySearch()
+    {
+        if (string.Equals(_appliedSearch, SearchText ?? string.Empty, StringComparison.Ordinal))
+            return;
+        _appliedSearch = SearchText ?? string.Empty;
+        HasSearch = _appliedSearch.Length > 0;
+        Refresh(forceRebuild: true);
+    }
+
+    partial void OnSelectedFilterChanged(QueueFilterOption? value) => Refresh(forceRebuild: true);
+
+    partial void OnSelectedDownloadChanged(DownloadItemViewModel? value) => UpdateDetails(value);
+
+    partial void OnSelectionCountChanged(int value) => OnPropertyChanged(nameof(CanBatch));
+
+    private void UpdateDetails(DownloadItemViewModel? row)
+    {
+        if (row is null)
+        {
+            DetailTitle = string.Empty;
+            DetailState = string.Empty;
+            DetailPath = string.Empty;
+            DetailSize = string.Empty;
+            DetailError = string.Empty;
+            HasDetailError = false;
+            return;
+        }
+
+        DetailTitle = row.Title;
+        DetailState = row.StateText;
+        DetailSize = row.SizeText;
+        switch (row.Item)
+        {
+            case Fichero file:
+                DetailPath = file.RutaLocal is null
+                    ? string.Empty
+                    : Path.Combine(file.RutaLocal, file.NombreFichero ?? string.Empty);
+                DetailError = file.DescripcionError ?? string.Empty;
+                break;
+            case Paquete package:
+                DetailPath = package.RutaLocal ?? string.Empty;
+                DetailError = string.Empty;
+                break;
+        }
+        HasDetailError = !string.IsNullOrWhiteSpace(DetailError);
+    }
+
+    internal void Refresh(bool sampleSpeed = false, bool forceRebuild = false)
     {
         if (_disposed || _loading)
             return;
@@ -355,47 +652,24 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         try
         {
             var packages = _engine.SnapshotPackages();
-            var desired = new List<DownloadItemViewModel>(Downloads.Count);
-            var liveItems = new HashSet<object>(ReferenceEqualityComparer.Instance);
-            int downloading = 0, queued = 0, paused = 0, completed = 0, failed = 0;
-            decimal totalSpeed = 0m;
+            var engineSummary = _engine.Summary;
+            int summaryVersion = _engine.SummaryVersion;
+            int queueVersion = _engine.QueueVersion;
 
-            foreach (Paquete package in packages)
-            {
-                liveItems.Add(package);
-                var header = GetOrCreateRow(package, isPackage: true);
-                var files = package.SnapshotFicheros();
-                UpdatePackageRow(header, package, files);
+            bool queueChanged = queueVersion != _lastQueueVersion;
+            bool rebuild = forceRebuild || queueChanged || summaryVersion != _lastSummaryVersion;
+            _lastQueueVersion = queueVersion;
+            _lastSummaryVersion = summaryVersion;
 
+            if (rebuild)
+                RebuildRows(packages);
+            else
+                UpdateVisibleRows();
 
-                var visibleFiles = new List<Fichero>(files.Count);
-                foreach (Fichero file in files)
-                {
-                    liveItems.Add(file);
-                    CountState(file.DescargaEstado(), ref downloading, ref queued, ref paused, ref completed, ref failed);
-                    totalSpeed += file.DescargaVelocidadKBs();
-                    if (MatchesFilter(file.DescargaEstado()))
-                        visibleFiles.Add(file);
-                }
-
-                bool packageMatches = MatchesFilter(package.DescargaEstado());
-                if (visibleFiles.Count == 0 && !packageMatches)
-                    continue;
-
-                header.HasChildren = files.Count > 0;
-                desired.Add(header);
-
-                foreach (Fichero file in visibleFiles)
-                {
-                    var child = GetOrCreateRow(file, isPackage: false);
-                    UpdateFileRow(child, file);
-                    if (header.IsExpanded)
-                        desired.Add(child);
-                }
-            }
-
-            Reconcile(desired);
-            PruneRowCache(liveItems);
+            // Only tasks can leave the queue when the queue version moved; a quiet tick
+            // does not need to walk every file to prune rows.
+            if (queueChanged || forceRebuild)
+                PruneRowCache(packages);
 
             IsEmpty = Downloads.Count == 0;
             HasFiles = packages.Count > 0;
@@ -416,6 +690,11 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
                 EmptyTitle = UiText.Get("Add links");
                 EmptyMessage = UiText.Get("Add a MEGA file or folder link to start a download.");
             }
+            else if (HasSearch)
+            {
+                EmptyTitle = UiText.Get("Nothing matches this search");
+                EmptyMessage = UiText.Get("Clear the search to see the whole queue.");
+            }
             else
             {
                 EmptyTitle = UiText.Get("Nothing matches this filter");
@@ -425,20 +704,21 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             CanStartAll = _engine.IsLoaded && HasFiles && _engine.State != DownloadEngineState.Running;
             CanPauseAll = _engine.IsLoaded && _engine.State == DownloadEngineState.Running;
             CanStopAll = _engine.IsLoaded && _engine.State != DownloadEngineState.Stopped;
-            ActiveCount = downloading;
-            QueuedCount = queued;
-            CompletedCount = completed;
-            TransferSpeed = FormatSpeed(totalSpeed);
+            ActiveCount = engineSummary.Active;
+            QueuedCount = engineSummary.Queued;
+            CompletedCount = engineSummary.Completed;
+            FailedCount = engineSummary.Failed;
+            TransferSpeed = FormatSpeed(engineSummary.SpeedKBs);
             if (sampleSpeed)
             {
                 if (_speedSamples.Count == 60)
                     _speedSamples.Dequeue();
-                _speedSamples.Enqueue((double)totalSpeed);
+                _speedSamples.Enqueue((double)engineSummary.SpeedKBs);
                 SpeedHistory = _speedSamples.ToArray();
             }
 
             Summary = UiText.Format("{0} active · {1} queued · {2} paused · {3} completed · {4} failed",
-                downloading, queued, paused, completed, failed);
+                engineSummary.Active, engineSummary.Queued, engineSummary.Paused, engineSummary.Completed, engineSummary.Failed);
             Status = _actionFeedback is not null && DateTime.UtcNow < _feedbackUntil
                 ? _actionFeedback
                 : UiText.Get(_loadFailed ? "Could not load the download queue" : _engine.State switch
@@ -459,6 +739,91 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void RebuildRows(IReadOnlyList<Paquete> packages)
+    {
+        var desired = new List<DownloadItemViewModel>();
+        foreach (Paquete package in packages)
+        {
+            var header = GetOrCreateRow(package, isPackage: true);
+            var files = package.SnapshotFicheros();
+            UpdatePackageRow(header, package, files);
+            header.ChildCount = files.Count;
+
+            var visibleFiles = new List<Fichero>(files.Count);
+            foreach (Fichero file in files)
+            {
+                if (MatchesRow(package, file))
+                    visibleFiles.Add(file);
+            }
+
+            bool packageMatches = MatchesRow(package, null);
+            if (visibleFiles.Count == 0 && !packageMatches)
+                continue;
+
+            header.HasChildren = files.Count > 0;
+            desired.Add(header);
+
+            if (!header.IsExpanded)
+                continue;
+            foreach (Fichero file in visibleFiles)
+            {
+                var child = GetOrCreateRow(file, isPackage: false);
+                UpdateFileRow(child, file);
+                desired.Add(child);
+            }
+        }
+
+        Reconcile(desired);
+    }
+
+    private void UpdateVisibleRows()
+    {
+        foreach (var row in Downloads)
+        {
+            switch (row.Item)
+            {
+                case Paquete package:
+                    UpdatePackageRow(row, package, package.SnapshotFicheros());
+                    break;
+                case Fichero file:
+                    UpdateFileRow(row, file);
+                    break;
+            }
+        }
+        if (SelectedDownload is not null)
+            UpdateDetails(SelectedDownload);
+    }
+
+    private bool MatchesRow(Paquete package, Fichero? file)
+    {
+        var state = file?.DescargaEstado() ?? package.DescargaEstado();
+        if (!MatchesFilter(state))
+            return false;
+        if (_appliedSearch.Length == 0)
+            return true;
+
+        if (file is null)
+        {
+            if (Contains(package.DescargaNombre(), _appliedSearch))
+                return true;
+            foreach (Fichero child in package.SnapshotFicheros())
+            {
+                if (MatchesSearch(child))
+                    return true;
+            }
+            return false;
+        }
+        return MatchesSearch(file);
+    }
+
+    private bool MatchesSearch(Fichero file) =>
+        Contains(FileTitle(file), _appliedSearch) ||
+        Contains(file.NombreFichero, _appliedSearch) ||
+        Contains(file.RutaRelativa, _appliedSearch);
+
+    private static bool Contains(string? value, string needle) =>
+        !string.IsNullOrEmpty(value) && value.Contains(needle, StringComparison.CurrentCultureIgnoreCase);
+
     private bool MatchesFilter(Estado state) => SelectedFilter?.Value switch
     {
         QueueFilter.Active => state is Estado.Descargando or Estado.CreandoLocal or Estado.Verificando
@@ -469,35 +834,6 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         QueueFilter.Failed => state == Estado.Erroneo,
         _ => true
     };
-
-    partial void OnSelectedFilterChanged(QueueFilterOption? value) => Refresh();
-
-    private static void CountState(Estado state, ref int downloading, ref int queued, ref int paused, ref int completed, ref int failed)
-    {
-        switch (state)
-        {
-            case Estado.Descargando:
-            case Estado.CreandoLocal:
-            case Estado.Verificando:
-            case Estado.ComprobandoMD5:
-            case Estado.Descomprimiendo:
-            case Estado.EsperandoVolumenes:
-                downloading++;
-                break;
-            case Estado.EnCola:
-                queued++;
-                break;
-            case Estado.Pausado:
-                paused++;
-                break;
-            case Estado.Completado:
-                completed++;
-                break;
-            case Estado.Erroneo:
-                failed++;
-                break;
-        }
-    }
 
     private DownloadItemViewModel GetOrCreateRow(object item, bool isPackage)
     {
@@ -511,10 +847,18 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     /// <summary>Drops rows whose engine objects left the queue. Rows hidden by the
     /// current filter stay cached so their expansion state survives filter changes.</summary>
-    private void PruneRowCache(HashSet<object> liveItems)
+    private void PruneRowCache(IReadOnlyList<Paquete> packages)
     {
         if (_rowCache.Count == 0)
             return;
+
+        var liveItems = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        foreach (Paquete package in packages)
+        {
+            liveItems.Add(package);
+            foreach (Fichero file in package.SnapshotFicheros())
+                liveItems.Add(file);
+        }
 
         List<object>? stale = null;
         foreach (object key in _rowCache.Keys)
@@ -544,6 +888,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         row.DetailText = UiText.Format("{0} files · {1}", files.Count, row.SizeText);
         row.CanStart = package.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = package.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
+        row.CanRetry = package.DescargaEstado() == Estado.Erroneo && files.Any(file => !file.EsErrorPermanente);
         row.IsCompleted = package.DescargaEstado() == Estado.Completado;
         row.IsFailed = package.DescargaEstado() == Estado.Erroneo;
     }
@@ -573,10 +918,16 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
         row.CanStart = file.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = file.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
+        row.CanRetry = file.DescargaEstado() == Estado.Erroneo && !file.EsErrorPermanente;
         row.IsCompleted = file.DescargaEstado() == Estado.Completado;
         row.IsFailed = file.DescargaEstado() == Estado.Erroneo;
     }
 
+    /// <summary>
+    /// Brings <see cref="Downloads"/> in line with <paramref name="desired"/> by moving,
+    /// inserting and removing rows instead of clearing the list, so selection, focus and
+    /// the scroll anchor survive.
+    /// </summary>
     private void Reconcile(List<DownloadItemViewModel> desired)
     {
         bool sameOrder = Downloads.Count == desired.Count;
@@ -596,11 +947,43 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             return;
 
         var selected = SelectedDownload;
-        Downloads.Clear();
-        foreach (var row in desired)
-            Downloads.Add(row);
+        var selectedSet = new HashSet<DownloadItemViewModel>(SelectedDownloads);
+
+        for (int index = 0; index < desired.Count; index++)
+        {
+            var row = desired[index];
+            if (index < Downloads.Count && ReferenceEquals(Downloads[index], row))
+                continue;
+            int existing = IndexOf(row);
+            if (existing >= 0)
+                Downloads.Move(existing, index);
+            else
+                Downloads.Insert(index, row);
+        }
+
+        while (Downloads.Count > desired.Count)
+            Downloads.RemoveAt(Downloads.Count - 1);
 
         SelectedDownload = selected is not null && desired.Contains(selected) ? selected : null;
+
+        // Restore the batch selection to the rows that are still visible.
+        SelectedDownloads.Clear();
+        foreach (var row in desired)
+        {
+            if (selectedSet.Contains(row))
+                SelectedDownloads.Add(row);
+        }
+        SelectionCount = SelectedDownloads.Count;
+    }
+
+    private int IndexOf(DownloadItemViewModel row)
+    {
+        for (int index = 0; index < Downloads.Count; index++)
+        {
+            if (ReferenceEquals(Downloads[index], row))
+                return index;
+        }
+        return -1;
     }
 
     internal static string StateLabel(Estado state) => state switch
@@ -649,6 +1032,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             return;
         _disposed = true;
         _refreshTimer.Stop();
+        _searchTimer.Stop();
         UiText.Changed -= ApplyLanguage;
     }
 }
@@ -704,6 +1088,9 @@ public partial class DownloadItemViewModel : ObservableObject
     private bool canPause;
 
     [ObservableProperty]
+    private bool canRetry;
+
+    [ObservableProperty]
     private bool isCompleted;
 
     [ObservableProperty]
@@ -711,6 +1098,9 @@ public partial class DownloadItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool hasChildren;
+
+    [ObservableProperty]
+    private int childCount;
 
     [ObservableProperty]
     private bool isExpanded = true;
@@ -726,11 +1116,20 @@ public partial class DownloadItemViewModel : ObservableObject
     private void Pause() => _owner.PauseItem(Item);
 
     [RelayCommand]
+    private void Retry() => _owner.RetryItem(Item);
+
+    [RelayCommand]
     private void ToggleExpanded()
     {
         IsExpanded = !IsExpanded;
-        _owner.Refresh();
+        _owner.Refresh(forceRebuild: true);
     }
+
+    [RelayCommand]
+    private void OpenFile() => _owner.OpenOutput(Item, openFolder: false);
+
+    [RelayCommand]
+    private void OpenFolder() => _owner.OpenOutput(Item, openFolder: true);
 
     [RelayCommand]
     private Task PropertiesAsync() => _owner.ShowPropertiesAsync(Item);

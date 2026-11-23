@@ -1,15 +1,17 @@
-using MegaDownloader.UI.Services;
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MegaDownloader.UI.Services;
 
 namespace MegaDownloader.UI.ViewModels;
 
 /// <summary>
-/// Link intake for the Avalonia shell. Metadata inspection and package construction
-/// reuse the Core engine (<see cref="PreflightSession"/>, <see cref="DownloadPackageBuilder"/>);
-/// the page only owns selection state and presentation.
+/// Two-step link intake for the Avalonia shell. Step one collects links; step two shows
+/// the folder tree and the destination before anything is queued. Metadata inspection
+/// and package construction reuse the Core engine (<see cref="PreflightSession"/>,
+/// <see cref="PreflightTree"/>, <see cref="DownloadPackageBuilder"/>); this class only
+/// owns the flow and the selection state.
 /// </summary>
 public partial class AddLinksViewModel : ViewModelBase, IDisposable
 {
@@ -17,10 +19,15 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<BatchLinkPreflight.Entry, PreflightRowViewModel> _rowsByEntry =
         new(ReferenceEqualityComparer.Instance);
     private PreflightSelection? _selection;
+    private PreflightTree? _tree;
     private PreflightSession? _session;
     private DispatcherTimer? _progressTimer;
     private CancellationTokenSource? _importCancellation;
+    private string? _preparedText;
     private bool _disposed;
+
+    [ObservableProperty]
+    private int step;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
@@ -76,11 +83,26 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     private string filterText = string.Empty;
 
     [ObservableProperty]
+    private string categoryFilter = string.Empty;
+
+    [ObservableProperty]
     private string selectionSummary = UiText.Get("No links selected");
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
     private int selectedCount;
+
+    [ObservableProperty]
+    private string destinationPreview = string.Empty;
+
+    [ObservableProperty]
+    private string spaceText = string.Empty;
+
+    [ObservableProperty]
+    private bool spaceInsufficient;
+
+    [ObservableProperty]
+    private string pendingBatch = string.Empty;
 
     public AddLinksViewModel(DownloadEngineService engine)
     {
@@ -96,40 +118,83 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         StartDownload = reuseLast ? UltimaConfiguracionUsada.IniciarDescarga : true;
     }
 
-    public ObservableCollection<PreflightRowViewModel> Entries { get; } = new();
+    /// <summary>The rows currently shown: folders and files in display order.</summary>
+    public ObservableCollection<PreflightRowViewModel> Rows { get; } = new();
 
-    public ObservableCollection<PreflightRowViewModel> VisibleEntries { get; } = new();
+    public ObservableCollection<string> Categories { get; } = new();
 
     /// <summary>Set by the window so Browse can use the platform folder picker.</summary>
     public Func<Task<string?>>? PickFolderAsync { get; set; }
 
-    /// <summary>Raised with true when the package was added, false when the user cancels.</summary>
+    /// <summary>Raised with true when a package was added, false when the user cancels.</summary>
     public event Action<bool>? CloseRequested;
 
-    internal void ClipboardNotice(string message) => SetNotice(UiText.Get(message), true);
+    public bool IsStepOne => Step == 0;
+
+    public bool IsStepTwo => Step == 1;
 
     public bool CanCheck => !IsInspecting && !IsImporting && !string.IsNullOrWhiteSpace(LinksText);
 
-    public bool CanAdd => SelectedCount > 0 && !IsImporting && !IsInspecting;
+    public bool CanAdd => SelectedCount > 0 && !IsImporting && !IsInspecting && !SpaceInsufficient;
 
     public bool HasNotice => !string.IsNullOrWhiteSpace(Notice);
 
+    public bool HasPendingBatch => !string.IsNullOrWhiteSpace(PendingBatch);
+
+    public bool CanGoBack => !IsImporting && !IsInspecting;
+
     public string AddButtonText => SelectedCount > 0 ? UiText.Format("Add {0} selected", SelectedCount) : UiText.Get("Add selected");
+
+    internal void ClipboardNotice(string message) => SetNotice(UiText.Get(message), true);
+
+    /// <summary>Links held for the next batch while this window was open.</summary>
+    internal void SetPendingBatch(int count) =>
+        PendingBatch = count > 0 ? UiText.Format("{0} new link(s) will open in a new batch after this one.", count) : string.Empty;
+
+    /// <summary>Starts on the given text, keeping the previous results when it is the
+    /// same batch (going back and forth must not re-resolve or lose the selection).</summary>
+    internal async Task BeginAsync(string? initialText)
+    {
+        if (!string.IsNullOrWhiteSpace(initialText))
+            LinksText = initialText;
+
+        if (_tree is not null && string.Equals(_preparedText, LinksText, StringComparison.Ordinal))
+        {
+            Step = 1;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(LinksText) && CheckCommand.CanExecute(null))
+            await CheckAsync();
+    }
+
+    partial void OnStepChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsStepOne));
+        OnPropertyChanged(nameof(IsStepTwo));
+        OnPropertyChanged(nameof(CanGoBack));
+    }
 
     partial void OnLinksTextChanged(string value)
     {
         OnPropertyChanged(nameof(CanCheck));
-        if (IsInspecting || !HasEntries)
+        if (IsInspecting || _tree is null)
             return;
 
-        // The visible results belong to the previous text; never let Add enqueue them.
-        HasEntries = false;
-        Entries.Clear();
-        VisibleEntries.Clear();
-        _rowsByEntry.Clear();
+        // The results belong to the previous text; never let Add enqueue them.
+        if (string.Equals(value, _preparedText, StringComparison.Ordinal))
+            return;
+        _session?.Invalidate();
+        _tree = null;
         _selection = null;
+        Rows.Clear();
+        _rowsByEntry.Clear();
+        Categories.Clear();
+        HasEntries = false;
         SelectedCount = 0;
-        SelectionSummary = UiText.Get("No links selected");
+        UpdateSelectionSummary();
+        if (Step == 1)
+            Step = 0;
         Status = UiText.Get("Links changed — check them again.");
     }
 
@@ -137,19 +202,29 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(CanCheck));
         OnPropertyChanged(nameof(CanAdd));
+        OnPropertyChanged(nameof(CanGoBack));
     }
 
     partial void OnIsImportingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanCheck));
         OnPropertyChanged(nameof(CanAdd));
+        OnPropertyChanged(nameof(CanGoBack));
     }
 
     partial void OnSelectedCountChanged(int value) => OnPropertyChanged(nameof(AddButtonText));
 
     partial void OnNoticeChanged(string value) => OnPropertyChanged(nameof(HasNotice));
 
+    partial void OnPendingBatchChanged(string value) => OnPropertyChanged(nameof(HasPendingBatch));
+
+    partial void OnSpaceInsufficientChanged(bool value) => OnPropertyChanged(nameof(CanAdd));
+
     partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    partial void OnCategoryFilterChanged(string value) => ApplyFilter();
+
+    partial void OnDestinationChanged(string value) => UpdateDestinationPreview();
 
     [RelayCommand(CanExecute = nameof(CanCheck))]
     private async Task CheckAsync()
@@ -168,16 +243,18 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
         IsInspecting = true;
         HasEntries = false;
-        Entries.Clear();
-        VisibleEntries.Clear();
+        Rows.Clear();
         _rowsByEntry.Clear();
+        Categories.Clear();
+        _tree = null;
         _selection = null;
+        SelectedCount = 0;
         UpdateSelectionSummary();
 
-        _session?.Dispose();
-        _session = new PreflightSession(_engine.Config);
+        _session ??= new PreflightSession(_engine.Config);
         string requestedText = LinksText;
         var request = _session.Prepare(requestedText);
+        _preparedText = requestedText;
         StartProgressTimer(request);
 
         try
@@ -193,19 +270,32 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
             var reconciled = PreflightSession.Reconcile(entries, _engine.GetQueuedLinkSnapshot());
             _selection = new PreflightSelection(reconciled);
+
+            _tree = new PreflightTree(_selection);
+            _rowsByEntry.Clear();
             foreach (var entry in reconciled)
             {
-                var row = new PreflightRowViewModel(this, entry);
-                Entries.Add(row);
-                _rowsByEntry[entry] = row;
+                var leaf = _tree.LeafNode(entry);
+                _rowsByEntry[entry] = leaf is null
+                    ? new PreflightRowViewModel(this, entry)
+                    : new PreflightRowViewModel(this, entry, leaf);
             }
-
+            BuildCategoryList();
             ApplyFilter();
-            HasEntries = Entries.Count > 0;
+            UpdateDestinationPreview();
+
+            HasEntries = Rows.Count > 0;
             UpdateSelectionSummary();
             Status = reconciled.Count == 0
                 ? UiText.Get("No valid MEGA links were found.")
                 : UiText.Format("Checked {0} link(s).", reconciled.Count);
+
+            // Nothing usable: stay on step one so the user can fix the links instead of
+            // landing on an empty file tree.
+            if (HasEntries)
+                Step = 1;
+            else
+                SetNotice(Status, true);
             ProgressValue = 100;
         }
         catch (OperationCanceledException)
@@ -236,13 +326,43 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void SelectAll() => ApplySelection(PreflightSelection.SelectionOperation.SelectAll);
+    private void Back()
+    {
+        if (!CanGoBack)
+            return;
+        Step = 0;
+    }
 
     [RelayCommand]
-    private void ClearSelection() => ApplySelection(PreflightSelection.SelectionOperation.Clear);
+    private async Task RecheckAsync()
+    {
+        _session?.Invalidate(clearCache: true);
+        _tree = null;
+        _selection = null;
+        _preparedText = null;
+        await CheckAsync();
+    }
+
+    [RelayCommand]
+    private void SelectAll() => ApplyToTree(PreflightSelection.SelectionOperation.SelectAll);
+
+    [RelayCommand]
+    private void ClearSelection() => ApplyToTree(PreflightSelection.SelectionOperation.Clear);
+
+    [RelayCommand]
+    private void ExpandAll() => ToggleAll(expand: true);
+
+    [RelayCommand]
+    private void CollapseAll() => ToggleAll(expand: false);
 
     [RelayCommand]
     private void Cancel() => CloseRequested?.Invoke(false);
+
+    private void ToggleAll(bool expand)
+    {
+        _tree?.ExpandAll(expand);
+        RebuildRows();
+    }
 
     [RelayCommand(CanExecute = nameof(CanAdd))]
     private async Task AddAsync()
@@ -260,11 +380,12 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        // Snapshot the selection at submit time so a later tree change cannot alter it.
         var chosen = new List<URLProcessor.FileURL>();
-        foreach (var row in Entries)
+        foreach (var entry in _selection.Entries)
         {
-            if (row.Entry.Selected && row.Entry.CanAdd && row.Entry.Source is not null)
-                chosen.Add(row.Entry.Source);
+            if (entry.Selected && entry.CanAdd && entry.Source is not null)
+                chosen.Add(entry.Source);
         }
         if (chosen.Count == 0)
         {
@@ -336,16 +457,19 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             UltimaConfiguracionUsada.RutaDescarga = Destination;
             UltimaConfiguracionUsada.IniciarDescarga = StartDownload;
 
+            string summary = UiText.Format("Added {0} file(s) to the queue.", added);
+            if (chosen.Count != added)
+                summary += " " + UiText.Format("{0} already queued or skipped.", chosen.Count - added);
+
             if (StartDownload && !_engine.TryStartPending(out string reason))
             {
-                // The tasks are queued but the queue refused to start (schedule window
-                // or quota cooldown). Say so instead of claiming they are running.
-                Status = UiText.Format("Added {0} file(s) to the queue.", added) + " " + reason;
+                // Queued, but the schedule or the quota kept the queue from starting.
+                Status = summary + " " + reason;
                 CloseRequested?.Invoke(true);
                 return;
             }
 
-            Status = UiText.Format("Added {0} file(s) to the queue.", added);
+            Status = summary;
             CloseRequested?.Invoke(true);
         }
         catch (OperationCanceledException)
@@ -365,36 +489,133 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         }
     }
 
-    internal void SetRowSelected(PreflightRowViewModel row, bool selected)
+    /// <summary>A leaf checkbox changed. Folder tri-state is recomputed by the tree.</summary>
+    internal void SetEntrySelected(BatchLinkPreflight.Entry entry, bool selected)
     {
         if (_selection is null)
             return;
-        _selection.SetSelected(row.Entry, selected);
-        if (row.Entry.Selected != selected)
-            row.SetSelectedSilently(row.Entry.Selected);
+        _selection.SetSelected(entry, selected);
+        if (entry.Selected != selected)
+            _rowsByEntry[entry].SetSelectedSilently(entry.Selected);
+        RefreshRowStates();
         UpdateSelectionSummary();
     }
 
-    private void ApplySelection(PreflightSelection.SelectionOperation operation)
+    /// <summary>A folder row was clicked: select or clear everything underneath it.</summary>
+    internal void ToggleFolderSelection(PreflightTree.Node node)
     {
-        if (_selection is null)
+        if (_selection is null || _tree is null || !node.IsFolder)
+            return;
+        var operation = node.CheckState == PreflightTree.TriState.Checked
+            ? PreflightSelection.SelectionOperation.Clear
+            : PreflightSelection.SelectionOperation.SelectAll;
+        _tree.Apply(_tree.NodesUnder(node), operation);
+        RefreshRowStates();
+        UpdateSelectionSummary();
+    }
+
+    internal void ToggleFolder(PreflightTree.Node node)
+    {
+        _tree?.Toggle(node);
+        RebuildRows();
+    }
+
+    private void ApplyToTree(PreflightSelection.SelectionOperation operation)
+    {
+        if (_selection is null || _tree is null)
             return;
         _selection.Apply(operation, visibleOnly: true);
-        foreach (var row in Entries)
-            row.SetSelectedSilently(row.Entry.Selected);
+        RebuildRows();
         UpdateSelectionSummary();
+    }
+
+    private void BuildCategoryList()
+    {
+        Categories.Clear();
+        if (_selection is null)
+            return;
+        foreach (var category in _selection.Categories())
+            Categories.Add(category);
     }
 
     private void ApplyFilter()
     {
-        if (_selection is null)
+        if (_selection is null || _tree is null)
             return;
-        _selection.Filter(FilterText ?? string.Empty, string.Empty);
-        VisibleEntries.Clear();
-        foreach (var entry in _selection.Visible)
+        _selection.Filter(FilterText ?? string.Empty, CategoryFilter ?? string.Empty);
+        _tree.Filter(!string.IsNullOrWhiteSpace(FilterText) || !string.IsNullOrWhiteSpace(CategoryFilter));
+        RebuildRows();
+    }
+
+    /// <summary>
+    /// Refreshes check states and folder counts without touching the row collection.
+    /// A selection change never changes which rows are visible, so rebuilding the list
+    /// would only throw away the user's scroll position.
+    /// </summary>
+    private void RefreshRowStates()
+    {
+        foreach (var row in Rows)
+            row.SyncFromEntry();
+    }
+
+    private void RebuildRows()
+    {
+        if (_tree is null)
+            return;
+        Rows.Clear();
+        foreach (var node in _tree.Rows)
         {
-            if (_rowsByEntry.TryGetValue(entry, out var row))
-                VisibleEntries.Add(row);
+            if (node.IsFolder)
+            {
+                var folderRow = new PreflightRowViewModel(this, node);
+                folderRow.SyncFromEntry();
+                Rows.Add(folderRow);
+            }
+            else if (_rowsByEntry.TryGetValue(node.Entry, out var row))
+            {
+                row.SyncFromEntry();
+                Rows.Add(row);
+            }
+        }
+    }
+
+    private void UpdateDestinationPreview()
+    {
+        if (_selection is null)
+        {
+            DestinationPreview = string.Empty;
+            SpaceText = string.Empty;
+            SpaceInsufficient = false;
+            return;
+        }
+
+        var chosen = _selection.Entries.Where(entry => entry.Selected && entry.CanAdd && entry.Source is not null)
+            .Select(entry => entry.Source).ToList();
+        if (chosen.Count == 0)
+        {
+            DestinationPreview = UiText.Get("Select files to see where they will be saved.");
+            SpaceText = string.Empty;
+            SpaceInsufficient = false;
+            return;
+        }
+
+        var preview = DownloadPackageBuilder.PreviewDestination(chosen, PackageName.Trim(), Destination.Trim(), CreateSubdirectory);
+        DestinationPreview = preview.PackageRoot is null
+            ? UiText.Format("Files go into {0} (the folder is named after the file once verified).", Destination.Trim())
+            : UiText.Format("Files go into {0}", preview.PackageRoot);
+
+        long? available = BatchLinkPreflight.AvailableSpace(Destination.Trim());
+        if (available.HasValue && _selection.SelectedBytes > 0)
+        {
+            SpaceText = UiText.Format("{0} selected · {1} free on the target drive",
+                DownloadsPageViewModel.FormatBytes((long)_selection.SelectedBytes),
+                DownloadsPageViewModel.FormatBytes(available.Value));
+            SpaceInsufficient = _selection.SelectedBytes > available.Value;
+        }
+        else
+        {
+            SpaceText = string.Empty;
+            SpaceInsufficient = false;
         }
     }
 
@@ -404,6 +625,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         {
             SelectedCount = 0;
             SelectionSummary = UiText.Get("No links selected");
+            UpdateDestinationPreview();
             return;
         }
 
@@ -413,6 +635,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             ? UiText.Format(" + {0} unknown", _selection.UnknownSizes)
             : string.Empty;
         SelectionSummary = UiText.Format("{0} selected · {1}{2}", _selection.SelectedCount, bytes, unknown);
+        UpdateDestinationPreview();
     }
 
     private void StartProgressTimer(PreflightSession.Request request)
@@ -500,12 +723,14 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     }
 }
 
-/// <summary>One preflight row; selection is delegated to <see cref="PreflightSelection"/>.</summary>
+/// <summary>One preflight row: a folder node or a file leaf.</summary>
 public partial class PreflightRowViewModel : ObservableObject
 {
     private readonly AddLinksViewModel _owner;
+    private readonly PreflightTree.Node? _node;
     private bool _suppress;
 
+    /// <summary>File row.</summary>
     public PreflightRowViewModel(AddLinksViewModel owner, BatchLinkPreflight.Entry entry)
     {
         _owner = owner;
@@ -513,42 +738,123 @@ public partial class PreflightRowViewModel : ObservableObject
         isSelected = entry.Selected;
     }
 
-    public BatchLinkPreflight.Entry Entry { get; }
-
-    public string Name => string.IsNullOrWhiteSpace(Entry.Name) ? UiText.Get("(unnamed link)") : Entry.Name;
-
-    public string SizeText => Entry.SizeBytes.HasValue
-        ? DownloadsPageViewModel.FormatBytes(Entry.SizeBytes.Value)
-        : "—";
-
-    public string StateText => Entry.State switch
+    /// <summary>File row that already knows its tree leaf (for the indent).</summary>
+    public PreflightRowViewModel(AddLinksViewModel owner, BatchLinkPreflight.Entry entry, PreflightTree.Node leaf)
+        : this(owner, entry)
     {
-        BatchLinkPreflight.LinkState.Ready => UiText.Get("Ready"),
-        BatchLinkPreflight.LinkState.AlreadyQueued => UiText.Get("Already queued"),
-        BatchLinkPreflight.LinkState.Duplicate => UiText.Get("Duplicate"),
-        BatchLinkPreflight.LinkState.Invalid => UiText.Get("Invalid"),
-        _ => UiText.Get("Unavailable")
-    };
+        _node = leaf;
+    }
 
-    public bool CanSelect => Entry.CanAdd;
+    /// <summary>Folder row.</summary>
+    public PreflightRowViewModel(AddLinksViewModel owner, PreflightTree.Node node)
+    {
+        _owner = owner;
+        _node = node;
+        IsFolder = true;
+        isExpanded = node.Expanded;
+    }
 
-    public bool IsReady => Entry.State == BatchLinkPreflight.LinkState.Ready;
+    public BatchLinkPreflight.Entry? Entry { get; }
 
-    public bool IsErrorState => Entry.State is BatchLinkPreflight.LinkState.Invalid
+    public bool IsFolder { get; }
+
+    public bool IsFile => !IsFolder;
+
+    public string Name => IsFolder ? _node!.Name : (string.IsNullOrWhiteSpace(Entry!.Name) ? UiText.Get("(unnamed link)") : Entry.Name);
+
+    /// <summary>Left inset that shows the folder hierarchy (DIPs, not spaces).</summary>
+    public double Indent => Math.Max(0, IsFolder ? _node!.Depth : (_node!.Parent?.Depth ?? -1) + 1) * 18d;
+
+    public string SizeText => IsFolder
+        ? (_node!.SizeBytes > 0 ? DownloadsPageViewModel.FormatBytes((long)_node.SizeBytes) : "—")
+        : Entry!.SizeBytes.HasValue ? DownloadsPageViewModel.FormatBytes(Entry.SizeBytes.Value) : "—";
+
+    public string StateText => IsFolder
+        ? UiText.Format("{0} of {1}", _node!.SelectedCount, _node.MatchCount)
+        : Entry!.State switch
+        {
+            BatchLinkPreflight.LinkState.Ready => UiText.Get("Ready"),
+            BatchLinkPreflight.LinkState.AlreadyQueued => UiText.Get("Already queued"),
+            BatchLinkPreflight.LinkState.Duplicate => UiText.Get("Duplicate"),
+            BatchLinkPreflight.LinkState.Invalid => UiText.Get("Invalid"),
+            _ => UiText.Get("Unavailable")
+        };
+
+    public bool CanSelect => IsFolder || Entry!.CanAdd;
+
+    public bool IsReady => !IsFolder && Entry!.State == BatchLinkPreflight.LinkState.Ready;
+
+    public bool IsErrorState => !IsFolder && Entry!.State is BatchLinkPreflight.LinkState.Invalid
         or BatchLinkPreflight.LinkState.Unavailable;
 
-    public bool HasDetail => !string.IsNullOrWhiteSpace(Entry.Detail);
+    public bool HasDetail => !IsFolder && !string.IsNullOrWhiteSpace(Entry!.Detail);
 
-    public string Detail => Entry.Detail ?? string.Empty;
+    public string Detail => IsFolder ? string.Empty : (Entry!.Detail ?? string.Empty);
+
+    public string PathText => IsFolder || Entry?.Source is null
+        ? string.Empty
+        : (Entry.Source.Path ?? string.Empty).Replace('\\', '/');
 
     [ObservableProperty]
     private bool isSelected;
 
+    [ObservableProperty]
+    private bool? isChecked;
+
+    [ObservableProperty]
+    private bool isExpanded;
+
+    public string Chevron => IsFolder ? (IsExpanded ? "⌄" : "›") : string.Empty;
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(Chevron));
+
+    partial void OnIsCheckedChanged(bool? value)
+    {
+        if (_suppress || !IsFolder || _node is null)
+            return;
+        // Folder checkbox: checked selects everything below, anything else clears it.
+        if (value == true)
+            _owner.ToggleFolderSelection(_node);
+        else if (value == false && _node.CheckState != PreflightTree.TriState.Unchecked)
+            _owner.ToggleFolderSelection(_node);
+    }
+
     partial void OnIsSelectedChanged(bool value)
     {
-        if (_suppress)
+        if (_suppress || IsFolder || Entry is null)
             return;
-        _owner.SetRowSelected(this, value);
+        _owner.SetEntrySelected(Entry, value);
+    }
+
+    /// <summary>Refreshes the displayed values after the selection or tree changed.</summary>
+    internal void SyncFromEntry()
+    {
+        _suppress = true;
+        try
+        {
+            if (IsFolder && _node is not null)
+            {
+                IsChecked = _node.CheckState switch
+                {
+                    PreflightTree.TriState.Checked => true,
+                    PreflightTree.TriState.Indeterminate => null,
+                    _ => false
+                };
+                IsExpanded = _node.Expanded;
+                OnPropertyChanged(nameof(StateText));
+                OnPropertyChanged(nameof(SizeText));
+                OnPropertyChanged(nameof(Detail));
+                OnPropertyChanged(nameof(HasDetail));
+            }
+            else if (Entry is not null)
+            {
+                IsSelected = Entry.Selected;
+            }
+        }
+        finally
+        {
+            _suppress = false;
+        }
     }
 
     internal void SetSelectedSilently(bool value)
@@ -558,5 +864,21 @@ public partial class PreflightRowViewModel : ObservableObject
         _suppress = true;
         IsSelected = value;
         _suppress = false;
+    }
+
+    [RelayCommand]
+    private void Toggle()
+    {
+        if (IsFolder && _node is not null)
+            _owner.ToggleFolder(_node);
+    }
+
+    [RelayCommand]
+    private void ToggleSelection()
+    {
+        if (IsFolder && _node is not null)
+            _owner.ToggleFolderSelection(_node);
+        else if (Entry is not null)
+            _owner.SetEntrySelected(Entry, !Entry.Selected);
     }
 }

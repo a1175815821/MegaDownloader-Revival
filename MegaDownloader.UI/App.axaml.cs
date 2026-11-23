@@ -120,6 +120,9 @@ public partial class App : Application
                 Services.GetService<ClipboardMonitor>()?.Dispose();
                 Services.GetService<DownloadsPageViewModel>()?.Dispose();
                 WebServerHost.Stop();
+
+                // The engine stops the transfers in flight and saves the queue after
+                // they commit what they wrote (see DownloadEngineService.Dispose).
                 engine.Dispose();
                 _instance?.Dispose();
             };
@@ -146,7 +149,9 @@ public partial class App : Application
 
         services.AddSingleton<DownloadEngineService>();
         services.AddSingleton<LinkIntakeService>();
+        services.AddSingleton<AddLinksCoordinator>();
         services.AddSingleton<ClipboardMonitor>();
+        services.AddSingleton<DownloadsPageViewModel>();
 
         // The gate created before Avalonia started; a fresh one only when this process
         // was started without going through Program (tests, designer).
@@ -154,7 +159,6 @@ public partial class App : Application
             PlatformServicesFactory.Create().GetAppDataDirectory("MegaDownloader"), "MegaDownloader-Avalonia"));
         services.AddSingleton<ActivationService>();
         services.AddTransient<AddLinksViewModel>();
-        services.AddSingleton<DownloadsPageViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<StreamingPageViewModel>();
         services.AddSingleton<MainWindowViewModel>();

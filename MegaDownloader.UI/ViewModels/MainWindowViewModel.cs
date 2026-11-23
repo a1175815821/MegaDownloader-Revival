@@ -41,22 +41,15 @@ public partial class MainWindowViewModel : ViewModelBase
         _downloads = downloadsPage;
 
         // Clipboard monitoring is opt-in through the configuration; the monitor itself
-        // checks the setting on every tick, so toggling it needs no restart.
-        clipboard.IntakeCompleted += result =>
-        {
-            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed or LinkIntakeStatus.NotReady or LinkIntakeStatus.AllDuplicates)
-                StatusText = IntakeMessage(result);
-        };
+        // checks the setting on every tick, so toggling it needs no restart. Links it
+        // finds open the confirmation window, so the status bar only reports the find.
+        clipboard.LinksFound += count =>
+            StatusText = UiText.Format("Found {0} link(s) in the clipboard.", count);
         clipboard.Start();
 
-        // A mega:// activation (or a second launch) is reported in the status bar too:
-        // without this the user sees no feedback at all when a link arrives.
-        activation.IntakeCompleted += result =>
-        {
-            if (result.Status is LinkIntakeStatus.Added or LinkIntakeStatus.Failed
-                or LinkIntakeStatus.NotReady or LinkIntakeStatus.AllDuplicates)
-                StatusText = IntakeMessage(result);
-        };
+        // A mega:// activation (or a second launch) opens the same window.
+        activation.LinksFound += count =>
+            StatusText = UiText.Format("Found {0} link(s) in the link that opened the app.", count);
 
         // The settings page can change the theme too; the toolbar label follows.
         _theme.ModeChanged += (_, _) => UpdateThemeLabel();
@@ -84,17 +77,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public IReadOnlyList<NavigationItemViewModel> NavigationItems { get; }
 
-    private static string IntakeMessage(LinkIntakeResult result) => result.Status switch
-    {
-        LinkIntakeStatus.Added => UiText.Format("Added {0} file(s) to the queue.", result.AddedCount),
-        LinkIntakeStatus.AllDuplicates => UiText.Get("All selected links are already queued."),
-        LinkIntakeStatus.NotReady when result.Message == "The download queue is still loading." =>
-            UiText.Get("The download queue is still loading. Try again in a moment."),
-        LinkIntakeStatus.NotReady when result.Message == "The download queue is not ready." =>
-            UiText.Get("The queue is not ready yet. Try again in a moment."),
-        _ => UiText.Get(result.Message)
-    };
-
     private static Geometry GetIcon(string name) =>
         Application.Current!.Resources.TryGetResource("Icon." + name, null, out object? resource) && resource is Geometry icon
             ? icon
@@ -110,6 +92,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private Task AddLinksAsync() => _downloads.AddLinksCommand.ExecuteAsync(null);
+
+    /// <summary>Raised when the user asked for the queue search box (Ctrl/Cmd+F).</summary>
+    public event Action? SearchRequested;
+
+    [RelayCommand]
+    private void FocusSearch()
+    {
+        SelectedNavigationItem = NavigationItems[0];
+        SearchRequested?.Invoke();
+    }
 
     [RelayCommand]
     private async Task ShowGuideAsync()

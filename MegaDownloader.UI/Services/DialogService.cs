@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using MegaDownloader.UI.Views;
+using MegaDownloader.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MegaDownloader.UI.Services;
@@ -47,17 +48,29 @@ public sealed class DialogService : IDialogService
         return await result.Task;
     }
 
+    private AddLinksWindow? _addLinksWindow;
+
     public async Task<string?> ShowAddLinksAsync(string? initialText = null)
     {
         var window = new AddLinksWindow { InitialText = initialText };
+        _addLinksWindow = window;
         var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
-        if (owner is { IsVisible: true })
-            return await window.ShowDialog<bool>(owner) ? window.Outcome : null;
+        try
+        {
+            if (owner is { IsVisible: true })
+                return await window.ShowDialog<bool>(owner) ? window.Outcome : null;
 
-        window.Show();
-        return null;
+            window.Show();
+            return null;
+        }
+        finally
+        {
+            _addLinksWindow = null;
+        }
     }
+
+    public void ShowPendingBatch(int count) => _addLinksWindow?.ShowPendingBatch(count);
 
     public async Task<bool> ShowPropertiesAsync(object item)
     {

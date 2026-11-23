@@ -1,13 +1,23 @@
 using System;
 using System.Collections.Generic;
-using System.Windows.Forms;
 
 namespace MegaDownloader
 {
 
-    /// <summary>Folder hierarchy with a virtual projection; collapsing a folder never changes its selection.</summary>
+    /// <summary>
+    /// Folder hierarchy over a <see cref="PreflightSelection"/> with a virtual row
+    /// projection. Collapsing or filtering never changes what is selected; folder
+    /// tri-state is always derived from the leaf entries underneath it.
+    /// </summary>
     public sealed class PreflightTree
     {
+        public enum TriState
+        {
+            Unchecked,
+            Checked,
+            Indeterminate
+        }
+
         public sealed class Node
         {
             public string Name;
@@ -26,10 +36,10 @@ namespace MegaDownloader
             internal readonly List<Node> FolderChildren;
             internal readonly List<Node> FileChildren;
 
-            public Node(BatchLinkPreflight.Entry @file = null)
+            public Node(BatchLinkPreflight.Entry file = null)
             {
-                Entry = @file;
-                if (@file is null)
+                Entry = file;
+                if (file is null)
                 {
                     Folders = new Dictionary<string, Node>(StringComparer.Ordinal);
                     FolderChildren = new List<Node>();
@@ -37,21 +47,15 @@ namespace MegaDownloader
                 }
             }
 
-            public bool IsFolder
-            {
-                get
-                {
-                    return Entry is null;
-                }
-            }
+            public bool IsFolder => Entry is null;
 
-            public CheckState CheckState
+            public TriState CheckState
             {
                 get
                 {
                     if (EligibleCount == 0 || SelectedCount == 0)
-                        return CheckState.Unchecked;
-                    return SelectedCount == EligibleCount ? CheckState.Checked : CheckState.Indeterminate;
+                        return TriState.Unchecked;
+                    return SelectedCount == EligibleCount ? TriState.Checked : TriState.Indeterminate;
                 }
             }
         }
@@ -61,6 +65,8 @@ namespace MegaDownloader
         private readonly Dictionary<BatchLinkPreflight.Entry, Node> leaves = new Dictionary<BatchLinkPreflight.Entry, Node>();
         private readonly PreflightSelection selection;
         private bool filtered;
+
+        /// <summary>Visible rows in display order (the list the UI binds to).</summary>
         public readonly List<Node> Rows = new List<Node>();
 
         public PreflightTree(PreflightSelection model)
@@ -89,6 +95,10 @@ namespace MegaDownloader
             Filter(false);
         }
 
+        public Node Root => root;
+
+        public bool IsFiltered => filtered;
+
         private Node Folder(Node parent, string key, string name)
         {
             Node result = null;
@@ -102,6 +112,9 @@ namespace MegaDownloader
             return result;
         }
 
+        /// <summary>Recomputes match and selection counts from the selection's visible
+        /// entries and rebuilds <see cref="Rows"/>. Call after the selection filter
+        /// changed.</summary>
         public void Filter(bool isFiltered)
         {
             filtered = isFiltered;
@@ -117,7 +130,8 @@ namespace MegaDownloader
             }
             foreach (BatchLinkPreflight.Entry entry in selection.Visible)
             {
-                var leaf = leaves[entry];
+                if (!leaves.TryGetValue(entry, out Node leaf))
+                    continue;
                 leaf.Matches = true;
                 var node = leaf;
                 while (!ReferenceEquals(node, root))
@@ -128,13 +142,9 @@ namespace MegaDownloader
                     if (entry.Selected)
                         node.SelectedCount += 1;
                     if (entry.SizeBytes.HasValue)
-                    {
                         node.SizeBytes += entry.SizeBytes.Value;
-                    }
                     else
-                    {
                         node.UnknownSizes += 1;
-                    }
                     node = node.Parent;
                 }
             }
@@ -143,8 +153,7 @@ namespace MegaDownloader
 
         private void SelectionChanged(BatchLinkPreflight.Entry entry, int delta)
         {
-            Node node = null;
-            if (!leaves.TryGetValue(entry, out node) || !node.Matches)
+            if (!leaves.TryGetValue(entry, out Node node) || !node.Matches)
                 return;
             while (!ReferenceEquals(node, root))
             {
@@ -158,13 +167,9 @@ namespace MegaDownloader
             if (node is null || !node.IsFolder)
                 return;
             if (filtered)
-            {
                 node.SearchCollapsed = !node.SearchCollapsed;
-            }
             else
-            {
                 node.Expanded = !node.Expanded;
-            }
             RebuildRows();
         }
 
@@ -175,23 +180,18 @@ namespace MegaDownloader
                 if (!node.IsFolder)
                     continue;
                 if (filtered)
-                {
                     node.SearchCollapsed = !expand;
-                }
                 else
-                {
                     node.Expanded = expand;
-                }
             }
             RebuildRows();
         }
 
-        public bool IsExpanded(Node node)
-        {
-            return filtered ? !node.SearchCollapsed : node.Expanded;
-        }
+        public bool IsExpanded(Node node) => filtered ? !node.SearchCollapsed : node.Expanded;
 
-        private void RebuildRows()
+        /// <summary>Row projection. Rows are rebuilt, but the Node objects (and therefore
+        /// expansion and selection state) are stable.</summary>
+        public void RebuildRows()
         {
             Rows.Clear();
             var pending = new Stack<Node>();
@@ -215,9 +215,11 @@ namespace MegaDownloader
                 pending.Push(parent.FolderChildren[index]);
         }
 
+        /// <summary>Applies an operation to the given nodes (folders expand to their
+        /// leaves). A folder and one of its highlighted descendants never touch the
+        /// same file twice.</summary>
         public void Apply(IEnumerable<Node> targets, PreflightSelection.SelectionOperation operation)
         {
-            // A folder and a highlighted child must never invert the same file twice.
             var highlighted = new HashSet<Node>(targets);
             var pending = new Stack<Node>();
             foreach (Node node in highlighted)
@@ -244,5 +246,38 @@ namespace MegaDownloader
                 }
             }
         }
+
+        /// <summary>Every leaf entry below a node, whether or not it is currently visible.</summary>
+        public IEnumerable<BatchLinkPreflight.Entry> LeavesUnder(Node node)
+        {
+            foreach (Node leaf in NodesUnder(node))
+                yield return leaf.Entry;
+        }
+
+        /// <summary>Every leaf node below a node, visible or not.</summary>
+        public IEnumerable<Node> NodesUnder(Node node)
+        {
+            var pending = new Stack<Node>();
+            pending.Push(node);
+            while (pending.Count > 0)
+            {
+                var current = pending.Pop();
+                if (current.IsFolder)
+                {
+                    for (int index = current.FileChildren.Count - 1; index >= 0; index -= 1)
+                        pending.Push(current.FileChildren[index]);
+                    for (int index = current.FolderChildren.Count - 1; index >= 0; index -= 1)
+                        pending.Push(current.FolderChildren[index]);
+                }
+                else
+                {
+                    yield return current;
+                }
+            }
+        }
+
+        /// <summary>The leaf node that owns an entry, or null when it is not in this tree.</summary>
+        public Node LeafNode(BatchLinkPreflight.Entry entry) =>
+            entry is not null && leaves.TryGetValue(entry, out Node node) ? node : null;
     }
 }

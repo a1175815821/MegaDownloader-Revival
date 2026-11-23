@@ -9,7 +9,47 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # The cross-platform core and its regression entry run on every target OS. The UI
+  # project is published per RID so a macOS or Linux build failure is visible here
+  # instead of only at release time.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Core regression
+        run: dotnet run --project MegaDownloader.Core.Tests/MegaDownloader.Core.Tests.csproj -c Release
+
+      - name: Publish the desktop app
+        run: >
+          dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release
+          -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true
+          -o dist/${{ matrix.rid }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaDownloader-${{ matrix.rid }}
+          path: dist/${{ matrix.rid }}
+
+  # The WinForms reference app and its UI-coupled regression suite stay Windows-only.
+  windows-full:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -22,3 +62,9 @@ jobs:
 
       - name: Build solution
         run: dotnet build MegaDownloader.slnx -c Debug
+
+      - name: WinForms regression
+        run: >
+          dotnet run --project MegaDownloader.Tests/MegaDownloader.Tests.csproj -c Debug --no-build --
+          ${{ github.workspace }}
+          ${{ github.workspace }}/MegaDownloader.Full/bin/Debug/net10.0-windows

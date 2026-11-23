@@ -51,17 +51,46 @@ namespace MegaDownloader
             Filter("", "");
         }
 
+        /// <summary>Filter by name, share folder name, relative path and category.
+        /// Filtering only narrows <see cref="Visible"/>; totals keep counting every
+        /// selected entry, including ones the filter hides.</summary>
         public void Filter(string text, string category)
         {
             Visible.Clear();
             foreach (BatchLinkPreflight.Entry entry in Entries)
             {
-                if (text.Length > 0 && (entry.Name ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) < 0 && (entry.Source is null || (entry.Source.FolderName ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) < 0 && (entry.Source.Path ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) < 0))
+                if (text.Length > 0 && !MatchesText(entry, text))
                     continue;
                 if (category.Length > 0 && (entry.Category ?? "") != (category ?? ""))
                     continue;
                 Visible.Add(entry);
             }
+        }
+
+        private static bool MatchesText(BatchLinkPreflight.Entry entry, string text)
+        {
+            if ((entry.Name ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                return true;
+            if (entry.Source is null)
+                return false;
+            if ((entry.Source.FolderName ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                return true;
+            return (entry.Source.Path ?? "").IndexOf(text, StringComparison.CurrentCultureIgnoreCase) >= 0;
+        }
+
+        /// <summary>Distinct categories present in the current entries, in display order.</summary>
+        public List<string> Categories()
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var result = new List<string>();
+            foreach (BatchLinkPreflight.Entry entry in Entries)
+            {
+                string category = entry.Category ?? "";
+                if (category.Length == 0 || !seen.Add(category))
+                    continue;
+                result.Add(category);
+            }
+            return result;
         }
 
         public void SetSelected(BatchLinkPreflight.Entry entry, bool selected)

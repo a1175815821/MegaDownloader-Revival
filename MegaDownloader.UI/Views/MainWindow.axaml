@@ -7,6 +7,9 @@
         WindowStartupLocation="CenterScreen">
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+N" Command="{Binding AddLinksCommand}" />
+        <KeyBinding Gesture="Cmd+N" Command="{Binding AddLinksCommand}" />
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusSearchCommand}" />
+        <KeyBinding Gesture="Cmd+F" Command="{Binding FocusSearchCommand}" />
         <KeyBinding Gesture="F1" Command="{Binding ShowGuideCommand}" />
     </Window.KeyBindings>
 
@@ -34,7 +37,7 @@
                 </StackPanel>
             </Grid>
         </Border>
-        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentPage}" ClipToBounds="True" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <TransitioningContentControl Grid.Row="1" x:Name="PageHost" Content="{Binding CurrentPage}" ClipToBounds="True" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <TransitioningContentControl.PageTransition><CrossFade Duration="0:0:0.18"/></TransitioningContentControl.PageTransition>
         </TransitioningContentControl>
         <Border Grid.Row="2" Classes="band" Padding="32,7"><Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">

@@ -21,12 +21,7 @@ public partial class AddLinksWindow : Window
         Opened += async (_, _) =>
         {
             LinkInput.Focus();
-            if (!string.IsNullOrWhiteSpace(InitialText))
-                viewModel.LinksText = InitialText;
-            else if (viewModel.LinksText.Length == 0)
-                await ReadClipboardAsync(viewModel, automatic: true);
-            if (IsVisible && viewModel.CheckCommand.CanExecute(null))
-                await viewModel.CheckCommand.ExecuteAsync(null);
+            await viewModel.BeginAsync(InitialText);
         };
         Closed += (_, _) => viewModel.Dispose();
     }
@@ -35,24 +30,24 @@ public partial class AddLinksWindow : Window
 
     public string? Outcome => (DataContext as AddLinksViewModel)?.Status;
 
+    /// <summary>Shows how many links arrived while this window was open; they open as
+    /// the next batch instead of a second window.</summary>
+    public void ShowPendingBatch(int count) =>
+        (DataContext as AddLinksViewModel)?.SetPendingBatch(count);
+
     private async void PasteLinks(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is AddLinksViewModel model)
-            await ReadClipboardAsync(model, automatic: false);
-    }
-
-    private async Task ReadClipboardAsync(AddLinksViewModel model, bool automatic)
-    {
+        if (DataContext is not AddLinksViewModel model)
+            return;
         try
         {
             string? text = Clipboard is null ? null : await Clipboard.TryGetTextAsync();
-            if (!IsVisible || model.IsInspecting || model.IsImporting || (automatic && model.LinksText.Length > 0))
+            if (!IsVisible || model.IsInspecting || model.IsImporting)
                 return;
             var links = LinkIntakeService.ExtractLinks(text);
             if (links.Count == 0)
             {
-                if (!automatic)
-                    model.ClipboardNotice("No valid MEGA links were found.");
+                model.ClipboardNotice("No valid MEGA links were found.");
                 return;
             }
             model.LinksText = string.Join(Environment.NewLine, links);
@@ -62,8 +57,7 @@ public partial class AddLinksWindow : Window
         catch (Exception ex)
         {
             Log.WriteWarning("Could not read the clipboard: " + Log.SafeException(ex));
-            if (!automatic)
-                model.ClipboardNotice("No valid MEGA links were found.");
+            model.ClipboardNotice("No valid MEGA links were found.");
         }
     }
 

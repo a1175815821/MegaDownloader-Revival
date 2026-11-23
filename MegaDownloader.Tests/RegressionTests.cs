@@ -1130,7 +1130,7 @@ public partial class RegressionTests {
         var tree=new PreflightTree(selection);
         Check(tree.Rows.Count==1 && tree.Rows[0].IsFolder,"shared folders start collapsed instead of flattening their children");
         var folder=tree.Rows[0];
-        Check(folder.EligibleCount==2 && folder.SelectedCount==2 && folder.CheckState==System.Windows.Forms.CheckState.Checked,"folder check state excludes ineligible duplicate files");
+        Check(folder.EligibleCount==2 && folder.SelectedCount==2 && folder.CheckState==PreflightTree.TriState.Checked,"folder check state excludes ineligible duplicate files");
         tree.ExpandAll(true);
         var leaf=tree.Rows.First(n=>object.ReferenceEquals(n.Entry,video));
         tree.Apply(new[]{folder,leaf},PreflightSelection.SelectionOperation.Invert);
@@ -1142,7 +1142,7 @@ public partial class RegressionTests {
         tree.Apply(new[]{folder},PreflightSelection.SelectionOperation.Clear);
         Check(!video.Selected && audio.Selected && selection.SelectedCount==1,"filtered folder operations preserve hidden selections");
         selection.Filter("","");tree.Filter(false);
-        Check(folder.CheckState==System.Windows.Forms.CheckState.Indeterminate && folder.SelectedCount==1,"clearing a filter restores the full folder's mixed check state");
+        Check(folder.CheckState==PreflightTree.TriState.Indeterminate && folder.SelectedCount==1,"clearing a filter restores the full folder's mixed check state");
     }
     static void QueueViewSnapshotCases() {
         var form=(Main)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Main));

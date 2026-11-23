@@ -13,6 +13,23 @@ namespace MegaDownloader
     }
 
     /// <summary>
+    /// Queue totals produced by the engine's own 500 ms sweep, so the workbench reads
+    /// counts and speed without walking every task again on the UI thread.
+    /// </summary>
+    public readonly record struct QueueSummary(
+        int Active,
+        int Queued,
+        int Paused,
+        int Completed,
+        int Failed,
+        decimal SpeedKBs)
+    {
+        public static QueueSummary Empty => new(0, 0, 0, 0, 0, 0m);
+
+        public int Total => Active + Queued + Paused + Completed + Failed;
+    }
+
+    /// <summary>
     /// Cross-platform host for the download queue. The WinForms shell keeps its own
     /// UI-coupled scheduler; this service exposes the same engine primitives
     /// (<see cref="Paquete"/>, <see cref="Fichero"/>, <see cref="ThrottledStreamController"/>)
@@ -36,6 +53,17 @@ namespace MegaDownloader
         private int _tickRunning;
         private DateTime _lastSaveUtc = DateTime.MinValue;
         private volatile bool _saveRequested;
+        private sealed class SummaryBox
+        {
+            public readonly QueueSummary Value;
+            public SummaryBox(QueueSummary value) => Value = value;
+        }
+
+        // Published as an immutable reference: the UI reads it from another thread and a
+        // 36-byte struct read is not atomic.
+        private SummaryBox _summary = new SummaryBox(QueueSummary.Empty);
+        private int _summaryVersion;
+        private int _queueVersion;
 
         public DownloadEngineService()
         {
@@ -132,7 +160,8 @@ namespace MegaDownloader
             }
 
             _saveRequested = true;
-            RefreshAggregates();
+            Interlocked.Increment(ref _queueVersion);
+            RefreshAggregatesCore();
             return true;
         }
 
@@ -185,7 +214,8 @@ namespace MegaDownloader
                     _state = DownloadEngineState.Stopped;
             }
 
-            RefreshAggregates();
+            RefreshAggregatesCore();
+            Interlocked.Increment(ref _queueVersion);
 
             // Only now is it safe to schedule ticks (and periodic saves).
             Volatile.Write(ref _loaded, 1);
@@ -384,6 +414,56 @@ namespace MegaDownloader
                 file.Start(ref _config, connections, owner);
         }
 
+        /// <summary>
+        /// Puts every retryable failed task back in the queue. Permanent failures stay
+        /// put: the link is gone and retrying only burns quota. Quota failures keep
+        /// their partial progress so the retry resumes instead of starting over.
+        /// </summary>
+        public int RetryFailed()
+        {
+            var pending = new List<Fichero>();
+            lock (Mutex.ListaDescargas)
+            {
+                foreach (Paquete package in _packages)
+                {
+                    if (package.ListaFicheros is null)
+                        continue;
+                    foreach (Fichero file in package.ListaFicheros)
+                    {
+                        if (file.DescargaEstado() == Estado.Erroneo && !file.EsErrorPermanente)
+                            pending.Add(file);
+                    }
+                }
+            }
+
+            foreach (Fichero file in pending)
+                ResetForRetry(file);
+
+            if (pending.Count > 0)
+            {
+                _saveRequested = true;
+                Log.WriteWarning("Retrying " + pending.Count + " failed task(s).");
+            }
+            return pending.Count;
+        }
+
+        /// <summary>Retries one failed task; returns false when it is a permanent failure.</summary>
+        public bool RetryFile(Fichero file)
+        {
+            if (file is null || file.DescargaEstado() != Estado.Erroneo || file.EsErrorPermanente)
+                return false;
+            ResetForRetry(file);
+            _saveRequested = true;
+            return true;
+        }
+
+        private static void ResetForRetry(Fichero file)
+        {
+            file.ResetearDescarga(preserveProgress: file.FailedByQuota);
+            file.PausaIndividual = false;
+            file.SetDescargaEstado = Estado.EnCola;
+        }
+
         public void PauseFile(Fichero file)
         {
             if (file is null)
@@ -449,6 +529,7 @@ namespace MegaDownloader
             }
 
             _saveRequested = true;
+            Interlocked.Increment(ref _queueVersion);
             return true;
         }
 
@@ -471,12 +552,55 @@ namespace MegaDownloader
 
         public void RefreshAggregates()
         {
+            RefreshAggregatesCore();
+        }
+
+        /// <summary>
+        /// The single queue sweep: refreshes each task's derived values and counts the
+        /// states the workbench shows. The result is published for the UI to read, so a
+        /// page refresh never has to walk the queue itself.
+        /// </summary>
+        private QueueSummary RefreshAggregatesCore()
+        {
+            int active = 0, queued = 0, paused = 0, completed = 0, failed = 0;
+            decimal speed = 0m;
+            int count = 0;
+
             foreach (Paquete package in SnapshotPackages())
             {
                 try
                 {
                     foreach (Fichero file in package.SnapshotFicheros())
+                    {
                         file.ActualizarDatosDescarga();
+                        count++;
+                        switch (file.DescargaEstado())
+                        {
+                            case Estado.Descargando:
+                            case Estado.CreandoLocal:
+                            case Estado.Verificando:
+                            case Estado.ComprobandoMD5:
+                            case Estado.Descomprimiendo:
+                            case Estado.EsperandoVolumenes:
+                                active++;
+                                break;
+                            case Estado.EnCola:
+                                queued++;
+                                break;
+                            case Estado.Pausado:
+                                paused++;
+                                break;
+                            case Estado.Completado:
+                                completed++;
+                                break;
+                            case Estado.Erroneo:
+                                failed++;
+                                break;
+                        }
+
+                        speed += file.DescargaVelocidadKBs();
+                    }
+
                     package.ActualizarDatosDescarga();
                 }
                 catch (Exception ex)
@@ -484,7 +608,33 @@ namespace MegaDownloader
                     Log.WriteError("Updating package totals failed: " + Log.SafeException(ex));
                 }
             }
+
+            var summary = new QueueSummary(active, queued, paused, completed, failed, speed);
+            Volatile.Write(ref _summary, new SummaryBox(summary));
+
+            // The version moves whenever the totals or the task count change, so a page
+            // can skip rebuilding rows on quiet ticks without diffing the queue.
+            if (!summary.Equals(_lastSummary) || count != _lastFileCount)
+            {
+                _lastSummary = summary;
+                _lastFileCount = count;
+                Interlocked.Increment(ref _summaryVersion);
+            }
+
+            return summary;
         }
+
+        private QueueSummary _lastSummary = QueueSummary.Empty;
+        private int _lastFileCount;
+
+        /// <summary>Latest totals from the engine sweep.</summary>
+        public QueueSummary Summary => Volatile.Read(ref _summary).Value;
+
+        /// <summary>Increments when the totals or the task count change.</summary>
+        public int SummaryVersion => Volatile.Read(ref _summaryVersion);
+
+        /// <summary>Increments whenever tasks are added or removed.</summary>
+        public int QueueVersion => Volatile.Read(ref _queueVersion);
 
         private void Tick()
         {
@@ -513,7 +663,7 @@ namespace MegaDownloader
                     StopActiveFiles();
                 }
 
-                RefreshAggregates();
+                RefreshAggregatesCore();
 
                 if (_saveRequested || (DateTime.UtcNow - _lastSaveUtc).TotalSeconds >= 5)
                 {
@@ -912,6 +1062,29 @@ namespace MegaDownloader
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             _timer.Dispose();
+
+            // Shutdown order matters: stop dispatching new work, let the transfers in
+            // flight commit what they have written, and only then persist the queue.
+            // Saving first records progress the disk has not received yet, so a restart
+            // could ask for bytes that were never written.
+            try
+            {
+                lock (_stateGate)
+                    _state = DownloadEngineState.Stopped;
+                foreach (Fichero file in SnapshotFiles())
+                {
+                    Estado state = file.DescargaEstado();
+                    if (state != Estado.Descargando && state != Estado.CreandoLocal && state != Estado.Pausado)
+                        continue;
+                    file.Stop();
+                }
+                RefreshAggregatesCore();
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Stopping transfers on shutdown failed: " + Log.SafeException(ex));
+            }
+
             try
             {
                 // Stop the extraction worker. Only the worker is cancelled: the

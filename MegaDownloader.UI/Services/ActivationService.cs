@@ -18,7 +18,7 @@ namespace MegaDownloader.UI.Services;
 public sealed class ActivationService : IDisposable
 {
     private readonly IPlatformServices _platform;
-    private readonly LinkIntakeService _intake;
+    private readonly AddLinksCoordinator _coordinator;
     private readonly DownloadEngineService _engine;
     private readonly SingleInstanceCoordinator _instance;
     private readonly DispatcherTimer _pollTimer;
@@ -34,12 +34,12 @@ public sealed class ActivationService : IDisposable
 
     public ActivationService(
         IPlatformServices platform,
-        LinkIntakeService intake,
+        AddLinksCoordinator coordinator,
         DownloadEngineService engine,
         SingleInstanceCoordinator instance)
     {
         _platform = platform;
-        _intake = intake;
+        _coordinator = coordinator;
         _engine = engine;
         _instance = instance;
 
@@ -47,8 +47,8 @@ public sealed class ActivationService : IDisposable
         _pollTimer.Tick += async (_, _) => await DrainAsync();
     }
 
-    /// <summary>Raised on the UI thread after an activation attempt, for the status bar.</summary>
-    public event Action<LinkIntakeResult>? IntakeCompleted;
+    /// <summary>Raised on the UI thread with the number of links an activation carried.</summary>
+    public event Action<int>? LinksFound;
 
     /// <summary>
     /// Returns false when another instance already owns the queue; the caller must then
@@ -154,24 +154,32 @@ public sealed class ActivationService : IDisposable
     }
 
     /// <summary>
-    /// Queues the links of one activation. Returns null when the queue could not take
-    /// them yet, so the caller can retry instead of losing them.
+    /// Hands the links of one activation to the confirmation window. Returns null while
+    /// the queue is still loading, so the caller retries instead of losing them.
     /// </summary>
     private async Task<LinkIntakeResult?> HandleAsync(IReadOnlyList<string> arguments)
     {
         if (arguments is null || arguments.Count == 0)
             return null;
 
+        if (!_engine.IsLoaded)
+            return null;
+
+        var links = new List<string>();
+        foreach (string argument in arguments)
+            links.AddRange(LinkIntakeService.ExtractLinks(argument));
+        if (links.Count == 0)
+            return new LinkIntakeResult(LinkIntakeStatus.NoLinks, 0, 0, "No MEGA links found.");
+
         try
         {
-            LinkIntakeResult result = await _intake.AddFromArgumentsAsync(arguments);
-            // "Not ready" means the queue is still loading: the batch stays pending.
-            if (result.Status == LinkIntakeStatus.NotReady && !_engine.IsLoaded)
-                return null;
+            if (_coordinator.IsOpen)
+                _coordinator.Stage(string.Join(Environment.NewLine, links));
+            else
+                _ = _coordinator.ShowAsync(string.Join(Environment.NewLine, links));
 
-            if (result.Status != LinkIntakeStatus.NoLinks)
-                IntakeCompleted?.Invoke(result);
-            return result;
+            LinksFound?.Invoke(links.Count);
+            return new LinkIntakeResult(LinkIntakeStatus.Added, links.Count, 0, string.Empty);
         }
         catch (Exception ex)
         {

@@ -261,7 +261,7 @@ namespace MegaDownloader
                     var node = NodeAt(e.RowIndex);
                     if (node is null || node.EligibleCount == 0)
                         return;
-                    ChangeCheckbox(e.RowIndex, node.CheckState != CheckState.Checked);
+                    ChangeCheckbox(e.RowIndex, node.CheckState != PreflightTree.TriState.Checked);
                 };
             grid.CellBeginEdit += BeginCellEdit;
             grid.CellFormatting += FormatCell;
@@ -792,7 +792,7 @@ namespace MegaDownloader
                 switch (e.ColumnIndex)
                 {
                     case 0:
-                        e.Value = node.CheckState;
+                        e.Value = ToWinFormsState(node.CheckState);
                         break;
                     case 1:
                         e.Value = node.Name;
@@ -852,6 +852,21 @@ namespace MegaDownloader
             else if (e.ColumnIndex == 3 && node.Entry.State == BatchLinkPreflight.LinkState.Invalid)
             {
                 e.CellStyle.ForeColor = ThemeManager.GetColor("ErrorFore");
+            }
+        }
+
+        /// <summary>The core tree reports its own tri-state; the grid column needs the
+        /// WinForms enum with the same three values.</summary>
+        private static CheckState ToWinFormsState(PreflightTree.TriState state)
+        {
+            switch (state)
+            {
+                case PreflightTree.TriState.Checked:
+                    return CheckState.Checked;
+                case PreflightTree.TriState.Indeterminate:
+                    return CheckState.Indeterminate;
+                default:
+                    return CheckState.Unchecked;
             }
         }
 
