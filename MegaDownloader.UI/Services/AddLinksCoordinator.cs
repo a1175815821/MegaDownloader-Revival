@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace MegaDownloader.UI.Services;
@@ -64,6 +65,39 @@ public sealed class AddLinksCoordinator
             _open = false;
             _staged.Clear();
         }
+    }
+
+    /// <summary>
+    /// Unpacks dropped or command-line files into link text. Non-container files are
+    /// reported: the drop target only accepts <c>.elc</c>/<c>.dlc</c> containers and
+    /// plain link text.
+    /// </summary>
+    public async Task<string?> ReadContainersAsync(IReadOnlyList<string> paths)
+    {
+        var links = new List<string>();
+        var errors = new List<string>();
+        foreach (string path in paths)
+        {
+            if (!LinkContainer.IsContainerPath(path))
+            {
+                errors.Add(UiText.Format("{0}: only .elc and .dlc files can be dropped here.", Path.GetFileName(path)));
+                continue;
+            }
+
+            try
+            {
+                links.Add(await LinkContainer.ReadAsync(path));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+            {
+                errors.Add(Path.GetFileName(path) + ": " + DownloadAdvice.FirstLine(Log.Redact(ex.Message)));
+            }
+        }
+
+        if (errors.Count > 0)
+            await _dialogs.ShowMessageAsync(UiText.Get("Could not read the file"), string.Join(Environment.NewLine, errors), UiText.Get("OK"));
+
+        return links.Count == 0 ? null : string.Join(Environment.NewLine, links);
     }
 
     /// <summary>

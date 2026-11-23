@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -18,6 +19,21 @@ namespace MegaDownloader.Core.Tests
 
         public static int Main(string[] args)
         {
+            // Second-process side of the single-instance case: hand the running test
+            // instance this launch's arguments exactly as a second MegaDownloader would.
+            if (args.Length >= 2 && args[0] == "--instance-child")
+            {
+                var child = new SingleInstanceCoordinator(args[1], "CoreTests");
+                if (child.TryAcquire())
+                {
+                    child.Dispose();
+                    return 3;
+                }
+                child.SendArguments(args.Skip(2).ToArray());
+                child.Dispose();
+                return 0;
+            }
+
             string root = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "mega-core-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             try
@@ -26,6 +42,9 @@ namespace MegaDownloader.Core.Tests
                 PreflightSelectionCases();
                 DestinationPreviewCases();
                 PreflightSessionCacheCases();
+                LinkContainerCases();
+                SingleInstanceCases();
+                DownloadScheduleCases();
 
                 Console.WriteLine();
                 Console.WriteLine("ASSERTIONS: " + _assertions);
@@ -250,6 +269,138 @@ namespace MegaDownloader.Core.Tests
             Check(loads > afterFirst, "clearing the cache forces a new load");
             session.Dispose();
             Console.WriteLine("preflight_session: request reuse and cache clearing passed");
+        }
+
+        private static void LinkContainerCases()
+        {
+            string folder = Path.Combine(Path.GetTempPath(), "mega-container-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                string elc = Path.Combine(folder, "links.ELC");
+                File.WriteAllText(elc, "  serverEncodedPayload  ");
+                Check(LinkContainer.IsContainerPath(elc), ".elc is recognised case-insensitively");
+                Check(!LinkContainer.IsContainerPath(Path.Combine(folder, "plain.txt")), "other extensions are not containers");
+
+                string link = LinkContainer.ReadAsync(elc).GetAwaiter().GetResult();
+                Check(link == "mega://elc?serverEncodedPayload", "an .elc becomes a server-encoded link");
+                Check(URLExtractor.ExtraerURLs(link).Count == 1, "the generated link is recognised by the extractor");
+
+                string dlc = Path.Combine(folder, "old.dlc");
+                File.WriteAllText(dlc, "payload");
+                bool refused = false;
+                try
+                {
+                    LinkContainer.ReadAsync(dlc).GetAwaiter().GetResult();
+                }
+                catch (NotSupportedException)
+                {
+                    refused = true;
+                }
+                Check(refused, ".dlc is refused with the discontinued reason");
+
+                string empty = Path.Combine(folder, "empty.elc");
+                File.WriteAllText(empty, "   ");
+                bool emptyRefused = false;
+                try
+                {
+                    LinkContainer.ReadAsync(empty).GetAwaiter().GetResult();
+                }
+                catch (InvalidDataException)
+                {
+                    emptyRefused = true;
+                }
+                Check(emptyRefused, "an empty container is reported");
+            }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
+            Console.WriteLine("link_container: elc decoding, dlc refusal and empty files passed");
+        }
+
+        private static void SingleInstanceCases()
+        {
+            string folder = Path.Combine(Path.GetTempPath(), "mega-instance-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            var first = new SingleInstanceCoordinator(folder, "CoreTests");
+            var second = new SingleInstanceCoordinator(folder, "CoreTests");
+            try
+            {
+                Check(first.TryAcquire(), "the first process acquires the instance lock");
+                Check(!second.TryAcquire(), "a second process is refused the lock");
+
+                // Really spawn the second process: it must fail to take the lock and
+                // leave its payload in the spool, with links and with no arguments.
+                Check(RunInstanceChild(folder, "mega://elc?abc") == 0,
+                    "a second process forwards its links instead of running");
+                Check(RunInstanceChild(folder) == 0,
+                    "a second process without arguments still reaches the owner");
+
+                var pending = first.ReadPendingArguments();
+                Check(pending.Count == 2, "both launches are forwarded in order");
+                Check(pending[0].Count == 1 && pending[0][0] == "mega://elc?abc", "the link is forwarded intact");
+                Check(pending[1].Count == 0, "a launch without arguments is forwarded as an empty batch");
+                Check(first.ReadPendingArguments().Count == 0, "draining empties the spool");
+
+                first.Dispose();
+                Check(second.TryAcquire(), "the lock is released when its owner exits");
+            }
+            finally
+            {
+                first.Dispose();
+                second.Dispose();
+                Directory.Delete(folder, true);
+            }
+            Console.WriteLine("single_instance: lock, argument spool and empty launch passed");
+        }
+
+        /// <summary>
+        /// Runs this test binary as the second MegaDownloader process. Exit code 3 means
+        /// it unexpectedly took the lock; 0 means it forwarded its payload.
+        /// </summary>
+        private static int RunInstanceChild(string folder, params string[] payload)
+        {
+            string host = Environment.ProcessPath ?? throw new InvalidOperationException("No process path available.");
+            var start = new ProcessStartInfo(host) { UseShellExecute = false };
+            if (string.Equals(Path.GetFileNameWithoutExtension(host), "dotnet", StringComparison.OrdinalIgnoreCase))
+                start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+            start.ArgumentList.Add("--instance-child");
+            start.ArgumentList.Add(folder);
+            foreach (string argument in payload)
+                start.ArgumentList.Add(argument);
+
+            using var process = Process.Start(start) ?? throw new InvalidOperationException("The second process did not start.");
+            if (!process.WaitForExit(30000))
+            {
+                process.Kill();
+                return -1;
+            }
+            return process.ExitCode;
+        }
+
+        private static void DownloadScheduleCases()
+        {
+            var crossMidnight = new DownloadScheduleSettings { Enabled = true, Daily = true, StartMinute = 23 * 60, EndMinute = 7 * 60 };
+            var beforeMidnight = new DateTime(2026, 1, 1, 23, 30, 0);
+            var afterMidnight = new DateTime(2026, 1, 2, 6, 0, 0);
+            Check(crossMidnight.AllowsDownload(beforeMidnight), "a cross-midnight window is active before midnight");
+            Check(crossMidnight.AllowsDownload(afterMidnight), "a cross-midnight window is active after midnight");
+            Check(crossMidnight.ActiveWindow(beforeMidnight) == crossMidnight.ActiveWindow(afterMidnight),
+                "the same window keeps its identity across midnight");
+            Check(!crossMidnight.AllowsDownload(new DateTime(2026, 1, 2, 12, 0, 0)), "outside the window is refused");
+
+            var once = new DownloadScheduleSettings
+            {
+                Enabled = true,
+                Daily = false,
+                OnceStart = new DateTime(2026, 1, 1, 9, 0, 0),
+                OnceEnd = new DateTime(2026, 1, 1, 17, 0, 0)
+            };
+            Check(once.AllowsDownload(new DateTime(2026, 1, 1, 12, 0, 0)), "a one-time window allows downloads inside it");
+            Check(!once.AllowsDownload(new DateTime(2026, 1, 1, 18, 0, 0)), "a one-time window stops after its end");
+            Check(!once.AllowsDownload(new DateTime(2026, 1, 1, 8, 0, 0)), "a one-time window does not start early");
+            Console.WriteLine("download_schedule: daily cross-midnight and one-time windows passed");
         }
     }
 }

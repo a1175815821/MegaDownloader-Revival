@@ -47,9 +47,11 @@
                      AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
                      PlaceholderText="{DynamicResource Loc.PasteMegaLinksOnePerLine}"
                      AutomationProperties.Name="{DynamicResource Loc.MEGALinks}"/>
-            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Classes="muted" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.Paste}" Click="PasteLinks" IsEnabled="{Binding !IsInspecting}"/>
+                <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.WatchOnline}" Command="{Binding WatchOnlineCommand}"
+                        ToolTip.Tip="{DynamicResource Loc.WatchTheFirstLinkWhileItDownloads}"/>
+                <Button Grid.Column="2" Classes="quiet" Content="{DynamicResource Loc.Paste}" Click="PasteLinks" IsEnabled="{Binding !IsInspecting}"/>
             </Grid>
             <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <StackPanel VerticalAlignment="Center" Spacing="3">
@@ -92,7 +94,7 @@
                             <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.Status}"/>
                             <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Size}" MinWidth="96" TextAlignment="Right"/>
                         </Grid>
-                        <ListBox Grid.Row="1" Classes="preflight" ItemsSource="{Binding Rows}"
+                        <ListBox Grid.Row="1" x:Name="PreflightList" Classes="preflight" ItemsSource="{Binding Rows}"
                                  Background="Transparent" BorderThickness="0" Padding="0"
                                  IsEnabled="{Binding !IsImporting}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">

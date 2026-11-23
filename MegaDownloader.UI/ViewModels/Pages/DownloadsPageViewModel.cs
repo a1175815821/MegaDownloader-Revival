@@ -165,6 +165,13 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     /// <summary>Rows the user selected; batch commands act on this set.</summary>
     public ObservableCollection<DownloadItemViewModel> SelectedDownloads { get; } = new();
 
+    /// <summary>
+    /// Raised after the visible rows were rearranged, so the view can put the list's
+    /// own selection back on the rows that are still on screen. The view is the only
+    /// place that can write <c>ListBox.SelectedItems</c>.
+    /// </summary>
+    public event Action? SelectionSyncRequested;
+
     public bool CanBatch => SelectionCount > 1;
 
     /// <summary>Called by the view after the list selection changed.</summary>
@@ -438,6 +445,25 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
                 break;
         }
 
+        Refresh(forceRebuild: true);
+    }
+
+    internal bool CanMoveBeside(DownloadItemViewModel source, DownloadItemViewModel target) =>
+        _engine.CanMoveBeside(source.Item, target.Item);
+
+    internal void MoveBeside(DownloadItemViewModel source, DownloadItemViewModel target, bool after)
+    {
+        if (!_engine.MoveBeside(source.Item, target.Item, after))
+            return;
+        Refresh(forceRebuild: true);
+    }
+
+    internal void MoveItem(object item, QueueMove move)
+    {
+        if (!_engine.MoveTo(item, move))
+            return;
+        // The scheduler walks the queue in list order, so the new position is what the
+        // next free slot picks up.
         Refresh(forceRebuild: true);
     }
 
@@ -723,9 +749,12 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
                 ? _actionFeedback
                 : UiText.Get(_loadFailed ? "Could not load the download queue" : _engine.State switch
                 {
-                    DownloadEngineState.Running => UiText.Get("Queue running"),
-                    DownloadEngineState.Paused => UiText.Get("Queue paused"),
-                    _ => UiText.Get("Queue stopped")
+                    DownloadEngineState.Running => "Queue running",
+                    // The scheduler pauses and resumes by itself; saying why keeps the
+                    // paused queue from looking like a manual pause.
+                    DownloadEngineState.Paused when !_engine.ScheduleAllowsDownloadsNow => "Paused by the download schedule",
+                    DownloadEngineState.Paused => "Queue paused",
+                    _ => "Queue stopped"
                 });
         }
         catch (Exception ex)
@@ -966,7 +995,9 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
         SelectedDownload = selected is not null && desired.Contains(selected) ? selected : null;
 
-        // Restore the batch selection to the rows that are still visible.
+        // Restore the batch selection to the rows that are still visible, then let the
+        // view mirror it back into the list so the highlighted rows match the count in
+        // the batch bar.
         SelectedDownloads.Clear();
         foreach (var row in desired)
         {
@@ -974,6 +1005,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
                 SelectedDownloads.Add(row);
         }
         SelectionCount = SelectedDownloads.Count;
+        SelectionSyncRequested?.Invoke();
     }
 
     private int IndexOf(DownloadItemViewModel row)
@@ -1124,6 +1156,15 @@ public partial class DownloadItemViewModel : ObservableObject
         IsExpanded = !IsExpanded;
         _owner.Refresh(forceRebuild: true);
     }
+
+    [RelayCommand]
+    private void MoveToTop() => _owner.MoveItem(Item, QueueMove.Top);
+
+    [RelayCommand]
+    private void MoveUp() => _owner.MoveItem(Item, QueueMove.Up);
+
+    [RelayCommand]
+    private void MoveDown() => _owner.MoveItem(Item, QueueMove.Down);
 
     [RelayCommand]
     private void OpenFile() => _owner.OpenOutput(Item, openFolder: false);

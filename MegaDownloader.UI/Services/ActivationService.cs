@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MegaDownloader.Platform;
 
@@ -22,6 +25,7 @@ public sealed class ActivationService : IDisposable
     private readonly DownloadEngineService _engine;
     private readonly SingleInstanceCoordinator _instance;
     private readonly DispatcherTimer _pollTimer;
+    private IActivatableLifetime? _activatable;
 
     /// <summary>
     /// Argument batches that were received but not queued yet. A batch stays here until
@@ -76,6 +80,13 @@ public sealed class ActivationService : IDisposable
         RegisterProtocolHandler();
         _pollTimer.Start();
 
+        // macOS delivers a mega:// link to the already-running .app as an activation
+        // event instead of starting a second process; Linux desktops can do the same.
+        // Both carry the same payloads the spool does, so they join the same queue.
+        _activatable = Avalonia.Application.Current?.TryGetFeature<IActivatableLifetime>();
+        if (_activatable is not null)
+            _activatable.Activated += OnActivated;
+
         // The queue is loaded asynchronously, so this launch's own arguments are queued
         // like any other activation and processed once the queue is ready.
         if (arguments is not null && arguments.Count > 0)
@@ -96,6 +107,36 @@ public sealed class ActivationService : IDisposable
             // A missing registration only means browser links open nothing; the app works.
             Log.WriteWarning("mega:// registration failed: " + Log.SafeException(ex));
         }
+    }
+
+    private void OnActivated(object? sender, ActivatedEventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        IReadOnlyList<string>? batch = e switch
+        {
+            ProtocolActivatedEventArgs protocol => new[] { protocol.Uri.ToString() },
+            FileActivatedEventArgs files => LocalPaths(files.Files),
+            _ => null
+        };
+        if (batch is null || batch.Count == 0)
+            return;
+
+        _pending.Add(batch);
+        ActivateWindow();
+        _ = DrainAsync();
+    }
+
+    private static IReadOnlyList<string> LocalPaths(IReadOnlyList<IStorageItem> files)
+    {
+        var paths = new List<string>();
+        foreach (var file in files)
+        {
+            if (file.TryGetLocalPath() is { } path)
+                paths.Add(path);
+        }
+        return paths;
     }
 
     private async Task DrainAsync()
@@ -166,8 +207,23 @@ public sealed class ActivationService : IDisposable
             return null;
 
         var links = new List<string>();
+        var containers = new List<string>();
         foreach (string argument in arguments)
-            links.AddRange(LinkIntakeService.ExtractLinks(argument));
+        {
+            // A browser activation normally carries mega:// links, but a file
+            // association or a command line can hand over an .elc container instead.
+            if (LinkContainer.IsContainerPath(argument) && System.IO.File.Exists(argument))
+                containers.Add(argument);
+            else
+                links.AddRange(LinkIntakeService.ExtractLinks(argument));
+        }
+
+        if (containers.Count > 0)
+        {
+            string? unpacked = await _coordinator.ReadContainersAsync(containers);
+            if (!string.IsNullOrEmpty(unpacked))
+                links.AddRange(LinkIntakeService.ExtractLinks(unpacked));
+        }
         if (links.Count == 0)
             return new LinkIntakeResult(LinkIntakeStatus.NoLinks, 0, 0, "No MEGA links found.");
 
@@ -204,6 +260,11 @@ public sealed class ActivationService : IDisposable
             return;
         _disposed = true;
         _pollTimer.Stop();
+        if (_activatable is not null)
+        {
+            _activatable.Activated -= OnActivated;
+            _activatable = null;
+        }
         _pending.Clear();
         _instance.Dispose();
     }

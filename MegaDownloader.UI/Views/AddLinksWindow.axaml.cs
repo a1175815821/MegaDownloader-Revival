@@ -1,6 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using MegaDownloader.UI.Services;
 using Avalonia.Platform.Storage;
 using MegaDownloader.UI.ViewModels;
@@ -13,6 +16,16 @@ public partial class AddLinksWindow : Window
     public AddLinksWindow()
     {
         InitializeComponent();
+
+        // Shift-click toggles a range of checkboxes, the same gesture the queue uses.
+        // Tunnelling: the row checkbox must not also toggle itself on release.
+        AddHandler(PointerPressedEvent, OnTreePointerPressed, RoutingStrategies.Tunnel);
+
+        // A container dropped while the window is open joins the next batch instead of
+        // opening a second window.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
 
         var viewModel = App.Services.GetRequiredService<AddLinksViewModel>();
         viewModel.PickFolderAsync = PickFolderAsync;
@@ -59,6 +72,76 @@ public partial class AddLinksWindow : Window
             Log.WriteWarning("Could not read the clipboard: " + Log.SafeException(ex));
             model.ClipboardNotice("No valid MEGA links were found.");
         }
+    }
+
+    private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not AddLinksViewModel model || PreflightList is null)
+            return;
+        if (!e.GetCurrentPoint(PreflightList).Properties.IsLeftButtonPressed)
+            return;
+
+        PreflightRowViewModel? row = FindRow(e.Source as Visual);
+        if (row is null)
+            return;
+
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            model.SetRangeAnchor(row);
+            return;
+        }
+
+        // Marked handled so the checkbox under the pointer does not toggle itself again.
+        model.ExtendSelectionTo(row);
+        e.Handled = true;
+    }
+
+    private PreflightRowViewModel? FindRow(Visual? source)
+    {
+        if (source is null)
+            return null;
+        foreach (var ancestor in source.GetSelfAndVisualAncestors())
+        {
+            if (ReferenceEquals(ancestor, PreflightList))
+                return null;
+            if (ancestor is ListBoxItem { DataContext: PreflightRowViewModel row })
+                return row;
+        }
+        return null;
+    }
+
+    private static void OnDragOver(object? sender, DragEventArgs e)
+    {
+        bool accepts = e.DataTransfer.Contains(DataFormat.File) || e.DataTransfer.Contains(DataFormat.Text);
+        e.DragEffects = accepts ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        var coordinator = App.Services.GetRequiredService<AddLinksCoordinator>();
+
+        if (e.DataTransfer.TryGetFiles() is { Length: > 0 } files)
+        {
+            var paths = new List<string>();
+            foreach (var file in files)
+            {
+                if (file.TryGetLocalPath() is { } path)
+                    paths.Add(path);
+            }
+            if (paths.Count > 0)
+            {
+                string? unpacked = await coordinator.ReadContainersAsync(paths);
+                if (!string.IsNullOrEmpty(unpacked))
+                    coordinator.Stage(unpacked);
+                return;
+            }
+        }
+
+        string? text = e.DataTransfer.TryGetText();
+        if (!string.IsNullOrWhiteSpace(text))
+            coordinator.Stage(text);
     }
 
     private async Task<string?> PickFolderAsync()

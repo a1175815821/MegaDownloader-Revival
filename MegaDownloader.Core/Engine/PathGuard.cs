@@ -188,7 +188,9 @@ namespace MegaDownloader
         // Call only after canonicalizing and validating the archive path.
         internal static string ArchiveIoPath(string fullPath)
         {
-            if (fullPath.Length < 248 || fullPath.StartsWith(@"\\?\", StringComparison.Ordinal))
+            // \\?\ is a Windows device path; on macOS/Linux it would be a literal
+            // directory name and every archive write would land in the wrong place.
+            if (!OperatingSystem.IsWindows() || fullPath.Length < 248 || fullPath.StartsWith(@"\\?\", StringComparison.Ordinal))
                 return fullPath;
             if (fullPath.StartsWith(@"\\", StringComparison.Ordinal))
                 return @"\\?\UNC\" + fullPath.Substring(2);

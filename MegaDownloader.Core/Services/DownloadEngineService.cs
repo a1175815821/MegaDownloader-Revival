@@ -12,6 +12,14 @@ namespace MegaDownloader
         Paused
     }
 
+    /// <summary>How far a queue row moves when the user reorders it.</summary>
+    public enum QueueMove
+    {
+        Top,
+        Up,
+        Down
+    }
+
     /// <summary>
     /// Queue totals produced by the engine's own 500 ms sweep, so the workbench reads
     /// counts and speed without walking every task again on the UI thread.
@@ -188,6 +196,161 @@ namespace MegaDownloader
             }
         }
 
+        /// <summary>
+        /// Moves a package or one of its files in the queue. The physical list order is
+        /// the scheduling order — the scheduler walks the packages in list order — so a
+        /// move is a real swap, renumbered onto the stored priorities and saved with the
+        /// queue. Restarting reproduces the order the user left.
+        /// </summary>
+        public bool MoveTo(object item, QueueMove move)
+        {
+            if (item is null || Volatile.Read(ref _disposed) != 0)
+                return false;
+
+            bool moved = false;
+            lock (_scheduleGate)
+            {
+                lock (Mutex.ListaDescargas)
+                {
+                    moved = item switch
+                    {
+                        Paquete package => MovePackageLocked(package, move),
+                        Fichero file => MoveFileLocked(file, move),
+                        _ => false
+                    };
+                    if (moved)
+                        RenumberPrioritiesLocked();
+                }
+            }
+
+            if (!moved)
+                return false;
+            _saveRequested = true;
+            Interlocked.Increment(ref _queueVersion);
+            RefreshAggregatesCore();
+            return true;
+        }
+
+        /// <summary>
+        /// Places <paramref name="item"/> next to <paramref name="target"/> (before it,
+        /// or after it). Drag-and-drop uses this; it takes the same list and priority
+        /// path as the move commands. Packages move among packages; a file moves within
+        /// its own package.
+        /// </summary>
+        /// <summary>True when <see cref="MoveBeside"/> could move the two rows together.</summary>
+        public bool CanMoveBeside(object item, object target)
+        {
+            if (item is null || target is null || ReferenceEquals(item, target))
+                return false;
+            if (item is Paquete && target is Paquete)
+                return true;
+            if (item is not Fichero file || target is not Fichero anchor)
+                return false;
+            lock (Mutex.ListaDescargas)
+            {
+                Paquete owner = FindPackageLocked(file, out _);
+                return owner is not null && ReferenceEquals(owner, FindPackageLocked(anchor, out _));
+            }
+        }
+
+        public bool MoveBeside(object item, object target, bool after)
+        {
+            if (item is null || target is null || ReferenceEquals(item, target) ||
+                Volatile.Read(ref _disposed) != 0)
+                return false;
+
+            bool moved = false;
+            lock (_scheduleGate)
+            {
+                lock (Mutex.ListaDescargas)
+                {
+                    moved = (item, target) switch
+                    {
+                        (Paquete package, Paquete anchor) => MovePackageBesideLocked(package, anchor, after),
+                        (Fichero file, Fichero anchor) => MoveFileBesideLocked(file, anchor, after),
+                        _ => false
+                    };
+                    if (moved)
+                        RenumberPrioritiesLocked();
+                }
+            }
+
+            if (!moved)
+                return false;
+            _saveRequested = true;
+            Interlocked.Increment(ref _queueVersion);
+            RefreshAggregatesCore();
+            return true;
+        }
+
+        private bool MovePackageBesideLocked(Paquete package, Paquete target, bool after)
+        {
+            int from = _packages.IndexOf(package);
+            int to = _packages.IndexOf(target);
+            if (from < 0 || to < 0 || from == to)
+                return false;
+            _packages.RemoveAt(from);
+            if (from < to)
+                to--;
+            _packages.Insert(Math.Clamp(after ? to + 1 : to, 0, _packages.Count), package);
+            return true;
+        }
+
+        private bool MoveFileBesideLocked(Fichero file, Fichero target, bool after)
+        {
+            Paquete owner = FindPackageLocked(file, out _);
+            if (owner is null || !ReferenceEquals(owner, FindPackageLocked(target, out _)) || owner.ListaFicheros is null)
+                return false;
+            int from = owner.ListaFicheros.IndexOf(file);
+            int to = owner.ListaFicheros.IndexOf(target);
+            if (from < 0 || to < 0 || from == to)
+                return false;
+            owner.ListaFicheros.RemoveAt(from);
+            if (from < to)
+                to--;
+            owner.ListaFicheros.Insert(Math.Clamp(after ? to + 1 : to, 0, owner.ListaFicheros.Count), file);
+            return true;
+        }
+
+        private bool MovePackageLocked(Paquete package, QueueMove move)
+        {
+            int from = _packages.IndexOf(package);
+            if (from < 0)
+                return false;
+            int to = move switch
+            {
+                QueueMove.Top => 0,
+                QueueMove.Up => from - 1,
+                _ => from + 1
+            };
+            if (to < 0 || to >= _packages.Count || to == from)
+                return false;
+            _packages.RemoveAt(from);
+            _packages.Insert(to, package);
+            return true;
+        }
+
+        private bool MoveFileLocked(Fichero file, QueueMove move)
+        {
+            Paquete owner = FindPackageLocked(file, out _);
+            if (owner?.ListaFicheros is null)
+                return false;
+            int from = owner.ListaFicheros.IndexOf(file);
+            if (from < 0)
+                return false;
+            int to = move switch
+            {
+                QueueMove.Top => 0,
+                QueueMove.Up => from - 1,
+                _ => from + 1
+            };
+            if (to < 0 || to >= owner.ListaFicheros.Count || to == from)
+                return false;
+            owner.ListaFicheros.RemoveAt(from);
+            owner.ListaFicheros.Insert(to, file);
+            return true;
+        }
+
         public async Task LoadAsync(CancellationToken cancellationToken = default)
         {
             if (Volatile.Read(ref _loaded) != 0)
@@ -324,6 +487,9 @@ namespace MegaDownloader
             _scheduleController.Reset();
             ApplySchedule();
         }
+
+        /// <summary>True when the download schedule allows transfers right now.</summary>
+        public bool ScheduleAllowsDownloadsNow => _config.DownloadSchedule.AllowsDownload(DateTime.Now);
 
         public void PauseAll()
         {
@@ -1161,9 +1327,10 @@ namespace MegaDownloader
             if (urls.Count == 0)
                 return Language.GetText("No valid URLs have been inserted");
 
-            string destination = _config.RutaDefecto;
-            if (string.IsNullOrEmpty(destination) || !System.IO.Directory.Exists(destination))
-                return Language.GetText("Can not add remote links without a default path");
+            // Same destination rule as the desktop intake: the configured folder, or the
+            // system Downloads folder when none is set.
+            string destination = LinkIntakeService.DownloadFolder(_config);
+            System.IO.Directory.CreateDirectory(destination);
 
             List<URLProcessor.FileURL> expanded;
             try
@@ -1197,8 +1364,13 @@ namespace MegaDownloader
                 return ex.Message;
             }
 
-            if (!AddPackage(package))
+            // The same duplicate check as the desktop intake: a link that is already
+            // queued is reported instead of being added a second time.
+            int added = AddUniquePackage(package);
+            if (added <= 0)
             {
+                if (added == 0)
+                    return Language.GetText("Preflight_AllQueued");
                 foreach (Fichero file in package.SnapshotFicheros())
                     file.Dispose();
                 return Language.GetText("Loading please wait");

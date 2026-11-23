@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Security;
 using System.Text;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MegaDownloader.Platform;
@@ -70,6 +71,25 @@ public partial class SettingsPageViewModel : ViewModelBase
 
     [ObservableProperty]
     private TimeSpan? scheduleEnd;
+
+    [ObservableProperty]
+    private DateTimeOffset? scheduleOnceStartDate;
+
+    [ObservableProperty]
+    private TimeSpan? scheduleOnceStartTime;
+
+    [ObservableProperty]
+    private DateTimeOffset? scheduleOnceEndDate;
+
+    [ObservableProperty]
+    private TimeSpan? scheduleOnceEndTime;
+
+    [ObservableProperty]
+    private string scheduleSummary = string.Empty;
+
+    /// <summary>The values that are actually in force right now, shown after saving.</summary>
+    [ObservableProperty]
+    private string effectiveSummary = string.Empty;
 
     /// <summary>Global speed limit in KB/s (0 = unlimited).</summary>
     [ObservableProperty]
@@ -170,6 +190,10 @@ public partial class SettingsPageViewModel : ViewModelBase
         ScheduleDaily = schedule.Daily;
         ScheduleStart = TimeSpan.FromMinutes(Math.Clamp(schedule.StartMinute, 0, 1439));
         ScheduleEnd = TimeSpan.FromMinutes(Math.Clamp(schedule.EndMinute, 0, 1439));
+        ScheduleOnceStartDate = new DateTimeOffset(schedule.OnceStart);
+        ScheduleOnceStartTime = schedule.OnceStart.TimeOfDay;
+        ScheduleOnceEndDate = new DateTimeOffset(schedule.OnceEnd);
+        ScheduleOnceEndTime = schedule.OnceEnd.TimeOfDay;
 
         GlobalSpeedLimitKBs = Math.Clamp(config.LimiteVelocidadKBs, 0, int.MaxValue);
         StartWithWindows = config.IniciarConWindows;
@@ -205,6 +229,16 @@ public partial class SettingsPageViewModel : ViewModelBase
             }
         }
         PreSharedKeysText = keys.ToString();
+
+        // Both summaries describe values that were all assigned above.
+        UpdateScheduleSummary();
+        UpdateEffectiveSummary();
+
+        // The schedule summary says "allowed now" or "paused until …"; keep it truthful
+        // while the page stays open across a window boundary.
+        var scheduleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        scheduleTimer.Tick += (_, _) => UpdateScheduleSummary();
+        scheduleTimer.Start();
     }
 
     private static string NativeLanguageName(string code, string fallback) => code switch
@@ -255,6 +289,101 @@ public partial class SettingsPageViewModel : ViewModelBase
 
     partial void OnSaveStatusChanged(string value) => OnPropertyChanged(nameof(HasSaveStatus));
 
+    partial void OnScheduleEnabledChanged(bool value) => UpdateScheduleSummary();
+
+    partial void OnScheduleDailyChanged(bool value) => UpdateScheduleSummary();
+
+    partial void OnScheduleStartChanged(TimeSpan? value) => UpdateScheduleSummary();
+
+    partial void OnScheduleEndChanged(TimeSpan? value) => UpdateScheduleSummary();
+
+    partial void OnScheduleOnceStartDateChanged(DateTimeOffset? value) => UpdateScheduleSummary();
+
+    partial void OnScheduleOnceStartTimeChanged(TimeSpan? value) => UpdateScheduleSummary();
+
+    partial void OnScheduleOnceEndDateChanged(DateTimeOffset? value) => UpdateScheduleSummary();
+
+    partial void OnScheduleOnceEndTimeChanged(TimeSpan? value) => UpdateScheduleSummary();
+
+    /// <summary>
+    /// Says, in the schedule editor itself, whether downloads are allowed right now and
+    /// when the next window opens. The engine enforces the same rules every tick; this
+    /// is the visible summary of that decision.
+    /// </summary>
+    private void UpdateScheduleSummary()
+    {
+        if (!ScheduleEnabled)
+        {
+            ScheduleSummary = UiText.Get("The schedule is off. Downloads start whenever you start the queue.");
+            return;
+        }
+
+        DateTime now = DateTime.Now;
+        if (ScheduleDaily)
+        {
+            int start = ToMinutes(ScheduleStart);
+            int end = ToMinutes(ScheduleEnd);
+            if (start == end)
+            {
+                ScheduleSummary = UiText.Get("The schedule start and end times must differ.");
+                return;
+            }
+
+            double minute = now.TimeOfDay.TotalMinutes;
+            bool active = start < end
+                ? minute >= start && minute < end
+                : minute >= start || minute < end;
+            if (active)
+            {
+                DateTime pauseAt = now.Date.AddMinutes(end);
+                if (start > end && minute >= start)
+                    pauseAt = pauseAt.AddDays(1);
+                ScheduleSummary = UiText.Format("Downloads are allowed now — the queue pauses at {0:HH:mm}.", pauseAt);
+                return;
+            }
+
+            DateTime next = now.Date.AddMinutes(start);
+            if (next <= now)
+                next = next.AddDays(1);
+            ScheduleSummary = UiText.Format("Downloads are paused until {0:ddd HH:mm}.", next);
+            return;
+        }
+
+        DateTime onceStart = CombineDateAndTime(ScheduleOnceStartDate, ScheduleOnceStartTime);
+        DateTime onceEnd = CombineDateAndTime(ScheduleOnceEndDate, ScheduleOnceEndTime);
+        if (onceEnd <= onceStart)
+        {
+            ScheduleSummary = UiText.Get("Set the end time after the start time.");
+            return;
+        }
+
+        if (now >= onceStart && now < onceEnd)
+            ScheduleSummary = UiText.Format("Downloads are allowed now — this one-time window ends {0:g}.", onceEnd);
+        else if (now < onceStart)
+            ScheduleSummary = UiText.Format("Runs once from {0:g} to {1:g}.", onceStart, onceEnd);
+        else
+            ScheduleSummary = UiText.Get("The one-time window has already ended.");
+    }
+
+    private void UpdateEffectiveSummary()
+    {
+        string folder = string.IsNullOrWhiteSpace(DefaultFolder) ? UiText.Get("(not set)") : DefaultFolder.Trim();
+        string limit = GlobalSpeedLimitKBs > 0
+            ? UiText.Format("{0} KB/s", GlobalSpeedLimitKBs)
+            : UiText.Get("Unlimited");
+        string proxy = UseProxy
+            ? UiText.Format("{0}:{1}", ProxyHost.Trim(), (int)ProxyPort)
+            : UiText.Get("Off");
+        EffectiveSummary = UiText.Format("{0} · {1} parallel · {2} connections each · limit {3} · proxy {4}",
+            folder, (int)SimultaneousDownloads, (int)ConnectionsPerFile, limit, proxy);
+    }
+
+    private static DateTime CombineDateAndTime(DateTimeOffset? date, TimeSpan? time)
+    {
+        DateTime day = (date ?? DateTimeOffset.Now).Date;
+        return day.Add(time ?? TimeSpan.Zero);
+    }
+
     [RelayCommand]
     private async Task BrowseFolderAsync()
     {
@@ -268,6 +397,8 @@ public partial class SettingsPageViewModel : ViewModelBase
     [RelayCommand]
     private async Task SaveAsync()
     {
+        DateTime onceStart = default;
+        DateTime onceEnd = default;
         if (ScheduleEnabled && ScheduleDaily)
         {
             int start = ToMinutes(ScheduleStart);
@@ -275,6 +406,16 @@ public partial class SettingsPageViewModel : ViewModelBase
             if (start == end)
             {
                 SetSaveStatus(UiText.Get("The schedule start and end times must differ."), true);
+                return;
+            }
+        }
+        else if (ScheduleEnabled)
+        {
+            onceStart = CombineDateAndTime(ScheduleOnceStartDate, ScheduleOnceStartTime);
+            onceEnd = CombineDateAndTime(ScheduleOnceEndDate, ScheduleOnceEndTime);
+            if (onceEnd <= onceStart)
+            {
+                SetSaveStatus(UiText.Get("Set the end time after the start time."), true);
                 return;
             }
         }
@@ -317,6 +458,11 @@ public partial class SettingsPageViewModel : ViewModelBase
         {
             schedule.StartMinute = ToMinutes(ScheduleStart);
             schedule.EndMinute = ToMinutes(ScheduleEnd);
+        }
+        else if (ScheduleEnabled)
+        {
+            schedule.OnceStart = onceStart;
+            schedule.OnceEnd = onceEnd;
         }
 
         // The global limit is applied to the running transfers, not only stored.
@@ -366,6 +512,8 @@ public partial class SettingsPageViewModel : ViewModelBase
         // The schedule controller caches the window it last saw, so an edited
         // schedule only took effect when the window changed by itself.
         _engine.ApplyScheduleSettings();
+        UpdateScheduleSummary();
+        UpdateEffectiveSummary();
 
         // Start with Windows is applied by the platform layer (registry on Windows,
         // autostart entries elsewhere). A failure here must not lose the rest of

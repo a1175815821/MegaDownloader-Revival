@@ -1035,10 +1035,13 @@ namespace MegaDownloader
                     if (Directory.Exists(VLCPath))
                     {
                     }
-                    // OK: directory containing vlc.exe
-                    else if (File.Exists(VLCPath) && VLCPath.ToLowerInvariant().EndsWith(".exe"))
+                    // OK: the folder that contains the VLC binary, or the binary itself.
+                    else if (File.Exists(VLCPath) && (OperatingSystem.IsWindows()
+                        ? VLCPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                        : IsExecutableFile(VLCPath)))
                     {
-                        VLCPath = Path.GetDirectoryName(VLCPath);
+                        if (OperatingSystem.IsWindows())
+                            VLCPath = Path.GetDirectoryName(VLCPath);
                     }
                     else
                     {
@@ -1055,6 +1058,19 @@ namespace MegaDownloader
         }
 
         #endregion
+
+        private static bool IsExecutableFile(string path)
+        {
+            try
+            {
+                const UnixFileMode execute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+                return (File.GetUnixFileMode(path) & execute) != 0;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
 
 
         #region Métodos privados

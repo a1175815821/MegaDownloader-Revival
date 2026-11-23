@@ -24,6 +24,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     private DispatcherTimer? _progressTimer;
     private CancellationTokenSource? _importCancellation;
     private string? _preparedText;
+    private PreflightRowViewModel? _rangeAnchor;
     private bool _disposed;
 
     [ObservableProperty]
@@ -31,6 +32,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WatchOnlineCommand))]
     private string linksText = string.Empty;
 
     [ObservableProperty]
@@ -54,11 +56,13 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WatchOnlineCommand))]
     private bool isInspecting;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WatchOnlineCommand))]
     private bool isImporting;
 
     [ObservableProperty]
@@ -135,6 +139,8 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
     public bool CanCheck => !IsInspecting && !IsImporting && !string.IsNullOrWhiteSpace(LinksText);
 
+    public bool CanWatchOnline => !IsInspecting && !IsImporting && !string.IsNullOrWhiteSpace(LinksText);
+
     public bool CanAdd => SelectedCount > 0 && !IsImporting && !IsInspecting && !SpaceInsufficient;
 
     public bool HasNotice => !string.IsNullOrWhiteSpace(Notice);
@@ -178,6 +184,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     partial void OnLinksTextChanged(string value)
     {
         OnPropertyChanged(nameof(CanCheck));
+        OnPropertyChanged(nameof(CanWatchOnline));
         if (IsInspecting || _tree is null)
             return;
 
@@ -201,6 +208,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     partial void OnIsInspectingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanCheck));
+        OnPropertyChanged(nameof(CanWatchOnline));
         OnPropertyChanged(nameof(CanAdd));
         OnPropertyChanged(nameof(CanGoBack));
     }
@@ -208,6 +216,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     partial void OnIsImportingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanCheck));
+        OnPropertyChanged(nameof(CanWatchOnline));
         OnPropertyChanged(nameof(CanAdd));
         OnPropertyChanged(nameof(CanGoBack));
     }
@@ -312,6 +321,64 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             StopProgressTimer();
             IsInspecting = false;
             IsProgressIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// Watch the first pasted link while it downloads: resolves it through the local
+    /// streaming server and hands the loopback URL to VLC. Same entry as the WinForms
+    /// add-links dialog.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanWatchOnline))]
+    private async Task WatchOnlineAsync()
+    {
+        var config = _engine.Config;
+        if (!config.ServidorStreamingActivo)
+        {
+            SetNotice(UiText.Get("Enable the streaming server in Settings → Streaming to watch a link."), true);
+            return;
+        }
+
+        var links = LinkIntakeService.ExtractLinks(LinksText);
+        if (links.Count == 0)
+        {
+            SetNotice(UiText.Get("Paste at least one link."), true);
+            return;
+        }
+
+        IsInspecting = true;
+        IsProgressIndeterminate = true;
+        SetNotice(string.Empty);
+        try
+        {
+            Status = UiText.Get("Resolving the stream…");
+            string url = await Task.Run(() =>
+                StreamingHelper.CreateStreamingLink(links[0], config.ServidorStreamingPuerto, ref config));
+            if (string.IsNullOrEmpty(url))
+            {
+                Status = UiText.Get("The stream could not be resolved for this link.");
+                return;
+            }
+
+            if (!StreamingHelper.WatchOnline(config.VLCPath, url))
+            {
+                SetNotice(UiText.Get("VLC could not be started. Install VLC or set its folder in Settings."), true);
+                Status = string.Empty;
+                return;
+            }
+
+            Status = UiText.Get("Opened in VLC.");
+        }
+        catch (Exception ex)
+        {
+            Log.WriteError("Watch online failed: " + Log.SafeException(ex));
+            SetNotice(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), true);
+            Status = UiText.Get("The stream could not be resolved for this link.");
+        }
+        finally
+        {
+            IsProgressIndeterminate = false;
+            IsInspecting = false;
         }
     }
 
@@ -487,6 +554,48 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             _importCancellation?.Dispose();
             _importCancellation = null;
         }
+    }
+
+    /// <summary>Remembers the row a Shift-click extends from.</summary>
+    internal void SetRangeAnchor(PreflightRowViewModel row) => _rangeAnchor = row;
+
+    /// <summary>
+    /// Shift-click: applies the clicked row's next state to every row between the anchor
+    /// and the clicked row, the same gesture the queue uses. Folders in the range take
+    /// everything underneath them.
+    /// </summary>
+    internal void ExtendSelectionTo(PreflightRowViewModel row)
+    {
+        if (_selection is null || _tree is null)
+            return;
+        int target = Rows.IndexOf(row);
+        int anchor = _rangeAnchor is null ? -1 : Rows.IndexOf(_rangeAnchor);
+        if (target < 0)
+            return;
+        if (anchor < 0)
+        {
+            _rangeAnchor = row;
+            return;
+        }
+
+        bool select = row.Entry is not null
+            ? !row.Entry.Selected
+            : row.Node?.CheckState != PreflightTree.TriState.Checked;
+        var operation = select ? PreflightSelection.SelectionOperation.SelectAll : PreflightSelection.SelectionOperation.Clear;
+
+        int first = Math.Min(anchor, target);
+        int last = Math.Max(anchor, target);
+        for (int index = first; index <= last; index++)
+        {
+            var candidate = Rows[index];
+            if (candidate.IsFolder && candidate.Node is not null)
+                _tree.Apply(_tree.NodesUnder(candidate.Node), operation);
+            else if (candidate.Entry is not null)
+                _selection.SetSelected(candidate.Entry, select);
+        }
+
+        RefreshRowStates();
+        UpdateSelectionSummary();
     }
 
     /// <summary>A leaf checkbox changed. Folder tri-state is recomputed by the tree.</summary>
@@ -755,6 +864,8 @@ public partial class PreflightRowViewModel : ObservableObject
     }
 
     public BatchLinkPreflight.Entry? Entry { get; }
+
+    internal PreflightTree.Node? Node => _node;
 
     public bool IsFolder { get; }
 

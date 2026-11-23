@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template for MegaDownloader.app. The packaging step copies the published files into
+     Contents/MacOS and points CFBundleExecutable at the single-file binary. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Mega Downloader</string>
+  <key>CFBundleDisplayName</key>
+  <string>Mega Downloader</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.megadownloader</string>
+  <key>CFBundleExecutable</key>
+  <string>MegaDownloader</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>__VERSION__</string>
+  <key>CFBundleVersion</key>
+  <string>__VERSION__</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.megadownloader.mega</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>mega</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Mega Downloader
+Comment=Download files and folders from MEGA
+Exec=/usr/bin/megadownloader %u
+Icon=megadownloader
+Terminal=false
+Categories=Network;FileTransfer;
+MimeType=x-scheme-handler/mega;
+StartupWMClass=MegaDownloader

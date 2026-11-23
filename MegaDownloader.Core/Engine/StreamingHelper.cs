@@ -18,8 +18,6 @@ namespace MegaDownloader
 
         public static bool WatchOnline(string VLCPath, string URLStreamning)
         {
-            if (string.IsNullOrEmpty(VLCPath))
-                return false;
             if (string.IsNullOrEmpty(URLStreamning))
                 return false;
             // Only allow local streaming URLs to avoid argument injection / remote launch abuse
@@ -31,17 +29,16 @@ namespace MegaDownloader
             if (!(uri.Host == "127.0.0.1" || uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
                 return false;
 
-            string exe = "vlc.exe";
-            if (!System.IO.File.Exists(System.IO.Path.Combine(VLCPath, exe)))
-                exe = "vlcportable.exe";
-            if (!System.IO.File.Exists(System.IO.Path.Combine(VLCPath, exe)))
+            string exe = ResolveVlcExecutable(VLCPath);
+            if (exe is null)
                 return false;
 
             try
             {
                 var p = new Process();
-                p.StartInfo.FileName = System.IO.Path.Combine(VLCPath, exe);
-                p.StartInfo.Arguments = "\"" + URLStreamning.Replace("\"", "") + "\"";
+                p.StartInfo.FileName = exe;
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.ArgumentList.Add(URLStreamning);
                 p.Start();
                 return true;
             }
@@ -51,6 +48,58 @@ namespace MegaDownloader
                 Log.WriteError("Failed to start VLC: " + ex.ToString());
                 return false;
             }
+        }
+
+        /// <summary>
+        /// VLC's executable on this platform: the configured folder or binary first, then
+        /// the usual install location (macOS bundle) and PATH.
+        /// </summary>
+        private static string ResolveVlcExecutable(string vlcpPath)
+        {
+            if (!string.IsNullOrWhiteSpace(vlcpPath))
+            {
+                var candidates = new List<string>();
+                if (OperatingSystem.IsWindows())
+                {
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "vlc.exe"));
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "vlcportable.exe"));
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    // .../VLC.app, .../VLC.app/Contents/MacOS, or that folder itself.
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "Contents", "MacOS", "VLC"));
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "VLC"));
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "VLC.app", "Contents", "MacOS", "VLC"));
+                }
+                else
+                {
+                    candidates.Add(System.IO.Path.Combine(vlcpPath, "vlc"));
+                }
+
+                foreach (string candidate in candidates)
+                {
+                    if (System.IO.File.Exists(candidate))
+                        return candidate;
+                }
+                if (System.IO.File.Exists(vlcpPath) && !vlcpPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    return vlcpPath;
+            }
+
+            if (OperatingSystem.IsMacOS() &&
+                System.IO.File.Exists("/Applications/VLC.app/Contents/MacOS/VLC"))
+                return "/Applications/VLC.app/Contents/MacOS/VLC";
+
+            if (!OperatingSystem.IsWindows())
+            {
+                string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                foreach (string directory in path.Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string candidate = System.IO.Path.Combine(directory, "vlc");
+                    if (System.IO.File.Exists(candidate))
+                        return candidate;
+                }
+            }
+            return null;
         }
 
         public static bool GetFileDataFromTempID(string TempID, ref string FileID, ref string FileKey)

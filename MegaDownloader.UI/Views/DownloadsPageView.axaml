@@ -91,7 +91,7 @@
                     </Grid>
                 </Border>
 
-                <ListBox Grid.Row="2" Classes="queue" Background="Transparent" BorderThickness="0" Padding="0"
+                <ListBox Grid.Row="2" x:Name="QueueList" Classes="queue" Background="Transparent" BorderThickness="0" Padding="0"
                          ItemsSource="{Binding Downloads}" SelectedItem="{Binding SelectedDownload}"
                          SelectionMode="Multiple"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -106,6 +106,10 @@
                                         <MenuItem Header="{DynamicResource Loc.StartOrResume}" Command="{Binding StartCommand}" IsVisible="{Binding CanStart}"/>
                                         <MenuItem Header="{DynamicResource Loc.Pause}" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}"/>
                                         <MenuItem Header="{DynamicResource Loc.RetryFailed}" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}"/>
+                                        <Separator />
+                                        <MenuItem Header="{DynamicResource Loc.MoveToTop}" Command="{Binding MoveToTopCommand}"/>
+                                        <MenuItem Header="{DynamicResource Loc.MoveUp}" Command="{Binding MoveUpCommand}"/>
+                                        <MenuItem Header="{DynamicResource Loc.MoveDown}" Command="{Binding MoveDownCommand}"/>
                                         <Separator />
                                         <MenuItem Header="{DynamicResource Loc.OpenFile}" Command="{Binding OpenFileCommand}"/>
                                         <MenuItem Header="{DynamicResource Loc.OpenFolder}" Command="{Binding OpenFolderCommand}"/>
@@ -160,6 +164,10 @@
                                             <PathIcon Data="{StaticResource Icon.More}" />
                                             <Button.Flyout>
                                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuItem Header="{DynamicResource Loc.MoveToTop}" Command="{Binding MoveToTopCommand}"/>
+                                                    <MenuItem Header="{DynamicResource Loc.MoveUp}" Command="{Binding MoveUpCommand}"/>
+                                                    <MenuItem Header="{DynamicResource Loc.MoveDown}" Command="{Binding MoveDownCommand}"/>
+                                                    <Separator />
                                                     <MenuItem Header="{DynamicResource Loc.OpenFile}" Command="{Binding OpenFileCommand}"/>
                                                     <MenuItem Header="{DynamicResource Loc.OpenFolder}" Command="{Binding OpenFolderCommand}"/>
                                                     <Separator />

@@ -1163,6 +1163,23 @@ namespace MegaDownloader
         /// </summary>
             private static string FindSystemSevenZip()
             {
+                if (!OperatingSystem.IsWindows())
+                {
+                    // p7zip and the official 7-Zip both install a `7zz`/`7z` command.
+                    foreach (string name in new string[] { "7zz", "7z" })
+                    {
+                        string found = FindOnPath(name);
+                        if (found is not null)
+                            return found;
+                    }
+                    foreach (string candidate in new string[] { "/opt/homebrew/bin/7zz", "/opt/homebrew/bin/7z", "/usr/local/bin/7zz", "/usr/local/bin/7z", "/usr/bin/7zz", "/usr/bin/7z" })
+                    {
+                        if (File.Exists(candidate))
+                            return candidate;
+                    }
+                    return null;
+                }
+
                 try
                 {
                     // The registry probe only exists on Windows; elsewhere the
@@ -1215,8 +1232,24 @@ namespace MegaDownloader
         /// is (re)written whenever the embedded payload differs in size, so upgrades
         /// replace the stale binary automatically.
         /// </summary>
+            private static string FindOnPath(string name)
+            {
+                string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                foreach (string directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string candidate = Path.Combine(directory, name);
+                    if (File.Exists(candidate))
+                        return candidate;
+                }
+                return null;
+            }
+
             private static string EnsureEmbedded7zr()
             {
+                // The embedded binary is 7zr.exe; there is nothing to run on macOS/Linux.
+                if (!OperatingSystem.IsWindows())
+                    return null;
+
                 string dir = Path.Combine(ApplicationDataDirectory.GetLegacyRoot(), "bin");
                 string target = Path.Combine(dir, "7zr.exe");
 

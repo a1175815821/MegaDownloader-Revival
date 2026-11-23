@@ -102,6 +102,11 @@ public sealed class UnixPlatformServices : IPlatformServices
     public void SetMegaProtocolHandler(bool enabled, string executablePath)
     {
         if (_kind != PlatformKind.Linux || !enabled) return;
+        // An installed package ships its own desktop entry with x-scheme-handler/mega;
+        // a per-user copy would shadow it and pin the association to one binary path.
+        if (executablePath.StartsWith("/usr/", StringComparison.Ordinal) ||
+            executablePath.StartsWith("/opt/", StringComparison.Ordinal))
+            return;
         var applications = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share", "applications");
         Directory.CreateDirectory(applications);
         var desktop = Path.Combine(applications, "MegaDownloader.desktop");
