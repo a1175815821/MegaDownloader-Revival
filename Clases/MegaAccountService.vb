@@ -51,6 +51,7 @@ Friend NotInheritable Class MegaAccountService
         Public Property AliasName As String
         Public Property Session As String
         Public Property DrivePreferences As MegaDrivePreferences
+        Public Property DriveSubscriptions As Dictionary(Of ULong, MegaDriveSubscription)
         Public Property QuotaRetryUtc As Date?
     End Class
 
@@ -71,6 +72,7 @@ Friend NotInheritable Class MegaAccountService
         Friend ZeroBalanceExpiresUtc As Date
         Friend ReadOnly StreamingNodes As New HashSet(Of ULong)()
         Friend DrivePreferences As New MegaDrivePreferences()
+        Friend DriveSubscriptions As New Dictionary(Of ULong, MegaDriveSubscription)()
     End Class
 
     Private ReadOnly gate As New Object()
@@ -216,6 +218,7 @@ Friend NotInheritable Class MegaAccountService
                 Dim entry As New AccountEntry With {
                     .Saved = True, .Session = If(saved.Session, ""),
                     .DrivePreferences = If(saved.DrivePreferences, New MegaDrivePreferences()),
+                    .DriveSubscriptions = If(saved.DriveSubscriptions, New Dictionary(Of ULong, MegaDriveSubscription)()),
                     .Value = New Status With {.Email = saved.Email, .AliasName = If(saved.AliasName, ""),
                                               .QuotaRetryUtc = saved.QuotaRetryUtc}}
                 entry.Value.Remember = entry.Session.Length > 0
@@ -482,6 +485,7 @@ Friend NotInheritable Class MegaAccountService
             If entry.Saved Then
                 store.Accounts.Add(New SavedLogin With {.Email = entry.Value.Email, .AliasName = entry.Value.AliasName,
                                                         .Session = entry.Session, .DrivePreferences = entry.DrivePreferences,
+                                                        .DriveSubscriptions = entry.DriveSubscriptions,
                                                         .QuotaRetryUtc = SnapshotStatus(entry).QuotaRetryUtc})
             End If
         Next
@@ -655,11 +659,103 @@ Friend NotInheritable Class MegaAccountService
                                                      paths.Count = binding.Value.Count AndAlso
                                                      binding.Value.All(Function(item) paths.ContainsKey(item.Key) AndAlso paths(item.Key) = item.Value)
                                              End Function) Then Return 0
+            Dim subscriptions = entry.DriveSubscriptions
             entry.DrivePreferences = preferences.Copy()
+            entry.DriveSubscriptions = subscriptions.Where(Function(item) preferences.FolderDestinations.ContainsKey(item.Key)).
+                ToDictionary(Function(item) item.Key, Function(item) item.Value)
             Dim result = SaveStore()
+            If result <> 0 Then
+                entry.DrivePreferences = previous
+                entry.DriveSubscriptions = subscriptions
+            End If
+            Return result
+        End SyncLock
+    End Function
+
+    Friend Function GetDriveSubscriptions(email As String) As List(Of MegaDriveSubscription)
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            If entry Is Nothing Then Return New List(Of MegaDriveSubscription)()
+            Return entry.DrivePreferences.FolderDestinations.Select(
+                Function(binding) SubscriptionFor(entry, binding.Key, binding.Value)).ToList()
+        End SyncLock
+    End Function
+
+    Friend Function GetDueDriveSubscriptions(email As String, now As Date) As List(Of MegaDriveSubscription)
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            If entry Is Nothing Then Return New List(Of MegaDriveSubscription)()
+            Return entry.DriveSubscriptions.Values.Where(Function(item)
+                Dim due = item.NextCheckLocal()
+                Return due.HasValue AndAlso due.Value <= now
+            End Function).Select(Function(item) item.Copy()).ToList()
+        End SyncLock
+    End Function
+
+    Private Shared Function SubscriptionFor(entry As AccountEntry, folder As ULong, destination As String) As MegaDriveSubscription
+        Dim saved As MegaDriveSubscription = Nothing
+        If entry.DriveSubscriptions.TryGetValue(folder, saved) Then Return saved.Copy()
+        Dim result As New MegaDriveSubscription With {.Folder = folder, .Destination = destination}
+        Dim paths As Dictionary(Of ULong, String) = Nothing
+        If entry.DrivePreferences.BoundFolderPaths.TryGetValue(folder, paths) Then
+            result.FolderPaths = New Dictionary(Of ULong, String)(paths)
+        End If
+        Return result
+    End Function
+
+    Friend Function SaveDriveSubscriptionSettings(email As String, settings As MegaDriveSubscription) As Integer
+        Dim destination As String
+        Try
+            destination = PathGuard.GetSafePathUnderRoot(settings.Destination, "")
+        Catch ex As ArgumentException
+            Return LocalError
+        End Try
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            If entry Is Nothing OrElse Not entry.Saved Then Return SessionExpired
+            Dim previous = entry.DrivePreferences
+            Dim oldDestination As String = Nothing
+            previous.FolderDestinations.TryGetValue(settings.Folder, oldDestination)
+            Dim subscription = SubscriptionFor(entry, settings.Folder, oldDestination)
+            Dim destinationChanged = Not String.Equals(oldDestination, destination, StringComparison.OrdinalIgnoreCase)
+            Dim extensions = MegaDriveSubscription.NormalizeExtensions(settings.Extensions)
+            If destinationChanged OrElse extensions <> subscription.Extensions Then subscription.Files.Clear()
+            If destinationChanged Then subscription.FolderPaths.Clear()
+            If Not subscription.CheckMinutes.Equals(settings.CheckMinutes) Then subscription.ScheduleFromUtc = Date.UtcNow
+            subscription.Destination = destination
+            subscription.CheckMinutes = settings.CheckMinutes
+            subscription.AutoQueue = settings.AutoQueue
+            subscription.Extensions = extensions
+            subscription.Name = If(settings.Name, subscription.Name)
+            subscription.Incoming = If(settings.Incoming.HasValue, settings.Incoming, subscription.Incoming)
+            Dim updated = previous.Copy()
+            updated.FolderDestinations(settings.Folder) = destination
+            If destinationChanged Then updated.BoundFolderPaths.Remove(settings.Folder)
+            entry.DrivePreferences = updated
+            Dim result = SaveSubscription(entry, subscription)
             If result <> 0 Then entry.DrivePreferences = previous
             Return result
         End SyncLock
+    End Function
+
+    Friend Function SaveDriveSubscriptionCheck(email As String, subscription As MegaDriveSubscription) As Integer
+        SyncLock gate
+            Dim entry = FindAccount(email)
+            If entry Is Nothing OrElse Not entry.Saved Then Return SessionExpired
+            Dim destination As String = Nothing
+            If Not entry.DrivePreferences.FolderDestinations.TryGetValue(subscription.Folder, destination) OrElse
+                Not SubscriptionFor(entry, subscription.Folder, destination).MatchesSettings(subscription) Then Return Busy
+            Return SaveSubscription(entry, subscription)
+        End SyncLock
+    End Function
+
+    Private Function SaveSubscription(entry As AccountEntry, subscription As MegaDriveSubscription) As Integer
+        Dim before = entry.DriveSubscriptions
+        entry.DriveSubscriptions = New Dictionary(Of ULong, MegaDriveSubscription)(before)
+        entry.DriveSubscriptions(subscription.Folder) = subscription.Copy()
+        Dim result = SaveStore()
+        If result <> 0 Then entry.DriveSubscriptions = before
+        Return result
     End Function
 
     Friend Function ReadDrive(email As String, ct As CancellationToken, ByRef snapshot As MegaDriveSnapshot,

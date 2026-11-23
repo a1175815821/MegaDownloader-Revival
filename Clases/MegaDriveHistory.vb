@@ -117,7 +117,17 @@ Friend NotInheritable Class MegaDriveHistory
 
     Friend Function FindBoundChanges(email As String, snapshot As MegaDriveSnapshot, folder As ULong, destination As String,
                                      queue As IEnumerable(Of MegaDriveQueueItem), paths As Dictionary(Of ULong, String)) As MegaDriveChanges
+        Return CreateBoundComparer(email, queue)(snapshot, folder, destination, paths)
+    End Function
+
+    Friend Function CreateBoundComparer(email As String, queue As IEnumerable(Of MegaDriveQueueItem)) As Func(Of MegaDriveSnapshot, ULong, String, Dictionary(Of ULong, String), MegaDriveChanges)
         Dim delivered = ReadDeliveries(email)
+        Return Function(snapshot, folder, destination, paths) CompareBinding(snapshot, folder, destination, queue, paths, delivered)
+    End Function
+
+    Private Shared Function CompareBinding(snapshot As MegaDriveSnapshot, folder As ULong, destination As String,
+                                           queue As IEnumerable(Of MegaDriveQueueItem), paths As Dictionary(Of ULong, String),
+                                           delivered As ILookup(Of ULong, Delivery)) As MegaDriveChanges
         Dim root = PathGuard.GetSafePathUnderRoot(destination, "").TrimEnd(Path.DirectorySeparatorChar) & Path.DirectorySeparatorChar
         For Each item In queue
             RecoverFolderPaths(snapshot, folder, root, item.Handle, item.LocalDirectory, paths)
@@ -164,6 +174,25 @@ Friend NotInheritable Class MegaDriveHistory
                                 queue As IEnumerable(Of MegaDriveQueueItem)) As MegaDriveChanges
         Return ComparePlan(fullPlan, destination, queue, ReadDeliveries(email))
     End Function
+
+    Friend Sub UpdateSubscriptionFileStates(email As String, subscriptions As IEnumerable(Of MegaDriveSubscription),
+                                             queue As IEnumerable(Of MegaDriveQueueItem))
+        Dim delivered = ReadDeliveries(email)
+        For Each subscription In subscriptions
+            If subscription.Files.Count = 0 Then Continue For
+            Dim changes = ComparePlan(subscription.PlanSelected(subscription.Files), subscription.Destination, queue, delivered)
+            Dim undelivered As New HashSet(Of ULong)(changes.Plan.Files.Select(Function(file) file.Key.Id))
+            For Each file In subscription.Files
+                If Not undelivered.Contains(file.Handle) Then
+                    file.Status = MegaDriveSubscriptionFileState.Downloaded
+                ElseIf changes.Pending.Contains(file.Handle) Then
+                    file.Status = MegaDriveSubscriptionFileState.Queued
+                Else
+                    file.Status = MegaDriveSubscriptionFileState.PendingReview
+                End If
+            Next
+        Next
+    End Sub
 
     Private Shared Function ComparePlan(fullPlan As MegaDriveDownload, destination As String, queue As IEnumerable(Of MegaDriveQueueItem),
                                         delivered As ILookup(Of ULong, Delivery)) As MegaDriveChanges

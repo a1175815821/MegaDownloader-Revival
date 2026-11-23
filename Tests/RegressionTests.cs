@@ -141,6 +141,7 @@ public partial class RegressionTests {
             new CaseDef("partial_persistence","core",()=>PartialPersistenceAndCleanup(Plain,Key)),
             new CaseDef("mega_account_queue","queue",MegaAccountQueueCases),
             new CaseDef("mega_drive_queue","queue",MegaDriveQueueCases),
+            new CaseDef("mega_drive_subscriptions","queue",MegaDriveSubscriptionCases),
             new CaseDef("deletion_ownership","core",()=>DeletionOwnershipCases(Plain,Key)),
             new CaseDef("locked_primary","core",LockedPrimaryCases),
             new CaseDef("resume_space","download",ResumeSpaceCases),
@@ -1739,7 +1740,7 @@ public partial class RegressionTests {
         }
         var plan=snapshot.GetType().GetMethod("PlanDownload",hidden).Invoke(snapshot,new object[]{new[]{4UL,5UL,7UL},null});
         var confirmType=assembly.GetType("MegaDownloader.MegaDriveDownloadForm",true);
-        using(var confirm=(System.Windows.Forms.Form)Activator.CreateInstance(confirmType,hidden,null,new object[]{plan,"课程素材",config.RutaDefecto,new[]{4UL},false,null},null)) {
+        using(var confirm=(System.Windows.Forms.Form)Activator.CreateInstance(confirmType,hidden,null,new object[]{plan,"课程素材",config.RutaDefecto,new[]{4UL}},null)) {
             ApplyFeatureTheme(confirm,ConfiguracionUI.ThemeModeType.Dark);
             DrawFeatureDialog(confirm,"mega-drive-confirm-dark.png");
             var preview=(System.Windows.Forms.DataGridView)confirm.Controls.Find("MegaDrivePreview",true).Single();
@@ -1768,6 +1769,7 @@ public partial class RegressionTests {
             Print("menu_first_open","width="+menu.Width,"client="+main.ClientSize.Width,string.Join("|",menu.Items.Cast<System.Windows.Forms.ToolStripItem>().Select(i=>i.Text+":"+i.Placement+":"+i.Bounds)));
             Check(menu.Width==main.ClientSize.Width && !menu.AutoSize,"menu keeps the full client width on first show without a resize");
             Check(menu.Items.Cast<System.Windows.Forms.ToolStripItem>().All(i=>i.Placement==System.Windows.Forms.ToolStripItemPlacement.Main && i.Bounds.Right<=menu.ClientSize.Width),"all menu entries are visible on the first frame");
+            Check(menu.Items["MegaDriveSubscriptionsMenu"]!=null && menu.Items["MegaDriveSubscriptionsMenu"].Text=="订阅","subscriptions are directly available in the main menu");
             var accountItem=menu.Items["MegaAccountMenu"];
             Check(accountItem!=null && accountItem.Alignment==System.Windows.Forms.ToolStripItemAlignment.Right && accountItem.Text=="登录 MEGA","MEGA login is right-aligned in the command strip");
             var status=main.Controls.OfType<System.Windows.Forms.StatusStrip>().Single().Items["MegaAccountStatus"];
@@ -1779,6 +1781,27 @@ public partial class RegressionTests {
                 task.MegaAccountEmail="first@example.invalid";
                 typeof(Fichero).GetField("MegaAccountTransferEmail",hidden).SetValue(task,"other@example.invalid");
                 Check(identity.GetStringValue(task)==Language.GetText("MegaAccount_Removed")+" · MEGA · other@example.invalid","the queue column labels the removed account used after a quota switch");
+            }
+            main.Config.DownloadSchedule=new DownloadScheduleSettings();
+            using(var complete=new Fichero {NombreFichero="done.bin",SetDescargaEstado=Estado.Completado})
+            using(var failed=new Fichero {NombreFichero="failed.bin",SetDescargaEstado=Estado.Erroneo})
+            using(var paused=new Fichero {NombreFichero="paused.bin",PausaIndividual=true,SetDescargaEstado=Estado.Pausado}) {
+                var package=new Paquete {Nombre="Subscription fixture",ListaFicheros=new List<Fichero>{complete,failed,paused}};
+                var packages=type.GetField("ListaPaquetes",hidden);
+                packages.SetValue(main,new List<Paquete>{package});
+                queue.Roots=new[]{package};
+                queue.SelectedObject=package;
+                var selection=type.GetMethod("ReadQueueSelection",hidden).Invoke(main,new object[]{new object[]{package,failed}});
+                var selectionType=selection.GetType();
+                Check((int)selectionType.GetField("Total",hidden).GetValue(selection)==3 &&
+                    (int)selectionType.GetField("Completed",hidden).GetValue(selection)==1 &&
+                    (int)selectionType.GetField("Failed",hidden).GetValue(selection)==1 &&
+                    ((int[])selectionType.GetField("WaitCounts",hidden).GetValue(selection))[1]==1,
+                    "queue details count completed, failed and manually paused files without double-counting selected children");
+                type.GetMethod("ShowFirstFailedFile",hidden).Invoke(main,new object[]{main,EventArgs.Empty});
+                Check(Object.ReferenceEquals(queue.SelectedObject,failed),"the package failure action expands the package and selects its first failed file");
+                queue.Roots=new Paquete[0];
+                packages.SetValue(main,new List<Paquete>());
             }
             type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
@@ -2823,6 +2846,94 @@ public partial class RegressionTests {
         Check((decimal)result.GetType().GetField("TotalBytes",hidden).GetValue(result)==4M && paths[30UL]=="Photos" && paths[20UL]=="photos (2)",
               "older deliveries keep their directory when a lower-handle case collision is added");
         Check(paths[40UL].StartsWith("_CON.") && paths[40UL].Length==240,"reserved-name sanitizing stays within the planner's segment limit");
+    }
+    static void MegaDriveSubscriptionCases() {
+        var assembly=typeof(Main).Assembly;
+        var serviceType=assembly.GetType("MegaDownloader.MegaAccountService",true);
+        var subType=assembly.GetType("MegaDownloader.MegaDriveSubscription",true);
+        var queueType=assembly.GetType("MegaDownloader.MegaDriveQueueItem",true);
+        var store=Path.Combine(root,"subscription-store");
+        var target=Path.Combine(root,"subscription-output");
+        var service=Activator.CreateInstance(serviceType,hidden,null,new object[]{store},null);
+        const string email="subscription@example.invalid", other="another-subscription@example.invalid";
+        SeedMegaAccount(service,email,"Archives",true);
+        SeedMegaAccount(service,other,"Other",true);
+        var snapshot=MakeDriveFixture();
+        var history=serviceType.GetField("DriveHistory",hidden).GetValue(service);
+        var saveSettings=serviceType.GetMethod("SaveDriveSubscriptionSettings",hidden);
+        var saveCheck=serviceType.GetMethod("SaveDriveSubscriptionCheck",hidden);
+        var read=serviceType.GetMethod("GetDriveSubscriptions",hidden);
+        var schedule=serviceType.GetMethod("GetDueDriveSubscriptions",hidden);
+        var next=subType.GetMethod("NextCheckLocal",hidden);
+        Func<object,string,object> get=(item,key)=>item.GetType().GetProperty(key).GetValue(item,null);
+        Action<object,string,object> set=(item,key,value)=>item.GetType().GetProperty(key).SetValue(item,value,null);
+        Func<object,object[]> files=item=>((System.Collections.IEnumerable)get(item,"Files")).Cast<object>().ToArray();
+        var settings=Activator.CreateInstance(subType,true);
+        set(settings,"Folder",2UL);
+        set(settings,"Name","课程素材");
+        set(settings,"Incoming",true);
+        set(settings,"Destination",target);
+        set(settings,"CheckMinutes",120);
+        set(settings,"Extensions"," .PDF; ZIP, pdf ");
+        set(settings,"AutoQueue",true);
+        Check((int)saveSettings.Invoke(service,new[]{email,settings})==0,"binding and daily subscription settings are saved together");
+        var sub=((System.Collections.IList)read.Invoke(service,new[]{email}))[0];
+        Check((string)get(sub,"Extensions")=="pdf, zip" && (bool)get(sub,"Incoming") && (bool)get(sub,"AutoQueue"),"share source, file extensions and automatic mode persist");
+        Check(((System.Collections.IList)read.Invoke(service,new[]{other})).Count==0,"subscription bindings are account scoped");
+        var term=(DateTime)next.Invoke(sub,null);
+        Check(term.TimeOfDay==TimeSpan.FromHours(2) && ((System.Collections.IList)schedule.Invoke(service,new object[]{email,term.AddSeconds(-1)})).Count==0 &&
+            ((System.Collections.IList)schedule.Invoke(service,new object[]{email,term})).Count==1,"a daily subscription becomes due at the chosen local time");
+        Directory.CreateDirectory(target);
+        File.WriteAllBytes(Path.Combine(target,"练习包.zip"),new byte[1]);
+        var emptyQueue=Array.CreateInstance(queueType,0);
+        var paths=get(sub,"FolderPaths");
+        var find=history.GetType().GetMethod("FindBoundChanges",hidden);
+        var changes=find.Invoke(history,new[]{email,snapshot,2UL,target,emptyQueue,paths});
+        subType.GetMethod("ApplyCheck",hidden).Invoke(sub,new[]{snapshot,changes});
+        var discoveries=files(sub);
+        Check(discoveries.Length==2 && discoveries.All(item=>(ulong)get(item,"Handle")!=4UL),"extensions restrict both scan results and the plan to ZIP and PDF");
+        var zip=discoveries.Single(item=>(ulong)get(item,"Handle")==5UL);
+        var pdf=discoveries.Single(item=>(ulong)get(item,"Handle")==7UL);
+        Check((bool)get(zip,"Updated") && !(bool)get(pdf,"Updated") && (string)get(pdf,"RelativePath")=="参考","results identify updated files and preserve nested paths");
+        var chosen=Array.CreateInstance(pdf.GetType(),1);
+        chosen.SetValue(pdf,0);
+        var download=subType.GetMethod("PlanSelected",hidden).Invoke(sub,new object[]{chosen});
+        var package=(Paquete)download.GetType().GetMethod("Build",hidden).Invoke(download,new object[]{email,target,"Subscription",false,CancellationToken.None});
+        try {
+            var task=package.ListaFicheros.Single();
+            Check(task.RutaLocal==PathGuard.GetSafePathUnderRoot(target,"参考",false) && task.MegaAccountEmail==email,"selected reports queue under the same account and nested destination");
+        } finally {foreach(var task in package.ListaFicheros)task.Dispose();}
+        set(sub,"LastCheckedUtc",term.ToUniversalTime());
+        Check((int)saveCheck.Invoke(service,new[]{email,sub})==0 && ((System.Collections.IList)schedule.Invoke(service,new object[]{email,term.AddHours(1)})).Count==0,
+            "last check advances the schedule rather than checking again each timer tick");
+        var restored=Activator.CreateInstance(serviceType,hidden,null,new object[]{store},null);
+        Check(((System.Threading.Tasks.Task<int>)serviceType.GetMethod("RestoreAsync",hidden).Invoke(restored,null)).GetAwaiter().GetResult()==0,"subscription reports restore with the saved account");
+        var reports=(System.Collections.IList)read.Invoke(restored,new[]{email});
+        var active=Array.CreateInstance(queueType,1);
+        active.SetValue(Activator.CreateInstance(queueType,hidden,null,new object[]{5UL,target,"练习包.zip",1024L,false},null),0);
+        var destination=Path.Combine(target,"参考","参考文档.pdf");
+        File.WriteAllBytes(destination,new byte[2048]);
+        history.GetType().GetMethod("Record",hidden).Invoke(history,new object[]{email,7UL,"参考文档.pdf",destination});
+        history.GetType().GetMethod("UpdateSubscriptionFileStates",hidden).Invoke(history,new object[]{email,reports,active});
+        var reopened=files(reports[0]);
+        Check(get(reopened.Single(item=>(ulong)get(item,"Handle")==5UL),"Status").ToString()=="Queued" &&
+            get(reopened.Single(item=>(ulong)get(item,"Handle")==7UL),"Status").ToString()=="Downloaded","subscription results distinguish queued and actually delivered files after opening again");
+        var settingsType=assembly.GetType("MegaDownloader.MegaDriveSubscriptionSettingsForm",true);
+        using(var editor=(System.Windows.Forms.Form)Activator.CreateInstance(settingsType,hidden,null,new[]{reports[0]},null)) {
+            var extensions=(System.Windows.Forms.TextBox)settingsType.GetField("extensions",hidden).GetValue(editor);
+            var time=(System.Windows.Forms.DateTimePicker)settingsType.GetField("checkTime",hidden).GetValue(editor);
+            Check(extensions.Text=="pdf, zip" && time.Enabled && time.Value.Hour==2,"subscription editor opens with its saved extensions and check time");
+        }
+        var reportType=assembly.GetType("MegaDownloader.MegaDriveSubscriptionsForm",true);
+        using(var report=(System.Windows.Forms.Form)Activator.CreateInstance(reportType,hidden,null,new object[]{null,restored,email,null},null)) {
+            reportType.GetMethod("ShowReports",hidden).Invoke(report,new object[]{reports,2UL});
+            var table=(System.Windows.Forms.DataGridView)reportType.GetField("report",hidden).GetValue(report);
+            Check(table.RowCount==2 && Enumerable.Range(0,table.RowCount).Any(i=>Convert.ToString(table[2,i].Value)==Path.Combine("参考","参考文档.pdf")),"subscription report shows discoveries with their nested relative paths");
+        }
+        var prefs=serviceType.GetMethod("GetDrivePreferences",hidden).Invoke(restored,new[]{email});
+        ((Dictionary<ulong,string>)get(prefs,"FolderDestinations")).Remove(2UL);
+        Check((int)serviceType.GetMethod("SaveDrivePreferences",hidden).Invoke(restored,new[]{email,prefs})==0 &&
+            ((System.Collections.IList)read.Invoke(restored,new[]{email})).Count==0,"unbinding also removes the subscription");
     }
     static void MegaAccountStoreCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);

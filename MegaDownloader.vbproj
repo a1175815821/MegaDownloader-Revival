@@ -216,7 +216,12 @@
     <Compile Include="Clases\MegaAccountService.vb" />
     <Compile Include="Clases\MegaDrive.vb" />
     <Compile Include="Clases\MegaDriveHistory.vb" />
+    <Compile Include="Clases\MegaDriveSubscription.vb" />
     <Compile Include="Forms\MegaDriveForm.vb" />
+    <Compile Include="Forms\MegaDriveSubscriptionsForm.vb" />
+    <Compile Include="Forms\Main.Subscriptions.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
     <Compile Include="Forms\Main.MegaAccount.vb">
       <DependentUpon>Main.vb</DependentUpon>
     </Compile>

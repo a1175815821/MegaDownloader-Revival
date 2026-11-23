@@ -2274,6 +2274,7 @@ Public Class Main
         sepColumnsMenuItem.Name = "sepColumnsMenuItem"
         MenuDescarga.Items.Add(queueIdentityMenu)
         InitCloudQuotaActions()
+        MenuDescarga.Items.Add(queueWaitMenu)
         MenuDescarga.Items.Add(sepBatchMenuItem)
         MenuDescarga.Items.Add(RetryAllFailedMenuItem)
         MenuDescarga.Items.Add(RemoveAllFailedMenuItem)
@@ -2795,16 +2796,13 @@ Public Class Main
     Private Sub UpdateDetailPanel()
         Try
             If workbenchReady AndAlso Not detailPanel.Visible Then Return
-            Dim sel As IDescarga = Nothing
-            If ListaDescargas IsNot Nothing AndAlso ListaDescargas.SelectedObjects IsNot Nothing AndAlso
-               ListaDescargas.SelectedObjects.Count > 0 Then
-                sel = TryCast(ListaDescargas.SelectedObjects(0), IDescarga)
-            End If
-
+            Dim selected As Collections.IList = ListaDescargas.SelectedObjects
+            Dim sel As IDescarga = If(selected.Count = 0, Nothing, TryCast(selected(0), IDescarga))
             If sel Is Nothing Then
                 ShowDetailEmptyState()
             Else
                 UpdateDetailContent(sel)
+                UpdateQueueDetail(selected)
             End If
         Catch ex As Exception
             Log.WriteDebug("UpdateDetailPanel failed: " & Log.SafeException(ex))
@@ -5111,6 +5109,7 @@ Public Class Main
             Next
             PopulateQueueIdentityMenu()
             PrepareCloudQuotaActions()
+            PrepareQueueWaitActions(ListaDescargas.SelectedObjects)
             e.MenuStrip = MenuDescarga
         End If
     End Sub

@@ -32,6 +32,39 @@ Partial Public Class Main
     Private queueWholeMatches As New Generic.HashSet(Of Paquete)()
     Private appliedScopeVersion As Long = -1
     Private requestedSearchVersion As Long = -1
+    Private ReadOnly queueWaitMenu As New ToolStripMenuItem With {.Visible = False}
+    Private detailQueueSummary As Label
+    Private detailFirstFailed As CommandButton
+    Private detailWaitActions As CommandButton
+    Private detailHasFailedPackage As Boolean
+    Private detailHasWaitActions As Boolean
+    Private detailQueueMeasuredText As String
+    Private detailQueueMeasuredSize As Size
+    Private detailQueueMeasuredFont As Font
+
+    Private Enum QueueWaitReason
+        None
+        ManualPause
+        Schedule
+        QueuePaused
+        AnonymousQuota
+        AccountQuota
+        SessionExpired
+    End Enum
+
+    Private NotInheritable Class QueueSelection
+        Friend ReadOnly WaitCounts(CInt(QueueWaitReason.SessionExpired)) As Integer
+        Friend ReadOnly ManuallyPaused As New List(Of Fichero)()
+        Friend ReadOnly QuotaAccounts As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Friend ShowFileCounts As Boolean
+        Friend Total As Integer
+        Friend Completed As Integer
+        Friend Failed As Integer
+        Friend FailedPackage As Paquete
+        Friend FirstFailedFile As Fichero
+        Friend AnonymousRetry As TimeSpan?
+        Friend NextAccountRetryUtc As Date?
+    End Class
 
     Private Structure QueueViewItem
         Friend Model As IDescarga
@@ -361,6 +394,7 @@ Partial Public Class Main
             ListaDescargas.BorderStyle = BorderStyle.None
             LayoutNavRail()
             LayoutDetailContent()
+            LayoutQueueDetailContent()
             LayoutWorkbenchEmptyState()
             UpdateWorkbenchHeading()
         Finally
@@ -554,25 +588,281 @@ Partial Public Class Main
         UpdateDetailPanel()
     End Sub
 
+    Private Function ReadQueueSelection(selected As Collections.IList) As QueueSelection
+        Dim result As New QueueSelection With {.ShowFileCounts = selected.Count > 1}
+        Dim files As New HashSet(Of Fichero)()
+        SyncLock Mutex.ListaDescargas
+            For Each item As Object In selected
+                Dim package As Paquete = TryCast(item, Paquete)
+                If package IsNot Nothing Then
+                    result.ShowFileCounts = True
+                    If package.ListaFicheros Is Nothing Then Continue For
+                    For Each file As Fichero In package.ListaFicheros
+                        files.Add(file)
+                        If result.FirstFailedFile Is Nothing AndAlso file.DescargaEstado() = Estado.Erroneo Then
+                            result.FailedPackage = package
+                            result.FirstFailedFile = file
+                        End If
+                    Next
+                ElseIf TypeOf item Is Fichero Then
+                    files.Add(DirectCast(item, Fichero))
+                End If
+            Next
+        End SyncLock
+        result.Total = files.Count
+        If files.Count = 0 Then Return result
+
+        Dim scheduleWaiting As Boolean = Not Config.DownloadSchedule.AllowsDownload(Date.Now)
+        Dim queuePaused As Boolean = EstadoAplicacion = TipoEstadoAplicacion.Pausa
+        Dim accounts As New Dictionary(Of String, MegaAccountService.Status)(StringComparer.OrdinalIgnoreCase)
+        result.AnonymousRetry = MegaQuotaManager.GetRemaining()
+
+        For Each file As Fichero In files
+            Dim reason As QueueWaitReason = QueueWaitReason.None
+            Dim state As Estado = file.DescargaEstado()
+            Select Case state
+                Case Estado.Completado
+                    result.Completed += 1
+                Case Estado.Erroneo
+                    result.Failed += 1
+                    If file.FailedByQuota OrElse (file.UsesMegaAccount AndAlso file.MegaAccountErrorCode.GetValueOrDefault() = MegaAccountService.SessionExpired) Then
+                        reason = QueueTransferWaitReason(file, accounts, result)
+                    End If
+                Case Estado.EnCola, Estado.Pausado
+                    If file.PausaIndividual Then
+                        result.ManuallyPaused.Add(file)
+                        reason = QueueWaitReason.ManualPause
+                    ElseIf scheduleWaiting Then
+                        reason = QueueWaitReason.Schedule
+                    ElseIf queuePaused Then
+                        reason = QueueWaitReason.QueuePaused
+                    Else
+                        reason = QueueTransferWaitReason(file, accounts, result)
+                    End If
+            End Select
+            If reason <> QueueWaitReason.None Then result.WaitCounts(CInt(reason)) += 1
+        Next
+        Return result
+    End Function
+
+    Private Shared Function QueueTransferWaitReason(file As Fichero, accounts As Dictionary(Of String, MegaAccountService.Status), selection As QueueSelection) As QueueWaitReason
+        If Not file.UsesMegaAccount Then Return If(selection.AnonymousRetry.HasValue OrElse file.FailedByQuota, QueueWaitReason.AnonymousQuota, QueueWaitReason.None)
+        If file.HasRecordedMegaAccountOutput Then Return QueueWaitReason.None
+
+        Dim email As String = file.EffectiveMegaAccountEmail
+        Dim status As MegaAccountService.Status = Nothing
+        If Not accounts.TryGetValue(email, status) Then
+            status = MegaAccountService.Current.GetStatus(email)
+            accounts.Add(email, status)
+        End If
+        If status.Connecting Then Return QueueWaitReason.None
+        If Not status.SignedIn AndAlso (status.NeedsLogin OrElse file.MegaAccountErrorCode.GetValueOrDefault() = MegaAccountService.SessionExpired) Then
+            Return QueueWaitReason.SessionExpired
+        End If
+        If status.SignedIn AndAlso (status.QuotaReached OrElse (file.FailedByQuota AndAlso status.QuotaDelayUnknown)) Then
+            selection.QuotaAccounts.Add(email)
+            If status.QuotaRetryUtc.HasValue AndAlso status.QuotaRetryUtc.Value < selection.NextAccountRetryUtc.GetValueOrDefault(Date.MaxValue) Then
+                selection.NextAccountRetryUtc = status.QuotaRetryUtc
+            End If
+            Return QueueWaitReason.AccountQuota
+        End If
+        Return QueueWaitReason.None
+    End Function
+
+    Private Shared Function QueueWaitCaption(key As String, count As Integer, showCount As Boolean) As String
+        Dim caption As String = Language.GetText(key)
+        If showCount Then caption = Language.GetText("QueueWait_Count").Replace("%TEXT%", caption).Replace("%N%", count.ToString())
+        Return caption
+    End Function
+
+    Private Sub UpdateQueueDetail(selected As Collections.IList)
+        Dim selection As QueueSelection = ReadQueueSelection(selected)
+        Dim lines As New List(Of String)()
+        If selection.ShowFileCounts Then
+            lines.Add(Language.GetText(If(selected.Count > 1, "Detail_SelectedFiles", "Detail_PackageFiles")).
+                Replace("%DONE%", selection.Completed.ToString()).Replace("%TOTAL%", selection.Total.ToString()).Replace("%FAILED%", selection.Failed.ToString()))
+        End If
+        Dim keys As String() = {"QueueWait_ManualPause", "Schedule_Waiting", "QueueWait_QueuePaused", "QueueWait_AnonymousQuota", "MegaDrive_WaitingQuota", "QueueWait_SessionExpired"}
+        For i As Integer = 0 To keys.Length - 1
+            Dim reason As QueueWaitReason = CType(i + 1, QueueWaitReason)
+            Dim count As Integer = selection.WaitCounts(CInt(reason))
+            If count = 0 Then Continue For
+            lines.Add(QueueWaitCaption(keys(i), count, selection.ShowFileCounts))
+            Dim retryUtc As Date? = Nothing
+            If reason = QueueWaitReason.AnonymousQuota AndAlso selection.AnonymousRetry.HasValue Then retryUtc = Date.UtcNow + selection.AnonymousRetry.Value
+            If reason = QueueWaitReason.AccountQuota Then retryUtc = selection.NextAccountRetryUtc
+            If retryUtc.HasValue Then lines.Add(Language.GetText("QueueWait_RetryAt").Replace("%T%", retryUtc.Value.ToLocalTime().ToString("g")))
+        Next
+
+        If detailQueueSummary Is Nothing Then
+            If lines.Count = 0 Then Return
+            detailQueueSummary = New Label With {.Name = "QueueDetailSummary", .UseMnemonic = False, .Visible = False}
+            detailFirstFailed = New CommandButton With {.Name = "QueueDetailFirstFailed", .AutoEllipsis = True, .Visible = False}
+            detailWaitActions = New CommandButton With {.Name = "QueueDetailWaitActions", .AutoEllipsis = True, .Visible = False}
+            AddHandler detailFirstFailed.Click, AddressOf ShowFirstFailedFile
+            AddHandler detailWaitActions.Click, AddressOf ShowQueueWaitActions
+            detailContentPanel.Controls.AddRange(New Control() {detailQueueSummary, detailFirstFailed, detailWaitActions})
+            UiStyles.SetRole(detailQueueSummary, UiStyles.Role.Muted)
+            UiStyles.SetRole(detailFirstFailed, UiStyles.Role.SecondaryButton)
+            UiStyles.SetRole(detailWaitActions, UiStyles.Role.SecondaryButton)
+            EnableLinkDrop(detailQueueSummary)
+            EnableLinkDrop(detailFirstFailed)
+            EnableLinkDrop(detailWaitActions)
+        End If
+        UiStyles.SetText(detailQueueSummary, String.Join(Environment.NewLine, lines))
+        detailHasFailedPackage = selection.FirstFailedFile IsNot Nothing
+        detailHasWaitActions = selection.WaitCounts.Any(Function(count) count > 0)
+        If detailHasFailedPackage Then UiStyles.SetText(detailFirstFailed, Language.GetText("Detail_FirstFailedFile"))
+        If detailHasWaitActions Then UiStyles.SetText(detailWaitActions, Language.GetText("QueueWait_Actions"))
+        LayoutQueueDetailContent()
+    End Sub
+
+    Private Sub LayoutQueueDetailContent()
+        If detailQueueSummary Is Nothing OrElse Not detailContentPanel.Visible Then Return
+        ' Base detail layout is cached independently. Insert the summary below its title.
+        Dim scale As Single = GetUiScale()
+        Dim y As Integer = detailTitleLabel.Bottom + CInt(8 * scale)
+        Dim x As Integer = detailTitleLabel.Left
+        Dim width As Integer = detailTitleLabel.Width
+        Dim gap As Integer = CInt(4 * scale)
+        Dim summaryText As String = detailQueueSummary.Text
+        Dim showSummary As Boolean = summaryText.Length > 0
+        Dim summaryBounds As Rectangle = Rectangle.Empty
+        Dim actionBounds As Rectangle = Rectangle.Empty
+        Dim waitBounds As Rectangle = Rectangle.Empty
+        If showSummary Then
+            Dim font As Font = detailQueueSummary.Font
+            If summaryText <> detailQueueMeasuredText OrElse width <> detailQueueMeasuredSize.Width OrElse font IsNot detailQueueMeasuredFont Then
+                Dim height As Integer = TextRenderer.MeasureText(summaryText, font, New Size(width, Integer.MaxValue), TextFormatFlags.WordBreak Or TextFormatFlags.NoPrefix).Height
+                detailQueueMeasuredText = summaryText
+                detailQueueMeasuredSize = New Size(width, height)
+                detailQueueMeasuredFont = font
+            End If
+            summaryBounds = New Rectangle(x, y, width, detailQueueMeasuredSize.Height)
+            y = summaryBounds.Bottom + gap
+        End If
+        If detailHasFailedPackage Then
+            actionBounds = New Rectangle(x, y, width, Math.Max(CInt(30 * scale), detailFirstFailed.Font.Height + gap * 2))
+            y = actionBounds.Bottom + gap
+        End If
+
+        If detailHasWaitActions Then
+            waitBounds = New Rectangle(x, y, width, Math.Max(CInt(30 * scale), detailWaitActions.Font.Height + gap * 2))
+            y = waitBounds.Bottom + gap
+        End If
+        Dim offset As Integer = y - detailRows(0).Key.Top
+        If offset = 0 AndAlso detailQueueSummary.Bounds = summaryBounds AndAlso detailFirstFailed.Bounds = actionBounds AndAlso
+            detailWaitActions.Bounds = waitBounds AndAlso detailWaitActions.Visible = detailHasWaitActions AndAlso
+            detailQueueSummary.Visible = showSummary AndAlso detailFirstFailed.Visible = detailHasFailedPackage Then Return
+
+        Dim scrollY As Integer = detailContentPanel.AutoScrollPosition.Y
+        detailContentPanel.SuspendLayout()
+        Try
+            detailQueueSummary.Bounds = summaryBounds
+            detailQueueSummary.Visible = showSummary
+            detailFirstFailed.Bounds = actionBounds
+            detailFirstFailed.Visible = detailHasFailedPackage
+            detailWaitActions.Bounds = waitBounds
+            detailWaitActions.Visible = detailHasWaitActions
+            If offset <> 0 Then
+                For Each row As KeyValuePair(Of Label, Label) In detailRows
+                    row.Key.Top += offset
+                    row.Value.Top += offset
+                Next
+                detailProgressBar.Top += offset
+            End If
+            detailContentPanel.AutoScrollMinSize = New Size(0, detailRows.Last().Value.Bottom - scrollY + gap + CInt(12 * scale))
+        Finally
+            detailContentPanel.ResumeLayout(True)
+        End Try
+    End Sub
+
+    Private Sub ShowQueueWaitActions(sender As Object, e As EventArgs)
+        PrepareQueueWaitActions(ListaDescargas.SelectedObjects)
+        If queueWaitMenu.DropDownItems.Count > 0 Then queueWaitMenu.DropDown.Show(detailWaitActions, New Point(0, detailWaitActions.Height))
+    End Sub
+
+    Private Sub PrepareQueueWaitActions(selected As Collections.IList)
+        While queueWaitMenu.DropDownItems.Count > 0
+            queueWaitMenu.DropDownItems(0).Dispose()
+        End While
+        Dim selection As QueueSelection = ReadQueueSelection(selected)
+        AddQueueWaitAction(selection, QueueWaitReason.ManualPause, "QueueWait_UnpauseSelected", AddressOf UnpauseSelectedFiles)
+        AddQueueWaitAction(selection, QueueWaitReason.Schedule, "Schedule_Title", AddressOf OpenDownloadSchedule)
+        AddQueueWaitAction(selection, QueueWaitReason.QueuePaused, "QueueWait_ResumeQueue", Sub(sender, e) StartDownload())
+        AddQueueWaitAction(selection, QueueWaitReason.AnonymousQuota, "QueueWait_RetryAnonymous", AddressOf QuotaRetryNow_Click)
+        AddQueueWaitAction(selection, QueueWaitReason.AccountQuota, "MegaAccount_RefreshQuota", Async Sub(sender, e) Await RefreshQueueQuotaAsync())
+        AddQueueWaitAction(selection, QueueWaitReason.SessionExpired, "MegaAccount_Reconnect", AddressOf OpenMegaAccount)
+        queueWaitMenu.Visible = queueWaitMenu.DropDownItems.Count > 0
+        If queueWaitMenu.Available Then queueWaitMenu.Text = Language.GetText("QueueWait_Actions")
+    End Sub
+
+    Private Sub AddQueueWaitAction(selection As QueueSelection, reason As QueueWaitReason, key As String, handler As EventHandler)
+        If selection.WaitCounts(CInt(reason)) = 0 Then Return
+        Dim action As New ToolStripMenuItem(Language.GetText(key).Replace("&", "&&"))
+        AddHandler action.Click, handler
+        queueWaitMenu.DropDownItems.Add(action)
+    End Sub
+
+    Private Sub UnpauseSelectedFiles(sender As Object, e As EventArgs)
+        SyncLock Mutex.ListaDescargas
+            Dim selection As QueueSelection = ReadQueueSelection(ListaDescargas.SelectedObjects)
+            If selection.ManuallyPaused.Count = 0 Then Return
+            For Each file As Fichero In selection.ManuallyPaused
+                file.PausaIndividual = False
+            Next
+            PeticionGuardadoFichero = Now
+        End SyncLock
+        RefreshListaDescargas(False)
+    End Sub
+
+    Private Async Function RefreshQueueQuotaAsync() As Task
+        Dim selection As QueueSelection = ReadQueueSelection(ListaDescargas.SelectedObjects)
+        Dim service As MegaAccountService = MegaAccountService.Current
+        For Each email As String In selection.QuotaAccounts
+            Dim result As Integer = Await service.RefreshQuotaAsync(email)
+            If IsDisposed OrElse Cerrando Then Return
+            Dim text As String = If(result = 0, MegaAccountForm.Summary(service.GetStatus(email), True), MegaAccountService.ErrorText(result, connecting:=True))
+            ToastForm.ShowToast(Me, text)
+        Next
+        UpdateDetailPanel()
+    End Function
+
+    Private Sub ShowFirstFailedFile(sender As Object, e As EventArgs)
+        Dim selection As QueueSelection = ReadQueueSelection(ListaDescargas.SelectedObjects)
+        If selection.FirstFailedFile IsNot Nothing Then RevealQueuePackage(selection.FailedPackage, selection.FirstFailedFile)
+    End Sub
+
     Private Sub RevealImportedPackage(package As Paquete)
+        RevealQueuePackage(package)
+    End Sub
+
+    Private Sub RevealQueuePackage(package As Paquete, Optional file As Fichero = Nothing)
         If Cerrando OrElse IsDisposed OrElse Not workbenchReady Then Return
-        ' Reveal the confirmed import even if an earlier search or status tab hid it.
         ListaDescargas.BeginUpdate()
         Try
-            _updatingNav = True
-            Try
-                _navScope = DownloadEstadoFilter.NavScope.All
-                navListBox.SelectedIndex = 0
-            Finally
-                _updatingNav = False
-            End Try
-            If workbenchSearch.TextLength > 0 Then
-                workbenchSearch.Clear()
-            Else
-                RebuildWorkbenchRoots()
+            If file Is Nothing OrElse Not MatchesQueueFile(file, package) Then
+                _updatingNav = True
+                Try
+                    _navScope = DownloadEstadoFilter.NavScope.All
+                    navListBox.SelectedIndex = CInt(_navScope)
+                Finally
+                    _updatingNav = False
+                End Try
+                If workbenchSearch.TextLength > 0 Then
+                    workbenchSearch.Clear()
+                Else
+                    RebuildWorkbenchRoots()
+                End If
             End If
-            ListaDescargas.SelectedObject = package
-            ListaDescargas.EnsureModelVisible(package)
+            Dim target As IDescarga = package
+            If file IsNot Nothing Then
+                ListaDescargas.Expand(package)
+                If ListaDescargas.IndexOf(file) < 0 Then ListaDescargas.RefreshObjects(New Object() {package})
+                target = file
+            End If
+            ListaDescargas.SelectedObject = target
+            ListaDescargas.EnsureModelVisible(target)
         Finally
             ListaDescargas.EndUpdate()
         End Try

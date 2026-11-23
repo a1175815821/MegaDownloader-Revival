@@ -159,7 +159,7 @@ Friend NotInheritable Class MegaDriveForm
                                                          scope.SelectedIndex = 0
                                                          LoadDrive()
                                                      End Sub
-        AddHandler checkNew.Click, Sub() ConfirmDownload({drive.Folder}, drive.Preferences.FolderDestinations(drive.Folder))
+        AddHandler checkNew.Click, AddressOf CheckBoundFolder
         AddHandler manage.Click, AddressOf ManageAccounts
         AddHandler refreshButton.Click, Sub() LoadDrive()
         AddHandler favorites.Click, AddressOf ShowFavorites
@@ -658,7 +658,7 @@ Friend NotInheritable Class MegaDriveForm
                                      End Sub
             menu.Items.Add(toggle)
             If marked OrElse bound Then
-                menu.Items.Add(Language.GetText(If(bound, "MegaDrive_ChangeBinding", "MegaDrive_BindFolder")), Nothing, Sub() BindFolder(folder))
+                menu.Items.Add(Language.GetText(If(bound, "DriveSubscription_EditSettings", "MegaDrive_BindFolder")), Nothing, Sub() BindFolder(folder))
             End If
             If bound Then
                 menu.Items.Add(Language.GetText("MegaDrive_UnbindFolder"), Nothing,
@@ -690,20 +690,41 @@ Friend NotInheritable Class MegaDriveForm
     End Sub
 
     Private Sub BindFolder(folder As ULong)
-        Dim settings = drive.Preferences.FolderDestinations
+        Dim destinations = drive.Preferences.FolderDestinations
         Dim current As String = Nothing
-        settings.TryGetValue(folder, current)
-        Using picker As New FolderBrowserDialog With {.Description = Language.GetText("MegaDrive_BindFolder"), .SelectedPath = If(current, config.RutaDefecto)}
-            If picker.ShowDialog(Me) <> DialogResult.OK Then Return
-            Dim destination = PathGuard.GetSafePathUnderRoot(picker.SelectedPath, "")
-            If Not String.Equals(current, destination, StringComparison.OrdinalIgnoreCase) Then drive.Preferences.BoundFolderPaths.Remove(folder)
-            settings(folder) = destination
+        destinations.TryGetValue(folder, current)
+        Dim settings = service.GetDriveSubscriptions(currentEmail).FirstOrDefault(Function(item) item.Folder = folder)
+        If settings Is Nothing Then settings = New MegaDriveSubscription With {.Folder = folder, .Destination = config.RutaDefecto}
+        settings.Name = drive.Snapshot.Find(folder).Name
+        settings.Incoming = drive.Incoming
+        Using dialog As New MegaDriveSubscriptionSettingsForm(settings)
+            If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
+            settings = dialog.Settings
+            Dim result = service.SaveDriveSubscriptionSettings(currentEmail, settings)
+            If result <> 0 Then
+                MessageBox.Show(Me, MegaAccountService.ErrorText(result), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
         End Using
-        SavePreferences()
+        Dim destination = PathGuard.GetSafePathUnderRoot(settings.Destination, "")
+        If Not String.Equals(current, destination, StringComparison.OrdinalIgnoreCase) Then drive.Preferences.BoundFolderPaths.Remove(folder)
+        destinations(folder) = destination
         RefreshRows()
     End Sub
 
-    Private Async Sub ConfirmDownload(selection As IEnumerable(Of ULong), Optional boundDestination As String = Nothing)
+    Private Sub CheckBoundFolder(sender As Object, e As EventArgs)
+        If submitting OrElse loadCancellation IsNot Nothing Then Return
+        Using dialog As New MegaDriveSubscriptionsForm(ownerMain, service, currentEmail, drive.Folder)
+            dialog.ShowDialog(Me)
+        End Using
+        ' Subscription settings can change the local binding in the report window.
+        Dim saved = service.GetDrivePreferences(currentEmail)
+        drive.Preferences.FolderDestinations = saved.FolderDestinations
+        drive.Preferences.BoundFolderPaths = saved.BoundFolderPaths
+        RefreshRows()
+    End Sub
+
+    Private Async Sub ConfirmDownload(selection As IEnumerable(Of ULong))
         If submitting OrElse loadCancellation IsNot Nothing Then Return
         Dim ids = selection.ToArray()
         If ids.Length = 0 Then Return
@@ -714,37 +735,10 @@ Friend NotInheritable Class MegaDriveForm
         Try
             Enabled = False
             Dim name = If(ids.Length = 1, snapshot.Find(ids(0)).Name, Text)
-            Dim queue = ownerMain.SnapshotCloudQueue(email)
-            Dim tracked = boundDestination IsNot Nothing
-            Dim plan As MegaDriveDownload
-            Dim queued As IEnumerable(Of ULong) = queue.Select(Function(file) file.Handle)
-            Dim updated As HashSet(Of ULong) = Nothing
-            Dim paths As New Dictionary(Of ULong, String)()
-            If tracked Then
-                status.Text = Language.GetText("MegaDrive_CheckingFolder")
-                Dim previousPaths As Dictionary(Of ULong, String) = Nothing
-                If selectedDrive.Preferences.BoundFolderPaths.TryGetValue(ids(0), previousPaths) Then paths = New Dictionary(Of ULong, String)(previousPaths)
-                Dim incoming = selectedDrive.Incoming
-                Dim changes = Await Task.Run(Function()
-                                                 Dim latest As MegaDriveSnapshot = Nothing
-                                                 Dim result = service.ReadDrive(email, CancellationToken.None, latest, incomingShares:=incoming)
-                                                 If result <> 0 Then Throw New ApplicationException(MegaAccountService.ErrorText(result))
-                                                 If Not latest.IsFolder(ids(0)) Then Throw New ApplicationException(Language.GetText("MegaDrive_FileUnavailable"))
-                                                 Return service.DriveHistory.FindBoundChanges(email, latest, ids(0), boundDestination, queue, paths)
-                                             End Function)
-                plan = changes.Plan
-                queued = changes.Pending
-                updated = changes.Updated
-                If plan.Files.Count = 0 Then
-                    Enabled = True
-                    MessageBox.Show(Me, Language.GetText("MegaDrive_NoChanges"), Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
-                    Return
-                End If
-            Else
-                plan = Await Task.Run(Function() snapshot.PlanDownload(ids))
-            End If
+            Dim queued = ownerMain.SnapshotCloudQueue(email).Select(Function(file) file.Handle)
+            Dim plan = Await Task.Run(Function() snapshot.PlanDownload(ids))
             Enabled = True
-            Using dialog As New MegaDriveDownloadForm(plan, name, If(boundDestination, config.RutaDefecto), queued, tracked, updated)
+            Using dialog As New MegaDriveDownloadForm(plan, name, config.RutaDefecto, queued)
                 If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
                 Dim confirmed = dialog.ConfirmedPlan
                 Dim destination = dialog.Destination
@@ -767,14 +761,8 @@ Friend NotInheritable Class MegaDriveForm
                 Else
                     MessageBox.Show(Me, Language.GetText("MegaDrive_FoldersCreated"), Text, MessageBoxButtons.OK, MessageBoxIcon.Information)
                 End If
-                If tracked Then
-                    selectedDrive.Preferences.BoundFolderPaths(ids(0)) = paths
-                    SavePreferences()
-                End If
                 selectedDrive.Selected.ExceptWith(ids)
             End Using
-        Catch ex As ApplicationException
-            MessageBox.Show(Me, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error)
         Catch ex As Exception
             Log.WriteWarning("Cloud drive queue creation failed: " & Log.SafeException(ex))
             MessageBox.Show(Me, Language.GetText("MegaDrive_AddFailed"), Text, MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -792,8 +780,6 @@ Friend NotInheritable Class MegaDriveDownloadForm
     Private ReadOnly pathInput As New TextBox With {.Name = "MegaDriveDestination", .Dock = DockStyle.Fill}
     Private ReadOnly plan As MegaDriveDownload
     Private ReadOnly queued As HashSet(Of ULong)
-    Private ReadOnly updated As HashSet(Of ULong)
-    Private ReadOnly incremental As Boolean
     Private ReadOnly checkDuplicates As New CheckBox With {.Name = "MegaDriveSkipQueued", .AutoSize = True, .Anchor = AnchorStyles.Left}
     Private ReadOnly summary As New Label With {.Dock = DockStyle.Fill, .AutoEllipsis = True}
     Private ReadOnly accept As New CommandButton With {.AutoSize = True, .Padding = New Padding(8, 4, 8, 4)}
@@ -806,14 +792,10 @@ Friend NotInheritable Class MegaDriveDownloadForm
         End Get
     End Property
 
-    Friend Sub New(plan As MegaDriveDownload, title As String, initialPath As String,
-                   Optional queuedHandles As IEnumerable(Of ULong) = Nothing, Optional incremental As Boolean = False,
-                   Optional updatedHandles As HashSet(Of ULong) = Nothing)
+    Friend Sub New(plan As MegaDriveDownload, title As String, initialPath As String, queuedHandles As IEnumerable(Of ULong))
         Me.plan = plan
-        Me.incremental = incremental
-        queued = New HashSet(Of ULong)(If(queuedHandles, Enumerable.Empty(Of ULong)()))
-        updated = If(updatedHandles, New HashSet(Of ULong)())
-        Text = Language.GetText(If(incremental, "MegaDrive_CheckNew", "MegaDrive_Confirm"))
+        queued = New HashSet(Of ULong)(queuedHandles)
+        Text = Language.GetText("MegaDrive_Confirm")
         Name = "MegaDriveConfirm"
         StartPosition = FormStartPosition.CenterParent
         ShowInTaskbar = False
@@ -840,10 +822,9 @@ Friend NotInheritable Class MegaDriveDownloadForm
         layout.SetColumnSpan(summary, 2)
         layout.Controls.Add(pathLabel, 0, 2)
         pathInput.Text = initialPath
-        pathInput.ReadOnly = incremental
         pathInput.AccessibleName = pathLabel.Text
         layout.Controls.Add(pathInput, 0, 3)
-        Dim browse As New CommandButton With {.Text = Language.GetText("Browse"), .AutoSize = True, .Visible = Not incremental, .Anchor = AnchorStyles.Top Or AnchorStyles.Right}
+        Dim browse As New CommandButton With {.Text = Language.GetText("Browse"), .AutoSize = True, .Anchor = AnchorStyles.Top Or AnchorStyles.Right}
         UiStyles.SetRole(browse, UiStyles.Role.SecondaryButton)
         AddHandler browse.Click, Sub()
                                      Using picker As New FolderBrowserDialog With {.SelectedPath = Destination}
@@ -867,7 +848,6 @@ Friend NotInheritable Class MegaDriveDownloadForm
 
         checkDuplicates.Text = Language.GetText("MegaDrive_SkipQueued")
         checkDuplicates.Visible = plan.Files.Any(Function(item) queued.Contains(item.Key.Id))
-        checkDuplicates.Checked = incremental
         AddHandler checkDuplicates.CheckedChanged, AddressOf UpdatePreview
         layout.Controls.Add(checkDuplicates, 0, 5)
         layout.SetColumnSpan(checkDuplicates, 2)
@@ -907,8 +887,6 @@ Friend NotInheritable Class MegaDriveDownloadForm
             Case 3
                 If queued.Contains(item.Key.Id) Then
                     e.Value = Language.GetText(If(checkDuplicates.Checked, "MegaDrive_SkippedQueued", "MegaDrive_AlreadyQueued"))
-                ElseIf incremental Then
-                    e.Value = Language.GetText(If(updated.Contains(item.Key.Id), "MegaDrive_ChangedFile", "MegaDrive_NewFile"))
                 End If
         End Select
     End Sub

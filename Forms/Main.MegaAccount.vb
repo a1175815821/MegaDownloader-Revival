@@ -131,6 +131,7 @@ Partial Public Class Main
 
     Private Sub EnsureMegaAccountMenu()
         If MainMenuStrip Is Nothing OrElse megaAccountStatus Is Nothing Then Return
+        EnsureDriveSubscriptionMenu()
         If megaAccountMenu IsNot Nothing AndAlso megaAccountMenu.Owner Is MainMenuStrip Then Return
         megaAccountMenu = New ToolStripMenuItem With {.Name = "MegaAccountMenu", .Alignment = ToolStripItemAlignment.Right,
                                                        .Overflow = ToolStripItemOverflow.Never, .Padding = New Padding(8, 0, 8, 0)}

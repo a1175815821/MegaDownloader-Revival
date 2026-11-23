@@ -12,6 +12,7 @@ Partial Public Class Main
         AddHandler scheduleTimer.Tick, AddressOf ScheduleTick
         ScheduleTick(Nothing, EventArgs.Empty)
         scheduleTimer.Start()
+        InitDriveSubscriptionScheduler()
     End Sub
 
     Private Sub ScheduleTick(sender As Object, e As EventArgs)
