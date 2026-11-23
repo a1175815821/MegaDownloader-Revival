@@ -80,32 +80,15 @@ Namespace My
             End Try
         End Sub
 
-        Private Function LoadDLLFromStream( _
-            ByVal sender As Object, _
-            ByVal args As System.ResolveEventArgs) As System.Reflection.Assembly
-
-            Dim resourceName As String = New AssemblyName(args.Name).Name & ".dll"
-
-
-            resourceName = ResourceHelper.GetResourceName(resourceName)
-
-            If Not String.IsNullOrEmpty(resourceName) Then
-                Using stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-
-                    If stream Is Nothing Then
-                        Throw New ApplicationException("DLL resource stream could not be opened: " & resourceName)
-                    End If
-
-                    Dim assemblyData(CInt(stream.Length - 1)) As Byte
-                    stream.Read(assemblyData, 0, assemblyData.Length)
-                    Return System.Reflection.Assembly.Load(assemblyData)
-
+        Private Function LoadDLLFromStream(sender As Object, args As ResolveEventArgs) As Assembly
+            Dim fileName = New AssemblyName(args.Name).Name & ".dll"
+            Using source = ResourceHelper.OpenBundledDll(fileName)
+                If source Is Nothing Then Return Nothing
+                Using assemblyData As New IO.MemoryStream()
+                    source.CopyTo(assemblyData)
+                    Return Assembly.Load(assemblyData.ToArray())
                 End Using
-            Else
-                Throw New ApplicationException("DLL could not be loaded: " & args.Name)
-            End If
-
-
+            End Using
         End Function
 
 

@@ -55,7 +55,7 @@
 - **绑定目录**：把收藏的云盘目录绑定到本地目录后检查新增与更新，已交付文件会被记录，不会重复下载。
 - **修复**：批量暂停不再卡在第一个网盘任务；重启后已交付的分卷直接复用，不再重下整卷；断点标记或账号配置损坏时改为可恢复，而不是卡住任务。[完整变更](CHANGELOG.md)。
 
-> 账号下载需要 64 位 Windows 进程。x64 的 `MegaAccountBridge.dll` 与所需 VC++ 运行库已随两种发布包提供：便携版就在程序旁边，单文件版首次使用时释放到 `%LOCALAPPDATA%\MegaDownloader\native\`。匿名下载不会加载它。
+> 账号下载需要 64 位 Windows 进程。两种发布包均自带 x64 MEGA 账号模块与所需的 VC++ 运行库。32 位 Windows 仍可匿名下载。
 
 ## 2.6 引入的工作台功能
 
@@ -316,7 +316,7 @@ msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86
 
 回归验证：在 PowerShell 中运行 `.\Tests\Run-RegressionTests.ps1`（需要 .NET SDK）。测试使用临时文件与本机 HTTP 服务，无需 MEGA 账号。详见 [Tests/README.md](../Tests/README.md)。
 
-MEGA 账号模块是独立的 x64 原生 DLL，基于 MEGA SDK v10.21.1。仓库在 `Native/MegaAccount/prebuilt/x64/` 提供预构建副本，项目会把它内嵌进单文件版、并复制到便携版旁边；重建方法见 [Native/MegaAccount/README.md](../Native/MegaAccount/README.md)。缺少这些文件时程序仍可编译并匿名下载。
+构建时会压缩并内嵌 `Native/MegaAccount/prebuilt/x64/` 中预构建的 x64 MEGA 账号模块，常规发版直接复用。重建方法见 [Native/MegaAccount/README.md](../Native/MegaAccount/README.md)。
 
 **技术栈**：VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle（加密）· Newtonsoft.Json · ObjectListView · SharpCompress（解压）· HttpServer/Fadd（Web）· F5Lib（隐写）
 

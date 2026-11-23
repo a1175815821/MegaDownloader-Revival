@@ -4,7 +4,7 @@ This native DLL connects the WinForms app to the official [MEGA SDK v10.21.1](ht
 
 ## Prebuilt copy
 
-`prebuilt/x64/` contains `MegaAccountBridge.dll`, the three VC++ runtime DLLs it links against (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`), and `MEGA-SDK-LICENSE.txt`. The project copies them beside the portable build and embeds them into the single-file EXE, which unpacks them to `%LOCALAPPDATA%\MegaDownloader\native\<version>\` on first use. Regenerate the folder only when the bridge source or the SDK pin changes.
+`prebuilt/x64/` contains `MegaAccountBridge.dll`, its three VC++ runtime DLLs (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`), and `MEGA-SDK-LICENSE.txt`. MSBuild compresses and embeds the DLLs. Both release downloads use the same EXE, which unpacks the native files to `%LOCALAPPDATA%\MegaDownloader\native\<version>\` on first use. Ordinary releases reuse the prebuilt files. Rebuild when the bridge source, SDK pin, or native dependencies or build options change.
 
 ## Build
 
@@ -17,11 +17,13 @@ cmake --build bin/MegaAccountNative --config Release --target MegaAccountBridge
 
 `USE_OPENSSL=OFF` is the supported configuration on Windows: the SDK's curl uses the system Schannel backend, which avoids an OpenSSL dependency entirely. If vcpkg fails while downloading a source archive behind a proxy, place the archive in the vcpkg `downloads` folder under the name its portfile expects and re-run the configure step.
 
-Copy the new DLL over `prebuilt/x64/MegaAccountBridge.dll`, or pass a different folder with `/p:MegaAccountPrebuiltDir=...` when building the application. A one-off path also works:
+Copy the new DLL over `prebuilt/x64/MegaAccountBridge.dll`. To test a rebuilt bridge with the prebuilt runtime DLLs, pass its path to MSBuild:
 
 ```powershell
-dotnet msbuild MegaDownloader.vbproj /p:Configuration=Release /p:Platform=x86 "/p:MegaAccountPrebuiltDir=$PWD\bin\MegaAccountNative\Release"
+dotnet msbuild MegaDownloader.vbproj /p:Configuration=Release /p:Platform=x86 "/p:MegaAccountBridgePath=$PWD\bin\MegaAccountNative\Release\MegaAccountBridge.dll"
 ```
+
+To use a different set of DLLs, pass `/p:MegaAccountPrebuiltDir=...` and put all four DLLs in that directory.
 
 The managed project uses AnyCPU with Prefer 32-bit disabled, including in the solution configuration named `x86`. The native module currently supports the x64 process. When distributing it, keep the [SDK license](https://github.com/meganz/sdk/blob/v10.21.1/LICENSE) with the binaries.
 

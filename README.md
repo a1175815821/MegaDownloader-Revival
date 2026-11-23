@@ -55,7 +55,7 @@
 - **Bound folders** — bind a favorite cloud folder to a local directory and check for new or updated files; completed deliveries are remembered so nothing is fetched twice.
 - **Fixes** — pausing a batch no longer stops at the first cloud task, a restarted task reuses its delivered file instead of downloading the volume again, and a damaged checkpoint marker or account store now recovers instead of blocking the task. [Full changelog](docs/CHANGELOG.md).
 
-> Account downloads need a 64-bit Windows process. The x64 `MegaAccountBridge.dll` and its VC++ runtime ship inside both release assets — the ZIP carries them beside the executable, and the single-file EXE unpacks them to `%LOCALAPPDATA%\MegaDownloader\native\` on first use. Anonymous downloads never touch it.
+> Account downloads require a 64-bit Windows process. Both downloads include the x64 MEGA account module and its VC++ runtime, ready to use. Anonymous downloads remain available on 32-bit Windows.
 
 ## Workbench features introduced in 2.6
 
@@ -313,7 +313,7 @@ Output goes to `bin/<Configuration>/MegaDownloader.exe`. Build configurations: `
 
 Regression checks: run `.\Tests\Run-RegressionTests.ps1` in PowerShell (requires the .NET SDK). Tests use temporary files and a local HTTP server; no MEGA account is needed. See [Tests/README.md](Tests/README.md).
 
-The MEGA account module is a separate x64 native DLL built against MEGA SDK v10.21.1. The repository ships a prebuilt copy under `Native/MegaAccount/prebuilt/x64/`, which the project embeds into the single-file EXE and copies beside the portable build; see [Native/MegaAccount/README.md](Native/MegaAccount/README.md) to rebuild it. Without those files the app still compiles and downloads anonymously.
+The build compresses and embeds the prebuilt x64 MEGA account module from `Native/MegaAccount/prebuilt/x64/`. Regular releases reuse it. See [Native/MegaAccount/README.md](Native/MegaAccount/README.md) for rebuild instructions.
 
 **Tech stack**: VB.NET · .NET Framework 4.8 · WinForms · BouncyCastle (crypto) · Newtonsoft.Json · ObjectListView · SharpCompress (decompression) · HttpServer/Fadd (web) · F5Lib (steganography)
 

@@ -497,21 +497,6 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\DLLs\BouncyCastle.Cryptography.dll" />
-    <EmbeddedResource Include="Resources\DLLs\Microsoft.Bcl.AsyncInterfaces.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Text.Encoding.CodePages.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Threading.Tasks.Extensions.dll" />
-    <EmbeddedResource Include="Resources\DLLs\Fadd.dll" />
-    <EmbeddedResource Include="Resources\DLLs\HttpServer.dll" />
-    <EmbeddedResource Include="Resources\DLLs\ObjectListView.dll" />
-    <!-- 单文件版生命线：主 exe 通过 ApplicationEvents.LoadDLLFromStream 从内嵌资源按需加载 DLL。
-         v2.2 构建工具链新增的 5 个 System.*.dll 当时只加了引用没加内嵌，裸 exe 在新目录启动即崩。
-         此后新增任何 CopyLocal 引用，必须同步在此内嵌，否则单文件版回归“双击没反应”。 -->
-    <EmbeddedResource Include="Resources\DLLs\System.Buffers.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Memory.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Numerics.Vectors.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Resources.Extensions.dll" />
-    <EmbeddedResource Include="Resources\DLLs\System.Runtime.CompilerServices.Unsafe.dll" />
     <EmbeddedResource Include="Resources\Binaries\7zr.exe">
       <LogicalName>MegaDownloader.7zr.exe</LogicalName>
     </EmbeddedResource>
@@ -526,9 +511,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\mega.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\DLLs\Newtonsoft.Json.dll" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\Language\fr-FR-Language.xml">
@@ -552,8 +534,6 @@
     <EmbeddedResource Include="HttpModule\Template\StreamingLibraryTemplateLogin.htm">
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="Resources\DLLs\SharpCompress.dll" />
-    <EmbeddedResource Include="Resources\DLLs\F5Lib.dll" />
     <Content Include="Resources\Installer MSD\ico.ico" />
     <Content Include="Resources\Installer MSD\MegaSearchDesktop.wxs">
       <SubType>Designer</SubType>
@@ -576,36 +556,58 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-  <!-- 预构建的原生 MEGA 账号模块（x64）。存在就随包分发并内嵌进单文件版；
-       不存在时项目照常构建，只是账号入口提示缺少模块。用
-       /p:MegaAccountPrebuiltDir=... 可指向别处的构建产物。 -->
-  <PropertyGroup Condition="'$(MegaAccountPrebuiltDir)' == ''">
-    <MegaAccountPrebuiltDir>$(MSBuildProjectDirectory)\Native\MegaAccount\prebuilt\x64</MegaAccountPrebuiltDir>
+  <!-- 预构建原生模块用于日常打包。没有预构建目录时仍可进行匿名下载开发。 -->
+  <PropertyGroup>
+    <MegaAccountPrebuiltDir Condition="'$(MegaAccountPrebuiltDir)' == ''">$(MSBuildProjectDirectory)\Native\MegaAccount\prebuilt\x64</MegaAccountPrebuiltDir>
+    <_BundledBridge>$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll</_BundledBridge>
+    <_BundledBridge Condition="'$(MegaAccountBridgePath)' != ''">$(MegaAccountBridgePath)</_BundledBridge>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll')">
-    <Content Include="$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll">
-      <Link>MegaAccountBridge.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(MegaAccountPrebuiltDir)\msvcp140.dll">
-      <Link>msvcp140.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(MegaAccountPrebuiltDir)\vcruntime140.dll">
-      <Link>vcruntime140.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(MegaAccountPrebuiltDir)\vcruntime140_1.dll">
-      <Link>vcruntime140_1.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\MegaAccountBridge.dll" />
-    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\msvcp140.dll" />
-    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\vcruntime140.dll" />
-    <EmbeddedResource Include="$(MegaAccountPrebuiltDir)\vcruntime140_1.dll" />
-    <None Include="$(MegaAccountPrebuiltDir)\MEGA-SDK-LICENSE.txt" />
+    <_NativeRuntime Include="$(MegaAccountPrebuiltDir)\msvcp140.dll;$(MegaAccountPrebuiltDir)\vcruntime140.dll;$(MegaAccountPrebuiltDir)\vcruntime140_1.dll" />
+    <EmbeddedResource Include="Native\MegaAccount\prebuilt\x64\MEGA-SDK-LICENSE.txt">
+      <LogicalName>$(RootNamespace).MEGA-SDK-LICENSE.txt</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+  <UsingTask TaskName="CompressEmbeddedDll" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Source ParameterType="System.String" Required="true" />
+      <Destination ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Directory.CreateDirectory(Path.GetDirectoryName(Destination));
+        using (var source = File.OpenRead(Source))
+        using (var destination = File.Create(Destination))
+        using (var compressed = new GZipStream(destination, CompressionLevel.Optimal))
+        {
+            source.CopyTo(compressed);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="PackEmbeddedDlls" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_BundledDll Include="@(Reference->'%(HintPath)');@(_NativeRuntime)" />
+      <_BundledDll Include="$(_BundledBridge)" Condition="'@(_NativeRuntime)' != ''">
+        <BundleName>MegaAccountBridge.dll</BundleName>
+      </_BundledDll>
+      <_BundledDll Update="@(_BundledDll)" Condition="'%(_BundledDll.BundleName)' == ''">
+        <BundleName>%(_BundledDll.Filename)%(_BundledDll.Extension)</BundleName>
+      </_BundledDll>
+      <_BundledDll Update="@(_BundledDll)">
+        <LogicalName>$(RootNamespace).Dependencies.%(_BundledDll.BundleName).gz</LogicalName>
+        <WithCulture>false</WithCulture>
+      </_BundledDll>
+    </ItemGroup>
+    <CompressEmbeddedDll Source="%(_BundledDll.FullPath)" Destination="$(IntermediateOutputPath)embedded\%(_BundledDll.BundleName).gz" />
+    <ItemGroup>
+      <EmbeddedResource Include="@(_BundledDll->'$(IntermediateOutputPath)embedded\%(BundleName).gz')" />
+      <FileWrites Include="@(_BundledDll->'$(IntermediateOutputPath)embedded\%(BundleName).gz')" />
+    </ItemGroup>
+  </Target>
   <PropertyGroup>
     <PostBuildEvent>if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\$(TargetFileName)"
 if $(ConfigurationName) == Release_MSD del "$(ProjectDir)Resources\Installer MSD\MegaSearchDesktop.exe"

@@ -835,12 +835,10 @@ End Class
 Friend Module MegaAccountNative
     Friend Const Library As String = "MegaAccountBridge.dll"
 
-    ''' <summary>单文件版把原生模块和 VC++ 运行库内嵌进 exe。首次使用时释放到
-    ''' %LOCALAPPDATA%\MegaDownloader\native\，再从绝对路径预加载，P/Invoke 才会命中。
-    ''' 便携版由构建直接复制到程序目录，这里检测到文件已存在就不再释放。</summary>
+    ' 正式版优先使用内嵌模块。仅当本地构建没有内嵌模块时，才尝试使用旁置 DLL。
     Private ReadOnly nativeGate As New Object()
     Private nativeReady As Integer
-    Private nativeDirectory As String
+    Private Const LoadWithAlteredSearchPath As UInteger = &H8UI
 
     Friend ReadOnly Property IsReady As Boolean
         Get
@@ -855,14 +853,16 @@ Friend Module MegaAccountNative
             If nativeReady <> 0 Then Return
             If Not Environment.Is64BitProcess Then Return
             Try
-                Dim beside As String = IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Library)
-                If IO.File.Exists(beside) Then
-                    Preload(beside)
-                Else
-                    Dim extracted As String = ExtractEmbedded()
-                    If extracted Is Nothing Then Return
-                    Preload(extracted)
-                End If
+                Dim modulePath As String
+                Using bridge = ResourceHelper.OpenBundledDll(Library)
+                    If bridge IsNot Nothing Then
+                        modulePath = ExtractEmbedded(bridge)
+                    Else
+                        modulePath = IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Library)
+                        If Not IO.File.Exists(modulePath) Then Return
+                    End If
+                End Using
+                Preload(modulePath)
                 Threading.Volatile.Write(nativeReady, 1)
             Catch ex As Exception
                 Log.WriteWarning("Could not prepare the MEGA account module: " & Log.SafeException(ex))
@@ -870,58 +870,50 @@ Friend Module MegaAccountNative
         End SyncLock
     End Sub
 
-    ''' <summary>释放内嵌模块。内容按程序版本分目录缓存，升级后不会复用旧文件。</summary>
-    Private Function ExtractEmbedded() As String
-        Dim resources = Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames()
-        Dim moduleName As String = resources.FirstOrDefault(Function(name) name.EndsWith("." & Library, StringComparison.OrdinalIgnoreCase))
-        If moduleName Is Nothing Then Return Nothing
-        Dim target As String = IO.Path.Combine(IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MegaDownloader"),
-            IO.Path.Combine("native", Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString()))
+    Private Function ExtractEmbedded(bridge As IO.Stream) As String
+        Dim target As String = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MegaDownloader", "native", GetType(MegaAccountService).Assembly.GetName().Version.ToString())
         IO.Directory.CreateDirectory(target)
-        Dim modulePath As String = IO.Path.Combine(target, Library)
-        ' The runtime DLLs must land before the module is loaded from this folder.
         For Each runtime As String In New String() {"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"}
-            ExtractResource(resources, runtime, IO.Path.Combine(target, runtime))
+            Using source = ResourceHelper.OpenBundledDll(runtime)
+                ExtractResource(source, IO.Path.Combine(target, runtime))
+            End Using
         Next
-        ExtractResource(resources, Library, modulePath)
-        nativeDirectory = target
+        Dim modulePath = IO.Path.Combine(target, Library)
+        ExtractResource(bridge, modulePath)
         Return modulePath
     End Function
 
-    Private Sub ExtractResource(resources As String(), fileName As String, destination As String)
-        Dim resourceName As String = resources.FirstOrDefault(
-            Function(name) name.EndsWith("." & fileName, StringComparison.OrdinalIgnoreCase))
-        If resourceName Is Nothing Then Return
-        Using source = Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-            If source Is Nothing Then Return
-            Dim bytes(CInt(source.Length) - 1) As Byte
-            source.Read(bytes, 0, bytes.Length)
-            If IO.File.Exists(destination) AndAlso New IO.FileInfo(destination).Length = bytes.Length Then Return
-            Dim temp As String = destination & "." & Guid.NewGuid().ToString("N") & ".tmp"
-            Try
-                IO.File.WriteAllBytes(temp, bytes)
-                If IO.File.Exists(destination) Then IO.File.Delete(destination)
-                IO.File.Move(temp, destination)
-            Finally
-                If IO.File.Exists(temp) Then IO.File.Delete(temp)
-            End Try
+    Private Sub ExtractResource(source As IO.Stream, destination As String)
+        Dim bytes As Byte()
+        Using buffer As New IO.MemoryStream()
+            source.CopyTo(buffer)
+            bytes = buffer.ToArray()
         End Using
+        ' A rebuild of the same version can replace a DLL with different bytes of the same size.
+        Dim existing As New IO.FileInfo(destination)
+        If existing.Exists AndAlso existing.Length = bytes.Length AndAlso IO.File.ReadAllBytes(destination).SequenceEqual(bytes) Then Return
+        Dim temp As String = destination & "." & Guid.NewGuid().ToString("N") & ".tmp"
+        Try
+            IO.File.WriteAllBytes(temp, bytes)
+            If existing.Exists Then
+                IO.File.Replace(temp, destination, Nothing)
+            Else
+                IO.File.Move(temp, destination)
+            End If
+        Finally
+            If IO.File.Exists(temp) Then IO.File.Delete(temp)
+        End Try
     End Sub
 
-    ''' <summary>用绝对路径加载，避免依赖 DLL 搜索顺序。</summary>
     Private Sub Preload(modulePath As String)
-        If nativeDirectory IsNot Nothing Then SetDllDirectory(nativeDirectory)
-        Dim handle = LoadLibraryW(modulePath)
+        ' Resolve the VC++ runtime from the module's directory for this load.
+        Dim handle = LoadLibraryExW(modulePath, IntPtr.Zero, LoadWithAlteredSearchPath)
         If handle = IntPtr.Zero Then Throw New IO.IOException("Could not load " & Library & " (" & Marshal.GetLastWin32Error() & ").")
     End Sub
 
-    <System.Runtime.InteropServices.DllImport("kernel32", CharSet:=System.Runtime.InteropServices.CharSet.Unicode, SetLastError:=True)>
-    Private Function LoadLibraryW(path As String) As IntPtr
-    End Function
-
-    <System.Runtime.InteropServices.DllImport("kernel32", CharSet:=System.Runtime.InteropServices.CharSet.Unicode, SetLastError:=True)>
-    Private Function SetDllDirectory(path As String) As Boolean
+    <System.Runtime.InteropServices.DllImport("kernel32", ExactSpelling:=True, CharSet:=System.Runtime.InteropServices.CharSet.Unicode, SetLastError:=True)>
+    Private Function LoadLibraryExW(path As String, reserved As IntPtr, flags As UInteger) As IntPtr
     End Function
 
     <UnmanagedFunctionPointer(CallingConvention.Cdecl)>

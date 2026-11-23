@@ -51,110 +51,19 @@ jobs:
       - name: Build solution (Release)
         run: msbuild MegaDownloader.sln /p:Configuration=Release /p:Platform=x86 /m /v:minimal /nr:false
 
-      # 6. 收集构建产物
-      - name: Collect artifacts
-        shell: pwsh
-        run: |
-          $out = 'bin\Release'
-          if (-not (Test-Path $out)) { throw "Build output not found: $out" }
-          $staging = 'artifacts'
-          New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          # 主程序
-          Copy-Item "$out\MegaDownloader.exe" $staging -Force
-          # 依赖 DLL (与 exe 同目录运行所需)
-          $deps = @(
-            'BouncyCastle.Cryptography.dll',
-            'F5Lib.dll',
-            'Fadd.dll',
-            'HttpServer.dll',
-            'Microsoft.Bcl.AsyncInterfaces.dll',
-            'Newtonsoft.Json.dll',
-            'ObjectListView.dll',
-            'SharpCompress.dll',
-            'System.Resources.Extensions.dll',
-            'System.Memory.dll',
-            'System.Buffers.dll',
-            'System.Runtime.CompilerServices.Unsafe.dll',
-            'System.Numerics.Vectors.dll',
-            'System.Text.Encoding.CodePages.dll',
-            'System.Threading.Tasks.Extensions.dll',
-            'MegaDownloader.exe.config'
-          )
-          foreach ($d in $deps) {
-            $src = Join-Path $out $d
-            if (Test-Path $src) { Copy-Item $src $staging -Force } else { throw "Missing artifact dependency: $src" }
-          }
-          # 原生 MEGA 账号模块（x64）与其 VC++ 运行库。提交在 Native/MegaAccount/prebuilt/x64；
-          # 没有它们时项目仍可构建，只是账号入口提示缺少模块，所以这里按可选处理。
-          $native = @(
-            'MegaAccountBridge.dll',
-            'msvcp140.dll',
-            'vcruntime140.dll',
-            'vcruntime140_1.dll'
-          )
-          $presentNative = @()
-          foreach ($n in $native) {
-            $src = Join-Path $out $n
-            if (Test-Path $src) { Copy-Item $src $staging -Force; $presentNative += $n }
-          }
-          if ($presentNative.Count -gt 0 -and $presentNative.Count -lt $native.Count) {
-            throw "Incomplete native module set in $out : $($presentNative -join ', ')"
-          }
-          if ($presentNative.Count -eq 0) { Write-Host "No native MEGA account module in this build; the account entry stays disabled." }
-          # 打包为 zip
-          $releaseFiles = @('MegaDownloader.exe') + $deps + $presentNative
-          $archiveFiles = @($releaseFiles | ForEach-Object { Join-Path $staging $_ })
-          Compress-Archive -LiteralPath $archiveFiles -DestinationPath "$staging\MegaDownloader-Revival-win-x86.zip" -Force
-          Write-Host "--- Artifacts ---"
-          Get-ChildItem $staging | Select-Object Name, Length
-
-      # 6b. 单文件版回归检查：主 exe 靠 ApplicationEvents.LoadDLLFromStream 从内嵌资源按需加载 DLL，
-      # 15 个 CopyLocal 引用必须全部内嵌，否则裸 exe 在新目录启动即崩（v2.2 漏嵌 5 个 System.*.dll
-      # 就是这么坏的）。这里逐一核对，有缺失直接让构建失败，而不是发出去让用户“双击没反应”。
-      - name: Verify embedded DLLs for single-file exe
-        # 必须用 Windows PowerShell 5.1：ReflectionOnlyLoad* 在 pwsh(.NET Core) 上抛
-        # PlatformNotSupportedException，用 pwsh 跑此步每次构建必红。
+      - name: Package and verify release assets
         shell: powershell
-        run: |
-          $exe = 'bin\Release\MegaDownloader.exe'
-          if (-not (Test-Path $exe)) { throw "Missing build output: $exe" }
-          $asm = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom((Resolve-Path $exe).Path)
-          $res = $asm.GetManifestResourceNames()
-          $need = @(
-            'BouncyCastle.Cryptography.dll',
-            'F5Lib.dll',
-            'Fadd.dll',
-            'HttpServer.dll',
-            'Microsoft.Bcl.AsyncInterfaces.dll',
-            'Newtonsoft.Json.dll',
-            'ObjectListView.dll',
-            'SharpCompress.dll',
-            'System.Resources.Extensions.dll',
-            'System.Memory.dll',
-            'System.Buffers.dll',
-            'System.Runtime.CompilerServices.Unsafe.dll',
-            'System.Numerics.Vectors.dll',
-            'System.Text.Encoding.CodePages.dll',
-            'System.Threading.Tasks.Extensions.dll'
-          )
-          $missing = @($need | Where-Object { $n = $_; -not ($res | Where-Object { $_ -like "*$n" }) })
-          if ($missing.Count -gt 0) { throw ("Single-file exe missing embedded DLLs: " + ($missing -join ', ')) }
-          Write-Host "All 15 dependency DLLs embedded; bare exe can run standalone."
-          # 原生账号模块同样要内嵌：单文件版靠它释放到 %LOCALAPPDATA% 再加载。
-          $nativeNeed = @('MegaAccountBridge.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
-          $nativeMissing = @($nativeNeed | Where-Object { $n = $_; -not ($res | Where-Object { $_ -like "*$n" }) })
-          if ($nativeMissing.Count -gt 0 -and $nativeMissing.Count -lt $nativeNeed.Count) {
-            throw ("Single-file exe has an incomplete embedded native module: " + ($nativeMissing -join ', '))
-          }
-          if ($nativeMissing.Count -eq 0) { Write-Host "Native MEGA account module embedded." }
-          Get-Item $exe | Select-Object Name, Length
+        run: .\Tests\Stage-ReleaseAssets.ps1 -TestStartup
 
       # 7. 上传构建产物 (任一触发都执行)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: MegaDownloader-Revival-build
-          path: artifacts/*
+          path: |
+            artifacts/MegaDownloader.exe
+            artifacts/MegaDownloader-Revival-win-x86.zip
+          if-no-files-found: error
           retention-days: 30
 
   release:
@@ -180,10 +89,7 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
-      # 创建 Release 并上传双版本：zip（解压用，exe + DLL + config）+
-      # 裸 MegaDownloader.exe（直接打开用，15 个 DLL 已内嵌为资源，缺 DLL 时自动从自身加载）。
-      # 注意：新增 CopyLocal 引用必须同步在 vbproj 里加 EmbeddedResource，否则单文件版会坏，
-      # 上一步 Verify embedded DLLs 会先拦住。
+      # 上传同一份 EXE 的单文件版和便携 ZIP。ZIP 附带运行配置和 SDK 许可证。
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
