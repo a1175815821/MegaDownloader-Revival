@@ -176,7 +176,11 @@ Friend NotInheritable Class UiStyles
 
     ' Keep the designer geometry in logical pixels. Font selection is completed
     ' before the first handle/layout, so font metrics and DPI never both scale it.
+    ' Designer forms carry the icon in their .Designer.vb; code-built forms have no
+    ' designer file, so the app icon is assigned here or the title bar falls back
+    ' to the framework default.
     Friend Shared Sub InitializeForm(form As Form)
+        form.Icon = Global.MegaDownloader.My.Resources.Resources.icono
         form.AutoScaleMode = AutoScaleMode.None
         SetAppFont(form)
         form.AutoScaleDimensions = New SizeF(96, 96)
