@@ -14,13 +14,64 @@ Public Partial Class ELCAccountControl
 	Public Sub New()
 		' The Me.InitializeComponent call is required for Windows Forms designer support.
 		Me.InitializeComponent()
+        ' 设计器按 615 逻辑像素排版。125% 缩放下两组内容比页面更宽，底部按钮也
+        ' 落在可见高度之外——宽度按页面重排，纵向不足时由滚动条补齐。
+        AutoScroll = True
+        ' 固定 96px 的按钮在罗/俄语下会裁掉“Add new”。按钮按文字自适应，
+        ' 位置不变，组内仍有 24px 间隔。
+        btnELCAccountAddNew.AutoSize = True
+        btnELCAccountModify.AutoSize = True
+        btnELCAccountDelete.AutoSize = True
+        ' 键盘顺序：账号列表 → 别名 → 网址 → 账号 → 密钥 → 默认/显示密码 →
+        ' 增删改按钮 → 帮助链接。设计器的 TabIndex 会把网址排到最后。
+        Dim tabOrder As Control() = {dgELCUsers, txtELCAccountAlias, txtELCAccountURL, txtELCAccountUser,
+                                     txtELCAccountKey, chkELCAccountMain, chkELCAccountShowPassword,
+                                     btnELCAccountAddNew, btnELCAccountModify, btnELCAccountDelete,
+                                     lklELCAliasAccount, lklELCUrl, lklELCMainAccount, lklELCShowPassword}
+        For index As Integer = 0 To tabOrder.Length - 1
+            tabOrder(index).TabIndex = index
+        Next
+        GroupBox8.TabIndex = 0
+        GroupBox9.TabIndex = 1
         AddHandler Disposed, Sub()
                                  Cerrar()
                                  If gridHeaderFont IsNot Nothing Then gridHeaderFont.Dispose()
                                  If t IsNot Nothing Then t.Dispose()
                              End Sub
-		
+
 	End Sub
+
+    Private layingOutSections As Boolean
+
+    Protected Overrides Sub OnResize(e As EventArgs)
+        MyBase.OnResize(e)
+        LayoutSections()
+    End Sub
+
+    Private Sub LayoutSections()
+        If layingOutSections OrElse GroupBox8 Is Nothing OrElse GroupBox9 Is Nothing OrElse GroupBox10 Is Nothing Then Return
+        layingOutSections = True
+        Try
+            Dim margin As Integer = GroupBox8.Left
+            Dim gap As Integer = Math.Max(0, GroupBox9.Left - GroupBox8.Right)
+            Dim width As Integer = ClientSize.Width - margin * 2
+            If width <= 0 Then Return
+            GroupBox10.Width = width
+            lblInfoELC.MaximumSize = New Size(Math.Max(50, width - lblInfoELC.Left * 2), 0)
+            Dim detailWidth As Integer = GroupBox9.Width
+            Dim listWidth As Integer = width - detailWidth - gap
+            If listWidth >= 120 Then
+                GroupBox8.Width = listWidth
+                GroupBox9.Left = margin + width - detailWidth
+            Else
+                GroupBox8.Width = 120
+                GroupBox9.Left = GroupBox8.Right + gap
+            End If
+            dgELCUsers.Width = Math.Max(40, GroupBox8.ClientSize.Width - dgELCUsers.Left * 2)
+        Finally
+            layingOutSections = False
+        End Try
+    End Sub
 	
 	Public Sub Cerrar
         If ELCAccountH IsNot Nothing Then
@@ -133,7 +184,11 @@ Public Partial Class ELCAccountControl
 	Private ELCURLBeingEdited As String = ""
 	Private ELCAliasBeingEdited As String = ""
 	Private ELCAccountAction As String = ""
+	Private fillingGrid As Boolean
+
 	Private Sub FillELCAccountDataGridView()
+		fillingGrid = True
+		Try
 		dgELCUsers.DataSource = ELCAccountH.GetAccounts.OrderBy(Function(c) As String
 																Dim t As String
 																If c.DefaultAccount Then
@@ -146,6 +201,9 @@ Public Partial Class ELCAccountControl
 																).Select(Function(c As ELCAccountHelper.Account) New With { _
 																.Email = If(c.DefaultAccount, PREFIX_MAIN_ACCOUNT, "") & c.Alias} _
 																).ToList()
+		Finally
+			fillingGrid = False
+		End Try
 	
 	End Sub
 	
@@ -164,59 +222,66 @@ Public Partial Class ELCAccountControl
 		End If
 	End Sub
 	
-	Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgELCUsers.CellClick
-		If e.RowIndex < 0 Then Return
-		' N-P3-1: in NEW mode (user pressed "Add new" and started typing) a mis-click
-		' on the grid used to silently overwrite the five input boxes with the clicked
-		' account's data and flip the button back to "Add new" — the half-entered
-		' account was gone with no confirmation. Confirm when there is unsaved input;
-		' with an empty form, leave NEW mode without a dialog.
-		If ELCAccountAction = "NEW" Then
-			If Not String.IsNullOrEmpty(txtELCAccountURL.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountUser.Text) OrElse _
-			   Not String.IsNullOrEmpty(txtELCAccountAlias.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountKey.Text) Then
-				If MessageBox.Show(Language.GetText("ELC discard new account confirm"), Language.GetText("Note"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> Windows.Forms.DialogResult.Yes Then
-					Return
+	' 加载必须跟着“当前行”走：键盘上下键改选后如果仍显示上一个账号，
+	' 点“修改”会把旧账号的数据写回去。仅鼠标点击的事件覆盖不到键盘改选。
+	Private loadingAccountRow As Boolean
+
+	Private Sub dgSELUsers_SelectionChanged(ByVal sender As Object, ByVal e As EventArgs) Handles dgELCUsers.SelectionChanged
+		If fillingGrid OrElse loadingAccountRow OrElse dgELCUsers.SelectedCells.Count = 0 Then Return
+		Dim rowIndex As Integer = dgELCUsers.SelectedCells(0).RowIndex
+		If rowIndex < 0 Then Return
+		loadingAccountRow = True
+		Try
+			' N-P3-1: in NEW mode (user pressed "Add new" and started typing) a mis-click
+			' on the grid used to silently overwrite the five input boxes with the clicked
+			' account's data and flip the button back to "Add new" — the half-entered
+			' account was gone with no confirmation. Confirm when there is unsaved input;
+			' with an empty form, leave NEW mode without a dialog.
+			If ELCAccountAction = "NEW" Then
+				If Not String.IsNullOrEmpty(txtELCAccountURL.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountUser.Text) OrElse _
+				   Not String.IsNullOrEmpty(txtELCAccountAlias.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountKey.Text) Then
+					If MessageBox.Show(Language.GetText("ELC discard new account confirm"), Language.GetText("Note"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> Windows.Forms.DialogResult.Yes Then
+						Return
+					End If
 				End If
 			End If
-		End If
-		Dim aliasName As String = CStr(dgELCUsers.Rows(e.RowIndex).Cells(0).Value)
-		'Private Sub dgSELUsers_CellClick(ByVal sender As Object, ByVal e As System.EventArgs) Handles dgELCUsers.SelectionChanged
-		'	
-		'	If dgELCUsers.SelectedCells Is Nothing OrElse dgELCUsers.SelectedCells.Count = 0 Then Exit Sub
-		'	Dim aliasName As String = CStr(dgELCUsers.SelectedCells(0).value)
-		
-		If aliasName.StartsWith(PREFIX_MAIN_ACCOUNT) Then aliasName = aliasName.Substring(PREFIX_MAIN_ACCOUNT.Length)
-		Dim account As ELCAccountHelper.Account = ELCAccountH.GetAccountDetailsByAlias(aliasName)
-		If account IsNot Nothing Then
-			txtELCAccountUser.Text = Criptografia.ToInsecureString(account.User)
-			txtELCAccountAlias.Text = account.Alias
-			txtELCAccountURL.Text = account.URL
-			txtELCAccountKey.Text = PASSWORDDEFECTO
-			ELCURLBeingEdited = txtELCAccountURL.Text
-			ELCAliasBeingEdited = txtELCAccountAlias.Text
-			chkELCAccountMain.Checked = account.DefaultAccount
-			btnELCAccountAddNew.Enabled = True
-			btnELCAccountDelete.Enabled = True
-			btnELCAccountModify.Enabled = True
-			ELCAccountAction = "EDIT"
-			btnELCAccountAddNew.Text = Language.GetText("Add new")
-			txtELCAccountKey.Enabled = True
-			txtELCAccountUser.Enabled = True
-			txtELCAccountURL.Enabled = True
-			txtELCAccountAlias.Enabled = True
-			chkELCAccountShowPassword.Enabled = True
-			chkELCAccountShowPassword.Checked = False
-			chkELCAccountMain.Enabled = True
-		Else
-			MessageBox.Show(Language.GetText("Account not found"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-			ELCURLBeingEdited = ""
-			ELCAliasBeingEdited = ""
-			btnELCAccountAddNew.Enabled = True
-			btnELCAccountDelete.Enabled = False
-			btnELCAccountModify.Enabled = False
-		End If
+			Dim aliasName As String = CStr(dgELCUsers.Rows(rowIndex).Cells(0).Value)
+
+			If aliasName.StartsWith(PREFIX_MAIN_ACCOUNT) Then aliasName = aliasName.Substring(PREFIX_MAIN_ACCOUNT.Length)
+			Dim account As ELCAccountHelper.Account = ELCAccountH.GetAccountDetailsByAlias(aliasName)
+			If account IsNot Nothing Then
+				txtELCAccountUser.Text = Criptografia.ToInsecureString(account.User)
+				txtELCAccountAlias.Text = account.Alias
+				txtELCAccountURL.Text = account.URL
+				txtELCAccountKey.Text = PASSWORDDEFECTO
+				ELCURLBeingEdited = txtELCAccountURL.Text
+				ELCAliasBeingEdited = txtELCAccountAlias.Text
+				chkELCAccountMain.Checked = account.DefaultAccount
+				btnELCAccountAddNew.Enabled = True
+				btnELCAccountDelete.Enabled = True
+				btnELCAccountModify.Enabled = True
+				ELCAccountAction = "EDIT"
+				btnELCAccountAddNew.Text = Language.GetText("Add new")
+				txtELCAccountKey.Enabled = True
+				txtELCAccountUser.Enabled = True
+				txtELCAccountURL.Enabled = True
+				txtELCAccountAlias.Enabled = True
+				chkELCAccountShowPassword.Enabled = True
+				chkELCAccountShowPassword.Checked = False
+				chkELCAccountMain.Enabled = True
+			Else
+				MessageBox.Show(Language.GetText("Account not found"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+				ELCURLBeingEdited = ""
+				ELCAliasBeingEdited = ""
+				btnELCAccountAddNew.Enabled = True
+				btnELCAccountDelete.Enabled = False
+				btnELCAccountModify.Enabled = False
+			End If
+		Finally
+			loadingAccountRow = False
+		End Try
 	End Sub
-	
+
 	Private Sub btnELCAccountAddNew_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnELCAccountAddNew.Click
 		Select Case ELCAccountAction
 			Case "NEW"

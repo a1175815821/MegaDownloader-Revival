@@ -30,6 +30,11 @@
   <Text key="DriveSubscription_CheckSchedule"><![CDATA[Ellenőrzési ütemezés]]></Text>
   <Text key="DriveSubscription_QueueMode"><![CDATA[Új fájlok megjelenésekor]]></Text>
   <Text key="DriveSubscription_NewDefaults"><![CDATA[Új feliratkozások alapértékei]]></Text>
+  <Text key="DriveSubscription_ShortSource"><![CDATA[Forrás szerinti]]></Text>
+  <Text key="DriveSubscription_ShortManual"><![CDATA[Csak kézi]]></Text>
+  <Text key="DriveSubscription_ShortDaily"><![CDATA[Naponta ekkor]]></Text>
+  <Text key="DriveSubscription_ShortReview"><![CDATA[Előbb ellenőriz]]></Text>
+  <Text key="DriveSubscription_ShortAuto"><![CDATA[Automatikus hozzáadás]]></Text>
   <Text key="DriveSubscription_SelectPending"><![CDATA[Az összes várakozó fájl kijelölése]]></Text>
   <Text key="DriveSubscription_ClearSelection"><![CDATA[Kijelölés törlése]]></Text>
   <Text key="DriveSubscription_PendingReview"><![CDATA[Jóváhagyásra vár]]></Text>

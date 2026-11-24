@@ -479,7 +479,7 @@ Public Class Configuration
         Dim ExaminarDirectorio As New FolderBrowserDialog
         ExaminarDirectorio.Description = Language.GetText("Select directory")
 
-        If ExaminarDirectorio.ShowDialog = Windows.Forms.DialogResult.OK Then
+        If ExaminarDirectorio.ShowDialog(Me) = Windows.Forms.DialogResult.OK Then
             txtRuta.Text = ExaminarDirectorio.SelectedPath
         End If
 
@@ -520,7 +520,7 @@ Public Class Configuration
         Integer.TryParse(txtTamanoPaquete.Text, TamanoPaquete)
         Integer.TryParse(txtTamanoBuffer.Text, TamanoBuffer)
 
-        If TamanoPaquete = 0 Or TamanoBuffer = 0 Then
+        If TamanoPaquete <= 0 Or TamanoBuffer <= 0 Then
             MessageBox.Show(Language.GetText("Disk buffer or package size values are not correct"), Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
             Exit Sub
         ElseIf TamanoPaquete >= TamanoBuffer Then
@@ -863,6 +863,7 @@ Public Class Configuration
 
     Private Sub chkServidorStreaming_CheckedChanged(sender As System.Object, e As System.EventArgs) Handles chkStreamingServer.CheckedChanged
         txtStreamingPort.Enabled = chkStreamingServer.Checked
+        txtStreamingPassword.Enabled = chkStreamingServer.Checked
     End Sub
 
     Private Function MsgApagarPC() As String
@@ -920,7 +921,7 @@ Public Class Configuration
         Examinar.Filter = Language.GetText("Templates") & " (*.xml)|*.xml"
         Examinar.Multiselect = False
 
-        If Examinar.ShowDialog = Windows.Forms.DialogResult.OK Then
+        If Examinar.ShowDialog(Me) = Windows.Forms.DialogResult.OK Then
             txtServidorWebTemplate.Text = Examinar.FileName
         End If
 
@@ -960,7 +961,7 @@ Public Class Configuration
         Dim ExaminarDirectorio As New FolderBrowserDialog
         ExaminarDirectorio.Description = Language.GetText("Select directory")
 
-        If ExaminarDirectorio.ShowDialog = Windows.Forms.DialogResult.OK Then
+        If ExaminarDirectorio.ShowDialog(Me) = Windows.Forms.DialogResult.OK Then
             txtVLCPath.Text = ExaminarDirectorio.SelectedPath
         End If
 

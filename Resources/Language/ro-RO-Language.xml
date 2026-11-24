@@ -30,6 +30,11 @@
   <Text key="DriveSubscription_CheckSchedule"><![CDATA[Programul verificărilor]]></Text>
   <Text key="DriveSubscription_QueueMode"><![CDATA[Când apar fișiere noi]]></Text>
   <Text key="DriveSubscription_NewDefaults"><![CDATA[Valori implicite pentru abonamente noi]]></Text>
+  <Text key="DriveSubscription_ShortSource"><![CDATA[Valoarea sursei]]></Text>
+  <Text key="DriveSubscription_ShortManual"><![CDATA[Doar manual]]></Text>
+  <Text key="DriveSubscription_ShortDaily"><![CDATA[Zilnic la]]></Text>
+  <Text key="DriveSubscription_ShortReview"><![CDATA[Verifică întâi]]></Text>
+  <Text key="DriveSubscription_ShortAuto"><![CDATA[Adaugă automat]]></Text>
   <Text key="DriveSubscription_SelectPending"><![CDATA[Selectează toate fișierele în așteptare]]></Text>
   <Text key="DriveSubscription_ClearSelection"><![CDATA[Anulează selecția]]></Text>
   <Text key="DriveSubscription_PendingReview"><![CDATA[În așteptarea confirmării]]></Text>
@@ -454,7 +459,7 @@ Clichează pe "Ajutor" pentru a citi termenii de utilizare.]]></Text>
   <Text key="Account"><![CDATA[Cont]]></Text>
   <Text key="Main account"><![CDATA[Contul implicit]]></Text>
   <Text key="Must configure at least one account"><![CDATA[Trebuie să configurezi cel puțin un cont.]]></Text>
-  <Text key="Add new"><![CDATA[Adauga unul nou]]></Text>
+  <Text key="Add new"><![CDATA[Adaugă]]></Text>
   <Text key="Account list empty"><![CDATA[Contul este goală]]></Text>
   <Text key="Account already exists"><![CDATA[Pseudonimul sau e-mail există deja]]></Text>
   <Text key="Account modified correctly"><![CDATA[Contul a fost modificat cu succes. 

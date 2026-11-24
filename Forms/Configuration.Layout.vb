@@ -190,6 +190,7 @@ Partial Public Class Configuration
                                   InlineControls(chkApagarPC, linkApagarPC), chkStartWindows,
                                   InlineControls(chkUltimaConfig, linkUltConfig), updateOptions,
                                   InlineControls(chkUnZip, comboPrioridad)}
+        comboPrioridad.Width = 140
         For index As Integer = 0 To checks.Length - 1
             checks(index).Margin = New Padding(0, 6, 16, 6)
             options.Controls.Add(checks(index), index Mod 2, index \ 2)
@@ -203,11 +204,19 @@ Partial Public Class Configuration
     End Sub
 
     Private Sub BuildConnectionPage()
-        SettingsSection(ConexionGroup, InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
-                        InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
-                        FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1)
+        ' 行的 TabIndex 按视觉顺序重排：新建的分区行默认都是 0，Tab 会先跳代理组，
+        ' 说明链接也会插到数字输入框中间。
+        Dim connectionRows As Control() = {InlineControls(chkLimitarVelocidad, txtLimiteVelocidadKBs, Label15),
+                                           InlineControls(chkReintentarError, txtPeriodoReintento, Label12), chkQuotaBreak,
+                                           FieldRow(Label10, txtDescSimult), FieldRow(Label9, txtConFic), LinkLabel1}
+        For index As Integer = 0 To connectionRows.Length - 1
+            connectionRows(index).TabIndex = index
+        Next
+        SettingsSection(ConexionGroup, connectionRows)
         SettingsSection(GroupBox2, chkProxy, Divider(), FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
                         FieldRow(Label23, txtProxyName), FieldRow(Label22, txtProxyPassword))
+        ConexionGroup.TabIndex = 0
+        GroupBox2.TabIndex = 1
         SettingsPage(connectionPage, ConexionGroup, GroupBox2)
     End Sub
 
@@ -218,12 +227,12 @@ Partial Public Class Configuration
             .Padding = New Padding(20, 0, 0, 16)}
         UiStyles.SetRole(manualHint, UiStyles.Role.Muted)
 
-        Dim sourceDefault = Language.GetText("DriveSubscription_UseSourceDefaults")
+        Dim sourceDefault = Language.GetText("DriveSubscription_ShortSource")
         Dim scheduleLabel As New Label With {.Text = Language.GetText("DriveSubscription_CheckSchedule")}
         subscriptionDefaultSchedule = New ComboBox With {.Name = "SubscriptionDefaultSchedule", .DropDownStyle = ComboBoxStyle.DropDownList,
             .AccessibleName = scheduleLabel.Text}
-        subscriptionDefaultSchedule.Items.AddRange({sourceDefault, Language.GetText("Manual check only"),
-            Language.GetText("DriveSubscription_DailyLocalTime")})
+        subscriptionDefaultSchedule.Items.AddRange({sourceDefault, Language.GetText("DriveSubscription_ShortManual"),
+            Language.GetText("DriveSubscription_ShortDaily")})
         subscriptionDefaultTime = New DateTimePicker With {.Name = "SubscriptionDefaultTime", .Format = DateTimePickerFormat.Custom,
             .CustomFormat = "HH:mm", .ShowUpDown = True, .Width = 84, .AccessibleName = Language.GetText("DriveSubscription_DailyLocalTime")}
         AddHandler subscriptionDefaultSchedule.SelectedIndexChanged,
@@ -236,15 +245,15 @@ Partial Public Class Configuration
         Dim queueLabel As New Label With {.Text = Language.GetText("DriveSubscription_QueueMode")}
         subscriptionDefaultQueue = New ComboBox With {.Name = "SubscriptionDefaultQueue", .DropDownStyle = ComboBoxStyle.DropDownList,
             .AccessibleName = queueLabel.Text}
-        subscriptionDefaultQueue.Items.AddRange({sourceDefault, Language.GetText("DriveSubscription_ReviewFirst"),
-            Language.GetText("DriveSubscription_AutoQueue")})
+        subscriptionDefaultQueue.Items.AddRange({sourceDefault, Language.GetText("DriveSubscription_ShortReview"),
+            Language.GetText("DriveSubscription_ShortAuto")})
 
         Dim scheduledChecks As New Global.MegaDownloader.SettingsSection With {.Text = Language.GetText("DriveSubscription_ScheduledChecks")}
         SettingsSection(scheduledChecks, pauseSubscriptionChecks, manualHint)
         Dim scheduleInputs = InlineControls(subscriptionDefaultSchedule, subscriptionDefaultTime)
-        subscriptionDefaultSchedule.Width = 208
+        subscriptionDefaultSchedule.Width = 240
         Dim queueInputs = InlineControls(subscriptionDefaultQueue)
-        subscriptionDefaultQueue.Width = 208
+        subscriptionDefaultQueue.Width = 240
         Dim newDefaults As New Global.MegaDownloader.SettingsSection With {.Text = Language.GetText("DriveSubscription_NewDefaults")}
         SettingsSection(newDefaults, FieldRow(scheduleLabel, scheduleInputs), FieldRow(queueLabel, queueInputs))
         SettingsPage(subscriptionPage, scheduledChecks, newDefaults)

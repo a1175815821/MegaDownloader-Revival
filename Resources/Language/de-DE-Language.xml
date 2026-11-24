@@ -30,6 +30,11 @@
   <Text key="DriveSubscription_CheckSchedule"><![CDATA[Prüfzeitplan]]></Text>
   <Text key="DriveSubscription_QueueMode"><![CDATA[Bei neuen Dateien]]></Text>
   <Text key="DriveSubscription_NewDefaults"><![CDATA[Standardwerte für neue Abonnements]]></Text>
+  <Text key="DriveSubscription_ShortSource"><![CDATA[Standard der Quelle]]></Text>
+  <Text key="DriveSubscription_ShortManual"><![CDATA[Nur manuell]]></Text>
+  <Text key="DriveSubscription_ShortDaily"><![CDATA[Täglich um]]></Text>
+  <Text key="DriveSubscription_ShortReview"><![CDATA[Erst prüfen]]></Text>
+  <Text key="DriveSubscription_ShortAuto"><![CDATA[Automatisch hinzufügen]]></Text>
   <Text key="DriveSubscription_SelectPending"><![CDATA[Alle ausstehenden Dateien auswählen]]></Text>
   <Text key="DriveSubscription_ClearSelection"><![CDATA[Auswahl aufheben]]></Text>
   <Text key="DriveSubscription_PendingReview"><![CDATA[Prüfung ausstehend]]></Text>

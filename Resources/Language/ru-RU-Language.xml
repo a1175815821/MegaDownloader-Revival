@@ -30,6 +30,11 @@
   <Text key="DriveSubscription_CheckSchedule"><![CDATA[Расписание проверок]]></Text>
   <Text key="DriveSubscription_QueueMode"><![CDATA[При появлении новых файлов]]></Text>
   <Text key="DriveSubscription_NewDefaults"><![CDATA[Значения по умолчанию для новых подписок]]></Text>
+  <Text key="DriveSubscription_ShortSource"><![CDATA[Как в источнике]]></Text>
+  <Text key="DriveSubscription_ShortManual"><![CDATA[Только вручную]]></Text>
+  <Text key="DriveSubscription_ShortDaily"><![CDATA[Ежедневно в]]></Text>
+  <Text key="DriveSubscription_ShortReview"><![CDATA[Сначала проверить]]></Text>
+  <Text key="DriveSubscription_ShortAuto"><![CDATA[Добавлять автоматически]]></Text>
   <Text key="DriveSubscription_SelectPending"><![CDATA[Выбрать все файлы, ожидающие подтверждения]]></Text>
   <Text key="DriveSubscription_ClearSelection"><![CDATA[Снять выделение]]></Text>
   <Text key="DriveSubscription_PendingReview"><![CDATA[Ожидает подтверждения]]></Text>
@@ -532,7 +537,7 @@
   <Text key="Account"><![CDATA[Аккаунт]]></Text>
   <Text key="Main account"><![CDATA[Аккаунт по умолчанию]]></Text>
   <Text key="Must configure at least one account"><![CDATA[Нужно настроить хотя бы один аккаунт.]]></Text>
-  <Text key="Add new"><![CDATA[Добавить новый]]></Text>
+  <Text key="Add new"><![CDATA[Добавить]]></Text>
   <Text key="Account list empty"><![CDATA[Список аккаунтов пуст]]></Text>
   <Text key="Account already exists"><![CDATA[Псевдоним или эл. почта уже существуют]]></Text>
   <Text key="Account modified correctly">

@@ -1921,6 +1921,16 @@ public partial class RegressionTests {
             Check(tabs.SelectedTab.Controls.Count>0 && tabs.SelectedTab.Controls[0].Height>100,"first visit to the account page lays out its body");
             accountControl=(ELCAccountControl)typeof(Configuration).GetProperty("ElcAccountControl",hidden).GetValue(settings,null);
             Check(accountControl!=null,"selecting the account tab builds the account control");
+            Check(accountControl.Controls.Find("btnELCAccountAddNew",true).OfType<System.Windows.Forms.Button>().Single().AutoSize,
+                "ELC action buttons size to their translated labels");
+            var elcGrid=(System.Windows.Forms.DataGridView)accountControl.Controls.Find("dgELCUsers",true).Single();
+            var elcAlias=(System.Windows.Forms.TextBox)accountControl.Controls.Find("txtELCAccountAlias",true).Single();
+            var elcUrl=(System.Windows.Forms.TextBox)accountControl.Controls.Find("txtELCAccountURL",true).Single();
+            var elcKey=(System.Windows.Forms.TextBox)accountControl.Controls.Find("txtELCAccountKey",true).Single();
+            Check(elcGrid.RowCount>0 && elcAlias.TabIndex<elcUrl.TabIndex && elcUrl.TabIndex<elcKey.TabIndex,
+                "ELC keyboard order follows the account fields rather than the designer's link order");
+            elcGrid.ClearSelection();elcGrid.Rows[0].Cells[0].Selected=true;System.Windows.Forms.Application.DoEvents();
+            Check(elcUrl.Enabled,"selecting an ELC account by its current row loads the details");
             var addAccount=accountControl.Controls.Find("btnELCAccountAddNew",true).OfType<System.Windows.Forms.Button>().Single();
             var draftUrl=accountControl.Controls.Find("txtELCAccountURL",true).OfType<System.Windows.Forms.TextBox>().Single();
             addAccount.PerformClick();
@@ -1931,6 +1941,13 @@ public partial class RegressionTests {
                 "reopening settings discards an unsubmitted ELC account and exits add mode");
             accountControl.Cerrar();accountControl.Cerrar();
             Check(true,"account cleanup is safe before or after repeated close calls");
+            settings.ClientSize=new System.Drawing.Size(720,650);
+            tabs.SelectedIndex=tabs.TabPages.Count-1;System.Windows.Forms.Application.DoEvents();
+            var detailGroup=accountControl.Controls.Find("GroupBox9",true).Single();
+            var addAccountButton=accountControl.Controls.Find("btnELCAccountAddNew",true).Single();
+            Check(detailGroup.Right<=accountControl.ClientSize.Width,"ELC account details stay inside a narrow settings page: "+detailGroup.Right+">"+accountControl.ClientSize.Width);
+            Check(accountControl.AutoScroll && accountControl.DisplayRectangle.Bottom>=addAccountButton.Bottom,
+                "ELC account actions stay reachable when the page is shorter than the designed layout");
             tabs.SelectedTab=advanced;
             Check((string)logChoice.SelectedValue==cfg.NivelLog.ToString(),"the first visit to advanced settings selects the saved log level");
             tabs.SelectedIndex=1;
@@ -1946,6 +1963,11 @@ public partial class RegressionTests {
             Check(defaultTime.Enabled,"choosing a daily check time enables the time field");
             defaultSchedule.SelectedIndex=0;
             Check(defaultQueue.Items.Count==3 && !pauseChecks.Checked,"new subscriptions can follow the source queue mode and checks start unpaused");
+            foreach(var combo in new[]{defaultSchedule,defaultQueue})
+                foreach(object item in combo.Items) {
+                    int need=System.Windows.Forms.TextRenderer.MeasureText(Convert.ToString(item),combo.Font).Width+System.Windows.Forms.SystemInformation.VerticalScrollBarWidth+10;
+                    Check(need<=combo.Width+4,"subscription option fits its combo: "+item);
+                }
             tabs.SelectedIndex=0;
             var checkUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkCheckUpdates",true).Single();
             var manualUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkUpdateManualOnly",true).Single();
@@ -1959,6 +1981,20 @@ public partial class RegressionTests {
             checkUpdates.Checked=true;
             manualUpdates.Checked=false;
             Check(updateInterval.Enabled && updateInterval.Text=="6","returning to automatic updates restores the editable interval");
+            tabs.SelectedIndex=5;
+            var streaming=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkStreamingServer",true).Single();
+            var streamingPassword=(System.Windows.Forms.TextBox)settings.Controls.Find("txtStreamingPassword",true).Single();
+            streaming.Checked=false;
+            Check(!streamingPassword.Enabled,"streaming password stays inactive while the server is off");
+            streaming.Checked=true;
+            Check(streamingPassword.Enabled,"streaming password becomes editable with the server");
+            streaming.Checked=false;
+            tabs.SelectedIndex=2;
+            System.Windows.Forms.Control firstFocusable=tabs.SelectedTab.GetNextControl(null,true);
+            while(firstFocusable!=null && !(firstFocusable.TabStop && firstFocusable.Enabled && firstFocusable.Visible && firstFocusable.CanSelect))
+                firstFocusable=tabs.SelectedTab.GetNextControl(firstFocusable,true);
+            Check(firstFocusable!=null && firstFocusable.Name=="chkLimitarVelocidad","tab order follows the connection page layout instead of jumping to the proxy group");
+            tabs.SelectedIndex=0;
             var intervalLabel=updateInterval.Parent.Controls.OfType<System.Windows.Forms.Label>().Single(c=>c.Text=="检查间隔");
             foreach(int width in new[]{880,720,1080}) {
                 settings.ClientSize=new System.Drawing.Size(width,650);
