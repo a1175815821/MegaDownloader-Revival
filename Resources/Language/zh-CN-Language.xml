@@ -108,6 +108,7 @@
   <Text key="MegaDrive_AddToQueue"><![CDATA[加入队列]]></Text>
   <Text key="MegaDrive_Adding"><![CDATA[正在将文件加入队列…]]></Text>
   <Text key="MegaDrive_AddFailed"><![CDATA[无法准备下载，请检查保存路径后重试。]]></Text>
+  <Text key="MegaDrive_DirectoryFileConflict"><![CDATA[下方的目录路径已被本地文件占用。请选择其他保存位置，或移走该文件后重试。]]></Text>
   <Text key="MegaDrive_CreateFolders"><![CDATA[创建目录]]></Text>
   <Text key="MegaDrive_FoldersCreated"><![CDATA[已在所选保存路径创建目录。]]></Text>
   <Text key="MegaAccount_Title"><![CDATA[MEGA 账号]]></Text>
@@ -762,6 +763,7 @@ ELC 生成器窗口会默认选中它。
   <Text key="Config_LockedByAnotherProcess"><![CDATA[配置文件正被其它程序占用。为保护已有设置，本次未保存任何内容；占用解除后程序会自动恢复，请稍后重试。]]></Text>
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 个已下载文件来自不含完整性校验信息的旧链接，无法自动确认归属。仍要删除吗？任务目录中同名且大小一致的文件将被移除。]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[操作已取消，未删除任何任务或文件。]]></Text>
+  <Text key="Delete_OutputOwnershipChanged"><![CDATA[部分本地文件无法确认为所选任务的下载成品，已保留。]]></Text>
   <Text key="Downloads_Failed_Banner"><![CDATA[%N% 个任务失败。右键失败行查看详情，或在下方重试。]]></Text>
   <Text key="Must specify the update check interval, and this value must be a positive number of hours."><![CDATA[必须填写更新检查间隔，且为大于 0 的小时数。]]></Text>
 </Language>

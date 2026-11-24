@@ -266,6 +266,7 @@ Public Class AddLinks
             Me.MinimizeBox = False
             Me.ShowInTaskbar = False
             Me.StartPosition = FormStartPosition.CenterParent
+            Me.Icon = Global.MegaDownloader.My.Resources.Resources.icono
             Me.Size = New System.Drawing.Size(380, 130)
             lbl.Left = 12
             lbl.Top = 12
