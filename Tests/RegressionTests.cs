@@ -157,6 +157,9 @@ public partial class RegressionTests {
             new CaseDef("stop_pending_http","download",()=>StopWhileRequestIsPending(Plain,Key,Encrypted)),
             new CaseDef("deferred_config_startup","startup",DeferredConfigurationStartup),
             new CaseDef("concurrent_library_edits","startup",RecoverConcurrentLibraryEdits),
+            new CaseDef("library_xml_import","audit",LibraryXmlImport),
+            new CaseDef("remote_add_links_error","audit",RemoteAddLinksError),
+            new CaseDef("link_container_read","audit",LinkContainerRead),
             new CaseDef("locked_backups","core",RecoverLockedBackups),
             new CaseDef("startup_performance","startup",StartupPerformanceCases),
             new CaseDef("sevenzip_cancel","archive",SevenZipCancelCase),
@@ -172,6 +175,7 @@ public partial class RegressionTests {
             new CaseDef("scheduled_queue_integration","queue",ScheduledQueueIntegration),
             new CaseDef("instance_buffer_mutex","core",InstanceBufferMutex),
             new CaseDef("language_builtin_writes","language",LanguageBuiltinWrites),
+            new CaseDef("language_key_coverage","language",LanguageKeyCoverage),
             new CaseDef("zh_cn_quality","language",SimplifiedChineseQuality),
             new CaseDef("system_language_selection","language",SystemLanguageSelection),
             new CaseDef("error_classification","core",ErrorClassificationCases),
@@ -1012,6 +1016,18 @@ public partial class RegressionTests {
         var read=new System.Xml.XmlDocument(); read.Load(path);
         Check(read.DocumentElement.FirstChild.InnerText=="updated","changed builtin language file is updated");
     }
+    static void LanguageKeyCoverage() {
+        var packs=Directory.GetFiles(Path.Combine(projectRoot,"Resources","Language"),"*-Language.xml");
+        Func<string,string[]> readKeys=path=>{
+            var xml=new System.Xml.XmlDocument();xml.Load(path);
+            return xml.DocumentElement.SelectNodes("Text").Cast<System.Xml.XmlElement>().Select(e=>e.GetAttribute("key")).ToArray();
+        };
+        var expected=new HashSet<string>(readKeys(packs.Single(path=>Path.GetFileName(path)=="en-US-Language.xml")));
+        foreach(string pack in packs) {
+            var keys=readKeys(pack);
+            Check(keys.Length==expected.Count && expected.SetEquals(keys),Path.GetFileName(pack)+" has every built-in language key exactly once");
+        }
+    }
     static void SimplifiedChineseQuality() {
         var zh=new System.Xml.XmlDocument(); zh.Load(Path.Combine(projectRoot,"Resources","Language","zh-CN-Language.xml"));
         var nodes=zh.DocumentElement.SelectNodes("Text").Cast<System.Xml.XmlNode>().ToArray();
@@ -1823,7 +1839,20 @@ public partial class RegressionTests {
                 var package=new Paquete {Nombre="Subscription fixture",ListaFicheros=new List<Fichero>{complete,failed,paused}};
                 var packages=type.GetField("ListaPaquetes",hidden);
                 packages.SetValue(main,new List<Paquete>{package});
-                queue.Roots=new[]{package};
+                bool treeRebuilt=false, rebuiltUnderLock=false;
+                queue.ItemsChanging+=(sender,args)=>{
+                    treeRebuilt=true;
+                    rebuiltUnderLock|=Monitor.IsEntered(MegaDownloader.Mutex.ListaDescargas);
+                };
+                type.GetMethod("RefreshListaDescargas",hidden).Invoke(main,new object[]{true});
+                Check(treeRebuilt && !rebuiltUnderLock,"structural rendering does not hold the shared download lock");
+                var downloadsCompleted=type.GetMethod("DownloadsCompleted",hidden);
+                Check(!(bool)downloadsCompleted.Invoke(main,null),"failed or paused downloads do not qualify for automatic shutdown");
+                package.ListaFicheros=new List<Fichero>{complete};
+                Check((bool)downloadsCompleted.Invoke(main,null),"a nonempty fully completed queue qualifies for automatic shutdown");
+                package.ListaFicheros.Clear();
+                Check(!(bool)downloadsCompleted.Invoke(main,null),"an empty queue does not qualify for automatic shutdown");
+                package.ListaFicheros.AddRange(new[]{complete,failed,paused});
                 queue.SelectedObject=package;
                 var selection=type.GetMethod("ReadQueueSelection",hidden).Invoke(main,new object[]{new object[]{package,failed}});
                 var selectionType=selection.GetType();
@@ -1834,8 +1863,8 @@ public partial class RegressionTests {
                     "queue details count completed, failed and manually paused files without double-counting selected children");
                 type.GetMethod("ShowFirstFailedFile",hidden).Invoke(main,new object[]{main,EventArgs.Empty});
                 Check(Object.ReferenceEquals(queue.SelectedObject,failed),"the package failure action expands the package and selects its first failed file");
-                queue.Roots=new Paquete[0];
                 packages.SetValue(main,new List<Paquete>());
+                type.GetMethod("RefreshListaDescargas",hidden).Invoke(main,new object[]{true});
             }
             type.GetMethod("CrearMenus",hidden).Invoke(main,null);
             Check(menu.IsDisposed && main.Controls.OfType<System.Windows.Forms.MenuStrip>().Count()==1,"rebuilding menus disposes the old strip without duplicating entries");
@@ -1847,29 +1876,32 @@ public partial class RegressionTests {
             main.Hide();
         }
         var timer=System.Diagnostics.Stopwatch.StartNew();
-        using(var settings=new PresentationSettings()) {
+        using(var settings=new PresentationSettings {RunLifecycle=true}) {
             double construct=timer.Elapsed.TotalMilliseconds;
             var cfg=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
             cfg.ConfigUI=new ConfiguracionUI {Tema=ConfiguracionUI.ThemeModeType.Light};
             cfg.ELCAccounts=new List<ELCAccountHelper.Account>{new ELCAccountHelper.Account {Alias="Fixture",URL="https://example.invalid",User=new System.Security.SecureString(),Key=new System.Security.SecureString()}};
             cfg.ListaPreSharedKeys=new List<System.Security.SecureString>();
             cfg.Usuario="";cfg.Password="";cfg.Idioma=Language.FollowSystemLanguageCode;cfg.RutaDefecto=@"D:\Downloads";cfg.VLCPath=root;
-            cfg.NivelLog=Log.LevelLogType.Normal;cfg.PrioridadDescompresion=DescompresionPriority.Normal;
+            cfg.NivelLog=Log.LevelLogType.Debug;cfg.PrioridadDescompresion=DescompresionPriority.Normal;
             cfg.CheckUpdates=true;cfg.UpdateCheckIntervalHours=6;
             settings.Config=cfg;
             int layouts=0;foreach(var control in DescendantControls(settings))control.Layout+=(sender,args)=>layouts++;
-            timer.Restart();
-            typeof(Configuration).GetMethod("Configuration_Load",hidden).Invoke(settings,new object[]{settings,EventArgs.Empty});
-            double load=timer.Elapsed.TotalMilliseconds;
-            timer.Restart();
+            int loads=0;settings.Load+=(sender,args)=>loads++;
             settings.ShowInTaskbar=false;settings.StartPosition=System.Windows.Forms.FormStartPosition.Manual;settings.Location=new System.Drawing.Point(-30000,-30000);
+            timer.Restart();
             settings.Show();System.Windows.Forms.Application.DoEvents();
-            Print("settings_first_open","constructMs="+construct.ToString("F2"),"loadMs="+load.ToString("F2"),"firstFrameMs="+timer.Elapsed.TotalMilliseconds.ToString("F2"),"layoutCalls="+layouts);
+            double loadAndFirstFrame=timer.Elapsed.TotalMilliseconds;
+            Print("settings_first_open","constructMs="+construct.ToString("F2"),"loadAndFirstFrameMs="+loadAndFirstFrame.ToString("F2"),"layoutCalls="+layouts);
+            Check(loads==1,"first show runs exactly one WinForms Load");
+            var advanced=(System.Windows.Forms.TabPage)typeof(Configuration).GetProperty("TabPage2",hidden).GetValue(settings,null);
+            var logChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboLog",hidden).GetValue(settings,null);
+            Check(advanced.Controls.Count==0 && (string)logChoice.SelectedValue==cfg.NivelLog.ToString(),"general-page save sees the saved log level without building the advanced page");
             // Gate the open stall (load + first frame), not the unavoidable control-tree
             // construction: a cold process spends seconds in JIT/ctor that is not a layout
             // regression and used to false-fail this check. The layout-pass count below is
             // the machine-independent guard against the original multi-second stall.
-            Check(load+timer.Elapsed.TotalMilliseconds<4000,"settings first open avoids the previous multi-second layout stall");
+            Check(loadAndFirstFrame<4000,"settings first open avoids the previous multi-second layout stall");
             Check(layouts<500,"settings first open keeps layout passes bounded (machine-independent stall guard): "+layouts);
             var languageChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboIdiomas",hidden).GetValue(settings,null);
             Check((string)languageChoice.SelectedValue==Language.FollowSystemLanguageCode && languageChoice.Text=="跟随系统","settings shows the saved automatic language mode instead of pinning the detected language");
@@ -1898,8 +1930,7 @@ public partial class RegressionTests {
                 "reopening settings discards an unsubmitted ELC account and exits add mode");
             accountControl.Cerrar();accountControl.Cerrar();
             Check(true,"account cleanup is safe before or after repeated close calls");
-            tabs.SelectedTab=(System.Windows.Forms.TabPage)typeof(Configuration).GetProperty("TabPage2",hidden).GetValue(settings,null);
-            var logChoice=(System.Windows.Forms.ComboBox)typeof(Configuration).GetProperty("comboLog",hidden).GetValue(settings,null);
+            tabs.SelectedTab=advanced;
             Check((string)logChoice.SelectedValue==cfg.NivelLog.ToString(),"the first visit to advanced settings selects the saved log level");
             tabs.SelectedIndex=0;
             var checkUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkCheckUpdates",true).Single();
@@ -1983,13 +2014,6 @@ public partial class RegressionTests {
             Check(settings.DialogResult==System.Windows.Forms.DialogResult.None,"reopened settings reset the dialog result");
             Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"reopened settings discard the previous account load");
             settings.Hide();
-
-            // Idle prewarm runs Load while hidden so the first click only refreshes and shows.
-            using(var preloaded=new PresentationSettings()) {
-                typeof(Configuration).GetMethod("PreloadForFirstShow",hidden).Invoke(preloaded,new object[]{cfg});
-                Check((bool)typeof(Configuration).GetField("configurationLoaded",hidden).GetValue(preloaded),"idle prewarm populates the settings window without showing it");
-                Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(preloaded,null)).Text==cfg.RutaDefecto,"idle prewarm reads the current configuration");
-            }
         }
         using(var emptyAccounts=new ELCAccountControl()) {
             var config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
@@ -2066,6 +2090,7 @@ public partial class RegressionTests {
                 using(var anonymous=new Fichero {NombreFichero="产品演示视频.mp4",DescargaProcesada=true}) {
                     packages[0].AgregarFichero(child);
                     packages[1].AgregarFichero(anonymous);
+                    type.GetMethod("RefreshListaDescargas",hidden).Invoke(main,new object[]{true});
                     list.Expand(packages[0]);
                     Check(list.Items.Count==7,"the task-name tree column still expands package children");
                     var identity=list.AllColumns.Single(c=>c.Name=="QueueDownloadIdentity");
@@ -2213,8 +2238,9 @@ public partial class RegressionTests {
         protected override bool ShowWithoutActivation {get{return true;}}
     }
     class PresentationSettings : Configuration {
-        protected override void OnLoad(EventArgs e) {}
-        protected override void OnShown(EventArgs e) {}
+        public bool RunLifecycle;
+        protected override void OnLoad(EventArgs e) { if(RunLifecycle) base.OnLoad(e); }
+        protected override void OnShown(EventArgs e) { if(RunLifecycle) base.OnShown(e); }
         protected override bool ShowWithoutActivation {get{return true;}}
     }
     class PresentationAddLinks : AddLinks {
@@ -3292,8 +3318,7 @@ public partial class RegressionTests {
         Check(f(3600)=="1 h 0 min"&&f(7199)=="1 h 59 min","hour boundary does not round 1h59m up to 2h");
         Check(f(7200)=="2 h 0 min","exact two hours");
     }
-    // Persistent failure banner: dismiss stays hidden until the count changes, retry
-    // wakes only non-permanent failures and preserves quota-failure resume progress.
+    // Dismiss applies only to the same failure occurrences; retry preserves quota progress.
     static void FailureBannerCases(){
         var languageFields=new[]{"LanguageFileDisk","LanguageFileInternal","LanguageFileEnUs"};
         var before=languageFields.Select(n=>typeof(Language).GetField(n,shared).GetValue(null)).ToArray();
@@ -3312,8 +3337,9 @@ public partial class RegressionTests {
                 type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
                 type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
                 type.GetMethod("InitNavRail",hidden).Invoke(main,null);
-                type.GetMethod("InitDownloadAreaLayout",hidden).Invoke(main,null);
+                type.GetMethod("InitQuotaBanner",hidden).Invoke(main,null);
                 type.GetMethod("InitFailureBanner",hidden).Invoke(main,null);
+                type.GetMethod("InitDownloadAreaLayout",hidden).Invoke(main,null);
                 // RefreshFailureBanner bails out until the form handle exists; show offscreen
                 // like the other presentation fixtures (business Load/Shown stay suppressed).
                 main.ShowInTaskbar=false;main.StartPosition=System.Windows.Forms.FormStartPosition.Manual;main.Location=new System.Drawing.Point(-30000,-30000);
@@ -3322,7 +3348,8 @@ public partial class RegressionTests {
                 var label=(System.Windows.Forms.Label)type.GetField("failureBannerLabel",hidden).GetValue(main);
                 var retry=(System.Windows.Forms.Button)type.GetField("failureRetryButton",hidden).GetValue(main);
                 var dismiss=(System.Windows.Forms.Button)type.GetField("failureDismissButton",hidden).GetValue(main);
-                var dismissedCount=type.GetField("_failureBannerDismissedCount",hidden);
+                var quotaPanel=(System.Windows.Forms.Panel)type.GetField("quotaBannerPanel",hidden).GetValue(main);
+                var header=(System.Windows.Forms.Panel)type.GetField("workbenchHeader",hidden).GetValue(main);
                 var refresh=type.GetMethod("RefreshFailureBanner",hidden);
                 Action Refresh=()=>refresh.Invoke(main,null);
                 var normal=new Fichero{FileID="BANNER_N",NombreFichero="normal.bin",RutaLocal=root};
@@ -3338,13 +3365,24 @@ public partial class RegressionTests {
                     normal.EstadoDescarga=Estado.Erroneo;
                     Refresh();
                     Check(panel.Visible&&label.Text.Contains("1"),"a first failure surfaces the banner with its count");
+                    quotaPanel.Visible=true;
+                    type.GetMethod("LayoutDownloadArea",hidden).Invoke(main,null);
+                    Check(main.MainMenuStrip.Bottom==quotaPanel.Top && quotaPanel.Bottom==panel.Top && panel.Bottom<=header.Top,
+                        "the menu, quota and failure banners stack above the workbench header");
+                    quotaPanel.Visible=false;
                     dismiss.PerformClick();
-                    Check(!panel.Visible&&(int)dismissedCount.GetValue(main)==1,"dismiss hides the banner and remembers the count");
+                    Check(!panel.Visible,"dismiss hides the banner");
                     Refresh();
-                    Check(!panel.Visible,"an unchanged failure count does not re-show a dismissed banner");
+                    Check(!panel.Visible,"the same failure does not re-show a dismissed banner");
+                    normal.FechaUltimoError=DateTime.Now;
+                    Refresh();
+                    Check(panel.Visible&&label.Text.Contains("1"),"a retry that fails between refreshes re-shows the banner");
+                    dismiss.PerformClick();
+                    normal.EstadoDescarga=Estado.EnCola;
                     permanent.EstadoDescarga=Estado.Erroneo;
                     Refresh();
-                    Check(panel.Visible&&label.Text.Contains("2"),"a new failure re-shows the dismissed banner");
+                    Check(panel.Visible&&label.Text.Contains("1"),"a different failure re-shows the banner even with the same count");
+                    normal.EstadoDescarga=Estado.Erroneo;
                     quota.EstadoDescarga=Estado.Erroneo;
                     Refresh();
                     Check(label.Text.Contains("3"),"banner count tracks every failed task");
@@ -3353,15 +3391,14 @@ public partial class RegressionTests {
                     Check(permanent.EstadoDescarga==Estado.Erroneo,"retry never re-downloads a permanent failure");
                     Check(quota.EstadoDescarga==Estado.EnCola&&quota.DatosPartes.GetTotalProgress()==2048,"retry wakes a quota failure and preserves its resume progress");
                     Check(normal.DatosPartes.GetTotalProgress()==0,"ordinary retry resets progress for a clean restart");
-                    // Retry dropped the count back to the previously dismissed value (1), so the
-                    // banner correctly stays suppressed until the count changes again.
-                    Check(!panel.Visible,"retry back to the dismissed count keeps the banner hidden");
-                    dismissedCount.SetValue(main,0);
-                    Refresh();
                     Check(panel.Visible&&label.Text.Contains("1"),"after retry only the permanent failure remains counted");
+                    dismiss.PerformClick();
                     permanent.EstadoDescarga=Estado.EnCola;
                     Refresh();
                     Check(!panel.Visible,"clearing the last failure hides the banner");
+                    normal.EstadoDescarga=Estado.Erroneo;
+                    Refresh();
+                    Check(panel.Visible&&label.Text.Contains("1"),"a later single failure is visible after the previous one clears");
                 }finally{normal.Dispose();permanent.Dispose();quota.Dispose();}
             }
         }finally{
@@ -3621,18 +3658,25 @@ public partial class RegressionTests {
             main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
             main.Config.CheckUpdates=true;
             var due=typeof(Main).GetField("ProximoAvisoActualizacion",hidden);
-            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            var apply=typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden);
+            apply.Invoke(main,new object[]{"https://localhost/","9.9.0",false});
             var deadline=(DateTime)due.GetValue(main);
-            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.9.0"});
+            apply.Invoke(main,new object[]{"https://localhost/","9.9.0",false});
             Check((DateTime)due.GetValue(main)==deadline,"a periodic update check preserves the same version's reminder deadline");
             due.SetValue(main,(DateTime?)DateTime.Now.AddSeconds(-1));
             typeof(Main).GetMethod("UpdateReminder_Tick",hidden).Invoke(main,new object[]{null,EventArgs.Empty});
             Check(due.GetValue(main)!=null,"a hidden or inactive window does not consume a due reminder");
-            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            apply.Invoke(main,new object[]{"https://localhost/","9.10.0",false});
             Check((DateTime)due.GetValue(main)>DateTime.Now,"a new version receives its own reminder deadline");
             main.Config.UpdateSkipVersion="9.10.0";
-            typeof(Main).GetMethod("ApplyUpdateCheckResult",hidden).Invoke(main,new object[]{"https://localhost/","9.10.0"});
+            apply.Invoke(main,new object[]{"https://localhost/","9.10.0",false});
             Check(due.GetValue(main)==null,"skipping a specific version clears only its reminder");
+            main.Config.CheckUpdates=false;
+            apply.Invoke(main,new object[]{"https://localhost/","9.10.0",true});
+            deadline=(DateTime)due.GetValue(main);
+            apply.Invoke(main,new object[]{null,null,false});
+            Check((DateTime)due.GetValue(main)==deadline && (string)typeof(Main).GetField("UrlNuevaVersionMegadownloader",hidden).GetValue(main)=="https://localhost/",
+                "a delayed automatic result cannot wipe a manual update and its reminder when automatic checks are off");
         }
     }
     static int ExtractHeaderLong(string head,string name) {

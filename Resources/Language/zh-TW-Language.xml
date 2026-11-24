@@ -1,5 +1,48 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Language id="zh-TW" name="Traditional Chinese" app="MegaDownloader">
+  <Text key="Detail_PackageFiles"><![CDATA[檔案 · 已完成 %DONE%/%TOTAL% · %FAILED% 項失敗]]></Text>
+  <Text key="Detail_SelectedFiles"><![CDATA[所選檔案 · 已完成 %DONE%/%TOTAL% · %FAILED% 項失敗]]></Text>
+  <Text key="Detail_FirstFailedFile"><![CDATA[前往第一個下載失敗的檔案]]></Text>
+  <Text key="QueueWait_ManualPause"><![CDATA[已手動暫停]]></Text>
+  <Text key="QueueWait_QueuePaused"><![CDATA[佇列已暫停]]></Text>
+  <Text key="QueueWait_AnonymousQuota"><![CDATA[等待匿名傳輸配額恢復]]></Text>
+  <Text key="QueueWait_SessionExpired"><![CDATA[MEGA 帳號工作階段已過期]]></Text>
+  <Text key="QueueWait_Count"><![CDATA[%TEXT%（%N% 項）]]></Text>
+  <Text key="QueueWait_RetryAt"><![CDATA[下次重試時間：%T%]]></Text>
+  <Text key="QueueWait_Actions"><![CDATA[等待中的任務]]></Text>
+  <Text key="QueueWait_UnpauseSelected"><![CDATA[繼續下載所選檔案]]></Text>
+  <Text key="QueueWait_ResumeQueue"><![CDATA[繼續處理下載佇列]]></Text>
+  <Text key="QueueWait_RetryAnonymous"><![CDATA[重試匿名下載佇列]]></Text>
+  <Text key="DriveSubscription_Title"><![CDATA[訂閱]]></Text>
+  <Text key="DriveSubscription_SettingsTitle"><![CDATA[資料夾訂閱設定]]></Text>
+  <Text key="DriveSubscription_Extensions"><![CDATA[副檔名（例如 pdf、zip，留空會包含所有檔案）]]></Text>
+  <Text key="DriveSubscription_DailyLocalTime"><![CDATA[每日檢查時間（本機時間）]]></Text>
+  <Text key="DriveSubscription_ReviewFirst"><![CDATA[確認檔案後再加入佇列]]></Text>
+  <Text key="DriveSubscription_AutoQueue"><![CDATA[自動將檔案加入佇列]]></Text>
+  <Text key="DriveSubscription_CheckFolder"><![CDATA[檢查所選資料夾]]></Text>
+  <Text key="DriveSubscription_CheckAll"><![CDATA[檢查所有資料夾]]></Text>
+  <Text key="DriveSubscription_EditSettings"><![CDATA[編輯設定…]]></Text>
+  <Text key="DriveSubscription_SelectPending"><![CDATA[勾選所有待確認的檔案]]></Text>
+  <Text key="DriveSubscription_ClearSelection"><![CDATA[取消所有勾選]]></Text>
+  <Text key="DriveSubscription_PendingReview"><![CDATA[待確認]]></Text>
+  <Text key="DriveSubscription_BoundFolders"><![CDATA[已綁定的資料夾]]></Text>
+  <Text key="DriveSubscription_BoundFolder"><![CDATA[綁定的資料夾]]></Text>
+  <Text key="DriveSubscription_LastCheck"><![CDATA[上次檢查]]></Text>
+  <Text key="DriveSubscription_NextCheck"><![CDATA[下次檢查]]></Text>
+  <Text key="DriveSubscription_LatestReports"><![CDATA[最新報告]]></Text>
+  <Text key="DriveSubscription_Change"><![CDATA[變更]]></Text>
+  <Text key="DriveSubscription_Loading"><![CDATA[正在載入訂閱報告…]]></Text>
+  <Text key="DriveSubscription_CheckFailedMessage"><![CDATA[無法檢查已綁定的資料夾。]]></Text>
+  <Text key="DriveSubscription_LoadFailed"><![CDATA[無法載入訂閱報告。請選擇「重新整理」重試。]]></Text>
+  <Text key="DriveSubscription_CheckFailed"><![CDATA[檢查失敗]]></Text>
+  <Text key="DriveSubscription_NoBindings"><![CDATA[將雲端硬碟資料夾與本機資料夾綁定，即可開始檢查變更。]]></Text>
+  <Text key="DriveSubscription_SomeChecksFailed"><![CDATA[無法檢查部分資料夾。]]></Text>
+  <Text key="DriveSubscription_NoChecks"><![CDATA[檢查已綁定的資料夾，即可產生該資料夾的第一份報告。]]></Text>
+  <Text key="DriveSubscription_NoChanges"><![CDATA[最新報告中沒有檔案變更。]]></Text>
+  <Text key="DriveSubscription_QueueConfirm"><![CDATA[將所選的 %N% 個檔案加入下載佇列？]]></Text>
+  <Text key="DriveSubscription_QueueFailed"><![CDATA[無法將所選檔案加入佇列。]]></Text>
+  <Text key="DriveSubscription_QueueNone"><![CDATA[未將任何檔案加入下載佇列。]]></Text>
+  <Text key="DriveSubscription_QueueAdded"><![CDATA[已將 %N% 個檔案加入下載佇列。]]></Text>
   <Text key="MegaDrive_Title"><![CDATA[我的雲端硬碟]]></Text>
   <Text key="MegaDrive_IncomingShares"><![CDATA[與我共用]]></Text>
   <Text key="MegaDrive_NoShares"><![CDATA[此帳號尚未收到共用資料夾。]]></Text>
@@ -475,6 +518,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Check for updates"><![CDATA[檢查更新]]></Text>
   <Text key="Manual check only"><![CDATA[僅手動檢查]]></Text>
   <Text key="Check interval"><![CDATA[檢查間隔]]></Text>
+  <Text key="Must specify the update check interval, and this value must be a positive number of hours."><![CDATA[請指定更新檢查間隔，並以大於零的小時數表示。]]></Text>
   <Text key="&amp;Hide links inside an image"><![CDATA[在圖片中隱藏連結(&H)]]></Text>
   <Text key="&amp;Retrieve links from an image"><![CDATA[從圖片提取連結(&R)]]></Text>
   <Text key="A web server password is required to allow LAN access"><![CDATA[必須設定網頁伺服器密碼才能允許區域網路存取。]]></Text>
@@ -604,6 +648,7 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Visible links"><![CDATA[可見連結]]></Text>
   <Text key="Visible links HELP"><![CDATA[如果勾選此選項，提取連結的使用者將能看到連結明文。
 否則他只能下載這些連結，看不到連結內容。]]></Text>
+  <Text key="Warning: The image output was created but the data verification failed. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：輸出圖片已建立，但資料驗證失敗。圖片可能太小，請改用較大的圖片。]]></Text>
   <Text key="Warning: data verification failed. The output file has not been created. This may happen if the image is too small, try with a bigger image"><![CDATA[警告：資料校驗失敗，輸出檔案未建立。可能圖片太小，請換一張更大的圖片。]]></Text>
   <Text key="Warning: image too small, maybe the data is corrupted"><![CDATA[警告：圖片太小，資料可能已損壞。]]></Text>
   <Text key="Streaming link could not be resolved"><![CDATA[無法解析該 MEGA 連結。請檢查連結是否正確,並確認串流伺服器已啟動。]]></Text>
@@ -715,4 +760,5 @@ Please note that only basic support for ZIP and RAR files is currently provided.
   <Text key="Delete_UnverifiedOutputConfirm"><![CDATA[有 {COUNT} 個已下載檔案來自不含完整性校驗資訊的舊連結，無法自動確認歸屬。仍要刪除嗎？任務目錄中同名且大小一致的檔案將被移除。]]></Text>
   <Text key="Delete_UnverifiedOutputKept"><![CDATA[操作已取消，未刪除任何工作或檔案。]]></Text>
   <Text key="Delete_OutputOwnershipChanged"><![CDATA[部分本機檔案無法確認屬於所選工作的下載成品，已保留。]]></Text>
+  <Text key="Downloads_Failed_Banner"><![CDATA[有 %N% 項下載失敗。以滑鼠右鍵按一下失敗的項目即可查看詳細資料，或在下方重試。]]></Text>
 </Language>

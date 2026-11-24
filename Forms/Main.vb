@@ -1,6 +1,7 @@
 ﻿Imports BrightIdeasSoftware
 Imports System.ComponentModel
 Imports System.Runtime.InteropServices
+Imports System.Threading.Tasks
 
 Public Class Main
     Implements IDownloaderService
@@ -25,8 +26,6 @@ Public Class Main
 
     ''' <summary>复用的设置窗口实例(关闭时隐藏,主窗口退出时释放)。</summary>
     Private _settingsForm As Configuration = Nothing
-    ''' <summary>主窗口空闲/失焦时预建设置窗口，让第一次点击也接近复用窗口的速度。</summary>
-    Private _settingsPrewarmTimer As System.Windows.Forms.Timer = Nothing
     Private _recoveryBusy As Boolean = False
     Private _recoveryStatusLabel As System.Windows.Forms.ToolStripStatusLabel = Nothing
 
@@ -338,7 +337,8 @@ Public Class Main
         ' Usamos esta librería para pintar la lista de descargas:
         ' http://objectlistview.sourceforge.net/cs/index.html
         DefinirColumnas()
-        ListaDescargas.SetObjects(Me.ListaPaquetes)
+        CaptureQueueTree()
+        ApplyNavRoots(replaceObjects:=True)
 
         ' 左栏总览/快捷入口:必须在 DefinirColumnas→InitNavList 建好 5 个过滤器项之后再建,
         ' 否则 navListBox.Items.Count 还是 0,拿不到正确高度,总览会压在列表上。
@@ -467,47 +467,11 @@ Public Class Main
             Me.IconoMinimizado.Text = "MegaDownloader started"
             Me.WindowState = FormWindowState.Minimized
         End If
-        StartSettingsPrewarm()
         If _startupQueueLoading Then
             BeginStartupQueueLoad()
         Else
             ContinueStartupAfterQueueLoad()
         End If
-    End Sub
-
-    ''' <summary>
-    ''' 主窗口显示后启动一个低频检查：用户离开本程序且没有其它可见窗口时，
-    ''' 先把设置窗体的控件树建好。这样首次点击设置不再承担约 0.55 秒的构造，
-    ''' 而用户不在看这个窗口，构造期间的可感知卡顿为零。
-    ''' </summary>
-    Private Sub StartSettingsPrewarm()
-        If _settingsPrewarmTimer IsNot Nothing Then Return
-        _settingsPrewarmTimer = New System.Windows.Forms.Timer With {.Interval = 5000}
-        AddHandler _settingsPrewarmTimer.Tick, AddressOf SettingsPrewarmTimer_Tick
-        _settingsPrewarmTimer.Start()
-    End Sub
-
-    <DllImport("user32.dll")>
-    Private Shared Function GetForegroundWindow() As IntPtr
-    End Function
-
-    Private Sub SettingsPrewarmTimer_Tick(sender As Object, e As EventArgs)
-        If _settingsForm IsNot Nothing OrElse Cerrando OrElse Me.IsDisposed Then
-            _settingsPrewarmTimer.Stop()
-            Return
-        End If
-        ' 只在用户不在本窗口、没有其它可见窗口、也没有禁用主窗体的模态框时预建，
-        ' 避免可感知卡顿。
-        If Not Me.Enabled Then Return
-        If GetForegroundWindow() = Me.Handle Then Return
-        If Application.OpenForms.Cast(Of Form)().Any(Function(f) f IsNot Me AndAlso f.Visible) Then Return
-        _settingsPrewarmTimer.Stop()
-        Try
-            _settingsForm = New Configuration()
-            _settingsForm.PreloadForFirstShow(Config)
-        Catch ex As Exception
-            Log.WriteError("Settings prewarm failed: " & Log.SafeException(ex))
-        End Try
     End Sub
 
     Private Sub CompleteStartup()
@@ -1062,11 +1026,6 @@ Public Class Main
         'SkinEngine.Dispose()
         ' 第19项:置位必须在 DoEvents 之前,否则泵出的托盘点击会复活窗口
         Cerrando = True
-        If _settingsPrewarmTimer IsNot Nothing Then
-            _settingsPrewarmTimer.Stop()
-            _settingsPrewarmTimer.Dispose()
-            _settingsPrewarmTimer = Nothing
-        End If
         If _settingsForm IsNot Nothing AndAlso Not _settingsForm.IsDisposed Then
             _settingsForm.Dispose()
             _settingsForm = Nothing
@@ -1217,8 +1176,6 @@ Public Class Main
                 ' here can re-enter Load and rebuild the entire workbench.
             End If
         End If
-        LayoutQuotaBanner()
-        LayoutFailureBanner()
         LayoutDownloadArea()
     End Sub
 
@@ -1290,13 +1247,15 @@ Public Class Main
         Return If(status.SignedIn, "", MegaAccountForm.Summary(status))
     End Function
 
-    Private Shared Function QueueDownloadIdentity(ele As IDescarga) As String
+    Private Function QueueDownloadIdentity(ele As IDescarga) As String
         Dim file = TryCast(ele, Fichero)
         If file IsNot Nothing Then Return QueueDownloadIdentityText(file.EffectiveMegaAccountEmail)
         Dim package = TryCast(ele, Paquete)
-        If package Is Nothing OrElse package.ListaFicheros.Count = 0 Then Return ""
-        Dim email = package.ListaFicheros(0).EffectiveMegaAccountEmail
-        For Each child In package.ListaFicheros
+        If package Is Nothing Then Return ""
+        Dim files As Fichero() = GetQueueViewFiles(package)
+        If files.Length = 0 Then Return ""
+        Dim email = files(0).EffectiveMegaAccountEmail
+        For Each child In files
             If Not String.Equals(child.EffectiveMegaAccountEmail, email, StringComparison.OrdinalIgnoreCase) Then Return Language.GetText("MegaAccount_MixedIdentities")
         Next
         Return QueueDownloadIdentityText(email)
@@ -1498,32 +1457,16 @@ Public Class Main
         ListaDescargas.AllowColumnReorder = True
 
         ListaDescargas.CanExpandGetter = Function(ele As Object)
-                                             Return TypeOf (ele) Is Paquete AndAlso _
-                                               CType(ele, Paquete).ListaFicheros IsNot Nothing AndAlso _
-                                               CType(ele, Paquete).ListaFicheros.Count > 0
+                                             Dim package = TryCast(ele, Paquete)
+                                             Return package IsNot Nothing AndAlso GetQueueViewFiles(package).Length > 0
                                          End Function
 
         ListaDescargas.ChildrenGetter = Function(ele As Object)
-                                            ' P2-11b:非 All 分组下只展开命中文件(包穿透规则与计数共用同一谓词)。
-                                            ' 注意:不可用 OLV UseFiltering(启动期静默退出),此处包裹是唯一的过滤点。
-                                            Try
-                                                If Not TypeOf ele Is Paquete Then
-                                                    Return Nothing
-                                                End If
-                                                Dim files As Generic.List(Of Fichero) = CType(ele, Paquete).ListaFicheros
-                                                If files Is Nothing Then Return Nothing
-                                                If _navScope = DownloadEstadoFilter.NavScope.All AndAlso queueQuery.Length = 0 Then Return files
-                                                Dim shown As New Generic.List(Of Fichero)()
-                                                For Each f As Fichero In files
-                                                    If MatchesQueueFile(f, CType(ele, Paquete)) Then shown.Add(f)
-                                                Next
-                                                Return shown
-                                            Catch ex As Exception
-                                                Log.WriteError("FilteredChildrenGetter failed: " & ex.ToString)
-                                                Dim p0 As Paquete = TryCast(ele, Paquete)
-                                                If p0 Is Nothing Then Return Nothing
-                                                Return p0.ListaFicheros
-                                            End Try
+                                            Dim package = TryCast(ele, Paquete)
+                                            If package Is Nothing Then Return Nothing
+                                            Dim files As Fichero() = GetQueueViewFiles(package)
+                                            If _navScope = DownloadEstadoFilter.NavScope.All AndAlso queueQuery.Length = 0 Then Return files
+                                            Return Array.FindAll(files, Function(file) MatchesQueueFile(file, package))
                                         End Function
 
 
@@ -2090,8 +2033,7 @@ Public Class Main
 
 #End Region
 
-    ''' <summary>配额横幅:Anchor 布局,显示/隐藏时整体下移下载列表,无 Dock 冲突。
-    ''' RC:Top 跟随工具栏底部(不再写死 40),高度按 DPI 缩放,防 125%/150% 下压住工具栏。</summary>
+    ''' <summary>配额横幅：在工作区上方占位，高度按 DPI 缩放。</summary>
     Private Sub InitQuotaBanner()
         Dim sc As Single = 1.0F
         Try
@@ -2106,11 +2048,6 @@ Public Class Main
         quotaBannerPanel.Name = "quotaBannerPanel"
         quotaBannerPanel.Height = bannerH
         quotaBannerPanel.Left = 0
-        Try
-            quotaBannerPanel.Top = TableLayoutPanel1.Bottom
-        Catch
-            quotaBannerPanel.Top = 40
-        End Try
         quotaBannerPanel.Width = Me.ClientSize.Width
         quotaBannerPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         quotaBannerPanel.Visible = False
@@ -2136,21 +2073,25 @@ Public Class Main
         quotaBannerPanel.Controls.Add(quotaRetryNowButton)
         Me.Controls.Add(quotaBannerPanel)
         quotaBannerPanel.BringToFront()
-        LayoutQuotaBanner()
         ApplyQuotaBannerTheme()
         UpdateQuotaBannerTexts()
     End Sub
 
-    Private Sub LayoutQuotaBanner()
-        If quotaBannerPanel Is Nothing OrElse quotaRetryNowButton Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
-        Try
-            quotaBannerPanel.Top = TableLayoutPanel1.Bottom
-        Catch
-        End Try
-        quotaBannerPanel.Width = Me.ClientSize.Width
-        quotaRetryNowButton.Left = quotaBannerPanel.Width - quotaRetryNowButton.Width - 12
-        quotaBannerLabel.Width = Math.Max(50, quotaRetryNowButton.Left - 18)
-    End Sub
+    ' All positions here are in the main form's client coordinates.
+    Private Function LayoutDownloadBanners(top As Integer) As Integer
+        If quotaBannerPanel IsNot Nothing Then
+            quotaBannerPanel.Top = top
+            quotaBannerPanel.Width = ClientSize.Width
+            quotaRetryNowButton.Left = quotaBannerPanel.Width - quotaRetryNowButton.Width - 12
+            quotaBannerLabel.Width = Math.Max(50, quotaRetryNowButton.Left - 18)
+            If quotaBannerPanel.Visible Then top = quotaBannerPanel.Bottom
+        End If
+        If failureBannerPanel IsNot Nothing Then
+            LayoutFailureBanner(top)
+            If failureBannerPanel.Visible Then top = failureBannerPanel.Bottom
+        End If
+        Return top
+    End Function
 
     Private Sub ApplyQuotaBannerTheme()
         If quotaBannerPanel Is Nothing OrElse quotaBannerLabel Is Nothing Then Return
@@ -2202,7 +2143,6 @@ Public Class Main
                 ' 倒计时文本仍每 tick 更新(Label.Text 自带等值短路,开销极小)。
                 If Not quotaBannerPanel.Visible Then
                     quotaBannerPanel.Visible = True
-                    LayoutQuotaBanner()
                     LayoutDownloadArea()
                 End If
                 quotaBannerLabel.Text = Language.GetText("Quota_Banner").Replace("%T%", FormatQuotaRemaining(quotaRem.Value))
@@ -2680,26 +2620,40 @@ Public Class Main
         Next
     End Sub
 
-    ''' <summary>
-    ''' P2-11b:按当前分组重设 Roots(包命中或子文件穿透才留)。SetObjects 会重置 Roots
-    ''' 为全量,故每次重建后调用;False 刷新沿用当前 Roots。禁用 OLV UseFiltering。
-    ''' </summary>
-    Private Sub ApplyNavRoots()
-        If ListaDescargas Is Nothing OrElse ListaPaquetes Is Nothing Then Return
+    ' The tree keeps detached membership, but each row is still the original download model.
+    Private queueViewRoots As Paquete() = Array.Empty(Of Paquete)()
+    Private queueViewFiles As New Dictionary(Of Paquete, Fichero())()
+
+    Private Sub CaptureQueueTree()
+        Dim roots As Paquete()
+        Dim children As New Dictionary(Of Paquete, Fichero())()
         SyncLock Mutex.ListaDescargas
-            If _navScope = DownloadEstadoFilter.NavScope.All AndAlso queueQuery.Length = 0 Then
-                ListaDescargas.Roots = ListaPaquetes
-                queueVisibleCount = ListaPaquetes.Count
-            Else
-                Dim shown As New Generic.List(Of Paquete)()
-                For Each package As Paquete In ListaPaquetes
-                    If MatchesQueuePackage(package) Then shown.Add(package)
-                Next
-                ListaDescargas.Roots = shown
-                queueVisibleCount = shown.Count
-            End If
+            roots = ListaPaquetes.ToArray()
+            For Each package As Paquete In roots
+                children(package) = If(package.ListaFicheros?.ToArray(), Array.Empty(Of Fichero)())
+            Next
         End SyncLock
-        UpdateWorkbenchHeading()
+        queueViewRoots = roots
+        queueViewFiles = children
+    End Sub
+
+    Private Function GetQueueViewFiles(package As Paquete) As Fichero()
+        Dim files As Fichero() = Nothing
+        Return If(queueViewFiles.TryGetValue(package, files), files, Array.Empty(Of Fichero)())
+    End Function
+
+    Private Sub ApplyNavRoots(Optional replaceObjects As Boolean = False)
+        Dim shown As Paquete() = queueViewRoots
+        If _navScope <> DownloadEstadoFilter.NavScope.All OrElse queueQuery.Length > 0 Then
+            shown = Array.FindAll(shown, AddressOf MatchesQueuePackage)
+        End If
+        queueVisibleCount = shown.Length
+        If replaceObjects Then
+            ListaDescargas.SetObjects(shown)
+        Else
+            ListaDescargas.Roots = shown
+            ListaDescargas.BuildList()
+        End If
     End Sub
 
     ' Explicit geometry prevents anchor drift during window resizing.
@@ -2714,13 +2668,7 @@ Public Class Main
             If ListaDescargas Is Nothing OrElse ListaDescargas.IsDisposed Then Return
             If navPanel Is Nothing OrElse detailPanel Is Nothing Then Return
             If TableLayoutPanel1 Is Nothing OrElse StatusStrip1 Is Nothing Then Return
-            Dim top As Integer = TableLayoutPanel1.Bottom + 2
-            If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then
-                top += quotaBannerPanel.Height
-            End If
-            If failureBannerPanel IsNot Nothing AndAlso failureBannerPanel.Visible Then
-                top += failureBannerPanel.Height
-            End If
+            Dim top As Integer = LayoutDownloadBanners(TableLayoutPanel1.Bottom) + 2
             Dim bottom As Integer = StatusStrip1.Top - 4
             Dim h As Integer = Math.Max(50, bottom - top)
             ListaDescargas.Top = top
@@ -3019,44 +2967,30 @@ Public Class Main
             Log.WriteWarning("Starting worker bgwComprobarMaxConexiones")
             While Not worker.CancellationPending
 
-                ' Comprobamos conexiones máximas
-                If Now >= ProximaComprobacionMaxConexiones Then
-                    'Log.WriteWarning("Checking max connection number")
-
-                    ' 遗留回退：内部配置 VERSION_PERIODO_REFRESCO_SEG（默认 3600）；用户配置
-                    ' UpdateCheckIntervalHours 在下面覆盖。保留原回退避免破坏旧用户/测试夹具。
-                    Dim SegundosProximaActualizacion As Integer = 3600
-                    If Not Integer.TryParse( _
-                                            InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_PERIODO_REFRESCO_SEG"), _
-                                            SegundosProximaActualizacion) Then
-                        SegundosProximaActualizacion = 3600
+                If Not Config.CheckUpdates OrElse Config.UpdateManualOnly Then
+                    ' No automatic result is posted; check right away if re-enabled.
+                    ProximaComprobacionMaxConexiones = Date.MinValue
+                ElseIf Now >= ProximaComprobacionMaxConexiones Then
+                    Dim intervalHours As Integer = Config.UpdateCheckIntervalHours
+                    Dim intervalSeconds As Double = intervalHours * 3600.0
+                    If intervalHours <= 0 Then
+                        Dim fallbackSeconds As Integer
+                        If Not Integer.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("VERSION_PERIODO_REFRESCO_SEG"), fallbackSeconds) Then
+                            fallbackSeconds = 3600
+                        End If
+                        intervalSeconds = fallbackSeconds
                     End If
-
-                    ' Aprovechamos para ver si hay una nueva versión
-
-                    ' 6:周期优先用用户可配置值（UpdateCheckIntervalHours，默认 1h）；内部配置
-                    ' VERSION_PERIODO_REFRESCO_SEG 仅作为遗留回退，0 视为关闭定时检查（仅手动）。
-                    Dim UseUserInterval As Boolean = Config.CheckUpdates AndAlso Not Config.UpdateManualOnly
-                    Dim CheckIntervalSec As Integer = SegundosProximaActualizacion
-                    If UseUserInterval AndAlso Config.UpdateCheckIntervalHours > 0 Then
-                        CheckIntervalSec = Math.Max(60, Config.UpdateCheckIntervalHours * 3600)
-                    End If
-                    If UseUserInterval Then
-                        ProximaComprobacionMaxConexiones = Now.AddSeconds(CheckIntervalSec)
-                    ElseIf Config.CheckUpdates AndAlso Config.UpdateManualOnly Then
-                        ' 仅手动：不倒计时，下一轮由用户点菜单触发；这里把下次检查推到明天避免空转。
+                    If intervalSeconds <= 0 Then
                         ProximaComprobacionMaxConexiones = Now.AddDays(1)
-                    End If
-
-                    Dim url As String = Nothing
-                    Dim version As String = Nothing
-                    If UseUserInterval Then
-                        ' Network I/O remains on the worker and outside the connection lock.
+                    Else
+                        ProximaComprobacionMaxConexiones = Now.AddSeconds(intervalSeconds)
+                        Dim url As String = Nothing
+                        Dim version As String = Nothing
                         Updater.ComprobarVersionMegadownloader(url, version)
-                        Log.WriteWarning("Version checked; next check in " & CheckIntervalSec & " seconds")
-                    End If
-                    If Not worker.CancellationPending AndAlso Not Cerrando AndAlso IsHandleCreated Then
-                        BeginInvoke(New Action(Of String, String)(AddressOf ApplyUpdateCheckResult), url, version)
+                        Log.WriteWarning("Version checked; next check in " & intervalSeconds & " seconds")
+                        If Not worker.CancellationPending AndAlso Not Cerrando AndAlso IsHandleCreated Then
+                            BeginInvoke(New Action(Of String, String, Boolean)(AddressOf ApplyUpdateCheckResult), url, version, False)
+                        End If
                     End If
                 End If
 
@@ -3938,69 +3872,46 @@ Public Class Main
 
     End Sub
 
-    Private Sub RevisarSiHayQueApagarPC()
-        If Not Config.ApagarPC Or _Timer IsNot Nothing Then Exit Sub
+    Private autoShutdownCheckPending As Integer
 
-
-        Dim TodosCompletadosOErroneos As Boolean = True
-        Dim HayErroneos As Boolean = False
-        Dim HayCola As Boolean = False
-
+    Private Function DownloadsCompleted() As Boolean
+        Dim hasFiles As Boolean = False
         SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each Fichero As Fichero In paq.ListaFicheros
-
-                    HayCola = True
-
-                    ' Only fully successful tasks count as completed for auto-shutdown
-                    If Fichero.DescargaEstado <> Estado.Completado Then
-                        TodosCompletadosOErroneos = False
-                    End If
-                    If Fichero.DescargaEstado = Estado.Erroneo Then
-                        HayErroneos = True
-                        TodosCompletadosOErroneos = False
-                    End If
-
+            For Each package As Paquete In ListaPaquetes
+                For Each file As Fichero In package.ListaFicheros
+                    If file.DescargaEstado <> Estado.Completado Then Return False
+                    hasFiles = True
                 Next
             Next
         End SyncLock
+        Return hasFiles
+    End Function
 
-        If HayCola And TodosCompletadosOErroneos And Not HayErroneos Then
-            If Not Config.ResetearErrores Or Not HayErroneos Then
-                ' Apagamos el PC!!!
-
-                Dim AbortClose As Boolean = False
-                For Each frm As Form In My.Application.OpenForms
-                    ' 复用的设置窗口平时是隐藏的;只阻止真正可见的设置窗口。
-                    If TypeOf frm Is Configuration AndAlso frm.Visible Then ' No cerramos hasta que el usuario quite la pantalla de configuración
-                        AbortClose = True
-                    End If
-                Next
-
-                If Not AbortClose Then
-                    _Timer = New System.Timers.Timer ' Creamos un timer para que este worker no se quede bloqueado
-                    AddHandler _Timer.Elapsed, AddressOf ApagarPC_Event
-                    _Timer.Interval = 500
-                    _Timer.Enabled = True
-                End If
-            End If
-        End If
-
+    Private Sub RevisarSiHayQueApagarPC()
+        If Cerrando OrElse Not Config.ApagarPC OrElse Not DownloadsCompleted() Then Return
+        If System.Threading.Interlocked.CompareExchange(autoShutdownCheckPending, 1, 0) <> 0 Then Return
+        Try
+            BeginInvoke(New Action(AddressOf CheckAutoShutdownOnUi))
+        Catch ex As InvalidOperationException
+            System.Threading.Interlocked.Exchange(autoShutdownCheckPending, 0)
+        End Try
     End Sub
 
-    Private _Timer As System.Timers.Timer ' Temporizador que apaga el PC
-    Private Sub ApagarPC_Event(source As Object, e As Timers.ElapsedEventArgs)
-        If _Timer IsNot Nothing Then
-            _Timer.Enabled = False
-            _Timer = Nothing
-            _ForzarCierre = True
-
+    Private Sub CheckAutoShutdownOnUi()
+        Try
+            If Cerrando OrElse _ForzarCierre OrElse Not Config.ApagarPC Then Return
+            For Each frm As Form In Application.OpenForms
+                If TypeOf frm Is Configuration AndAlso frm.Visible Then Return
+            Next
+            ' The queue may have changed between the worker's check and this callback.
+            If Not DownloadsCompleted() Then Return
             Log.WriteWarning("Turning off PC automatically")
-
             Process.Start("shutdown", "/s /t 60 /c """ & Language.GetText("Turning off in 60 seconds") & """")
-
-            CerrarAplicacion()
-        End If
+            _ForzarCierre = True
+            Close()
+        Finally
+            System.Threading.Interlocked.Exchange(autoShutdownCheckPending, 0)
+        End Try
     End Sub
 
 #End Region
@@ -4166,8 +4077,7 @@ Public Class Main
         If ListaDescargas.SelectedObjects Is Nothing Then Exit Sub
         Dim ObjetoASeleccionar As Object = Nothing
         For Each selobject As Object In ListaDescargas.SelectedObjects
-
-
+            Dim moved As Object = Nothing
             If TypeOf (selobject) Is Paquete Then
                 Dim Prioridad As Integer = CType(selobject, Paquete).DescargaPrioridad
                 Dim i As Integer = 0
@@ -4185,8 +4095,7 @@ Public Class Main
                         Dim paqTemp As Paquete = Me.ListaPaquetes(i - 1)
                         Me.ListaPaquetes(i - 1) = CType(selobject, Paquete)
                         Me.ListaPaquetes(i) = paqTemp
-                        ReordenarPrioridadPaquetes(True)
-                        ObjetoASeleccionar = Me.ListaPaquetes(i - 1)
+                        moved = Me.ListaPaquetes(i - 1)
                     End If
                 End SyncLock
 
@@ -4208,13 +4117,15 @@ Public Class Main
                             Dim ficTemp As Fichero = paq.ListaFicheros(i - 1)
                             paq.ListaFicheros(i - 1) = CType(selobject, Fichero)
                             paq.ListaFicheros(i) = ficTemp
-                            ReordenarPrioridadPaquetes(True)
-                            ObjetoASeleccionar = paq.ListaFicheros(i - 1)
+                            moved = paq.ListaFicheros(i - 1)
                             Exit For
                         End If
                     Next
                 End SyncLock
-
+            End If
+            If moved IsNot Nothing Then
+                ReordenarPrioridadPaquetes(True)
+                ObjetoASeleccionar = moved
             End If
         Next
         If ObjetoASeleccionar IsNot Nothing Then ListaDescargas.SelectedObject = ObjetoASeleccionar
@@ -4859,21 +4770,18 @@ Public Class Main
         Else
             Dim overview As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
             Dim scopeChanged As Boolean = overview IsNot Nothing AndAlso overview.ScopeVersion <> appliedScopeVersion
-            SyncLock Mutex.ListaDescargas
-                ListaDescargas.BeginUpdate()
-                Try
-                    If SetObjects Then ListaDescargas.SetObjects(Me.ListaPaquetes)
-                    If SetObjects OrElse (_navScope <> DownloadEstadoFilter.NavScope.All AndAlso scopeChanged) Then
-                        ApplyNavRoots()
-                        ListaDescargas.BuildList()
-                    End If
-                    ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
-                Finally
-                    ListaDescargas.EndUpdate()
-                End Try
-                UpdateNavCounts()
-                UpdateDetailPanel()
-            End SyncLock
+            Dim rebuildRoots As Boolean = SetObjects OrElse (_navScope <> DownloadEstadoFilter.NavScope.All AndAlso scopeChanged)
+            If SetObjects Then CaptureQueueTree()
+            ListaDescargas.BeginUpdate()
+            Try
+                If rebuildRoots Then ApplyNavRoots(replaceObjects:=SetObjects)
+                ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+            Finally
+                ListaDescargas.EndUpdate()
+            End Try
+            If rebuildRoots Then UpdateWorkbenchHeading()
+            UpdateNavCounts()
+            UpdateDetailPanel()
             If overview IsNot Nothing Then appliedScopeVersion = overview.ScopeVersion
             If workbenchReady AndAlso workbenchSearch.TextLength > 0 AndAlso
                 (SetObjects OrElse (overview IsNot Nothing AndAlso overview.SearchVersion <> requestedSearchVersion)) Then
@@ -4900,22 +4808,6 @@ Public Class Main
             Me.IconoMinimizado.Text = txt
         End If
     End Sub
-
-    ' This delegate enables asynchronous calls for setting
-    ' the text property on a TextBox control.
-    Delegate Sub CerrarAplicacionCallback()
-    Private Sub CerrarAplicacion()
-        ' InvokeRequired required compares the thread ID of the
-        ' calling thread to the thread ID of the creating thread.
-        ' If these threads are different, it returns true.
-        If Me.btnPause.InvokeRequired Then
-            Dim d As New CerrarAplicacionCallback(AddressOf CerrarAplicacion)
-            Me.Invoke(d, New Object() {})
-        Else
-            Me.Close()
-        End If
-    End Sub
-
 
     ''' <summary>
     ''' P2(审查):空态 hint 承诺"拖入链接",但此前只收 FileDrop(.dlc/.elc),
@@ -5024,16 +4916,27 @@ Public Class Main
     'End Sub
 
     Private ProximoAvisoActualizacion As Date?
+    Private manualUpdateReminder As Boolean
 
     ' Update availability and the reminder deadline belong to the UI thread.
-    Private Sub ApplyUpdateCheckResult(url As String, version As String)
+    Private Sub ApplyUpdateCheckResult(url As String, version As String, manual As Boolean)
         If Cerrando OrElse IsDisposed OrElse Config Is Nothing Then Return
-        Dim available As Boolean = Config.CheckUpdates AndAlso Not String.IsNullOrEmpty(url) AndAlso Not String.IsNullOrEmpty(version)
+        If Not manual AndAlso (Not Config.CheckUpdates OrElse Config.UpdateManualOnly) Then Return
+        Dim available As Boolean = Not String.IsNullOrEmpty(url) AndAlso Not String.IsNullOrEmpty(version)
+        If manual AndAlso Not available Then
+            MessageBox.Show(Me, Language.GetText("Check for updates"), Language.GetText("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+        ' Do not replace a reminder requested by the user with a periodic result.
+        If Not manual AndAlso manualUpdateReminder AndAlso ProximoAvisoActualizacion.HasValue Then Return
         Dim sameVersion As Boolean = String.Equals(VersionNuevaVersionMegadownloader, version, StringComparison.Ordinal)
         UrlNuevaVersionMegadownloader = If(available, url, Nothing)
         VersionNuevaVersionMegadownloader = If(available, version, Nothing)
         btnUpdate.Visible = available
-        If Not available OrElse String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal) Then
+        If manual Then
+            manualUpdateReminder = True
+            ProximoAvisoActualizacion = Now.AddSeconds(15)
+        ElseIf Not available OrElse String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal) Then
             ProximoAvisoActualizacion = Nothing
         ElseIf Not sameVersion Then
             ProximoAvisoActualizacion = Now.AddSeconds(15)
@@ -5041,14 +4944,17 @@ Public Class Main
     End Sub
 
     Private Sub UpdateReminder_Tick(sender As Object, e As EventArgs) Handles Me.Activated
-        If Cerrando OrElse IsDisposed OrElse Config Is Nothing OrElse Not Config.CheckUpdates OrElse
+        If Cerrando OrElse IsDisposed OrElse Config Is Nothing OrElse
            Not Me.Visible OrElse Form.ActiveForm IsNot Me OrElse WindowState = FormWindowState.Minimized OrElse
            Not ProximoAvisoActualizacion.HasValue OrElse Now < ProximoAvisoActualizacion.Value Then Return
+        If Not manualUpdateReminder AndAlso (Not Config.CheckUpdates OrElse Config.UpdateManualOnly) Then Return
 
+        Dim manual As Boolean = manualUpdateReminder
         ProximoAvisoActualizacion = Nothing
+        manualUpdateReminder = False
         Dim version As String = VersionNuevaVersionMegadownloader
         If String.IsNullOrEmpty(UrlNuevaVersionMegadownloader) OrElse
-           String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal) Then Return
+           (Not manual AndAlso String.Equals(Config.UpdateSkipVersion, version, StringComparison.Ordinal)) Then Return
         Dim mensaje As String = Language.GetText("New version do you want to download it? Recommended!") &
             vbNewLine & vbNewLine & "Version: " & version & vbNewLine & Language.GetText("Update prompt hint")
         Dim respuesta As DialogResult = MessageBox.Show(Me, mensaje, Language.GetText("New version available"), MessageBoxButtons.YesNoCancel)
@@ -5057,6 +4963,7 @@ Public Class Main
                 btnUpdate_Click(Nothing, Nothing)
             Case DialogResult.No
                 If String.Equals(VersionNuevaVersionMegadownloader, version, StringComparison.Ordinal) Then
+                    manualUpdateReminder = manual
                     ProximoAvisoActualizacion = Now.AddHours(3)
                 End If
             Case DialogResult.Cancel
@@ -5261,21 +5168,7 @@ Public Class Main
             Updater.ComprobarVersionMegadownloader(url, version)
             Log.WriteWarning("Manual version check requested")
 
-            BeginInvoke(New Action(Of String, String)(Sub(resUrl As String, resVersion As String)
-                ' F8: bypass ApplyUpdateCheckResult's Config.CheckUpdates gate so a manual
-                ' click always shows something, even when periodic checks are disabled.
-                Dim available As Boolean = Not String.IsNullOrEmpty(resUrl) AndAlso Not String.IsNullOrEmpty(resVersion)
-                If available Then
-                    UrlNuevaVersionMegadownloader = resUrl
-                    VersionNuevaVersionMegadownloader = resVersion
-                    btnUpdate.Visible = True
-                    ' Reuse the periodic reminder (15s) but ignore UpdateSkipVersion for a manual click.
-                    ProximoAvisoActualizacion = Now.AddSeconds(15)
-                Else
-                    ' No existing "already up to date" key in the XML: reuse the "Check for updates" title.
-                    MessageBox.Show(Me, Language.GetText("Check for updates"), Language.GetText("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information)
-                End If
-            End Sub), url, version)
+            BeginInvoke(New Action(Of String, String, Boolean)(AddressOf ApplyUpdateCheckResult), url, version, True)
         End Sub)
     End Sub
 
@@ -5894,124 +5787,54 @@ Public Class Main
 
 #Region "Agregar DLCs"
 
-    Private DLCProcessing As Boolean = False ' Indica si ya hay un proceso tratando el DLC
-    Private DLCPath As String = String.Empty
-    Private DLCResults As Generic.List(Of String) = Nothing
-    Private DLCErrorProcessing As Exception = Nothing
-    ' ⑥⑦:多文件排队。AddDLC 原来 DLCProcessing=True 时直接丢弃,拖多个/传多个只进第一个。
-    Private DLCQueue As New Generic.Queue(Of String)
+    ' Owned by the UI thread, including the completion of each queued import.
+    Private DLCProcessing As Boolean
+    Private ReadOnly DLCQueue As New Generic.Queue(Of String)
 
-
-    Private Sub AddDLC(ByVal DLCFilePath As String)
-        ' 用户在文件对话框点了"取消"时传空串:静默退出,不弹"The path is not valid"假错误
-        If String.IsNullOrWhiteSpace(DLCFilePath) Then Exit Sub
+    Private Sub AddDLC(DLCFilePath As String)
+        If String.IsNullOrWhiteSpace(DLCFilePath) Then Return
         DLCQueue.Enqueue(DLCFilePath)
         PumpDLCQueue()
     End Sub
 
-    ''' <summary>⑥⑦:空闲且队列非空时取下一个开工;保证多 .elc/.dlc 逐个导入,不再吞文件。</summary>
-    Private Sub PumpDLCQueue()
-        If DLCProcessing Then Exit Sub
-        If DLCQueue.Count = 0 Then Exit Sub
+    Private Async Sub PumpDLCQueue()
+        If DLCProcessing Then Return
         DLCProcessing = True
-        Dim Thread As New System.Threading.Thread(AddressOf StartProcessDLC)
-        ' 第18项:后台线程,进程退出时不被前台线程吊住(否则队列处理中退出会挂死)
-        Thread.IsBackground = True
-        DLCPath = DLCQueue.Dequeue()
-        Thread.Start()
-    End Sub
-
-    Private Sub FinishProcessing()
-
-        Dim ErrorProcessing As Exception = DLCErrorProcessing
-        Dim LocalURLList As Generic.List(Of String) = DLCResults
-        DLCResults = Nothing
-        DLCErrorProcessing = Nothing
-
-        If ErrorProcessing IsNot Nothing Then
-            MessageBox.Show(Language.GetText("The DLC could not be loaded. Reason: %REASON").Replace("%REASON", ErrorProcessing.Message), _
-                                  Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End If
-
-        If LocalURLList IsNot Nothing Then
-            Dim URLstr As String = String.Join(vbNewLine, LocalURLList)
-            If Not String.IsNullOrEmpty(URLstr) Then
-                ' Use the same asynchronous inbox for explicit container imports.
-                ' An existing file-selection page keeps this batch deferred.
-                ComprobarYAgregarLinks(URLstr, True, False, False)
-            ElseIf ErrorProcessing Is Nothing Then ' A decoder error was already shown above.
-                MessageBox.Show(Language.GetText("The DLC has no valid Mega links"), Language.GetText("Note"), _
-                       MessageBoxButtons.OK, MessageBoxIcon.Information)
-            End If
-        End If
-        ' ⑥⑦:当前处理完顺手起下一个排队文件。
-        PumpDLCQueue()
-    End Sub
-    Private Sub StartProcessDLC()
-        Dim Thread As New System.Threading.Thread(AddressOf ProcessDLC)
-        Thread.IsBackground = True
-        Thread.Start()
-        Dim d As Action(Of Boolean)
-
-        If Not Thread.Join(New TimeSpan(0, 0, 0, 30)) Then ' 30 seconds timeout
-            ' Never call Thread.Abort(): it can interrupt I/O mid-flight and corrupt state.
-            ' Mark the result as failed; the worker (a local file read) finishes on its own.
-            DLCProcessing = False
-            DLCResults = Nothing
-            DLCErrorProcessing = New ApplicationException("30s timeout")
-        End If
-        DLCPath = String.Empty
-        d = Sub(x As Boolean)
-                FinishProcessing()
-            End Sub
-        ' 第18项:窗口关闭后 handle 可能已销毁,裸 Invoke 会抛
-        ' ObjectDisposedException/InvalidOperationException 且无人接管;窗口没了直接跳过 UI。
         Try
-            If Me.IsDisposed OrElse Not Me.IsHandleCreated Then
-                Log.WriteWarning("StartProcessDLC: form handle gone, skipping UI finish")
-                DLCProcessing = False
-            Else
-                Me.Invoke(d, True)
-            End If
-        Catch ex As Exception
-            Log.WriteWarning("StartProcessDLC: Invoke failed (" & ex.Message & "), skipping UI finish")
-            DLCProcessing = False
-        End Try
-    End Sub
-    Private Sub ProcessDLC()
-        Try
-            Dim Path As String = DLCPath
+            While DLCQueue.Count > 0 AndAlso Not Cerrando AndAlso Not IsDisposed
+                Dim path As String = DLCQueue.Dequeue()
+                Dim read = Task.Run(Function() ReadLinkContainer(path))
+                Dim finished = Await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(30)))
+                If Cerrando OrElse IsDisposed Then Return
 
-            If String.IsNullOrEmpty(Path) Then
-                Throw New ApplicationException(Language.GetText("The path is not valid"))
-            End If
-
-            If Not System.IO.File.Exists(Path) Then
-                Throw New ApplicationException(Language.GetText("The path is not valid"))
-            End If
-
-            If Path.ToLower.EndsWith(".elc") Then
-                Dim ELC As New System.Text.StringBuilder
-                Using t As New System.IO.StreamReader(Path)
-                    ELC.Append(t.ReadToEnd())
-                End Using
-                If ELC.Length = 0 Then
-                    Throw New ApplicationException(Language.GetText("ELC file is empty"))
+                ' A late read only owns its own result and cannot affect the next item.
+                Dim result = If(finished Is read, read.Result, Tuple.Create(Of String, String)(Nothing, "30s timeout"))
+                If result.Item2 IsNot Nothing Then
+                    MessageBox.Show(Me, Language.GetText("The DLC could not be loaded. Reason: %REASON").Replace("%REASON", result.Item2),
+                                    Language.GetText("Error"), MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Else
+                    ComprobarYAgregarLinks(result.Item1, True, False, False)
                 End If
-                DLCResults = New Generic.List(Of String)
-                DLCResults.Add("mega://" & URLExtractor.SERVERENCODEDPREFIX & ELC.ToString())
-            Else
-                ' DLC decryption service (dcrypt.it) has been discontinued.
-                Throw New ApplicationException(Language.GetText("DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."))
-            End If
-
-        Catch ex As Exception
-            Log.WriteError("Error processing DLC: " & ex.ToString)
-            DLCErrorProcessing = ex
+            End While
         Finally
-            If DLCProcessing Then DLCProcessing = False
+            DLCProcessing = False
         End Try
     End Sub
+
+    Private Shared Function ReadLinkContainer(path As String) As Tuple(Of String, String)
+        Try
+            If Not IO.File.Exists(path) Then Return Tuple.Create(Of String, String)(Nothing, Language.GetText("The path is not valid"))
+            If Not path.EndsWith(".elc", StringComparison.OrdinalIgnoreCase) Then
+                Return Tuple.Create(Of String, String)(Nothing, Language.GetText("DLC format is no longer supported (dcrypt.it service discontinued). Please use .elc files instead."))
+            End If
+            Dim elc As String = IO.File.ReadAllText(path)
+            If elc.Length = 0 Then Return Tuple.Create(Of String, String)(Nothing, Language.GetText("ELC file is empty"))
+            Return Tuple.Create("mega://" & URLExtractor.SERVERENCODEDPREFIX & elc, CStr(Nothing))
+        Catch ex As Exception
+            Log.WriteError("Error processing DLC: " & Log.SafeException(ex))
+            Return Tuple.Create(Of String, String)(Nothing, ex.Message)
+        End Try
+    End Function
 
 #End Region
 

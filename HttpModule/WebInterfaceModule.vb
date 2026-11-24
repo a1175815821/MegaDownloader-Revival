@@ -505,12 +505,19 @@ Public Class WebInterfaceModule
                 ElseIf createdirpck = "true" And String.IsNullOrEmpty(pckname) Then
                     _RespuestaAjaxLocal.Value = ErrorAjax(Language.GetText("Invalid package name"))
                 Else
-                    Dim respuesta As String = Downloader.ControlRemotoAgregarLinks(links, pckname, createdirpck = "true")
-                    If String.IsNullOrEmpty(respuesta) Then
-                        _RespuestaAjaxLocal.Value = Language.GetText("Links added successfully")
-                    Else
-                        _RespuestaAjaxLocal.Value = ErrorAjax(respuesta)
-                    End If
+                    Try
+                        Dim respuesta As String = Downloader.ControlRemotoAgregarLinks(links, pckname, createdirpck = "true")
+                        If String.IsNullOrEmpty(respuesta) Then
+                            _RespuestaAjaxLocal.Value = Language.GetText("Links added successfully")
+                        Else
+                            _RespuestaAjaxLocal.Value = ErrorAjax(respuesta)
+                        End If
+                    Catch ex As Exception
+                        ' HttpServer does not send a response when the service exception escapes.
+                        Log.WriteError("Remote add links failed: " & Log.SafeException(ex))
+                        response.Status = Net.HttpStatusCode.InternalServerError
+                        _RespuestaAjaxLocal.Value = ErrorAjax("Could not add links")
+                    End Try
 
                 End If
             End If

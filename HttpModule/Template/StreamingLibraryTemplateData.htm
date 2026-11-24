@@ -156,18 +156,18 @@
 		           return;
                }
 
-		       var HTML = '<ul>';
-		       for (i = 0; i < l.length; i++) {
-		           var Poster = l[i].Poster;
-		           if (Poster == '') Poster = 'http://i.imgur.com/adc1iWF.png';
-		           HTML += '<li>';
-		           HTML += '<img src="' + Poster + '" class="mini" height="150" onclick="OpenDetails(\'' + l[i].ID + '\')" />';
-		           HTML += '<img src="' + Poster + '" class="pic" height="250" onclick="OpenDetails(\'' + l[i].ID + '\')" />';
-		           HTML += '<div class="divName">' + l[i].Name + '</div>';
-		           HTML += '</li>';
-		       }
-		       HTML += '</ul>';
-		       $('#gallery').html(HTML);
+		       var list = $('<ul>');
+		       $.each(l, function (_, item) {
+		           var poster = item.Poster || 'http://i.imgur.com/adc1iWF.png';
+		           var entry = $('<li>').append(
+		               $('<img class="mini" height="150" />').attr('src', poster),
+		               $('<img class="pic" height="250" />').attr('src', poster),
+		               $('<div class="divName"></div>').text(item.Name)
+		           );
+		           entry.on('click', 'img', function () { OpenDetails(item.ID); });
+		           list.append(entry);
+		       });
+		       $('#gallery').empty().append(list);
 		   }
 
 		   function OpenDetails(ID) {
@@ -196,7 +196,7 @@
 		       $('#videoPlayer_a2').attr('href', url)
 		       $('#videoPlayer_i').val(url)
 
-		       $('#modalPlayer_movieName').html(o.Name);
+		       $('#modalPlayer_movieName').text(o.Name);
 
 
 		       var id = $('#modalPlayer');

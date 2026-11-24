@@ -19,6 +19,93 @@ public partial class RegressionTests {
     static T FileBacked<T>(string path) {
         return (T)Activator.CreateInstance(typeof(T),hidden,null,new object[]{path},CultureInfo.InvariantCulture);
     }
+    static void LibraryXmlImport() {
+        var field=typeof(StreamingLibraryManager).GetField("_StreamingLibrary",shared);
+        var previous=field.GetValue(null);
+        var library=FileBacked<StreamingLibrary>(Path.Combine(root,"test-library-import.xml"));
+        field.SetValue(null,library);
+        try {
+            const string xml="<ExportedXML><Elements><Element><Name>Film &amp; credits</Name></Element></Elements></ExportedXML>";
+            var compress=typeof(StreamingLibraryManager).GetMethod("CompressString",shared);
+            Func<string,string> pack=value=>"{MEGALIBRARY}"+Criptografia.base64urlencode((byte[])compress.Invoke(null,new object[]{value}))+"{:MEGALIBRARY}";
+            Check(StreamingLibraryManager.ImportLibrary(pack("<!DOCTYPE ExportedXML>"+xml))==0 && library.Elements().Count==0,
+                "library import rejects DTDs even in a compressed bundle");
+            Check(StreamingLibraryManager.ImportLibrary(pack(xml))==1 && library.Elements().Single().Name=="Film & credits",
+                "valid compressed library import still preserves literal metadata");
+            library.Init();
+            Check(StreamingLibraryManager.ImportLibrary(xml)==1 && library.Elements().Single().Name=="Film & credits",
+                "valid plain XML library import still works");
+        } finally { field.SetValue(null,previous); }
+    }
+
+    sealed class FailingRemoteDownloader : IDownloaderService {
+        public decimal? ControlRemotoObtenerVelocidad() { return null; }
+        public int? ControlRemotoObtenerDescargasActivas() { return null; }
+        public int? ControlRemotoObtenerDescargasCompletadas() { return null; }
+        public int? ControlRemotoObtenerDescargasErroneas() { return null; }
+        public int? ControlRemotoObtenerDescargasEnCola() { return null; }
+        public DownloaderEstado ControlRemotoObtenerEstado() { return DownloaderEstado.Parado; }
+        public void ControlRemotoDescargar() { }
+        public void ControlRemotoParar() { }
+        public string ControlRemotoAgregarLinks(string links,string package,bool directory) {
+            throw new IOException("test-only directory diagnostic");
+        }
+    }
+
+    static void RemoteAddLinksError() {
+        int port=FreePort();
+        var server=new HttpServer.HttpServer();
+        server.Add(new WebInterfaceModule(new FailingRemoteDownloader(),null,"fixture","Test",5,"en-US"));
+        server.Start(IPAddress.Loopback,port);
+        try {
+            var cookies=new CookieContainer();
+            Func<string,string,HttpWebRequest> request=(path,form)=>{
+                var req=(HttpWebRequest)WebRequest.Create("http://127.0.0.1:"+port+path);
+                req.Proxy=null;req.Timeout=5000;req.ReadWriteTimeout=5000;req.CookieContainer=cookies;
+                if(form!=null) {
+                    byte[] body=System.Text.Encoding.UTF8.GetBytes(form);
+                    req.Method="POST";req.ContentType="application/x-www-form-urlencoded";req.ContentLength=body.Length;
+                    using(var stream=req.GetRequestStream())stream.Write(body,0,body.Length);
+                }
+                return req;
+            };
+            string page;
+            using(var res=request("/login","Password=fixture").GetResponse())
+            using(var reader=new StreamReader(res.GetResponseStream()))page=reader.ReadToEnd();
+            string token=System.Text.RegularExpressions.Regex.Match(page,"CSRF_TOKEN='([a-f0-9]+)'").Groups[1].Value;
+            Check(token.Length==32,"loopback remote-control login returned a CSRF token");
+            try {
+                using(var res=request("/ajax_addlink","links=fixture&pckname=fixture&createdirpck=true&csrf="+token).GetResponse())
+                    Check(false,"remote download failure should be an HTTP error");
+            } catch(WebException ex) {
+                using(var response=(HttpWebResponse)ex.Response) {
+                    Check(response!=null && response.StatusCode==HttpStatusCode.InternalServerError,
+                        "remote add failure returns HTTP 500 instead of leaving the request unanswered");
+                    using(var reader=new StreamReader(response.GetResponseStream())) {
+                        string body=reader.ReadToEnd();
+                        Check(body.Contains("Could not add links") && !body.Contains("test-only directory diagnostic"),
+                            "remote add returns an error without exposing the internal exception");
+                    }
+                }
+            }
+        } finally { server.Stop(); }
+    }
+
+    static void LinkContainerRead() {
+        var read=typeof(Main).GetMethod("ReadLinkContainer",shared);
+        string first=Path.Combine(root,"first.ELC"),second=Path.Combine(root,"second.elc"),old=Path.Combine(root,"legacy.dlc");
+        File.WriteAllText(first,"first batch"); File.WriteAllText(second,"second batch"); File.WriteAllText(old,"legacy batch");
+        Func<string,Tuple<string,string>> readFile=path=>(Tuple<string,string>)read.Invoke(null,new object[]{path});
+        var batch1=Task.Run(()=>readFile(first));
+        var batch2=Task.Run(()=>readFile(second));
+        Task.WaitAll(batch1,batch2);
+        Check(batch1.Result.Item1.EndsWith("first batch",StringComparison.Ordinal) && batch1.Result.Item2==null &&
+              batch2.Result.Item1.EndsWith("second batch",StringComparison.Ordinal) && batch2.Result.Item2==null,
+            "container reads carry their own path and result");
+        var unsupported=readFile(old);
+        Check(unsupported.Item1==null && !string.IsNullOrEmpty(unsupported.Item2),"obsolete DLC format still reports an error");
+    }
+
     static void SpeedLimitRoundTrips() {
         var previous=Thread.CurrentThread.CurrentCulture;
         var format=typeof(Utils).GetMethod("FormatSpeedLimit",shared);

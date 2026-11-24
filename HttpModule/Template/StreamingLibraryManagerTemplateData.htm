@@ -179,14 +179,15 @@
 
 	    // Row click
 	    $("#LibraryResults tbody").click(function (event) {
-	        if ($(event.target).attr('prevent-row-click') == 'true') return;
-
-	        var eleAux = $(event.target.parentNode).find(".selectorID");
-	        if (eleAux.length==0) { eleAux = $(event.target.parentNode.parentNode).find(".selectorID"); } // Puede haber dos elementos anidados...
-	        var IDelement = eleAux.html();
+	        var row = oTable.fnGetData($(event.target).closest('tr')[0]);
+	        if (!row) return;
+	        if ($(event.target).hasClass('play-library-item')) {
+	            OpenVLC(row.VlcLink, row.Name);
+	            return;
+	        }
 	        $.getJSON("/ajax",
 		   {
-		       Element: IDelement,
+		       Element: row.ID,
 		       Action: "Load"
 		   },
 		   function (data) {
@@ -282,17 +283,17 @@
 	// Export
 	function OpenExportLinks() {
 
-	    var HTML = '<ul>'
+	    var list = $('<ul>');
 	    var aTrs = oTable.fnGetNodes();
 	    for (var i = 0; i < aTrs.length; i++) {
 	        var row = oTable.fnGetData(aTrs[i]);
-	        HTML += '<li>'
-	        HTML += '<input type="checkbox" class="chkExport" name="chkExport" id="chkExport' + row.ID + '" ele-id="' + row.ID + '" />'
-	        HTML += '<label for="chkExport' + row.ID + '">' + row.Name + '</label>'
-	        HTML += '</li>'
+	        var id = 'chkExport' + row.ID;
+	        list.append($('<li>').append(
+	            $('<input type="checkbox" class="chkExport" name="chkExport" />').attr('id', id).attr('ele-id', row.ID),
+	            $('<label>').attr('for', id).text(row.Name)
+	        ));
 	    }
-	    HTML += '</ul>';
-	    $('#listExportElements').html(HTML);
+	    $('#listExportElements').empty().append(list);
 
 
 	    var id = $('#modalExport');
@@ -379,17 +380,17 @@
    
    // Render
 	function RenderID(data, type, full) {
-	   return '<span class="selectorID">' + data + '</span>'; // Ponemos un span para que sea más fácil obtener el ID al clickar en una fila
+	    return $('<span>').text(data)[0].outerHTML;
 	};
 	function RenderText(data, type, full) {
-		if (data.length > 50){
-			return '<span title="'+ data.replace(/"/g,"&quot;") +'">'+data.substring(0,50) + "..." + '</span>';
-		} else {
-			return data;
-		}
+	    var text = $('<span>').text(data);
+	    if (type === 'display' && data.length > 50) {
+	        text.attr('title', data).text(data.substring(0, 50) + '...');
+	    }
+	    return text[0].outerHTML;
 	};
 	function RenderPlayer(data, type, full) {
-	    return "<img prevent-row-click='true' title='Watch with VLC' src='http://ubuntuparanovatos.files.wordpress.com/2007/06/vlc_icon.png' width='12' onclick='OpenVLC(\"" + data + "\", \"" + full.Name.replace(/\"/gi, "") + "\")'/>";
+	    return '<img class="play-library-item" title="Watch with VLC" src="http://ubuntuparanovatos.files.wordpress.com/2007/06/vlc_icon.png" width="12" />';
 	};
    
    function AdjustWidth(){
@@ -484,7 +485,7 @@
        $('#videoPlayer_a2').attr('href', url)
        $('#videoPlayer_i').val(url)
 
-       $('#modalPlayer_movieName').html(name);
+       $('#modalPlayer_movieName').text(name);
 
         var id = $('#modalPlayer');
 		var mask = $('#mask_Player');

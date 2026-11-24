@@ -136,6 +136,8 @@ Public Class Configuration
             ListaLogs(Log.LevelLogType.Normal.ToString) = Language.GetText("Log_Normal")
             ListaLogs(Log.LevelLogType.Info.ToString) = Language.GetText("Log_Informative")
             ListaLogs(Log.LevelLogType.Debug.ToString) = Language.GetText("Log_Debug")
+            ' The combo is detached from the form until the advanced page is built.
+            comboLog.BindingContext = BindingContext
             comboLog.DataSource = New BindingSource(ListaLogs, Nothing)
             comboLog.DisplayMember = "Value"
             comboLog.ValueMember = "Key"
@@ -197,7 +199,7 @@ Public Class Configuration
             chkUltimaConfig.Checked = Config.MantenerUltimaConfiguracion
             chkComenzarPlay.Checked = Config.ComenzarDescargando
             chkStartWindows.Checked = Config.IniciarConWindows
-            If settingsPagesBuilt.Contains(TabPage2) Then comboLog.SelectedValue = Config.NivelLog.ToString
+            comboLog.SelectedValue = Config.NivelLog.ToString
             comboPrioridad.SelectedValue = Config.PrioridadDescompresion.ToString
             comboIdiomas.SelectedValue = Language.NormalizeLanguagePreference(Config.Idioma)
             If String.IsNullOrEmpty(CStr(comboIdiomas.SelectedValue)) Then
@@ -362,16 +364,6 @@ Public Class Configuration
         EnsureElcControl()
         ElcAccountControl.CargarDatos()
         elcAccountsLoaded = True
-    End Sub
-
-    ''' <summary>
-    ''' 空闲预建时顺手跑一次 Load：把绑定、翻译、主题和首次 ShowDialog 的
-    ''' JIT 提前完成，用户第一次点击设置时只剩刷新和重显。
-    ''' </summary>
-    Friend Sub PreloadForFirstShow(configuration As Configuracion)
-        If configuration Is Nothing OrElse configurationLoaded Then Return
-        Me.Config = configuration
-        Configuration_Load(Me, EventArgs.Empty)
     End Sub
 
     ''' <summary>

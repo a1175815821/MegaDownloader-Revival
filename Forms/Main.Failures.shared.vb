@@ -13,8 +13,8 @@ Partial Public Class Main
     Private failureBannerLabel As Label = Nothing
     Private failureRetryButton As Button = Nothing
     Private failureDismissButton As Button = Nothing
-    ' Dismissed failure count: suppressed until a new failure (or a changed set) needs attention again.
-    Private _failureBannerDismissedCount As Integer = 0
+    ' Dismiss individual failure occurrences, not a count that another set can share.
+    Private dismissedFailures As Dictionary(Of Fichero, Date?)
 
     ''' <summary>A 收口版：由 430ms UI 刷新 tick 认领 end-state 的 Erroneo 计数快照。
     ''' 与 quota 同款：UI 线程常驻刷新 vs 线程池 worker 调用，故内部 BeginInvoke。 </summary>
@@ -26,38 +26,40 @@ Partial Public Class Main
                 Return
             End If
             If failureBannerPanel Is Nothing Then Return
-            Dim count As Integer = 0
-            Try
-                If ListaPaquetes IsNot Nothing Then
-                    SyncLock Mutex.ListaDescargas
-                        For Each paq As Paquete In ListaPaquetes
-                            For Each fic As Fichero In paq.ListaFicheros
-                                If fic.DescargaEstado = Estado.Erroneo Then count += 1
-                            Next
-                        Next
-                    End SyncLock
-                End If
-            Catch ex As ObjectDisposedException
-            End Try
-            If count > 0 Then
-                Dim dismissed As Boolean = (count = _failureBannerDismissedCount)
-                If Not dismissed AndAlso Not failureBannerPanel.Visible Then
-                    failureBannerPanel.Visible = True
-                    failureBannerPanel.BringToFront()
-                    LayoutDownloadArea()
-                End If
+            Dim count As Integer = CountBannerFailures()
+            Dim showBanner As Boolean = count > 0 AndAlso dismissedFailures Is Nothing
+            If showBanner Then
                 failureBannerLabel.Text = Language.GetText("Downloads_Failed_Banner").Replace("%N%", count.ToString())
-                If dismissed AndAlso failureBannerPanel.Visible Then
-                    failureBannerPanel.Visible = False
-                    LayoutDownloadArea()
-                End If
-            ElseIf failureBannerPanel.Visible Then
-                failureBannerPanel.Visible = False
+            End If
+            If failureBannerPanel.Visible <> showBanner Then
+                failureBannerPanel.Visible = showBanner
                 LayoutDownloadArea()
             End If
         Catch
         End Try
     End Sub
+
+    Private Function CountBannerFailures(Optional dismiss As Boolean = False) As Integer
+        Dim snapshot = If(dismiss, New Dictionary(Of Fichero, Date?)(), dismissedFailures)
+        Dim matches As Boolean = snapshot IsNot Nothing
+        Dim count As Integer = 0
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In ListaPaquetes
+                For Each fic As Fichero In paq.ListaFicheros
+                    If fic.DescargaEstado <> Estado.Erroneo Then Continue For
+                    count += 1
+                    If dismiss Then
+                        snapshot(fic) = fic.FechaUltimoError
+                    ElseIf matches Then
+                        Dim previous As Date?
+                        matches = snapshot.TryGetValue(fic, previous) AndAlso Nullable.Equals(previous, fic.FechaUltimoError)
+                    End If
+                Next
+            Next
+        End SyncLock
+        dismissedFailures = If(matches AndAlso count > 0 AndAlso count = snapshot.Count, snapshot, Nothing)
+        Return count
+    End Function
 
     Private Sub InitFailureBanner()
         Dim sc As Single = 1.0F
@@ -73,11 +75,6 @@ Partial Public Class Main
         failureBannerPanel.Name = "failureBannerPanel"
         failureBannerPanel.Height = bannerH
         failureBannerPanel.Left = 0
-        Try
-            failureBannerPanel.Top = TableLayoutPanel1.Bottom + (If(quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible, quotaBannerPanel.Height, 0))
-        Catch
-            failureBannerPanel.Top = 70
-        End Try
         failureBannerPanel.Width = Me.ClientSize.Width
         failureBannerPanel.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         failureBannerPanel.Visible = False
@@ -107,22 +104,7 @@ Partial Public Class Main
         failureDismissButton.Top = (bannerH - failureDismissButton.Height) \ 2
         failureDismissButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         AddHandler failureDismissButton.Click, Sub()
-                                                 ' “已看到”：记住当前失败数，下轮刷新不再弹出，
-                                                 ' 失败数变化（新增/减少）时重新提示。重试/删除仍是清零的途径。
-                                                 Dim count As Integer = 0
-                                                 Try
-                                                     If ListaPaquetes IsNot Nothing Then
-                                                         SyncLock Mutex.ListaDescargas
-                                                             For Each paq As Paquete In ListaPaquetes
-                                                                 For Each fic As Fichero In paq.ListaFicheros
-                                                                     If fic.DescargaEstado = Estado.Erroneo Then count += 1
-                                                                 Next
-                                                             Next
-                                                         End SyncLock
-                                                     End If
-                                                 Catch
-                                                 End Try
-                                                 _failureBannerDismissedCount = count
+                                                 CountBannerFailures(dismiss:=True)
                                                  failureBannerPanel.Visible = False
                                                  LayoutDownloadArea()
                                              End Sub
@@ -132,19 +114,12 @@ Partial Public Class Main
         failureBannerPanel.Controls.Add(failureDismissButton)
         Me.Controls.Add(failureBannerPanel)
         failureBannerPanel.BringToFront()
-        LayoutFailureBanner()
         ApplyFailureBannerTheme()
         UpdateFailureBannerTexts()
     End Sub
 
-    Private Sub LayoutFailureBanner()
-        If failureBannerPanel Is Nothing OrElse failureRetryButton Is Nothing OrElse failureBannerLabel Is Nothing Then Return
-        Try
-            Dim top As Integer = TableLayoutPanel1.Bottom
-            If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then top += quotaBannerPanel.Height
-            failureBannerPanel.Top = top
-        Catch
-        End Try
+    Private Sub LayoutFailureBanner(top As Integer)
+        failureBannerPanel.Top = top
         failureBannerPanel.Width = Me.ClientSize.Width
         failureDismissButton.Left = failureBannerPanel.Width - failureDismissButton.Width - 12
         failureRetryButton.Left = failureDismissButton.Left - failureRetryButton.Width - 8

@@ -342,9 +342,7 @@ Partial Public Class Main
             LayoutWorkbenchToolbar()
             Dim scale As Single = GetUiScale()
             Dim pad As Integer = CInt(24 * scale)
-            Dim top As Integer = If(MainMenuStrip Is Nothing, 0, MainMenuStrip.Bottom)
-            If quotaBannerPanel IsNot Nothing AndAlso quotaBannerPanel.Visible Then top += quotaBannerPanel.Height
-            If failureBannerPanel IsNot Nothing AndAlso failureBannerPanel.Visible Then top += failureBannerPanel.Height
+            Dim top As Integer = LayoutDownloadBanners(MainMenuStrip.Bottom)
             Dim bottom As Integer = StatusStrip1.Top - pad
             Dim navWidth As Integer = CInt(192 * scale)
             Dim mainLeft As Integer = navWidth + pad
@@ -562,11 +560,10 @@ Partial Public Class Main
     End Function
 
     Private Function MatchesQueuePackage(package As Paquete) As Boolean
-        If queueQuery.Length = 0 Then Return DownloadEstadoFilter.MatchesScope(package, _navScope)
-        If Not queueMatches.Contains(package) Then Return False
-        If queueWholeMatches.Contains(package) Then Return DownloadEstadoFilter.MatchesScope(package, _navScope)
-        If package.ListaFicheros Is Nothing Then Return False
-        For Each file As Fichero In package.ListaFicheros
+        If queueQuery.Length > 0 AndAlso Not queueMatches.Contains(package) Then Return False
+        If (queueQuery.Length = 0 OrElse queueWholeMatches.Contains(package)) AndAlso
+           (_navScope = DownloadEstadoFilter.NavScope.All OrElse DownloadEstadoFilter.ScopeOf(package.DescargaEstado()) = _navScope) Then Return True
+        For Each file As Fichero In GetQueueViewFiles(package)
             If MatchesQueueFile(file, package) Then Return True
         Next
         Return False
@@ -574,15 +571,12 @@ Partial Public Class Main
 
     Private Sub RebuildWorkbenchRoots()
         Dim overview As QueueOverview = Volatile.Read(queueOverviewSnapshot)
-        SyncLock Mutex.ListaDescargas
-            ListaDescargas.BeginUpdate()
-            Try
-                ApplyNavRoots()
-                ListaDescargas.BuildList()
-            Finally
-                ListaDescargas.EndUpdate()
-            End Try
-        End SyncLock
+        ListaDescargas.BeginUpdate()
+        Try
+            ApplyNavRoots()
+        Finally
+            ListaDescargas.EndUpdate()
+        End Try
         If overview IsNot Nothing Then appliedScopeVersion = overview.ScopeVersion
         UpdateWorkbenchHeading()
         UpdateDetailPanel()

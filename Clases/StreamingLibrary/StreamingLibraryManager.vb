@@ -157,7 +157,10 @@ Public Class StreamingLibraryManager
 			Try
 				' Cada library es un nodo  "<ExportedXML>" ... "</ExportedXML>"
 				Dim xml As New XmlDocument
-				xml.LoadXml(library)
+				Dim settings As New XmlReaderSettings With {.DtdProcessing = DtdProcessing.Prohibit}
+				Using reader As XmlReader = XmlReader.Create(New StringReader(library), settings)
+					xml.Load(reader)
+				End Using
 				
 				For Each element As XmlNode In xml.DocumentElement.SelectNodes("Elements/Element")
 					Dim ele As New LibraryElement
@@ -175,7 +178,7 @@ Public Class StreamingLibraryManager
 				Next
 				StreamingLibrary.SaveXML()
 			Catch ex As Exception
-				Log.WriteError("Error trying to import library [ImportLibrary] - error " & ex.ToString & " - Data: " & library)
+				Log.WriteError("Error trying to import library [ImportLibrary] - " & Log.SafeException(ex))
 			End Try
 			
 		Next
