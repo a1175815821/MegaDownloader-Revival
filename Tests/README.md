@@ -25,9 +25,9 @@
 - **精准度**：设置首开守卫只测 load+首帧并辅以布局次数上限（`layouts<500`），排除冷进程 JIT/构造耗时造成的误报；下载/并行用例以“等待真实成品文件”取代固定 sleep；流媒体分段夹具去掉人为 250ms 延迟（仍真实分段）；16 MiB MetaMAC 独立生成器改用 `TransformBlock` 复用缓冲（语义不变、更快）。
 - **端口稳健**：`FreePort()` 与 `LocalFileServer` 用真实 `HttpListener` 探测并重试绑定，避开 Hyper-V/WinNAT 保留端口段导致的 WSAEACCES（“Error starting web server / 套接字访问权限”）环境性失败。
 
-## 当前基线（2026-11-19，main）
+## 当前基线（2026-11-24，main）
 
-Debug / Release 完整回归各通过 **1135 项断言**（53 用例，全部通过）。界面专项 `-UiOnly` 通过 247 项（截图关闭；加 `-Screenshots` 会恢复 PrintWindow 捕获校验），启动专项 `-StartupOnly` 通过 157 项。本轮新增覆盖：失败横幅行为（dismiss 保持隐藏 / 计数变化重现 / Retry 仅唤醒非永久失败 / 配额失败保留断点 / 与 dismiss 计数联动）、永久 vs 配额错误分类（`IsPermanentErrorText`/`IsQuotaErrorText`/`EstablecerError`）、配额倒计时格式边界（`FormatQuotaRemaining`）。常规一轮约 60–75 秒（界面专项与启动恢复计时占大头），重复轮因缓存省去构建与编译。
+Release 完整回归通过 **1380 项断言**（60 用例，全部通过），界面专项 `-UiOnly` 通过 394 项（加 `-Screenshots` 时同时重生成文档截图）。本轮新增覆盖：媒体库导入拒绝 DTD 且合法库照常导入、网页远控添加失败返回 500、设置首开只执行一次 `Load`、横幅与工作台标题不重叠、失败横幅按具体失败重现、队列结构渲染不在共享锁内、容器读取互不覆盖、11 个语言包键集合一致。界面专项 `-UiOnly` 通过 247 项（截图关闭；加 `-Screenshots` 会恢复 PrintWindow 捕获校验），启动专项 `-StartupOnly` 通过 157 项。本轮新增覆盖：失败横幅行为（dismiss 保持隐藏 / 计数变化重现 / Retry 仅唤醒非永久失败 / 配额失败保留断点 / 与 dismiss 计数联动）、永久 vs 配额错误分类（`IsPermanentErrorText`/`IsQuotaErrorText`/`EstablecerError`）、配额倒计时格式边界（`FormatQuotaRemaining`）。常规一轮约 60–75 秒（界面专项与启动恢复计时占大头），重复轮因缓存省去构建与编译。
 
 以下为历史发布检查记录。
 

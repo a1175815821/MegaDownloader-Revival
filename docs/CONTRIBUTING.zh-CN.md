@@ -293,9 +293,9 @@ u-RU-Language.xml" />
 7. 创建 Git Tag 并推送，CI 会自动构建产物并创建 GitHub Release：
 
 ```bash
-git tag -a v2.6.5 -m "Release v2.6.5"
+git tag -a v2.6.6 -m "Release v2.6.6"
 git push origin main
-git push origin v2.6.5
+git push origin v2.6.6
 ```
 
 CI 在 tag `v*` 上会自动：

@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../../releases/latest"><img alt="下载最新发行版" src="https://img.shields.io/badge/%E5%85%8D%E8%B4%B9%E4%B8%8B%E8%BD%BD-%E6%9C%80%E6%96%B0%E7%89%88-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.5-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="更新日志" src="https://img.shields.io/badge/Changelog-2.6.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><a href="../README.md">English</a> · <b>简体中文</b> · <a href="README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. 复制一个 MEGA 链接，程序会自动识别。
 3. 确认链接 → 勾选要的文件 → 开始下载。
 
-> v2.6.5 重点：可登录一个或多个 MEGA 账号、浏览云盘、下载网盘私有文件并断点续传；公开链接仍可匿名下载。
+> v2.6.6 重点：把云盘目录设为订阅，按每日计划自动把新增与更新的文件加入队列；同时修复维护审查发现的流媒体库安全、界面与后台问题。
 
 <table>
 <tr>
@@ -46,14 +46,14 @@
 
 ---
 
-## ✨ 2.6.5 新在哪
+## ✨ 2.6.6 新在哪
 
-- **MEGA 账号**：在菜单栏登录一个或多个账号，添加链接时按任务选择下载身份，之后可在队列中改选；记住登录使用 Windows DPAPI 保存在本机。
-- **云盘**：浏览「我的云盘」与「分享给我的」，支持搜索、筛选、Shift 连选与批量选择；入队前预览会列出本地子目录与已排队文件。
-- **私有文件断点续传**：暂停、重置与重启后保留任务专属断点，只请求缺失区间，交付前校验整文件 MetaMAC。
-- **跨账号配额**：公开链接配额用尽时自动换下一个可用账号；私有任务留在原账号，并显示 SDK 给出的重试倒计时。
-- **绑定目录**：把收藏的云盘目录绑定到本地目录后检查新增与更新，已交付文件会被记录，不会重复下载。
-- **修复**：批量暂停不再卡在第一个网盘任务；重启后已交付的分卷直接复用，不再重下整卷；断点标记或账号配置损坏时改为可恢复，而不是卡住任务。[完整变更](CHANGELOG.md)。
+- **云盘目录订阅**：把收藏的云盘目录设为订阅，指定每日检查时间与需要的扩展名，新增或更新的文件可自动入队，也可先确认。订阅窗口按账号列出全部绑定目录，以及新增、更新、待确认、已入队与已下载的文件，并保留云端子目录结构。
+- **队列详情说明等待原因**：区分手动暂停、计划等待、匿名配额、账号配额与账号过期，并显示已知的重试时间；任务包可直接跳到第一个失败文件。
+- **安全**：导入流媒体库不再解析 DTD 与外部实体，堵住读取本机文件与 SSRF 的路径；媒体库的名称、海报与编号按数据处理而不是拼进页面，关闭了库页面的存储型 XSS。
+- **界面**：配额与失败横幅不再盖住工作台标题；关闭失败横幅只隐藏你已看到的那批失败；保存设置不再把日志级别重置为「最小」；关闭自动检查更新时，手动检查的结果不会再被抹掉。
+- **后台**：队列用短快照渲染，不再长时间占着共享锁；自动关机在界面线程检查窗口；网页远控添加链接失败会返回错误，而不是让页面一直转圈；连续导入多个链接容器不再丢链接或重复导入。
+- **翻译补全**：9 个缺项语言包补齐 1,430 条文案，11 个内置语言包现在都覆盖同样的 684 个键。[完整变更](CHANGELOG.md)。
 
 > 账号下载需要 64 位 Windows 进程。两种发布包均自带 x64 MEGA 账号模块与所需的 VC++ 运行库。32 位 Windows 仍可匿名下载。
 
@@ -169,6 +169,7 @@
 - **批量预检** —— 大型分享先看清再勾选，不再盲下（v2.6）
 - **ELC 容器** —— 加密链接容器的导入与导出；`enc` / `enc2` / `fenc` / `fenc2` / `elc` 全支持
 - **云盘** —— 浏览我的云盘与分享目录，绑定本地目录后检查新增与更新文件（v2.6.5）
+- **目录订阅** —— 按每日计划检查绑定目录，新增与更新的文件可自动入队（v2.6.6）
 
 **工作台**
 
@@ -223,10 +224,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.5 settings" src="screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.6 settings" src="screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>2.6.5 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
+<p align="center"><sub>2.6.6 设置 · 语言跟随系统，表单可滚动。截图使用示例数据。</sub></p>
 
 <table>
 <tr>
@@ -245,7 +246,7 @@ MegaDownloader 是西班牙开发者 **Andres Soliño** 制作的 MEGA 下载管
 
 本仓库把它救了回来：反编译 v1.8 拿到源码，在此基础上持续修复与重构 —— 至今累计 **200+ 项修复与加固**（崩溃、静默丢数据、安全、兼容性），并按语义化版本持续发布。
 
-|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.5** |
+|  | 原版 v1.8（2018 年停更） | **本仓库 v2.6.6** |
 | --- | --- | --- |
 | 新版 `mega.nz/file` / `/folder` 链接 | ❌ 无法识别 | ✅ v1.9 起支持 |
 | MEGA 配额耗尽 | 卡死、报错 | ✅ 自动熔断，倒计时恢复（v2.5） |
@@ -357,7 +358,7 @@ MegaDownloader/
 | [CONTRIBUTING](CONTRIBUTING.zh-CN.md) | 贡献流程、代码风格、发布流程 |
 | [SECURITY](../SECURITY.md) | 安全问题反馈方式 |
 | [CODE OF CONDUCT](../CODE_OF_CONDUCT.md) | 社区行为准则 |
-| [2.6.5 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.5) | v2.6.5 的更新亮点与下载 |
+| [2.6.6 发行说明](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.6) | v2.6.6 的更新亮点与下载 |
 
 README 为三种语言手动维护；CONTRIBUTING 有英文与简体中文两个版本，CHANGELOG 为简体中文。更新时请同步：
 

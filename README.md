@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Free%20download-Latest-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.5-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. Copy a MEGA link — the app detects it automatically.
 3. Confirm the link → choose files → start the download.
 
-> v2.6.5: sign in with one or more MEGA accounts, browse the cloud drive, and download private files with resumable checkpoints — public links keep working anonymously.
+> v2.6.6: turn cloud folders into subscriptions that queue new and changed files on a daily schedule, and close the security, interface and background issues found in the maintenance audit.
 
 <table>
 <tr>
@@ -46,14 +46,14 @@
 
 ---
 
-## ✨ What's new in 2.6.5
+## ✨ What's new in 2.6.6
 
-- **MEGA accounts** — sign in with one or more accounts from the menu bar. Choose the download identity per task in Add Links, switch it later from the queue, and keep sessions on this device with Windows DPAPI.
-- **Cloud drive** — browse your drive or the folders shared with you, filter, search and range-select, then queue files through a preview that shows local subfolders and anything already queued.
-- **Private downloads that resume** — private files keep a task-owned checkpoint across pause, reset and restart, stream only the missing range, and verify the whole file's MetaMAC before delivery.
-- **Quota across accounts** — a public link rotates to the next eligible account when quota runs out; a private task stays with its account and shows the SDK retry countdown.
-- **Bound folders** — bind a favorite cloud folder to a local directory and check for new or updated files; completed deliveries are remembered so nothing is fetched twice.
-- **Fixes** — pausing a batch no longer stops at the first cloud task, a restarted task reuses its delivered file instead of downloading the volume again, and a damaged checkpoint marker or account store now recovers instead of blocking the task. [Full changelog](docs/CHANGELOG.md).
+- **Scheduled cloud folders** — mark a favorite drive folder as a subscription, pick a daily check time and the extensions you want, and let new or changed files queue automatically or after confirmation. The Subscriptions window lists every bound folder per account with new, updated, pending, queued and delivered files, and keeps the cloud subfolder structure.
+- **Queue details explain every wait** — manual pause, schedule, anonymous quota, account quota or an expired account, with the known retry time; a failed package jumps straight to its first failed file.
+- **Security** — importing a streaming library no longer resolves DTDs or external entities (the local-file read and SSRF path), and library names, posters and IDs are rendered as data rather than markup, closing the stored-XSS path in the library pages.
+- **Interface** — the quota and failure banners no longer cover the workbench title; dismissing the failure banner only hides the failures you saw; saving settings no longer resets the log level to Minimal; and a manual update check keeps its result when automatic checks are off.
+- **Background work** — the queue renders from a short snapshot instead of holding the shared lock, auto-shutdown checks windows on the UI thread, a failed remote add answers the browser instead of leaving it spinning, and importing several containers no longer drops or duplicates links.
+- **Complete translations** — the nine incomplete language packs gained 1,430 missing strings; all eleven built-in packs now cover the same 684 keys. [Full changelog](docs/CHANGELOG.md).
 
 > Account downloads require a 64-bit Windows process. Both downloads include the x64 MEGA account module and its VC++ runtime, ready to use. Anonymous downloads remain available on 32-bit Windows.
 
@@ -169,6 +169,7 @@ Besides clipboard detection, links can be added by dragging them onto the window
 - **Batch pre-flight** — inspect and choose files before committing a large share (v2.6)
 - **ELC containers** — import and export encrypted link containers; `enc` / `enc2` / `fenc` / `fenc2` / `elc` all supported
 - **Cloud drive** — browse your drive or shared folders, bind a folder to a local directory, and check for new or updated files (v2.6.5)
+- **Folder subscriptions** — check bound cloud folders daily and queue new or changed files automatically (v2.6.6)
 
 **Workbench**
 
@@ -223,10 +224,10 @@ mega://enc?_xlPqemSILarh5VBKbhSTFyQQQ0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/settings-general.png">
-    <img alt="MegaDownloader 2.6.5 settings" src="docs/screenshots/settings-general.png" width="85%">
+    <img alt="MegaDownloader 2.6.6 settings" src="docs/screenshots/settings-general.png" width="85%">
   </picture>
 </p>
-<p align="center"><sub>Settings in 2.6.5 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
+<p align="center"><sub>Settings in 2.6.6 · Automatic language selection and a scrollable layout. Demonstration data.</sub></p>
 
 <table>
 <tr>
@@ -245,7 +246,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.5** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.6** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -354,7 +355,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.5](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.5) | Highlights and downloads for v2.6.5 |
+| [Release notes 2.6.6](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.6) | Highlights and downloads for v2.6.6 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 
