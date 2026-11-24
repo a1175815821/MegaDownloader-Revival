@@ -6,6 +6,11 @@ Partial Public Class Configuration
     ' 但暂时离开布局/句柄树，等第一次选中该页时再构建（见 EnsureSettingsPage）。
     ' 实测这能把首次打开的构造期从约 1.0 秒降到约 0.67 秒。
     Private connectionPage As TabPage
+    Private ReadOnly subscriptionPage As New TabPage With {.Name = "SubscriptionPage"}
+    Private pauseSubscriptionChecks As CheckBox
+    Private subscriptionDefaultSchedule As ComboBox
+    Private subscriptionDefaultTime As DateTimePicker
+    Private subscriptionDefaultQueue As ComboBox
     Private settingsLayoutReady As Boolean
     Private ReadOnly settingsPagesBuilt As New HashSet(Of TabPage)
     ' 懒建页第一次选中时必须强制布局一次：页面的布局引擎不会在
@@ -50,6 +55,7 @@ Partial Public Class Configuration
         ' 只移动“连接”页后面的 4 个页；原先的 Clear + AddRange 会把 6 个页连同
         ' 174 个子控件全部拆掉重加，单是这一步就要约 50 ms。TabPages.Insert 在
         ' 这个窗体上不可靠(页会进入 Controls 却不进入 TabPages)，故用移除/重加。
+        TabControl1.TabPages.Add(subscriptionPage)
         TabControl1.TabPages.Add(connectionPage)
         Dim trailingPages As TabPage() = {TabPage2, TabPage3, TabPage4, TabPage5}
         For Each trailing As TabPage In trailingPages
@@ -107,6 +113,8 @@ Partial Public Class Configuration
             BuildGeneralPage()
         ElseIf page Is connectionPage Then
             BuildConnectionPage()
+        ElseIf page Is subscriptionPage Then
+            BuildSubscriptionPage()
         ElseIf page Is TabPage2 Then
             BuildAdvancedPage()
         ElseIf page Is TabPage3 Then
@@ -201,6 +209,71 @@ Partial Public Class Configuration
         SettingsSection(GroupBox2, chkProxy, Divider(), FieldRow(Label13, txtProxyIP), FieldRow(Label14, txtProxyPort),
                         FieldRow(Label23, txtProxyName), FieldRow(Label22, txtProxyPassword))
         SettingsPage(connectionPage, ConexionGroup, GroupBox2)
+    End Sub
+
+    Private Sub BuildSubscriptionPage()
+        pauseSubscriptionChecks = New CheckBox With {.Name = "PauseSubscriptionChecks", .AutoSize = True,
+            .Text = Language.GetText("DriveSubscription_PauseScheduledChecks")}
+        Dim manualHint As New Label With {.Text = Language.GetText("DriveSubscription_PauseHint"),
+            .Padding = New Padding(20, 0, 0, 16)}
+        UiStyles.SetRole(manualHint, UiStyles.Role.Muted)
+
+        Dim sourceDefault = Language.GetText("DriveSubscription_UseSourceDefaults")
+        Dim scheduleLabel As New Label With {.Text = Language.GetText("DriveSubscription_CheckSchedule")}
+        subscriptionDefaultSchedule = New ComboBox With {.Name = "SubscriptionDefaultSchedule", .DropDownStyle = ComboBoxStyle.DropDownList,
+            .AccessibleName = scheduleLabel.Text}
+        subscriptionDefaultSchedule.Items.AddRange({sourceDefault, Language.GetText("Manual check only"),
+            Language.GetText("DriveSubscription_DailyLocalTime")})
+        subscriptionDefaultTime = New DateTimePicker With {.Name = "SubscriptionDefaultTime", .Format = DateTimePickerFormat.Custom,
+            .CustomFormat = "HH:mm", .ShowUpDown = True, .Width = 84, .AccessibleName = Language.GetText("DriveSubscription_DailyLocalTime")}
+        AddHandler subscriptionDefaultSchedule.SelectedIndexChanged,
+            Sub()
+                Dim daily = subscriptionDefaultSchedule.SelectedIndex = 2
+                subscriptionDefaultTime.Visible = daily
+                subscriptionDefaultTime.Enabled = daily
+            End Sub
+
+        Dim queueLabel As New Label With {.Text = Language.GetText("DriveSubscription_QueueMode")}
+        subscriptionDefaultQueue = New ComboBox With {.Name = "SubscriptionDefaultQueue", .DropDownStyle = ComboBoxStyle.DropDownList,
+            .AccessibleName = queueLabel.Text}
+        subscriptionDefaultQueue.Items.AddRange({sourceDefault, Language.GetText("DriveSubscription_ReviewFirst"),
+            Language.GetText("DriveSubscription_AutoQueue")})
+
+        Dim scheduledChecks As New Global.MegaDownloader.SettingsSection With {.Text = Language.GetText("DriveSubscription_ScheduledChecks")}
+        SettingsSection(scheduledChecks, pauseSubscriptionChecks, manualHint)
+        Dim scheduleInputs = InlineControls(subscriptionDefaultSchedule, subscriptionDefaultTime)
+        subscriptionDefaultSchedule.Width = 208
+        Dim queueInputs = InlineControls(subscriptionDefaultQueue)
+        subscriptionDefaultQueue.Width = 208
+        Dim newDefaults As New Global.MegaDownloader.SettingsSection With {.Text = Language.GetText("DriveSubscription_NewDefaults")}
+        SettingsSection(newDefaults, FieldRow(scheduleLabel, scheduleInputs), FieldRow(queueLabel, queueInputs))
+        SettingsPage(subscriptionPage, scheduledChecks, newDefaults)
+        If configurationLoaded Then LoadSubscriptionSettings()
+    End Sub
+
+    Private Sub LoadSubscriptionSettings()
+        pauseSubscriptionChecks.Checked = Config.SubscriptionChecksPaused
+        Dim minutes = Config.NewSubscriptionCheckMinutes
+        Dim daily = minutes.HasValue AndAlso minutes.Value <> Configuracion.ManualSubscriptionCheck
+        subscriptionDefaultTime.Value = Date.Today.AddMinutes(If(daily, minutes.GetValueOrDefault(), 9 * 60))
+        subscriptionDefaultSchedule.SelectedIndex = If(daily, 2, If(minutes.HasValue, 1, 0))
+        Dim autoQueue = Config.NewSubscriptionAutoQueue
+        subscriptionDefaultQueue.SelectedIndex = If(autoQueue.HasValue, If(autoQueue.GetValueOrDefault(), 2, 1), 0)
+    End Sub
+
+    Private Sub SaveSubscriptionSettings()
+        Config.SubscriptionChecksPaused = pauseSubscriptionChecks.Checked
+        Select Case subscriptionDefaultSchedule.SelectedIndex
+            Case 1
+                Config.NewSubscriptionCheckMinutes = Configuracion.ManualSubscriptionCheck
+            Case 2
+                Dim time = subscriptionDefaultTime.Value
+                Config.NewSubscriptionCheckMinutes = time.Hour * 60 + time.Minute
+            Case Else
+                Config.NewSubscriptionCheckMinutes = Nothing
+        End Select
+        Dim queueMode = subscriptionDefaultQueue.SelectedIndex
+        Config.NewSubscriptionAutoQueue = If(queueMode > 0, CType(queueMode = 2, Boolean?), Nothing)
     End Sub
 
     Private Sub BuildAdvancedPage()

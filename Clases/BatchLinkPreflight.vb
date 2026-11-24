@@ -20,12 +20,19 @@ Public NotInheritable Class BatchLinkPreflight
         Public State As LinkState
         Public Detail As String
         Public Selected As Boolean
+        Friend FolderListing As PublicFolderListing
         Private categoryName As String
         Private categorySource As String
 
         Public ReadOnly Property CanAdd As Boolean
             Get
                 Return Source IsNot Nothing AndAlso (State = LinkState.Ready OrElse State = LinkState.Unavailable)
+            End Get
+        End Property
+
+        Friend ReadOnly Property IsFolderMarker As Boolean
+            Get
+                Return FolderListing IsNot Nothing AndAlso Source Is Nothing
             End Get
         End Property
 
@@ -136,6 +143,7 @@ Public NotInheritable Class BatchLinkPreflight
                                     ct As CancellationToken, Optional progress As IProgress(Of Integer) = Nothing,
                                     Optional detailedProgress As IProgress(Of PreflightProgress) = Nothing) As List(Of Entry)
         Dim files As New List(Of URLProcessor.FileURL)()
+        Dim folders As New List(Of KeyValuePair(Of Integer, PublicFolderListing))()
         Dim failures As New List(Of Entry)()
         For Each url As String In urls
             ct.ThrowIfCancellationRequested()
@@ -148,7 +156,13 @@ Public NotInheritable Class BatchLinkPreflight
                                                                            detailedProgress.Report(New PreflightProgress(PreflightProgress.Phase.Reading, processed:=count))
                                                                        End Sub)
                 End If
-                files.AddRange(URLProcessor.ProcessURLs(New List(Of String) From {url}, config, folderProgress, ct))
+                If PublicFolderListing.IsFolderLink(url) Then
+                    Dim listing As PublicFolderListing = PublicFolderListing.Read(url, folderProgress, ct)
+                    folders.Add(New KeyValuePair(Of Integer, PublicFolderListing)(files.Count, listing))
+                    files.AddRange(listing.Files)
+                Else
+                    files.AddRange(URLProcessor.ProcessURLs(New List(Of String) From {url}, config, folderProgress, ct))
+                End If
             Catch ex As OperationCanceledException
                 Throw
             Catch ex As Exception
@@ -171,6 +185,17 @@ Public NotInheritable Class BatchLinkPreflight
                 Dim url As String = source.URL.Replace(Fichero.HIDDEN_LINK, "")
                 Return Conexion.ObtenerInformacionFichero(config, Fichero.ExtraerFileID(url), Fichero.ExtraerFileKey(url), False, token)
             End Function, ct, fileProgress)
+        For Each folder As KeyValuePair(Of Integer, PublicFolderListing) In folders
+            Dim listing As PublicFolderListing = folder.Value
+            If listing.Files.Count = 0 Then
+                ' A valid empty share still supplies its directory tree, not a file or an error.
+                results.Add(New Entry With {.FolderListing = listing, .State = LinkState.Ready})
+            Else
+                For index As Integer = folder.Key To folder.Key + listing.Files.Count - 1
+                    results(index).FolderListing = listing
+                Next
+            End If
+        Next
         results.AddRange(failures)
         Return results
     End Function

@@ -17,6 +17,9 @@ Public Class URLProcessor
         Friend PreflightIdentityUrl As String
         ' Keeps identically named folders from separate input links in separate tree roots.
         Friend PreflightOrigin As String
+        Friend PublicFolderParent As String
+        Friend PublicFolderAccountLink As String
+        Friend FixedDownloadIdentity As Boolean
 
         ''' <summary>
         ''' 来源 MEGA 文件夹的真名(子文件夹链接为子文件夹名)。非文件夹链接为空。

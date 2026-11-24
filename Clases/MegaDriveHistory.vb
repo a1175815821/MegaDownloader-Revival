@@ -37,6 +37,7 @@ Friend NotInheritable Class MegaDriveHistory
         Public Property LocalPath As String
         Public Property Bytes As Long
         Public Property WriteUtcTicks As Long
+        Public Property VersionKey As String
     End Class
 
     Private Shared ReadOnly gate As New Object()
@@ -52,10 +53,18 @@ Friend NotInheritable Class MegaDriveHistory
     End Function
 
     Friend Sub Record(email As String, handle As ULong, cloudName As String, output As String)
+        RecordDelivery(email, handle, cloudName, output, Nothing)
+    End Sub
+
+    Friend Sub RecordPublic(scope As String, handle As ULong, output As String, versionKey As String)
+        RecordDelivery(scope, handle, Nothing, output, versionKey)
+    End Sub
+
+    Private Sub RecordDelivery(email As String, handle As ULong, cloudName As String, output As String, versionKey As String)
         Try
             Dim info As New FileInfo(output)
             Dim entry As New Delivery With {.Handle = handle, .CloudName = cloudName, .LocalPath = info.FullName, .Bytes = info.Length,
-                                           .WriteUtcTicks = info.LastWriteTimeUtc.Ticks}
+                                           .WriteUtcTicks = info.LastWriteTimeUtc.Ticks, .VersionKey = versionKey}
             Dim line = JsonConvert.SerializeObject(entry)
             SyncLock gate
                 Directory.CreateDirectory(folder)
@@ -94,6 +103,14 @@ Friend NotInheritable Class MegaDriveHistory
             End If
         End SyncLock
         Return delivered.Values.ToLookup(Function(item) item.Handle)
+    End Function
+
+    Friend Function CreatePublicDeliveryLookup(scope As String) As Func(Of MegaDriveSubscriptionFile, String, String)
+        Dim deliveries = ReadDeliveries(scope)
+        Return Function(file, directory) deliveries(file.Handle).FirstOrDefault(
+            Function(item) item.VersionKey = file.VersionKey AndAlso
+                IsInDirectory(Path.GetDirectoryName(item.LocalPath), directory) AndAlso
+                LocalFileMatches(item.LocalPath, item.Bytes, item.WriteUtcTicks))?.LocalPath
     End Function
 
     Private Shared Function LocalFileMatches(path As String, bytes As Long, Optional writeUtcTicks As Long? = Nothing) As Boolean

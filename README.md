@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download latest release" src="https://img.shields.io/badge/Free%20download-Latest-FF6B1F?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.6-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
+  <a href="docs/CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-2.6.7-2D333B?style=for-the-badge&logo=gitbook&logoColor=white"></a>
 </p>
 
 <p align="center"><sub><b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.ru-RU.md">Русский</a></sub></p>
@@ -33,7 +33,7 @@
 2. Copy a MEGA link — the app detects it automatically.
 3. Confirm the link → choose files → start the download.
 
-> v2.6.6: turn cloud folders into subscriptions that queue new and changed files on a daily schedule, and close the security, interface and background issues found in the maintenance audit.
+> v2.6.7: subscribe to a public share folder right from the file preview — pick a folder, backfill what is already there or only follow future updates, and download each subscription anonymously or with a chosen MEGA account.
 
 <table>
 <tr>
@@ -46,7 +46,15 @@
 
 ---
 
-## ✨ What's new in 2.6.6
+## ✨ What's new in 2.6.7
+
+- **Public folder subscriptions** — in the add-links preview, select a folder inside a public share and choose “Subscribe to this folder…”. Keep the current batch as an ordinary download, and decide separately whether the subscription backfills existing files or only follows future additions and updates. Before saving, the dialog shows how many files match, how many are already queued or delivered, and exactly how many will be added now.
+- **A download identity per subscription** — each public subscription downloads anonymously or with one of your MEGA accounts. The share is always checked through its public link, so a signed-out account never hides new files; a task waiting for that account shows “Waiting for MEGA sign-in”. Changing the identity affects only files queued afterwards.
+- **One subscriptions window** — the source list gains “Public shares”, so public and per-account cloud subscriptions are managed side by side: changes and status per file, check now, edit, open the delivered file, or unsubscribe without deleting queued tasks or local files.
+- **Account downloads cover public folder files** — a file inside a public folder can now be transferred by the chosen MEGA account, not only standalone public file links.
+- **Verified** — 61 regression cases, **1,400 assertions** and the UI-only suite all pass. [Full changelog](docs/CHANGELOG.md).
+
+## What was new in 2.6.6
 
 - **Scheduled cloud folders** — mark a favorite drive folder as a subscription, pick a daily check time and the extensions you want, and let new or changed files queue automatically or after confirmation. The Subscriptions window lists every bound folder per account with new, updated, pending, queued and delivered files, and keeps the cloud subfolder structure.
 - **Queue details explain every wait** — manual pause, schedule, anonymous quota, account quota or an expired account, with the known retry time; a failed package jumps straight to its first failed file.
@@ -170,6 +178,7 @@ Besides clipboard detection, links can be added by dragging them onto the window
 - **ELC containers** — import and export encrypted link containers; `enc` / `enc2` / `fenc` / `fenc2` / `elc` all supported
 - **Cloud drive** — browse your drive or shared folders, bind a folder to a local directory, and check for new or updated files (v2.6.5)
 - **Folder subscriptions** — check bound cloud folders daily and queue new or changed files automatically (v2.6.6)
+- **Public share subscriptions** — subscribe to a folder inside a public share from the preview; backfill existing files or follow only future updates, downloading with Anonymous or a chosen account (v2.6.7)
 
 **Workbench**
 
@@ -246,7 +255,7 @@ MegaDownloader is a MEGA download manager by Spanish developer **Andres Soliño*
 
 This repository brings it back: v1.8 was decompiled to recover the source, and fixes and refactoring have continued on that basis — **200+ fixes and hardening** so far (crashes, silent data loss, security, compatibility), released regularly under semantic versioning.
 
-| | Original v1.8 (abandoned 2018) | **This repo, v2.6.6** |
+| | Original v1.8 (abandoned 2018) | **This repo, v2.6.7** |
 | --- | --- | --- |
 | New `mega.nz/file` / `/folder` links | ❌ not recognised | ✅ supported since v1.9 |
 | MEGA quota exhausted | hangs / errors out | ✅ auto pause + countdown resume (v2.5) |
@@ -355,7 +364,7 @@ See [CONTRIBUTING](docs/CONTRIBUTING.md) for the complete directory tree and fil
 | [CONTRIBUTING](docs/CONTRIBUTING.md) | Contribution process, coding style, release process |
 | [SECURITY](SECURITY.md) | How to report a vulnerability |
 | [CODE OF CONDUCT](CODE_OF_CONDUCT.md) | Community expectations |
-| [Release notes 2.6.6](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.6) | Highlights and downloads for v2.6.6 |
+| [Release notes 2.6.7](https://github.com/a1175815821/MegaDownloader-Revival/releases/tag/v2.6.7) | Highlights and downloads for v2.6.7 |
 
 The README is maintained in three languages; CONTRIBUTING exists in English and Simplified Chinese, the CHANGELOG in Simplified Chinese. If you update one, please update the others:
 

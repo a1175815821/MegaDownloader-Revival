@@ -48,7 +48,7 @@ Public NotInheritable Class PreflightSession
                 Dim parsed As List(Of String) = Await Urls.ConfigureAwait(False)
                 Publish(New PreflightProgress(PreflightProgress.Phase.Waiting, total:=parsed.Count))
                 Dim resolved As List(Of BatchLinkPreflight.Entry) = Await Task.Run(Function() resolver(parsed, token, AddressOf Publish), token).ConfigureAwait(False)
-                Publish(New PreflightProgress(PreflightProgress.Phase.Completed, parsed.Count, parsed.Count, found:=resolved.Count))
+                Publish(New PreflightProgress(PreflightProgress.Phase.Completed, parsed.Count, parsed.Count, found:=FileRowCount(resolved)))
                 Return resolved
             Catch ex As OperationCanceledException
                 Publish(New PreflightProgress(PreflightProgress.Phase.Cancelled))
@@ -73,7 +73,14 @@ Public NotInheritable Class PreflightSession
     Private disposed As Boolean
 
     Public Sub New(configuration As Configuracion)
-        loader = Function(url, token, progress) BatchLinkPreflight.Resolve(New List(Of String) From {url}, configuration, New HashSet(Of String)(StringComparer.Ordinal), token, detailedProgress:=progress)
+        Me.New(configuration, Nothing)
+    End Sub
+
+    Friend Sub New(configuration As Configuracion, inspectOtherLink As Func(Of String, CancellationToken, List(Of BatchLinkPreflight.Entry)))
+        loader = Function(url, token, progress)
+                     If inspectOtherLink IsNot Nothing AndAlso Not PublicFolderListing.IsFolderLink(url) Then Return inspectOtherLink(url, token)
+                     Return BatchLinkPreflight.Resolve(New List(Of String) From {url}, configuration, New HashSet(Of String)(StringComparer.Ordinal), token, detailedProgress:=progress)
+                 End Function
     End Sub
 
     ''' <summary>Injectable source loader for offline cache/cancellation regressions.</summary>
@@ -132,6 +139,7 @@ Public NotInheritable Class PreflightSession
             End SyncLock
             Dim result As New List(Of BatchLinkPreflight.Entry)()
             Dim completed As Integer = 0
+            Dim found As Integer = 0
             For Each url As String In urls
                 token.ThrowIfCancellationRequested()
                 Dim known As CachedSource = Nothing
@@ -140,8 +148,8 @@ Public NotInheritable Class PreflightSession
                     cache.TryGetValue(sourceKey, known)
                 End SyncLock
                 If known Is Nothing OrElse DateTime.UtcNow - known.Completed >= TimeSpan.FromMinutes(3) Then
-                    Dim sourceProgress As New PreflightProgress.Reporter(Sub(value) report(New PreflightProgress(value.Stage, completed, urls.Count, value.ItemsProcessed, value.ItemsTotal, result.Count)))
-                    report(New PreflightProgress(PreflightProgress.Phase.Reading, completed, urls.Count, found:=result.Count))
+                    Dim sourceProgress As New PreflightProgress.Reporter(Sub(value) report(New PreflightProgress(value.Stage, completed, urls.Count, value.ItemsProcessed, value.ItemsTotal, found)))
+                    report(New PreflightProgress(PreflightProgress.Phase.Reading, completed, urls.Count, found:=found))
                     Dim inspected As List(Of BatchLinkPreflight.Entry) = loader(url, token, sourceProgress)
                     token.ThrowIfCancellationRequested()
                     known = New CachedSource With {.Entries = inspected, .Completed = DateTime.UtcNow}
@@ -154,7 +162,9 @@ Public NotInheritable Class PreflightSession
                 End If
                 result.AddRange(known.Entries)
                 completed += 1
-                report(New PreflightProgress(PreflightProgress.Phase.Checking, completed - 1, urls.Count, known.Entries.Count, known.Entries.Count, result.Count))
+                Dim sourceCount As Integer = FileRowCount(known.Entries)
+                found += sourceCount
+                report(New PreflightProgress(PreflightProgress.Phase.Checking, completed - 1, urls.Count, sourceCount, sourceCount, found))
             Next
             Return result
         Finally
@@ -162,11 +172,19 @@ Public NotInheritable Class PreflightSession
         End Try
     End Function
 
+    Private Shared Function FileRowCount(entries As List(Of BatchLinkPreflight.Entry)) As Integer
+        Dim count As Integer = 0
+        For Each entry As BatchLinkPreflight.Entry In entries
+            If Not entry.IsFolderMarker Then count += 1
+        Next
+        Return count
+    End Function
+
     Public Shared Function Reconcile(input As List(Of BatchLinkPreflight.Entry), queued As Dictionary(Of String, URLProcessor.FileURL)) As List(Of BatchLinkPreflight.Entry)
         Dim seen As New HashSet(Of String)(StringComparer.Ordinal)
         Dim result As New List(Of BatchLinkPreflight.Entry)(input.Count)
         For Each source As BatchLinkPreflight.Entry In input
-            Dim entry As New BatchLinkPreflight.Entry With {.Source = source.Source, .OriginalUrl = source.OriginalUrl, .Name = source.Name, .SizeBytes = source.SizeBytes, .State = source.State, .Detail = source.Detail}
+            Dim entry As New BatchLinkPreflight.Entry With {.Source = source.Source, .OriginalUrl = source.OriginalUrl, .Name = source.Name, .SizeBytes = source.SizeBytes, .State = source.State, .Detail = source.Detail, .FolderListing = source.FolderListing}
             Dim key As String = BatchLinkPreflight.Identity(entry.Source)
             If key IsNot Nothing Then
                 Dim existing As URLProcessor.FileURL = Nothing
@@ -178,7 +196,7 @@ Public NotInheritable Class PreflightSession
                     entry.State = BatchLinkPreflight.LinkState.Duplicate
                 End If
             End If
-            entry.Selected = entry.State = BatchLinkPreflight.LinkState.Ready
+            entry.Selected = entry.CanAdd AndAlso entry.State = BatchLinkPreflight.LinkState.Ready
             result.Add(entry)
         Next
         Return result

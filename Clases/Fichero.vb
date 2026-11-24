@@ -29,10 +29,30 @@ Public Class Fichero
     Friend MegaDriveNodeHandle As ULong?
     Friend MegaDriveWaitingForQuota As Boolean
     Friend MegaAccountErrorCode As Integer?
+    Friend PublicFolderAccountLink As String
+    Friend FixedDownloadIdentity As Boolean
+
+    Friend ReadOnly Property AccountIsBound As Boolean
+        Get
+            Return MegaDriveNodeHandle.HasValue OrElse FixedDownloadIdentity
+        End Get
+    End Property
+
+    Friend ReadOnly Property MegaAccountDownloadLink As String
+        Get
+            Return If(PublicFolderListing.IsFileLink(PublicFolderAccountLink), PublicFolderAccountLink, GetMegaAccountLink(Me.URL))
+        End Get
+    End Property
+
+    Friend ReadOnly Property IsWaitingForFixedAccount As Boolean
+        Get
+            Return FixedDownloadIdentity AndAlso UsesMegaAccount AndAlso Not MegaAccountService.Current.GetStatus(MegaAccountEmail).SignedIn
+        End Get
+    End Property
 
     Friend ReadOnly Property EffectiveMegaAccountEmail As String
         Get
-            Return If(MegaDriveNodeHandle.HasValue OrElse String.IsNullOrEmpty(MegaAccountTransferEmail), MegaAccountEmail, MegaAccountTransferEmail)
+            Return If(AccountIsBound OrElse String.IsNullOrEmpty(MegaAccountTransferEmail), MegaAccountEmail, MegaAccountTransferEmail)
         End Get
     End Property
 
@@ -292,6 +312,8 @@ Public Class Fichero
         Public FileID As String
         Public URLFichero As String
         Public URL As String
+        Public PublicFolderAccountLink As String
+        Public PublicFolderAccountLinkSource As String
         Public FileIDSource As SecureString
         Public FileKeySource As SecureString
         Public URLSource As SecureString
@@ -303,7 +325,7 @@ Public Class Fichero
                    Object.ReferenceEquals(FileKeySource, file._FileKey) AndAlso
                    Object.ReferenceEquals(URLSource, file._URL) AndAlso
                    Object.ReferenceEquals(URLFicheroSource, file._URLFichero) AndAlso
-                   LinkVisible = file.LinkVisible
+                   LinkVisible = file.LinkVisible AndAlso PublicFolderAccountLinkSource = file.PublicFolderAccountLink
         End Function
     End Class
     Private CacheSecureData As Cache = Nothing
@@ -323,6 +345,12 @@ Public Class Fichero
             c.URL = Criptografia.EncryptString_DPAPI(secureUrl)
         End Using
         c.URLFichero = Criptografia.EncryptString_DPAPI(_URLFichero)
+        If Not String.IsNullOrEmpty(PublicFolderAccountLink) Then
+            Using secureShare = Criptografia.ToSecureString(PublicFolderAccountLink)
+                c.PublicFolderAccountLink = Criptografia.EncryptString_DPAPI(secureShare)
+            End Using
+        End If
+        c.PublicFolderAccountLinkSource = PublicFolderAccountLink
         CaptureCacheSources(c)
         CacheSecureData = c
     End Sub
@@ -516,6 +544,23 @@ Public Class Fichero
         Return result
     End Function
 
+    Friend Function FindRecordedPublicOutput() As String
+        Dim name = completedFileName
+        If String.IsNullOrEmpty(name) Then Return Nothing
+        Try
+            Dim path = CompletedOutputPath(name)
+            Dim expected = _verifiedOutputIdentity
+            If Not String.IsNullOrEmpty(expected) AndAlso String.Equals(path, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) Then
+                Using handle = OpenCompletedOutput(path)
+                    If ReadCompletedOutputIdentity(handle) = expected Then Return path
+                End Using
+            End If
+        Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is System.IO.IOException OrElse TypeOf ex Is UnauthorizedAccessException
+            Return Nothing
+        End Try
+        Return Nothing
+    End Function
+
     Private Function GetCompletedFileForDeletion() As String
         OutputPreservedPath = Nothing
         OutputNeedsConfirmation = False
@@ -689,7 +734,7 @@ Public Class Fichero
     End Sub
 
     Private Function ReadMegaAccountInfo(email As String, ByRef name As String, ByRef size As Long) As Integer
-        Dim link As String = If(MegaDriveNodeHandle.HasValue, Nothing, GetMegaAccountLink(Me.URL))
+        Dim link As String = If(MegaDriveNodeHandle.HasValue, Nothing, MegaAccountDownloadLink)
         If link Is Nothing AndAlso Not MegaDriveNodeHandle.HasValue Then Return -2
         Dim code As Integer = MegaAccountService.Current.Inspect(email, link, name, size, MegaDriveNodeHandle)
         Return If(code = 0 AndAlso (String.IsNullOrEmpty(name) OrElse size < 0), -2, code)
@@ -704,7 +749,7 @@ Public Class Fichero
         Dim email = EffectiveMegaAccountEmail
         Dim status = service.GetStatus(email)
         If status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached Then Return True
-        If MegaDriveNodeHandle.HasValue OrElse String.IsNullOrEmpty(MegaAccountTransferEmail) Then Return False
+        If AccountIsBound OrElse String.IsNullOrEmpty(MegaAccountTransferEmail) Then Return False
 
         Dim nextEmail = service.NextTransferAccount(email, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {email}, allowUnknownDelay)
         If nextEmail = "" Then Return False
@@ -730,7 +775,7 @@ Public Class Fichero
                 ct.ThrowIfCancellationRequested()
                 tried.Add(email)
                 code = ReadMegaAccountInfo(email, name, size)
-                If code <> MegaAccountService.OverQuota OrElse MegaDriveNodeHandle.HasValue Then Exit Do
+                If code <> MegaAccountService.OverQuota OrElse AccountIsBound Then Exit Do
                 Dim nextEmail = MegaAccountService.Current.NextTransferAccount(email, tried)
                 If nextEmail = "" Then Exit Do
                 email = nextEmail
@@ -757,7 +802,7 @@ Public Class Fichero
     End Sub
 
     Private Sub StartMegaAccountDownload()
-        If Not HasRecordedMegaAccountOutput AndAlso IsMegaAccountConnecting Then Return
+        If Not HasRecordedMegaAccountOutput AndAlso (IsMegaAccountConnecting OrElse IsWaitingForFixedAccount) Then Return
         SyncLock Mutex.FicheroDownloader
             If disposedValue OrElse _Actualizando OrElse accountDownload IsNot Nothing OrElse
                (EstadoDescarga <> Estado.EnCola AndAlso EstadoDescarga <> Estado.Pausado) Then Return
@@ -808,6 +853,12 @@ Public Class Fichero
                 If code <> 0 Then Return
                 token.ThrowIfCancellationRequested()
                 If New System.IO.FileInfo(staging).Length <> TamanoBytes Then Throw New System.IO.IOException("Unexpected MEGA SDK output size.")
+                ' A folder link resolves a node handle, which can refer to a newer version by transfer time.
+                If Not String.IsNullOrEmpty(PublicFolderAccountLink) AndAlso Not Criptografia.VerifyMegaMetaMac(staging, FileKey) Then
+                    code = -14
+                    Return
+                End If
+                token.ThrowIfCancellationRequested()
                 SyncLock Mutex.FicheroDownloader
                     If accountCancelTarget.HasValue Then Return
                     output = DeliverMegaAccountFile(staging)
@@ -849,7 +900,7 @@ Public Class Fichero
                         EstadoDescarga = accountCancelTarget.Value
                     ElseIf localFailure Then
                         SetMegaAccountLocalError()
-                    ElseIf privateNode AndAlso code = MegaAccountService.OverQuota AndAlso
+                    ElseIf AccountIsBound AndAlso code = MegaAccountService.OverQuota AndAlso
                         MegaAccountService.Current.GetStatus(MegaAccountEmail).QuotaReached Then
                         MegaDriveWaitingForQuota = True
                         FailedByQuota = True
@@ -871,7 +922,7 @@ Public Class Fichero
     End Sub
 
     Private Function DownloadPublicMegaAccountFile(token As CancellationToken, ByRef staging As String) As Integer
-        Dim link As String = GetMegaAccountLink(Me.URL)
+        Dim link As String = MegaAccountDownloadLink
         If link Is Nothing Then Return -2
         Dim service = MegaAccountService.Current
         Dim email As String = EffectiveMegaAccountEmail
@@ -901,7 +952,7 @@ Public Class Fichero
                 EstadoDescarga = Estado.Descargando
                 code = service.Download(email, link, staging, AddressOf UpdateMegaAccountProgress, token)
             End If
-            If code <> MegaAccountService.OverQuota Then Return code
+            If code <> MegaAccountService.OverQuota OrElse AccountIsBound Then Return code
             token.ThrowIfCancellationRequested()
             Dim nextEmail As String = service.NextTransferAccount(email, tried)
             If nextEmail = "" Then Return code
@@ -1615,6 +1666,17 @@ Public Class Fichero
 			End If
 		End If
 		
+        If Me.EstadoDescarga <> Estado.Erroneo AndAlso Not String.IsNullOrEmpty(PublicFolderAccountLink) AndAlso
+           Not String.IsNullOrEmpty(completedFileName) Then
+            Try
+                Dim identity = BatchLinkPreflight.Identity(FileID, FileKey)
+                PublicFolderSubscriptions.History.RecordPublic(PublicFolderSubscriptions.DeliveryScope, PublicFolderListing.NodeId(FileID),
+                    CompletedOutputPath(completedFileName), PublicFolderListing.VersionOf(identity, TamanoBytes))
+            Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is System.IO.IOException OrElse TypeOf ex Is UnauthorizedAccessException
+                Log.WriteWarning("Could not record public folder download: " & Log.SafeException(ex))
+            End Try
+        End If
+
 		If Me.EstadoDescarga <> Estado.Erroneo Then
 			' Descomprimimos fichero
 			' Crear directorio al descomprimir?? De momento ponemos siempre que sí...
@@ -1975,11 +2037,19 @@ Public Class Fichero
 
 
         Me.MegaAccountEmail = LeerNodo(XML, "MegaAccountEmail", "")
+        Boolean.TryParse(LeerNodo(XML, "FixedDownloadIdentity", "false"), FixedDownloadIdentity)
+        Dim shareChild = LeerNodo(XML, "PublicFolderAccountLink", "")
+        If shareChild <> "" Then
+            Using decoded = Criptografia.DecryptStringWithCacheInfo(shareChild, loadedCache.PublicFolderAccountLink)
+                PublicFolderAccountLink = Criptografia.ToInsecureString(decoded)
+            End Using
+            loadedCache.PublicFolderAccountLinkSource = PublicFolderAccountLink
+        End If
         Dim driveHandle As ULong
         Me.MegaDriveNodeHandle = If(ULong.TryParse(LeerNodo(XML, "MegaDriveNodeHandle", ""), Globalization.NumberStyles.None,
                                                  Globalization.CultureInfo.InvariantCulture, driveHandle), CType(driveHandle, ULong?), Nothing)
         If MegaDriveNodeHandle.HasValue Then Me.LinkVisible = False
-        Me.MegaAccountTransferEmail = If(UsesMegaAccount AndAlso Not MegaDriveNodeHandle.HasValue, LeerNodo(XML, "MegaAccountTransferEmail", ""), "")
+        Me.MegaAccountTransferEmail = If(UsesMegaAccount AndAlso Not AccountIsBound, LeerNodo(XML, "MegaAccountTransferEmail", ""), "")
         Me.NombreFichero = LeerNodo(XML, "NombreFichero", "")
         Me.PartialFileName = LeerNodo(XML, "PartialFileName", "")
         If Not String.IsNullOrEmpty(Me.PartialFileName) Then
@@ -2155,9 +2225,16 @@ Public Class Fichero
             NodoFic.AppendChild(XML.CreateElement("FileKey")).InnerText = CacheSecureData.FileKey
             NodoFic.AppendChild(XML.CreateElement("URL")).InnerText = CacheSecureData.URL
             NodoFic.AppendChild(XML.CreateElement("URLFichero")).InnerText = CacheSecureData.URLFichero
+            If Not String.IsNullOrEmpty(CacheSecureData.PublicFolderAccountLink) Then
+                NodoFic.AppendChild(XML.CreateElement("PublicFolderAccountLink")).InnerText = CacheSecureData.PublicFolderAccountLink
+            End If
         Else
             NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID)
+            If Not String.IsNullOrEmpty(PublicFolderAccountLink) Then
+                NodoFic.AppendChild(XML.CreateElement("PublicFolderAccountLinkHash")).InnerText = Utils.SecretFingerprint(PublicFolderAccountLink)
+            End If
         End If
+        If FixedDownloadIdentity Then NodoFic.AppendChild(XML.CreateElement("FixedDownloadIdentity")).InnerText = "true"
         If UsesMegaAccount Then
             NodoFic.AppendChild(XML.CreateElement("MegaAccountEmail")).InnerText = MegaAccountEmail
             If MegaDriveNodeHandle.HasValue Then

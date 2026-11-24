@@ -105,6 +105,10 @@ Public Class Configuracion
 	
     Public ApagarPC As Boolean
     Public DownloadSchedule As New DownloadScheduleSettings()
+    Friend Const ManualSubscriptionCheck As Integer = -1
+    Friend SubscriptionChecksPaused As Boolean
+    Friend NewSubscriptionCheckMinutes As Integer?
+    Friend NewSubscriptionAutoQueue As Boolean?
 
     Public CheckUpdates As Boolean
 
@@ -320,6 +324,13 @@ Public Class Configuracion
 
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ApagarPC")).InnerText = ApagarPC.ToString
         Xml.DocumentElement.AppendChild(DownloadSchedule.ToXml(Xml))
+        Xml.DocumentElement.AppendChild(Xml.CreateElement("SubscriptionChecksPaused")).InnerText = SubscriptionChecksPaused.ToString()
+        If NewSubscriptionCheckMinutes.HasValue Then
+            Xml.DocumentElement.AppendChild(Xml.CreateElement("NewSubscriptionCheckMinutes")).InnerText = NewSubscriptionCheckMinutes.Value.ToString()
+        End If
+        If NewSubscriptionAutoQueue.HasValue Then
+            Xml.DocumentElement.AppendChild(Xml.CreateElement("NewSubscriptionAutoQueue")).InnerText = NewSubscriptionAutoQueue.Value.ToString()
+        End If
 		
         Xml.DocumentElement.AppendChild(Xml.CreateElement("ComenzarDescargando")).InnerText = ComenzarDescargando.ToString
 
@@ -605,6 +616,15 @@ Public Class Configuracion
         Boolean.TryParse(LeerNodo(Xml, "ComenzarDescargando", "true"), ComenzarDescargando)
 		Boolean.TryParse(LeerNodo(Xml, "ApagarPC", "false"), ApagarPC)
         DownloadSchedule = DownloadScheduleSettings.FromXml(Xml.DocumentElement.SelectSingleNode("DownloadSchedule"))
+        Boolean.TryParse(LeerNodo(Xml, "SubscriptionChecksPaused", "false"), SubscriptionChecksPaused)
+        Dim checkMinutes As Integer
+        NewSubscriptionCheckMinutes = Nothing
+        If Integer.TryParse(LeerNodo(Xml, "NewSubscriptionCheckMinutes", ""), checkMinutes) AndAlso
+                checkMinutes >= ManualSubscriptionCheck AndAlso checkMinutes < 24 * 60 Then
+            NewSubscriptionCheckMinutes = checkMinutes
+        End If
+        Dim autoQueue As Boolean
+        NewSubscriptionAutoQueue = If(Boolean.TryParse(LeerNodo(Xml, "NewSubscriptionAutoQueue", ""), autoQueue), CType(autoQueue, Boolean?), Nothing)
 		TamanoPaqueteKB = 50
 		TamanoBufferKB = 750
         MaxConexionesGuardadas = 100
@@ -754,6 +774,13 @@ Public Class Configuracion
 		Return True
 	End Function
 
+    Friend Sub ApplyNewSubscriptionDefaults(subscription As MegaDriveSubscription)
+        If NewSubscriptionCheckMinutes.HasValue Then
+            subscription.CheckMinutes = If(NewSubscriptionCheckMinutes.Value = ManualSubscriptionCheck, Nothing, NewSubscriptionCheckMinutes)
+        End If
+        If NewSubscriptionAutoQueue.HasValue Then subscription.AutoQueue = NewSubscriptionAutoQueue.Value
+    End Sub
+
 	Public Sub ConfiguracionDefectoVacia()
 		Me.RutaDefecto = ""
 		Me.ResetearErrores = True
@@ -767,6 +794,9 @@ Public Class Configuracion
 		Me.HideCollaborateButton = False
 		Me.ApagarPC = False
         Me.DownloadSchedule = New DownloadScheduleSettings()
+        Me.SubscriptionChecksPaused = False
+        Me.NewSubscriptionCheckMinutes = Nothing
+        Me.NewSubscriptionAutoQueue = Nothing
         Me.UsarProxy = False
         ' P3-5(b): align the empty-config default with CargaXML (:407 pre-read
         ' assignment and :428 node default "true", Forms/Configuration.vb:552 write

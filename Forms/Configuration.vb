@@ -129,6 +129,7 @@ Public Class Configuration
             If ElcAccountControl IsNot Nothing Then ElcAccountControl.Config = Config
 
             Translate()
+            If settingsPagesBuilt.Contains(subscriptionPage) Then LoadSubscriptionSettings()
             TrySetSearchCue()
 
             Dim ListaLogs As New Generic.Dictionary(Of String, String)
@@ -390,6 +391,10 @@ Public Class Configuration
         DialogResult = DialogResult.None
     End Sub
 
+    Friend Sub SelectSubscriptionPage()
+        TabControl1.SelectedTab = subscriptionPage
+    End Sub
+
     Private Sub Configuration_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
         If elcAccountControl IsNot Nothing Then elcAccountControl.Cerrar()
     End Sub
@@ -435,6 +440,7 @@ Public Class Configuration
         Me.chkUltimaConfig.Text = Language.GetText("Save / use last used configuration")
         Me.chkStartWindows.Text = Language.GetText("Start with Windows")
         Me.TabPage1.Text = Language.GetText("General")
+        subscriptionPage.Text = Language.GetText("DriveSubscription_Title")
         Me.TabPage2.Text = Language.GetText("Advanced")
         Me.GroupBox5.Text = Language.GetText("Web server")
         Me.btnExaminarTemplate.Text = Language.GetText("Browse")
@@ -660,6 +666,7 @@ Public Class Configuration
         Config.CheckUpdates = chkCheckUpdates.Checked
         Config.UpdateManualOnly = chkUpdateManualOnly.Checked
         Config.UpdateCheckIntervalHours = updateInterval
+        If settingsPagesBuilt.Contains(subscriptionPage) Then SaveSubscriptionSettings()
         Config.MantenerUltimaConfiguracion = chkUltimaConfig.Checked
         Config.IniciarConWindows = chkStartWindows.Checked
         Config.ResetearErroresPeriodoMinutos = PeriodoReintentosError

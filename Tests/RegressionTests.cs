@@ -142,6 +142,7 @@ public partial class RegressionTests {
             new CaseDef("mega_account_queue","queue",MegaAccountQueueCases),
             new CaseDef("mega_drive_queue","queue",MegaDriveQueueCases),
             new CaseDef("mega_drive_subscriptions","queue",MegaDriveSubscriptionCases),
+            new CaseDef("public_folder_subscriptions","queue",PublicSubscriptionCases),
             new CaseDef("deletion_ownership","core",()=>DeletionOwnershipCases(Plain,Key)),
             new CaseDef("locked_primary","core",LockedPrimaryCases),
             new CaseDef("resume_space","download",ResumeSpaceCases),
@@ -1932,6 +1933,19 @@ public partial class RegressionTests {
             Check(true,"account cleanup is safe before or after repeated close calls");
             tabs.SelectedTab=advanced;
             Check((string)logChoice.SelectedValue==cfg.NivelLog.ToString(),"the first visit to advanced settings selects the saved log level");
+            tabs.SelectedIndex=1;
+            var defaultSchedule=(System.Windows.Forms.ComboBox)settings.Controls.Find("SubscriptionDefaultSchedule",true).Single();
+            var defaultTime=(System.Windows.Forms.DateTimePicker)settings.Controls.Find("SubscriptionDefaultTime",true).Single();
+            var defaultQueue=(System.Windows.Forms.ComboBox)settings.Controls.Find("SubscriptionDefaultQueue",true).Single();
+            var pauseChecks=(System.Windows.Forms.CheckBox)settings.Controls.Find("PauseSubscriptionChecks",true).Single();
+            Check(tabs.SelectedTab.Name=="SubscriptionPage" && tabs.SelectedTab.Controls.Count>0 && tabs.SelectedTab.Controls[0].Height>100,
+                "subscription settings lay out on their first visit");
+            Check(settings.Controls.Find("SubscriptionDefaultTime",true).Length==1 && defaultSchedule.SelectedIndex==0 && !defaultTime.Enabled,
+                "new-subscription defaults start on the source default");
+            defaultSchedule.SelectedIndex=2;
+            Check(defaultTime.Enabled,"choosing a daily check time enables the time field");
+            defaultSchedule.SelectedIndex=0;
+            Check(defaultQueue.Items.Count==3 && !pauseChecks.Checked,"new subscriptions can follow the source queue mode and checks start unpaused");
             tabs.SelectedIndex=0;
             var checkUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkCheckUpdates",true).Single();
             var manualUpdates=(System.Windows.Forms.CheckBox)settings.Controls.Find("chkUpdateManualOnly",true).Single();
@@ -1996,21 +2010,24 @@ public partial class RegressionTests {
             DrawFeatureDialog(settings,"settings-loaded-dark.png");
             themeChoice.SelectedValue=ConfiguracionUI.ThemeModeType.Light.ToString();
             ThemeManager.ApplyTheme(settings,ConfiguracionUI.ThemeModeType.Light);
-            tabs.SelectedIndex=2;
+            tabs.SelectedIndex=1;
+            tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
+            DrawFeatureDialog(settings,"settings-loaded-subscription.png");
+            tabs.SelectedIndex=3;
             tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
             DrawFeatureDialog(settings,"settings-loaded-advanced.png");
-            tabs.SelectedIndex=1;
+            tabs.SelectedIndex=2;
             tabs.SelectedTab.AutoScrollPosition=System.Drawing.Point.Empty;
             DrawFeatureDialog(settings,"settings-loaded-connection.png");
             // Reusing the same settings window: reset per-open state and reload values.
             ((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text="stale";
-            Check(tabs.TabPages[1].Controls.Count>0,"connection page is built before reopening");
+            Check(tabs.TabPages[2].Controls.Count>0,"connection page is built before reopening");
             cfg.RutaDefecto=@"E:\Reopened";
             typeof(Configuration).GetMethod("PrepareForReopen",hidden).Invoke(settings,null);
             typeof(Configuration).GetMethod("Configuration_Load",hidden).Invoke(settings,new object[]{settings,EventArgs.Empty});
             Check(((System.Windows.Forms.TextBox)typeof(Configuration).GetProperty("txtRuta",hidden).GetValue(settings,null)).Text==cfg.RutaDefecto,"reopened settings refresh values from the current configuration");
             Check(tabs.SelectedIndex==0,"reopened settings return to the general page");
-            Check(tabs.TabPages[1].Controls.Count>0,"reopened settings keep already-built pages");
+            Check(tabs.TabPages[2].Controls.Count>0,"reopened settings keep already-built pages");
             Check(settings.DialogResult==System.Windows.Forms.DialogResult.None,"reopened settings reset the dialog result");
             Check(!(bool)typeof(Configuration).GetField("elcAccountsLoaded",hidden).GetValue(settings),"reopened settings discard the previous account load");
             settings.Hide();
@@ -2134,8 +2151,8 @@ public partial class RegressionTests {
                 ThemeManager.ApplyTheme(settings,mode);
                 DrawFeatureDialog(settings,"settings-general-"+mode+".png");
                 var tabs=(System.Windows.Forms.TabControl)typeof(Configuration).GetProperty("TabControl1",hidden).GetValue(settings,null);
-                Check(tabs.TabPages.Count==6,"settings preserves the original pages and exposes connection settings separately");
-                tabs.SelectedIndex=1;
+                Check(tabs.TabPages.Count==7,"settings keeps the original pages and adds subscription defaults beside connection settings");
+                tabs.SelectedIndex=2;
                 DrawFeatureDialog(settings,"settings-connection-"+mode+".png");
                 tabs.SelectedIndex=0;
             }
@@ -3036,6 +3053,28 @@ public partial class RegressionTests {
         ((Dictionary<ulong,string>)get(prefs,"FolderDestinations")).Remove(2UL);
         Check((int)serviceType.GetMethod("SaveDrivePreferences",hidden).Invoke(restored,new[]{email,prefs})==0 &&
             ((System.Collections.IList)read.Invoke(restored,new[]{email})).Count==0,"unbinding also removes the subscription");
+        var configPath=Path.Combine(root,"subscription-defaults.xml");
+        File.WriteAllText(configPath,"<Configuration><CondicionesAceptadas>true</CondicionesAceptadas><ResetearErroresMigratedV25>true</ResetearErroresMigratedV25></Configuration>");
+        var config=(Configuracion)Activator.CreateInstance(typeof(Configuracion),hidden,null,new object[]{configPath,1},System.Globalization.CultureInfo.InvariantCulture);
+        config.Usuario="";config.Password="";
+        var pausedField=typeof(Configuracion).GetField("SubscriptionChecksPaused",hidden);
+        var checkMinutesField=typeof(Configuracion).GetField("NewSubscriptionCheckMinutes",hidden);
+        var autoQueueField=typeof(Configuracion).GetField("NewSubscriptionAutoQueue",hidden);
+        pausedField.SetValue(config,true);
+        checkMinutesField.SetValue(config,(int?)1230);
+        autoQueueField.SetValue(config,(bool?)false);
+        config.GuardarXML(true);
+        var reloaded=(Configuracion)Activator.CreateInstance(typeof(Configuracion),hidden,null,new object[]{configPath,1},System.Globalization.CultureInfo.InvariantCulture);
+        Check((bool)pausedField.GetValue(reloaded) && (int?)checkMinutesField.GetValue(reloaded)==1230 && (bool?)autoQueueField.GetValue(reloaded)==false,
+            "paused checks and new-subscription defaults survive a restart");
+        var applyDefaults=typeof(Configuracion).GetMethod("ApplyNewSubscriptionDefaults",hidden);
+        var fresh=Activator.CreateInstance(subType,true);
+        set(fresh,"CheckMinutes",(int?)540);set(fresh,"AutoQueue",true);
+        applyDefaults.Invoke(reloaded,new object[]{fresh});
+        Check((int?)get(fresh,"CheckMinutes")==1230 && !(bool)get(fresh,"AutoQueue"),"saved defaults prefill a newly created subscription");
+        checkMinutesField.SetValue(reloaded,(int?)-1);
+        applyDefaults.Invoke(reloaded,new object[]{fresh});
+        Check((int?)get(fresh,"CheckMinutes")==null,"a manual-only default leaves new subscriptions on demand");
     }
     static void MegaAccountStoreCases() {
         var type=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);

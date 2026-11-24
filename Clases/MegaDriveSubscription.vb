@@ -13,6 +13,12 @@ Friend NotInheritable Class MegaDriveSubscriptionFile
     Public Property Bytes As Long
     Public Property Modified As Long
     Public Property Updated As Boolean
+    Public Property PublicUrl As String
+    Public Property AccountLink As String
+    Public Property VersionKey As String
+
+    <Newtonsoft.Json.JsonIgnore>
+    Public Property LocalPath As String
 
     <Newtonsoft.Json.JsonIgnore>
     Public Property Status As MegaDriveSubscriptionFileState
@@ -40,11 +46,19 @@ Friend NotInheritable Class MegaDriveSubscription
     Public Property LastError As Integer
     Public Property Files As New List(Of MegaDriveSubscriptionFile)()
     Public Property FolderPaths As New Dictionary(Of ULong, String)()
+    Public Property PublicShareUrl As String = ""
+    Public Property DownloadEmail As String = ""
+    Public Property LastAttemptUtc As Date?
+    Public Property KnownPublicFiles As Dictionary(Of ULong, PublicFolderVersion)
+
+    <Newtonsoft.Json.JsonIgnore>
+    Public Property IncludeExisting As Boolean
 
     Friend Function Copy() As MegaDriveSubscription
         Dim result = DirectCast(MemberwiseClone(), MegaDriveSubscription)
         result.Files = Files.Select(Function(file) file.Copy()).ToList()
         result.FolderPaths = New Dictionary(Of ULong, String)(FolderPaths)
+        If KnownPublicFiles IsNot Nothing Then result.KnownPublicFiles = New Dictionary(Of ULong, PublicFolderVersion)(KnownPublicFiles)
         Return result
     End Function
 
@@ -59,6 +73,7 @@ Friend NotInheritable Class MegaDriveSubscription
         If Not CheckMinutes.HasValue Then Return Nothing
         Dim reference = ScheduleFromUtc
         If LastCheckedUtc.HasValue AndAlso LastCheckedUtc.Value > reference Then reference = LastCheckedUtc.Value
+        If LastAttemptUtc.HasValue AndAlso LastAttemptUtc.Value > reference Then reference = LastAttemptUtc.Value
         Dim local = reference.ToLocalTime()
         Dim nextCheck = local.Date.AddMinutes(CheckMinutes.Value)
         Return If(nextCheck > local, nextCheck, nextCheck.AddDays(1))
@@ -88,7 +103,7 @@ Friend NotInheritable Class MegaDriveSubscription
         Files = discovered
     End Sub
 
-    Private Shared Function MatchesExtension(name As String, extensions As HashSet(Of String)) As Boolean
+    Friend Shared Function MatchesExtension(name As String, extensions As HashSet(Of String)) As Boolean
         If extensions.Count = 0 Then Return True
         Dim dot = name.LastIndexOf("."c)
         Return dot >= 0 AndAlso extensions.Contains(name.Substring(dot + 1))
@@ -113,7 +128,7 @@ Friend NotInheritable Class MegaDriveSubscription
     Friend Function MatchesSettings(other As MegaDriveSubscription) As Boolean
         Return String.Equals(Destination, other.Destination, StringComparison.OrdinalIgnoreCase) AndAlso
             CheckMinutes.Equals(other.CheckMinutes) AndAlso AutoQueue = other.AutoQueue AndAlso Extensions = other.Extensions AndAlso
-            ScheduleFromUtc = other.ScheduleFromUtc
+            ScheduleFromUtc = other.ScheduleFromUtc AndAlso String.Equals(DownloadEmail, other.DownloadEmail, StringComparison.OrdinalIgnoreCase)
     End Function
 
     Friend ReadOnly Property Caption As String

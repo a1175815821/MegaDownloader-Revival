@@ -83,12 +83,14 @@ Public NotInheritable Class DownloadPackageBuilder
                         URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "")
                     End If
 
+                    Dim accountFolderLink As String = URL.PublicFolderAccountLink
                     If Not String.IsNullOrEmpty(megaAccountEmail) AndAlso
-                       (Not Visible OrElse Not String.IsNullOrEmpty(URL.Path) OrElse Not String.IsNullOrEmpty(URL.FolderName) OrElse
-                        Fichero.GetMegaAccountLink(URLFile) Is Nothing) Then
+                       (Not Visible OrElse (Not PublicFolderListing.IsFileLink(accountFolderLink) AndAlso
+                        (Not String.IsNullOrEmpty(URL.Path) OrElse Not String.IsNullOrEmpty(URL.FolderName) OrElse Fichero.GetMegaAccountLink(URLFile) Is Nothing))) Then
                         Throw New ArgumentException(Language.GetText("AddLinks_MegaAccountFilesOnly"))
                     End If
-                    Dim oFichero As New Fichero(URLFile) With {.MegaAccountEmail = megaAccountEmail}
+                    Dim oFichero As New Fichero(URLFile) With {.MegaAccountEmail = megaAccountEmail,
+                        .PublicFolderAccountLink = accountFolderLink, .FixedDownloadIdentity = URL.FixedDownloadIdentity}
                     .ListaFicheros.Add(oFichero)
                     With oFichero
                         .LinkVisible = Visible
@@ -97,6 +99,9 @@ Public NotInheritable Class DownloadPackageBuilder
                         .NombreFichero = If(Visible, URLFile, Fichero.HIDDEN_LINK_DESC)
                         If Not String.IsNullOrEmpty(URL.DisplayName) Then .NombreFichero = URL.DisplayName
                         If URL.SizeBytes.HasValue Then .TamanoBytes = URL.SizeBytes.Value
+                        ' Anonymous preflight already read these authenticated file attributes.
+                        ' The SDK still resolves the node and the delivery checks the expected file key.
+                        .DescargaProcesada = megaAccountEmail <> "" AndAlso PublicFolderListing.IsFileLink(accountFolderLink) AndAlso URL.SizeBytes.HasValue
                         .FileID = Fichero.ExtraerFileID(URLFile)
                         .FileKey = Fichero.ExtraerFileKey(URLFile)
                         .SetDescargaExtraccionAutomatica(password) = extractArchives

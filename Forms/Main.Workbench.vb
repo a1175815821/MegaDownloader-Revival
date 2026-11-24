@@ -50,12 +50,14 @@ Partial Public Class Main
         AnonymousQuota
         AccountQuota
         SessionExpired
+        FixedAccountSignIn
     End Enum
 
     Private NotInheritable Class QueueSelection
-        Friend ReadOnly WaitCounts(CInt(QueueWaitReason.SessionExpired)) As Integer
+        Friend ReadOnly WaitCounts(CInt(QueueWaitReason.FixedAccountSignIn)) As Integer
         Friend ReadOnly ManuallyPaused As New List(Of Fichero)()
         Friend ReadOnly QuotaAccounts As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Friend ReadOnly AccountsWaitingForSignIn As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Friend ShowFileCounts As Boolean
         Friend Total As Integer
         Friend Completed As Integer
@@ -650,8 +652,12 @@ Partial Public Class Main
             accounts.Add(email, status)
         End If
         If status.Connecting Then Return QueueWaitReason.None
-        If Not status.SignedIn AndAlso (status.NeedsLogin OrElse file.MegaAccountErrorCode.GetValueOrDefault() = MegaAccountService.SessionExpired) Then
-            Return QueueWaitReason.SessionExpired
+        If Not status.SignedIn Then
+            If file.FixedDownloadIdentity Then
+                selection.AccountsWaitingForSignIn.Add(email)
+                Return QueueWaitReason.FixedAccountSignIn
+            End If
+            If status.NeedsLogin OrElse file.MegaAccountErrorCode.GetValueOrDefault() = MegaAccountService.SessionExpired Then Return QueueWaitReason.SessionExpired
         End If
         If status.SignedIn AndAlso (status.QuotaReached OrElse (file.FailedByQuota AndAlso status.QuotaDelayUnknown)) Then
             selection.QuotaAccounts.Add(email)
@@ -676,12 +682,16 @@ Partial Public Class Main
             lines.Add(Language.GetText(If(selected.Count > 1, "Detail_SelectedFiles", "Detail_PackageFiles")).
                 Replace("%DONE%", selection.Completed.ToString()).Replace("%TOTAL%", selection.Total.ToString()).Replace("%FAILED%", selection.Failed.ToString()))
         End If
-        Dim keys As String() = {"QueueWait_ManualPause", "Schedule_Waiting", "QueueWait_QueuePaused", "QueueWait_AnonymousQuota", "MegaDrive_WaitingQuota", "QueueWait_SessionExpired"}
+        Dim keys As String() = {"QueueWait_ManualPause", "Schedule_Waiting", "QueueWait_QueuePaused", "QueueWait_AnonymousQuota", "MegaDrive_WaitingQuota", "QueueWait_SessionExpired", "QueueWait_FixedAccountSignIn"}
         For i As Integer = 0 To keys.Length - 1
             Dim reason As QueueWaitReason = CType(i + 1, QueueWaitReason)
             Dim count As Integer = selection.WaitCounts(CInt(reason))
             If count = 0 Then Continue For
-            lines.Add(QueueWaitCaption(keys(i), count, selection.ShowFileCounts))
+            Dim detail = QueueWaitCaption(keys(i), count, selection.ShowFileCounts)
+            If reason = QueueWaitReason.FixedAccountSignIn AndAlso selection.AccountsWaitingForSignIn.Count = 1 Then
+                detail &= " · " & QueueDownloadIdentityText(selection.AccountsWaitingForSignIn.Single())
+            End If
+            lines.Add(detail)
             Dim retryUtc As Date? = Nothing
             If reason = QueueWaitReason.AnonymousQuota AndAlso selection.AnonymousRetry.HasValue Then retryUtc = Date.UtcNow + selection.AnonymousRetry.Value
             If reason = QueueWaitReason.AccountQuota Then retryUtc = selection.NextAccountRetryUtc
@@ -786,7 +796,9 @@ Partial Public Class Main
         AddQueueWaitAction(selection, QueueWaitReason.QueuePaused, "QueueWait_ResumeQueue", Sub(sender, e) StartDownload())
         AddQueueWaitAction(selection, QueueWaitReason.AnonymousQuota, "QueueWait_RetryAnonymous", AddressOf QuotaRetryNow_Click)
         AddQueueWaitAction(selection, QueueWaitReason.AccountQuota, "MegaAccount_RefreshQuota", Async Sub(sender, e) Await RefreshQueueQuotaAsync())
-        AddQueueWaitAction(selection, QueueWaitReason.SessionExpired, "MegaAccount_Reconnect", AddressOf OpenMegaAccount)
+        Dim signInReason = If(selection.WaitCounts(CInt(QueueWaitReason.FixedAccountSignIn)) > 0,
+            QueueWaitReason.FixedAccountSignIn, QueueWaitReason.SessionExpired)
+        AddQueueWaitAction(selection, signInReason, "MegaAccount_Reconnect", AddressOf OpenMegaAccount)
         queueWaitMenu.Visible = queueWaitMenu.DropDownItems.Count > 0
         If queueWaitMenu.Available Then queueWaitMenu.Text = Language.GetText("QueueWait_Actions")
     End Sub

@@ -694,7 +694,10 @@ Friend NotInheritable Class MegaDriveForm
         Dim current As String = Nothing
         destinations.TryGetValue(folder, current)
         Dim settings = service.GetDriveSubscriptions(currentEmail).FirstOrDefault(Function(item) item.Folder = folder)
-        If settings Is Nothing Then settings = New MegaDriveSubscription With {.Folder = folder, .Destination = config.RutaDefecto}
+        If settings Is Nothing Then
+            settings = New MegaDriveSubscription With {.Folder = folder, .Destination = config.RutaDefecto}
+            config.ApplyNewSubscriptionDefaults(settings)
+        End If
         settings.Name = drive.Snapshot.Find(folder).Name
         settings.Incoming = drive.Incoming
         Using dialog As New MegaDriveSubscriptionSettingsForm(settings)

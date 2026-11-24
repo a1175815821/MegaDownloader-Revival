@@ -101,7 +101,7 @@ Partial Public Class Main
             Dim status = service.GetStatus(email)
             Dim available = status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached
             If available AndAlso (Not status.QuotaDelayUnknown OrElse retryDue) Then Return True
-            If file.MegaDriveNodeHandle.HasValue Then Return False
+            If file.AccountIsBound Then Return False
             Dim nextEmail = service.NextTransferAccount(email, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {email}, retryDue)
             If nextEmail = "" Then Return False
             file.RecordMegaAccountTransfer(nextEmail)
@@ -114,7 +114,7 @@ Partial Public Class Main
     End Function
 
     Private Shared Function CloudQuotaBlocks(file As Fichero) As Boolean
-        If Not file.MegaDriveNodeHandle.HasValue OrElse file.HasRecordedMegaAccountOutput Then Return False
+        If Not file.AccountIsBound OrElse Not file.UsesMegaAccount OrElse file.HasRecordedMegaAccountOutput Then Return False
         Dim account = MegaAccountService.Current.GetStatus(file.MegaAccountEmail)
         Return account.SignedIn AndAlso account.QuotaReached
     End Function

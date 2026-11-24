@@ -31,7 +31,7 @@ try {
     # fresh per-run directory so its run-* fixtures never pollute the cache.
     $appExe = Join-Path $bin 'MegaDownloader.exe'
     $refs = @('BouncyCastle.Cryptography.dll', 'HttpServer.dll', 'ObjectListView.dll') | ForEach-Object { Join-Path $bin $_ }
-    $testSources = @('RegressionTests.cs', 'DeliveryAuditRegressionTests.cs', 'StartupPerformanceRegressionTests.cs') | ForEach-Object { Join-Path $PSScriptRoot $_ }
+    $testSources = @('RegressionTests.cs', 'DeliveryAuditRegressionTests.cs', 'StartupPerformanceRegressionTests.cs', 'PublicSubscriptionRegressionTests.cs') | ForEach-Object { Join-Path $PSScriptRoot $_ }
     $appConfig = Join-Path $projectRoot 'app.config'
     $sha = [System.Security.Cryptography.SHA256]::Create()
     $accumulator = New-Object System.IO.MemoryStream

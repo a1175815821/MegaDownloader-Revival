@@ -23,11 +23,8 @@ Partial Public Class AddLinks
             txtRuta.Focus()
             Return
         End If
-        Dim access = MegaAccountService.Current.GetAccessError(previewMegaAccountEmail)
-        If access <> 0 Then
-            ShowInputNotice(AccountAccessNotice(previewMegaAccountEmail, access), True)
-            Return
-        End If
+        ' Public folder inspection is anonymous even when the selected download
+        ' account is disconnected. The ordinary import still validates access.
         ShowInputNotice("")
         If _linkCountTimer IsNot Nothing Then _linkCountTimer.Stop()
         preflightProgressTimer.Stop()
@@ -38,6 +35,9 @@ Partial Public Class AddLinks
             preflightView = New BatchPreflightView(New List(Of String)(), Config,
                 New Dictionary(Of String, URLProcessor.FileURL)(StringComparer.Ordinal), txtRuta.Text,
                 preflightSession, prepared, Function() mainForm.GetQueuedLinkSnapshot())
+            preflightView.ConfigurePublicSubscriptions(
+                Function(listing, handle, target) mainForm.ManagePublicSubscriptionAsync(Me, listing, handle, target, previewMegaAccountEmail),
+                AddressOf mainForm.HasPublicSubscription)
             AddHandler preflightView.BackRequested, AddressOf BackFromSelection
             AddHandler preflightView.CancelRequested, AddressOf DismissSelection
             AddHandler preflightView.ConfirmRequested, AddressOf SubmitSelection

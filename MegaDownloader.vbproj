@@ -26,7 +26,7 @@
     <UpdateEnabled>false</UpdateEnabled>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>2.6.6.0</ApplicationVersion>
+    <ApplicationVersion>2.6.7.0</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>false</BootstrapperEnabled>
@@ -217,6 +217,11 @@
     <Compile Include="Clases\MegaDrive.vb" />
     <Compile Include="Clases\MegaDriveHistory.vb" />
     <Compile Include="Clases\MegaDriveSubscription.vb" />
+    <Compile Include="Clases\PublicFolderListing.vb" />
+    <Compile Include="Clases\PublicFolderSubscriptions.vb" />
+    <Compile Include="Forms\Main.PublicSubscriptions.vb">
+      <DependentUpon>Main.vb</DependentUpon>
+    </Compile>
     <Compile Include="Forms\MegaDriveForm.vb" />
     <Compile Include="Forms\MegaDriveSubscriptionsForm.vb" />
     <Compile Include="Forms\Main.Subscriptions.vb">

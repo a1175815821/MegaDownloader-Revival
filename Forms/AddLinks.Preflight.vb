@@ -90,6 +90,11 @@ Partial Public Class AddLinks
         End If
         previewMegaAccountEmail = email
         previewMegaAccountAccess = access
+        If onSelectionPage AndAlso Not identityChanged Then
+            ' A reconnect during subscription setup must not discard the public preview.
+            ShowIdentityNotice()
+            Return
+        End If
         PreflightInputChanged()
         If identityChanged AndAlso preflightSession IsNot Nothing Then
             preflightSession.Dispose()
@@ -118,7 +123,7 @@ Partial Public Class AddLinks
         If preflightSession Is Nothing Then
             If previewMegaAccountEmail <> "" Then
                 Dim email As String = previewMegaAccountEmail
-                preflightSession = New PreflightSession(Function(url, token) InspectMegaAccountLink(url, email, token))
+                preflightSession = New PreflightSession(Config, Function(url, token) InspectMegaAccountLink(url, email, token))
             Else
                 preflightSession = New PreflightSession(Config)
             End If
@@ -161,11 +166,6 @@ Partial Public Class AddLinks
             If String.IsNullOrWhiteSpace(txtLinks.Text) Then
                 HiddenLinks = String.Empty
                 lblLinkCount.Text = ""
-                Return
-            End If
-            If MegaAccountService.Current.GetAccessError(previewMegaAccountEmail) <> 0 Then
-                lblLinkCount.Text = ""
-                preflightProgressBar.Visible = False
                 Return
             End If
             Dim request As PreflightSession.Request = CurrentPreflightRequest()

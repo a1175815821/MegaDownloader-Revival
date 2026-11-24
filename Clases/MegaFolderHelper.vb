@@ -35,6 +35,12 @@ Public Class MegaFolderHelper
                                                      Optional ByVal SubFileID As String = "", _
                                                      Optional ByVal progress As IProgress(Of Integer) = Nothing, _
                                                      Optional ByVal ct As System.Threading.CancellationToken = Nothing) As Generic.List(Of URLProcessor.FileURL)
+        Return ReadFolder(FolderID, FolderKey, SubFolderID, SubFileID, progress, ct, Nothing)
+    End Function
+
+    Friend Shared Function ReadFolder(FolderID As String, FolderKey As String, SubFolderID As String, SubFileID As String,
+                                      progress As IProgress(Of Integer), ct As Threading.CancellationToken,
+                                      listing As PublicFolderListing) As Generic.List(Of URLProcessor.FileURL)
         Dim jsonRQ As String
         Dim res As Conexion.Respuesta
 
@@ -62,11 +68,17 @@ Public Class MegaFolderHelper
             Throw New ApplicationException("Error getting file list from shared folder - " & Log.SafeException(res.Excepcion))
         End If
 
+        Return ParseFolderResponse(FolderID, FolderKey, SubFolderID, SubFileID, res.Mensaje, FromENCLink, progress, ct, listing)
+    End Function
+
+    Friend Shared Function ParseFolderResponse(FolderID As String, FolderKey As String, SubFolderID As String, SubFileID As String,
+                                               response As String, FromENCLink As Boolean, progress As IProgress(Of Integer),
+                                               ct As Threading.CancellationToken, listing As PublicFolderListing) As Generic.List(Of URLProcessor.FileURL)
         ' MEGA reports API errors as a bracketed array ("[-9]", "[-17]"), so the brackets
         ' must come off before IsNumeric (IsNumeric("[-9]") is False, which made this whole
         ' branch dead) and before GetErrorFromMegaResponse (its Select Case matches the bare
         ' code). res.Mensaje is left untouched — the deserialisation below trims its own.
-        Dim body As String = If(res.Mensaje, String.Empty).Trim()
+        Dim body As String = If(response, String.Empty).Trim()
         If body.StartsWith("[") Then body = body.Substring(1)
         If body.EndsWith("]") Then body = body.Substring(0, body.Length - 1)
         body = body.Trim()
@@ -76,12 +88,16 @@ Public Class MegaFolderHelper
                 MegaQuotaManager.ReportQuota()
                 Throw New MegaQuotaExceededException("MEGA transfer quota exceeded (EOVERQUOTA) while reading folder.")
             End If
-            Throw MEGA_ErrorHandler.GetErrorFromMegaResponse(body, "getting file list from shared folder")
+            Dim apiError = MEGA_ErrorHandler.GetErrorFromMegaResponse(body, "getting file list from shared folder")
+            If listing IsNot Nothing AndAlso (body = "-9" OrElse body = "-11" OrElse body = "-14" OrElse body = "-16") Then
+                Throw New PublicFolderUnavailableException(apiError.Message)
+            End If
+            Throw apiError
         End If
 
         Dim FileList As FileListResponse
         Try
-            FileList = CType(Newtonsoft.Json.JsonConvert.DeserializeObject(res.Mensaje.Trim("["c, "]"c), _
+            FileList = CType(Newtonsoft.Json.JsonConvert.DeserializeObject(body, _
                                                           GetType(FileListResponse)),  _
                                                           FileListResponse)
         Catch ex As Exception
@@ -134,7 +150,7 @@ Public Class MegaFolderHelper
 
         If Not String.IsNullOrEmpty(SubFolderID) Then
             If Not parentMap.ContainsKey(SubFolderID) Then
-                Throw New ApplicationException("The subfolder specified in the link was not found in the shared folder (it may have been deleted).")
+                Throw New PublicFolderUnavailableException("The subfolder specified in the link was not found in the shared folder (it may have been deleted).")
             End If
         End If
         If Not String.IsNullOrEmpty(SubFileID) Then
@@ -209,6 +225,22 @@ Public Class MegaFolderHelper
         Dim pathMap As Generic.Dictionary(Of String, String) = htFolders
         If Not String.IsNullOrEmpty(SubFolderID) Then
             pathMap = BuildSubfolderPaths(SubFolderID, htFolderEstructure)
+        End If
+
+        If listing IsNot Nothing Then
+            listing.RootHandle = If(String.IsNullOrEmpty(SubFolderID), root, SubFolderID)
+            If Not htFolderEstructure.ContainsKey(listing.RootHandle) Then
+                Throw New PublicFolderUnavailableException("The public folder could not be opened with this link.")
+            End If
+            listing.ShareName = If(htFolderEstructure.ContainsKey(root), htFolderEstructure(root).Key, "")
+            For Each handle In BuildSubfolderPaths(listing.RootHandle, htFolderEstructure).Keys
+                Dim folder = htFolderEstructure(handle)
+                listing.Directories.Add(handle, New PublicFolderDirectory(handle, If(handle = listing.RootHandle, "", folder.Value), folder.Key))
+            Next
+            If Not listing.Directories.ContainsKey(listing.RootHandle) Then
+                Dim folder = htFolderEstructure(listing.RootHandle)
+                listing.Directories.Add(listing.RootHandle, New PublicFolderDirectory(listing.RootHandle, "", folder.Key))
+            End If
         End If
 
         ' 链接指向的那个文件夹的真名(子文件夹链接=子文件夹名,整文件夹链接=共享根名)。
@@ -293,6 +325,8 @@ Public Class MegaFolderHelper
                         resolved.FolderName = folderDisplayName
                         resolved.DisplayName = PathGuard.SanitizeFileName(FileInfoDec, "file")
                         resolved.SizeBytes = Math.Max(0L, fileN.s)
+                        resolved.PublicFolderParent = fileN.p
+                        If listing IsNot Nothing Then resolved.PublicFolderAccountLink = listing.FileLink(fileN.h)
                         Results.Add(resolved)
 
                     Else
@@ -315,6 +349,8 @@ Public Class MegaFolderHelper
             Log.WriteWarning("RetrieveLinksFromFolder: skipped " & skippedFiles & " file(s) and " & skippedFolders & " folder(s) that could not be decrypted (e.g. " & String.Join(",", firstSkipped.ToArray()) & "). The download will be incomplete.")
         End If
 
+        If listing IsNot Nothing Then listing.IsComplete = skippedFiles = 0 AndAlso
+            Results.All(Function(file) listing.Directories.ContainsKey(file.PublicFolderParent))
         If progress IsNot Nothing Then progress.Report(folderCounter + fileCounter)
         Return Results
     End Function

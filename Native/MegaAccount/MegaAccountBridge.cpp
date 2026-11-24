@@ -1,11 +1,14 @@
 #include <megaapi.h>
+#include <objbase.h>
 
 #include <atomic>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <limits>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 using namespace mega;
@@ -25,12 +28,165 @@ int finish(SynchronousRequestListener& request)
     return request.getError()->getErrorCode();
 }
 
-int publicFile(MegaApi& api, const char* link, std::unique_ptr<MegaNode>& node)
+constexpr char userAgent[] = "MegaDownloader-Revival";
+constexpr std::string_view folderPrefix = "https://mega.nz/folder/";
+
+int applyProxy(MegaApi& api, MegaProxy& proxy)
+{
+    SynchronousRequestListener request;
+    api.setProxySettings(&proxy, &request);
+    return finish(request);
+}
+
+class AccountClient final : public MegaApi
+{
+public:
+    AccountClient(const char* appKey, const char* cache)
+        : MegaApi(appKey, cache, userAgent),
+          cacheDirectory(cache ? std::filesystem::u8path(cache) : std::filesystem::current_path()) {}
+
+    int updateProxy(const char* url, const char* username, const char* password)
+    {
+        auto settings = std::make_unique<MegaProxy>();
+        settings->setProxyType(*url ? MegaProxy::PROXY_CUSTOM : MegaProxy::PROXY_NONE);
+        if (*url)
+        {
+            settings->setProxyURL(url);
+            settings->setCredentials(username, password);
+        }
+
+        const std::lock_guard lock(proxyMutex);
+        const int result = applyProxy(*this, *settings);
+        if (result == MegaError::API_OK) proxy = std::move(settings);
+        return result;
+    }
+
+    int copyProxyTo(MegaApi& folder)
+    {
+        const std::lock_guard lock(proxyMutex);
+        return proxy ? applyProxy(folder, *proxy) : MegaError::API_OK;
+    }
+
+    const std::filesystem::path cacheDirectory;
+
+private:
+    std::mutex proxyMutex;
+    std::unique_ptr<MegaProxy> proxy;
+};
+
+// The SDK opens SQLite tables named after the share. Each lookup needs its own directory.
+class FolderCache
+{
+public:
+    explicit FolderCache(const std::filesystem::path& parent)
+    {
+        GUID id;
+        if (FAILED(CoCreateGuid(&id))) return;
+        wchar_t name[39];
+        if (!StringFromGUID2(id, name, 39)) return;
+        auto directory = parent / name;
+        std::error_code error;
+        if (std::filesystem::create_directory(directory, error)) path = std::move(directory);
+    }
+
+    ~FolderCache()
+    {
+        std::error_code error;
+        if (!path.empty()) std::filesystem::remove_all(path, error);
+    }
+
+    std::filesystem::path path;
+};
+
+bool isBase64Url(std::string_view value)
+{
+    return value.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") == std::string_view::npos;
+}
+
+int finishPublicRequest(MegaApi& api, SynchronousRequestListener& request,
+                        IsCancelled cancelled, long long* quotaWaitSeconds)
+{
+    if (cancelled)
+    {
+        while (request.trywait(100) != 0)
+        {
+            if (!cancelled()) continue;
+            api.removeRequestListener(&request);
+            return MegaError::API_EINCOMPLETE;
+        }
+    }
+    else request.wait();
+
+    const auto* error = request.getError();
+    const int result = error->getErrorCode();
+    if (result == MegaError::API_EOVERQUOTA && quotaWaitSeconds)
+    {
+        const auto seconds = error->getValue();
+        *quotaWaitSeconds = seconds > 0 ? seconds : api.getBandwidthOverquotaDelay();
+    }
+    return result;
+}
+
+int publicFolderFile(AccountClient& account, std::string_view link, std::unique_ptr<MegaNode>& node,
+                     IsCancelled cancelled, long long* quotaWaitSeconds)
+{
+    constexpr size_t handleLength = 8;
+    constexpr size_t keyLength = 22;
+    constexpr std::string_view fileSeparator = "/file/";
+    const auto hash = folderPrefix.size() + handleLength;
+    const auto file = hash + 1 + keyLength;
+    const auto handle = file + fileSeparator.size();
+    if (link.size() != handle + handleLength || link[hash] != '#' ||
+        link.substr(file, fileSeparator.size()) != fileSeparator ||
+        !isBase64Url(link.substr(folderPrefix.size(), handleLength)) ||
+        !isBase64Url(link.substr(hash + 1, keyLength)) || !isBase64Url(link.substr(handle)))
+        return MegaError::API_EARGS;
+
+    const std::unique_ptr<char[]> auth(account.getAccountAuth());
+    if (!auth) return MegaError::API_ESID;
+    FolderCache cache(account.cacheDirectory);
+    if (cache.path.empty()) return MegaError::API_EWRITE;
+
+    const auto path = cache.path.u8string();
+    MegaApi folder(nullptr, reinterpret_cast<const char*>(path.c_str()), userAgent);
+    int result = account.copyProxyTo(folder);
+    if (result != MegaError::API_OK) return result;
+    folder.setAccountAuth(auth.get());
+
+    const std::string folderLink(link.substr(0, file));
+    SynchronousRequestListener login;
+    folder.loginToFolder(folderLink.c_str(), &login);
+    result = finishPublicRequest(folder, login, cancelled, quotaWaitSeconds);
+    if (result != MegaError::API_OK) return result;
+    if (cancelled && cancelled()) return MegaError::API_EINCOMPLETE;
+
+    SynchronousRequestListener fetch;
+    folder.fetchNodes(&fetch);
+    result = finishPublicRequest(folder, fetch, cancelled, quotaWaitSeconds);
+    if (result != MegaError::API_OK) return result;
+    if (!account.isLoggedIn()) return MegaError::API_ESID;
+    if (fetch.getRequest()->getFlag()) return MegaError::API_EKEY;
+
+    const std::string fileHandle(link.substr(handle));
+    const std::unique_ptr<MegaNode> child(folder.getNodeByHandle(MegaApi::base64ToHandle(fileHandle.c_str())));
+    if (!child || !child->isFile()) return MegaError::API_ENOENT;
+    if (!child->isNodeKeyDecrypted()) return MegaError::API_EKEY;
+    // Keep the folder's read authorization on the node so the account client can transfer it.
+    node.reset(folder.authorizeNode(child.get()));
+    return node ? MegaError::API_OK : MegaError::API_EACCESS;
+}
+
+int publicFile(MegaApi& api, const char* link, std::unique_ptr<MegaNode>& node,
+               IsCancelled cancelled = nullptr, long long* quotaWaitSeconds = nullptr)
 {
     if (!api.isLoggedIn()) return MegaError::API_ESID;
+    if (cancelled && cancelled()) return MegaError::API_EINCOMPLETE;
+    if (std::string_view(link).starts_with(folderPrefix))
+        return publicFolderFile(static_cast<AccountClient&>(api), link, node, cancelled, quotaWaitSeconds);
+
     SynchronousRequestListener request;
     api.getPublicNode(link, &request);
-    const int result = finish(request);
+    const int result = finishPublicRequest(api, request, cancelled, quotaWaitSeconds);
     if (result != MegaError::API_OK) return result;
     if (!api.isLoggedIn()) return MegaError::API_ESID;
     if (request.getRequest()->getFlag()) return MegaError::API_EKEY;
@@ -68,25 +224,16 @@ private:
 
 MD_EXPORT int md_set_proxy(MegaApi* api, const char* proxyUrl, const char* proxyUser, const char* proxyPassword)
 {
-    MegaProxy proxy;
-    proxy.setProxyType(*proxyUrl ? MegaProxy::PROXY_CUSTOM : MegaProxy::PROXY_NONE);
-    if (*proxyUrl)
-    {
-        proxy.setProxyURL(proxyUrl);
-        proxy.setCredentials(proxyUser, proxyPassword);
-    }
-    SynchronousRequestListener request;
-    api->setProxySettings(&proxy, &request);
-    return finish(request);
+    return static_cast<AccountClient&>(*api).updateProxy(proxyUrl, proxyUser, proxyPassword);
 }
 
 MD_EXPORT MegaApi* md_open(const char* appKey, const char* cache,
                             const char* proxyUrl, const char* proxyUser, const char* proxyPassword)
 {
-    auto api = std::make_unique<MegaApi>(appKey, cache, "MegaDownloader-Revival");
+    auto api = std::make_unique<AccountClient>(appKey, cache);
     // Private downloads use streaming as a ranged read, not for real-time playback.
     api->setStreamingMinimumRate(0);
-    if (*proxyUrl && md_set_proxy(api.get(), proxyUrl, proxyUser, proxyPassword) != MegaError::API_OK) return nullptr;
+    if (*proxyUrl && api->updateProxy(proxyUrl, proxyUser, proxyPassword) != MegaError::API_OK) return nullptr;
     return api.release();
 }
 
@@ -248,8 +395,7 @@ MD_EXPORT int md_download_with_limit(MegaApi* api, const char* link, const char*
 {
     *quotaWaitSeconds = 0;
     std::unique_ptr<MegaNode> node;
-    const int result = publicFile(*api, link, node);
-    if (result == MegaError::API_EOVERQUOTA) *quotaWaitSeconds = api->getBandwidthOverquotaDelay();
+    const int result = publicFile(*api, link, node, isCancelled, quotaWaitSeconds);
     return result == MegaError::API_OK ? downloadFile(api, node.get(), destination, progress, isCancelled, *quotaWaitSeconds, limit) : result;
 }
 

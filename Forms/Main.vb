@@ -3145,7 +3145,7 @@ Public Class Main
             SyncLock Mutex.ListaDescargas
                 For Each paq As Paquete In Me.ListaPaquetes
                     For Each fic As Fichero In paq.ListaFicheros
-                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(fic) AndAlso fic.DescargaEstado = Estado.EnCola,
+                        Dim canVerify As Boolean = If(fic.UsesMegaAccount, Not fic.IsMegaAccountConnecting AndAlso Not fic.IsWaitingForFixedAccount AndAlso Not CloudQuotaBlocks(fic) AndAlso fic.DescargaEstado = Estado.EnCola,
                                                       anonymousAllowed AndAlso fic.DescargaEstado <> Estado.Erroneo)
                         If canVerify AndAlso Not fic.DescargaProcesada AndAlso Not _verifyInflight.ContainsKey(fic) Then
                             picked = New VerifyJob()
@@ -3676,7 +3676,7 @@ Public Class Main
                 For Each Fichero As Fichero In paq.ListaFicheros
 
                     Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount,
-                        Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
+                        Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not Fichero.IsWaitingForFixedAccount AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
                     If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
                         ColaDescarga.Add(Fichero)
                     ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
@@ -5075,7 +5075,7 @@ Public Class Main
                         problem = "MegaAccount_QueueAccountInUse"
                         Exit For
                     End If
-                    If email <> "" AndAlso Fichero.GetMegaAccountLink(file.URL) Is Nothing Then
+                    If email <> "" AndAlso file.MegaAccountDownloadLink Is Nothing Then
                         problem = "MegaAccount_QueueOnlyFiles"
                         Exit For
                     End If
@@ -5189,6 +5189,10 @@ Public Class Main
     ''' <param name="e"></param>
     ''' <remarks></remarks>
     Private Sub btnConfig_Click(sender As System.Object, e As System.EventArgs) Handles btnConfig.Click
+        OpenSettings(Me)
+    End Sub
+
+    Friend Sub OpenSettings(owner As IWin32Window, Optional showSubscriptions As Boolean = False)
         ' 设置窗口复用同一个实例：首次打开先构建，之后只刷新字段并重新显示。
         ' 关闭时窗体由 ShowDialog 隐藏而不销毁，重开实测约 0.2 秒。
         If _settingsForm Is Nothing OrElse _settingsForm.IsDisposed Then
@@ -5198,7 +5202,8 @@ Public Class Main
         _settingsForm.Config = Config
         _settingsForm.RequiereConfiguracion = False
         _settingsForm.PrepareForReopen()
-        _settingsForm.ShowDialog(Me)
+        If showSubscriptions Then _settingsForm.SelectSubscriptionPage()
+        _settingsForm.ShowDialog(owner)
     End Sub
 
 

@@ -37,9 +37,20 @@ Public NotInheritable Class BatchPreflightView
     Private ReadOnly targetTip As New ToolTip()
     Private ReadOnly filterTimer As New System.Windows.Forms.Timer With {.Interval = 180}
     Private ReadOnly selectionMenu As New ContextMenuStrip()
+    Private ReadOnly subscriptionButton As New ToolStripButton With {.Enabled = False, .Available = False}
+    Private ReadOnly subscriptionDivider As New ToolStripSeparator With {.Available = False}
+    Private ReadOnly subscriptionMenuItem As New ToolStripMenuItem()
+    Private ReadOnly subscriptionMenuDivider As New ToolStripSeparator()
+    Private ReadOnly subscriptionStatuses As New Dictionary(Of PreflightTree.Node, Boolean)()
+    Private ReadOnly subscribeLabel As String = Language.GetText("Preflight_SubscribeDirectory")
+    Private ReadOnly viewSubscriptionLabel As String = Language.GetText("Preflight_ViewSubscription")
+    Private ReadOnly subscribedLabel As String = Language.GetText("Preflight_Subscribed")
     Private ReadOnly statusLabels As New Dictionary(Of BatchLinkPreflight.LinkState, String)()
     Private ReadOnly folderSelectionLabel As String
     Private entries As New List(Of BatchLinkPreflight.Entry)()
+    Private inspectedEntries As List(Of BatchLinkPreflight.Entry)
+    Private manageSubscription As Func(Of PublicFolderListing, String, String, Task(Of Boolean))
+    Private hasSubscription As Func(Of PublicFolderListing, String, Boolean)
     Private selection As PreflightSelection
     Private tree As PreflightTree
     Private boundRows As New List(Of PreflightTree.Node)()
@@ -48,6 +59,7 @@ Public NotInheritable Class BatchPreflightView
     Private binding As Boolean
     Private disposeRequested As Boolean
     Private importing As Boolean
+    Private managingSubscription As Boolean
     Private checkingSpace As Boolean
     Private spaceGeneration As Integer
     Private ReadOnly queueProvider As Func(Of Dictionary(Of String, URLProcessor.FileURL))
@@ -59,7 +71,7 @@ Public NotInheritable Class BatchPreflightView
 
     Private ReadOnly Property SelectionLocked As Boolean
         Get
-            Return loading OrElse importing OrElse disposeRequested
+            Return loading OrElse importing OrElse managingSubscription OrElse disposeRequested
         End Get
     End Property
 
@@ -149,6 +161,10 @@ Public NotInheritable Class BatchPreflightView
         AddHandler collapse.Click, Sub() ExpandFolders(False)
         tools.Items.Add(expand)
         tools.Items.Add(collapse)
+        subscriptionButton.Text = subscribeLabel
+        tools.Items.Add(subscriptionDivider)
+        tools.Items.Add(subscriptionButton)
+        AddHandler subscriptionButton.Click, AddressOf ManageSelectedSubscription
         Dim filterArea As New TableLayoutPanel With {.Dock = DockStyle.Fill, .AutoSize = True, .ColumnCount = 1, .RowCount = 3, .Margin = New Padding(0, 4, 0, 8)}
         For i As Integer = 0 To 2
             filterArea.RowStyles.Add(New RowStyle(SizeType.AutoSize))
@@ -189,6 +205,10 @@ Public NotInheritable Class BatchPreflightView
         AddContextAction("Preflight_CheckHighlighted", PreflightSelection.SelectionOperation.SelectAll)
         AddContextAction("Preflight_UncheckHighlighted", PreflightSelection.SelectionOperation.Clear)
         AddContextAction("Preflight_InvertHighlighted", PreflightSelection.SelectionOperation.Invert)
+        selectionMenu.Items.Add(subscriptionMenuDivider)
+        selectionMenu.Items.Add(subscriptionMenuItem)
+        AddHandler selectionMenu.Opening, AddressOf OpenSelectionMenu
+        AddHandler subscriptionMenuItem.Click, AddressOf ManageSelectedSubscription
         grid.ContextMenuStrip = selectionMenu
         layout.Controls.Add(grid, 0, 2)
         spaceLabel.Dock = DockStyle.Fill
@@ -256,6 +276,8 @@ Public NotInheritable Class BatchPreflightView
         AddHandler grid.CellBeginEdit, AddressOf BeginCellEdit
         AddHandler grid.CellFormatting, AddressOf FormatCell
         AddHandler grid.CellPainting, AddressOf PaintTreeCell
+        AddHandler grid.CellMouseDown, AddressOf SelectContextRow
+        AddHandler grid.SelectionChanged, Sub() UpdateSubscriptionAction()
         AddHandler grid.CellMouseClick, AddressOf TreeCellClick
         AddHandler grid.CellMouseDoubleClick, Sub(sender, e)
                                                        If e.ColumnIndex <> 1 OrElse e.RowIndex < 0 Then Return
@@ -266,7 +288,7 @@ Public NotInheritable Class BatchPreflightView
                                                   Dim node As PreflightTree.Node = NodeAt(e.RowIndex)
                                                   If node Is Nothing Then Return
                                                   If node.IsFolder Then
-                                                      e.ToolTipText = Language.GetText("Preflight_FolderHint")
+                                                      e.ToolTipText = If(e.ColumnIndex = 3 AndAlso IsSubscribed(node), FolderSelectionStatus(node), Language.GetText("Preflight_FolderHint"))
                                                   ElseIf e.ColumnIndex = 3 Then
                                                       e.ToolTipText = If(node.Entry.Detail, "")
                                                   ElseIf e.ColumnIndex = 1 Then
@@ -303,6 +325,117 @@ Public NotInheritable Class BatchPreflightView
         Dim item As New ToolStripMenuItem(Language.GetText(key))
         AddHandler item.Click, Sub() ChangeHighlighted(operation)
         selectionMenu.Items.Add(item)
+    End Sub
+
+    Friend Sub ConfigurePublicSubscriptions(openSubscription As Func(Of PublicFolderListing, String, String, Task(Of Boolean)),
+                                            subscriptionExists As Func(Of PublicFolderListing, String, Boolean))
+        manageSubscription = openSubscription
+        hasSubscription = subscriptionExists
+    End Sub
+
+    Private Function HighlightedSubscriptionFolder() As PreflightTree.Node
+        If SelectionLocked OrElse manageSubscription Is Nothing OrElse tree Is Nothing OrElse Not tree.HasPublicFolders Then Return Nothing
+        Dim row As Integer = grid.Rows.GetFirstRow(DataGridViewElementStates.Selected)
+        If row < 0 OrElse grid.Rows.GetNextRow(row, DataGridViewElementStates.Selected) >= 0 Then Return Nothing
+        Dim folder As PreflightTree.Node = NodeAt(row)
+        If folder Is Nothing OrElse folder.FolderListing Is Nothing Then Return Nothing
+        Return folder
+    End Function
+
+    Private Function IsSubscribed(folder As PreflightTree.Node) As Boolean
+        If folder.FolderListing Is Nothing OrElse hasSubscription Is Nothing Then Return False
+        Dim subscribed As Boolean
+        If Not subscriptionStatuses.TryGetValue(folder, subscribed) Then
+            subscribed = hasSubscription(folder.FolderListing, folder.FolderHandle)
+            subscriptionStatuses.Add(folder, subscribed)
+        End If
+        Return subscribed
+    End Function
+
+    Private Sub UpdateSubscriptionAction()
+        If binding OrElse disposeRequested Then Return
+        Dim available As Boolean = manageSubscription IsNot Nothing AndAlso tree IsNot Nothing AndAlso tree.HasPublicFolders
+        subscriptionDivider.Available = available
+        subscriptionButton.Available = available
+        If Not available Then Return
+        Dim folder As PreflightTree.Node = HighlightedSubscriptionFolder()
+        subscriptionButton.Enabled = folder IsNot Nothing
+        subscriptionButton.Text = If(folder IsNot Nothing AndAlso IsSubscribed(folder), viewSubscriptionLabel, subscribeLabel)
+    End Sub
+
+    Private Sub SelectContextRow(sender As Object, e As DataGridViewCellMouseEventArgs)
+        If SelectionLocked OrElse e.Button <> MouseButtons.Right OrElse e.RowIndex < 0 Then Return
+        If (grid.Rows.GetRowState(e.RowIndex) And DataGridViewElementStates.Selected) <> 0 Then Return
+        grid.CurrentCell = grid(1, e.RowIndex)
+        grid.ClearSelection()
+        grid.Rows(e.RowIndex).Selected = True
+    End Sub
+
+    Private Sub OpenSelectionMenu(sender As Object, e As System.ComponentModel.CancelEventArgs)
+        If SelectionLocked Then
+            e.Cancel = True
+            Return
+        End If
+        Dim folder As PreflightTree.Node = HighlightedSubscriptionFolder()
+        subscriptionMenuDivider.Available = folder IsNot Nothing
+        subscriptionMenuItem.Available = folder IsNot Nothing
+        If folder IsNot Nothing Then subscriptionMenuItem.Text = If(IsSubscribed(folder), viewSubscriptionLabel, subscribeLabel)
+    End Sub
+
+    Private Sub SetManagingSubscription(value As Boolean)
+        managingSubscription = value
+        filters.Enabled = Not value
+        tools.Enabled = Not value
+        backButton.Enabled = Not value
+        retryButton.Enabled = Not value
+        cancelButton.Enabled = Not value
+        If value Then addButton.Enabled = False
+    End Sub
+
+    Private Async Sub ManageSelectedSubscription(sender As Object, e As EventArgs)
+        If filterTimer.Enabled Then
+            filterTimer.Stop()
+            BindRows()
+        End If
+        Dim folder As PreflightTree.Node = HighlightedSubscriptionFolder()
+        If folder Is Nothing Then Return
+        SetManagingSubscription(True)
+        Dim refreshed As Boolean = False
+        Try
+            If Await manageSubscription(folder.FolderListing, folder.FolderHandle, destination) AndAlso Not disposeRequested AndAlso queueProvider IsNot Nothing Then
+                Dim previous As List(Of BatchLinkPreflight.Entry) = entries
+                Dim inspected As List(Of BatchLinkPreflight.Entry) = inspectedEntries
+                Dim model As PreflightSelection = Await Task.Run(Function()
+                                                                     Dim updated = PreflightSession.Reconcile(inspected, queueProvider())
+                                                                     For index As Integer = 0 To updated.Count - 1
+                                                                         If previous(index).CanAdd Then updated(index).Selected = updated(index).CanAdd AndAlso previous(index).Selected
+                                                                     Next
+                                                                     Return New PreflightSelection(updated)
+                                                                 End Function)
+                If disposeRequested Then Return
+                tree.RefreshSelection(model)
+                selection = model
+                entries = model.Entries
+                refreshed = True
+            End If
+        Catch ex As OperationCanceledException
+            ' The subscription dialog or application closed before applying changes.
+        Catch ex As Exception
+            Log.WriteWarning("Managing the public folder subscription failed: " & Log.SafeException(ex))
+            If Not disposeRequested Then ShowNotice(DownloadAdvice.FirstLine(Log.Redact(ex.Message)), True)
+        Finally
+            If Not disposeRequested Then
+                subscriptionStatuses.Clear()
+                SetManagingSubscription(False)
+                If refreshed Then
+                    ProjectRows(preserveSearchExpansion:=True)
+                Else
+                    UpdateSummary()
+                    UpdateSubscriptionAction()
+                    grid.Invalidate()
+                End If
+            End If
+        End Try
     End Sub
 
     Public Sub StartInspection()
@@ -469,6 +602,8 @@ Public NotInheritable Class BatchPreflightView
             Dim targetGeneration As Integer = spaceGeneration
             Dim available As Long? = Await Task.Run(Function() BatchLinkPreflight.AvailableSpace(target), token)
             If disposeRequested OrElse token.IsCancellationRequested Then Return
+            inspectedEntries = result
+            subscriptionStatuses.Clear()
             selection = prepared.Item1
             tree = prepared.Item2
             entries = selection.Entries
@@ -542,12 +677,23 @@ Public NotInheritable Class BatchPreflightView
             tree = Nothing
         End If
         If tree Is Nothing Then tree = New PreflightTree(selection)
+        ProjectRows()
+    End Sub
+
+    Private Sub ProjectRows(Optional preserveSearchExpansion As Boolean = False)
         Dim categories As String() = {"", "Video", "Audio", "Archives", "Documents", "Other"}
         selection.Filter(search.Text, categories(Math.Max(0, category.SelectedIndex)))
-        tree.Filter(search.Text.Length > 0 OrElse category.SelectedIndex > 0)
-        BindTreeRows()
+        tree.Filter(search.Text.Length > 0 OrElse category.SelectedIndex > 0, search.Text.Trim(), preserveSearchExpansion)
+        Dim initial = If(boundRows.Count = 0 OrElse Not boundRows.Exists(Function(node) node.FolderListing Is tree.InitialPublicFolder?.FolderListing),
+            tree.InitialPublicFolder, Nothing)
+        BindTreeRows(initial)
         UpdateSummary()
     End Sub
+
+    Private Function FolderSelectionStatus(node As PreflightTree.Node) As String
+        If IsSubscribed(node) Then Return subscribedLabel
+        Return folderSelectionLabel.Replace("%S%", node.SelectedCount.ToString()).Replace("%N%", node.MatchCount.ToString())
+    End Function
 
     Private Sub BindTreeRows(Optional currentNode As PreflightTree.Node = Nothing)
         ' The model projection may already have changed. Read previous indices from
@@ -589,6 +735,7 @@ Public NotInheritable Class BatchPreflightView
             grid.ResumeLayout()
             binding = False
         End Try
+        UpdateSubscriptionAction()
     End Sub
 
     Private Function NodeAt(index As Integer) As PreflightTree.Node
@@ -612,6 +759,7 @@ Public NotInheritable Class BatchPreflightView
         If e.ColumnIndex <> 1 OrElse e.RowIndex < 0 Then Return
         Dim node As PreflightTree.Node = NodeAt(e.RowIndex)
         If node Is Nothing OrElse Not node.IsFolder Then Return
+        If Not node.HasVisibleChildren Then Return
         e.Paint(e.ClipBounds, e.PaintParts)
         Dim side As Integer = Math.Max(10, CInt(11 * grid.DeviceDpi / 96.0R))
         Dim glyph As New Rectangle(e.CellBounds.Left + TreeIndent(node) + CInt(3 * grid.DeviceDpi / 96.0R), e.CellBounds.Top + (e.CellBounds.Height - side) \ 2, side, side)
@@ -662,7 +810,7 @@ Public NotInheritable Class BatchPreflightView
                 Case 0 : e.Value = node.CheckState
                 Case 1 : e.Value = node.Name
                 Case 2 : e.Value = If(node.UnknownSizes = node.MatchCount, "—", FormatSize(node.SizeBytes) & If(node.UnknownSizes > 0, "+", ""))
-                Case 3 : e.Value = folderSelectionLabel.Replace("%S%", node.SelectedCount.ToString()).Replace("%N%", node.MatchCount.ToString())
+                Case 3 : e.Value = FolderSelectionStatus(node)
                 Case 4 : e.Value = ""
             End Select
             Return

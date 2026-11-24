@@ -43,12 +43,14 @@ Partial Public Class Main
     End Sub
 
     Private Async Sub CheckScheduledSubscriptions(sender As Object, e As EventArgs)
-        If subscriptionTickRunning OrElse Cerrando OrElse Volatile.Read(_startupQueueLoading) OrElse SubscriptionService.IsRestoring Then Return
+        If subscriptionTickRunning OrElse Cerrando OrElse Volatile.Read(_startupQueueLoading) OrElse Config.SubscriptionChecksPaused Then Return
         subscriptionTickRunning = True
         Try
+            Await CheckPublicSubscriptionsAsync(Nothing, scheduled:=True)
+            If Cerrando OrElse SubscriptionService.IsRestoring Then Return
             For Each account In SubscriptionService.GetAccounts()
+                If Cerrando OrElse Config.SubscriptionChecksPaused Then Exit For
                 If account.SignedIn AndAlso Not account.Connecting Then Await CheckSubscriptionsAsync(account.Email, Nothing, scheduled:=True)
-                If Cerrando Then Exit For
             Next
         Finally
             subscriptionTickRunning = False
@@ -62,7 +64,7 @@ Partial Public Class Main
     Private Async Function CheckSubscriptionsAsync(email As String, folder As ULong?, scheduled As Boolean) As Task
         Await subscriptionWork.WaitAsync()
         Try
-            If Cerrando OrElse String.IsNullOrEmpty(email) Then Return
+            If Cerrando OrElse String.IsNullOrEmpty(email) OrElse (scheduled AndAlso Config.SubscriptionChecksPaused) Then Return
             Dim available = If(scheduled, SubscriptionService.GetDueDriveSubscriptions(email, Date.Now),
                                SubscriptionService.GetDriveSubscriptions(email))
             Dim subscriptions = available.Where(Function(item) Not folder.HasValue OrElse item.Folder = folder.Value).ToArray()
