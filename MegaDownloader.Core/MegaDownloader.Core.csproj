@@ -49,6 +49,7 @@
   -->
   <ItemGroup>
     <InternalsVisibleTo Include="MegaDownloader" />
+    <InternalsVisibleTo Include="CoreTests" />
   </ItemGroup>
 
   <!--

@@ -1,0 +1,173 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+             x:Class="MegaDownloader.UI.Views.CloudDrivePageView"
+             x:DataType="vm:CloudDrivePageViewModel">
+    <UserControl.Styles>
+        <Style Selector="ListBox.files ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Classes="reveal" Margin="20,18,20,14" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+        <!-- Account and source -->
+        <Grid ColumnDefinitions="Auto,240,Auto,200,Auto,*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="h1" Text="{DynamicResource Loc.MegaCloudDrive}" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}"
+                      MinWidth="220" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc.MegaAccounts}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CloudDriveAccountChoice">
+                        <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Location}" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="3" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
+                      VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc.Location}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CloudDriveSourceChoice">
+                        <TextBlock Text="{Binding Caption}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="6" Classes="quiet icon" Command="{Binding RefreshCommand}" ToolTip.Tip="{DynamicResource Loc.Refresh}"
+                    AutomationProperties.Name="{DynamicResource Loc.Refresh}" Width="30" Height="30">
+                <TextBlock Text="{Binding RefreshGlyph}" FontSize="16"/>
+            </Button>
+        </Grid>
+
+        <!-- Breadcrumbs and folder actions -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+            <Button Classes="quiet toolbar" Content="↑" Command="{Binding UpCommand}" IsEnabled="{Binding CanUp}"
+                    ToolTip.Tip="{DynamicResource Loc.UpOneFolder}" AutomationProperties.Name="{DynamicResource Loc.UpOneFolder}"/>
+            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Breadcrumbs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CloudCrumbViewModel">
+                            <Button Classes="quiet toolbar" Content="{Binding Caption}" Command="{Binding GoCommand}" FontSize="12"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <Button Grid.Column="2" Classes="quiet toolbar" Content="{DynamicResource Loc.Favorites}" IsEnabled="{Binding HasSnapshot}">
+                <Button.Flyout>
+                    <Flyout Placement="BottomEdgeAlignedLeft">
+                        <ItemsControl ItemsSource="{Binding Favorites}" MinWidth="220">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CloudFavoriteViewModel">
+                                    <Button Classes="quiet toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                            Content="{Binding Caption}" Command="{Binding GoCommand}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+            <Button Grid.Column="3" Classes="quiet toolbar" Content="{DynamicResource Loc.ToggleFavorite}" Command="{Binding ToggleFavoriteCommand}"
+                    IsEnabled="{Binding CanFavorite}" ToolTip.Tip="{DynamicResource Loc.ToggleFavorite}"/>
+            <Button Grid.Column="4" Classes="quiet toolbar" Content="{DynamicResource Loc.BindFolder}" Command="{Binding BindFolderCommand}"
+                    IsEnabled="{Binding HasSnapshot}" ToolTip.Tip="{DynamicResource Loc.BindFolderHint}"/>
+            <Button Grid.Column="5" Classes="quiet toolbar" Content="{DynamicResource Loc.UnbindFolder}" Command="{Binding UnbindFolderCommand}"
+                    IsVisible="{Binding IsBound}"/>
+            <Button Grid.Column="6" Classes="quiet toolbar" Content="{DynamicResource Loc.CheckNewFiles}" Command="{Binding CheckNewCommand}"
+                    IsEnabled="{Binding CanCheckNew}"/>
+            <Button Grid.Column="7" Classes="quiet toolbar" Content="{Binding ViewSelectedText}" Command="{Binding ToggleViewSelectedCommand}"
+                    IsEnabled="{Binding HasSnapshot}"/>
+        </Grid>
+
+        <!-- Search, scope, type -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,160,140,Auto,Auto" ColumnSpacing="8">
+            <TextBox Text="{Binding SearchText}" PlaceholderText="{DynamicResource Loc.SearchFiles}"
+                     AutomationProperties.Name="{DynamicResource Loc.SearchFiles}" IsEnabled="{Binding HasSnapshot}"/>
+            <CheckBox Grid.Column="1" Content="{DynamicResource Loc.WholeDrive}" IsChecked="{Binding WholeDrive}"
+                      IsEnabled="{Binding HasSnapshot}" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="2" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}"
+                      IsEnabled="{Binding HasSnapshot}" AutomationProperties.Name="{DynamicResource Loc.FileType}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CloudDriveTypeChoice">
+                        <TextBlock Text="{Binding Caption}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2">
+                <Button Classes="quiet toolbar" Content="{DynamicResource Loc.SelectAll}" Command="{Binding SelectAllVisibleCommand}"
+                        IsEnabled="{Binding HasSnapshot}"/>
+                <Button Classes="quiet toolbar" Content="{DynamicResource Loc.Clear}" Command="{Binding ClearSelectionCommand}"
+                        IsEnabled="{Binding HasSnapshot}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- File list -->
+        <Border Grid.Row="3" Classes="card" Padding="0" ClipToBounds="True" IsVisible="{Binding HasSnapshot}">
+            <Grid RowDefinitions="Auto,*">
+                <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="34,2.2*,100,150,1.5*,Auto" ColumnSpacing="10" Margin="10,6">
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.Name}"/>
+                        <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Size}" TextAlignment="Right"/>
+                        <Button Grid.Column="3" Classes="quiet toolbar" Command="{Binding SortByTimeCommand}" Padding="0" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="caption" Text="{DynamicResource Loc.Modified}"/>
+                                <TextBlock Classes="caption" Text="{Binding SortTimeGlyph}"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Grid.Column="4" Classes="caption" Text="{DynamicResource Loc.Location}"
+                                   IsVisible="{Binding LocationVisible}"/>
+                    </Grid>
+                </Border>
+                <ListBox Grid.Row="1" Classes="files" ItemsSource="{Binding Rows}" Background="Transparent"
+                         BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         DoubleTapped="RowDoubleTapped" AutomationProperties.Name="{DynamicResource Loc.MegaCloudDrive}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CloudDriveRowViewModel">
+                            <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" MinHeight="36" Padding="12,6" DoubleTapped="RowDoubleTapped">
+                                <Grid ColumnDefinitions="34,2.2*,100,150,1.5*,Auto" ColumnSpacing="10">
+                                    <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center"
+                                              AutomationProperties.Name="{Binding Name}"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding FolderMark}" Foreground="{DynamicResource Md.Link}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding Name}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="caption" Text="{Binding SizeText}" TextAlignment="Right"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Classes="caption" Text="{Binding ModifiedText}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="4" Classes="quiet toolbar" Content="{Binding Location}" Command="{Binding GoToFolderCommand}"
+                                            HorizontalAlignment="Left" FontSize="11" ToolTip.Tip="{Binding Location}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="3" Classes="muted" Text="{Binding Status}" TextWrapping="Wrap" MaxWidth="560"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasSnapshot}"/>
+
+        <!-- Footer -->
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+            <StackPanel VerticalAlignment="Center" Spacing="1">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="caption" Text="{DynamicResource Loc.MegaDriveSavePath}" />
+                    <TextBlock Classes="caption" Text="{Binding DownloadDestination}" TextTrimming="CharacterEllipsis"
+                               MaxWidth="420" ToolTip.Tip="{Binding DownloadDestination}" />
+                </StackPanel>
+                <TextBlock Classes="caption" Text="{Binding Status}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SelectionText}" VerticalAlignment="Center"/>
+            <Button Grid.Column="2" Content="{DynamicResource Loc.Clear}" Command="{Binding ClearSelectionCommand}"
+                    IsEnabled="{Binding HasSnapshot}"/>
+            <Button Grid.Column="3" Classes="accent" Content="{Binding AddButtonText}" Command="{Binding DownloadCommand}"
+                    IsEnabled="{Binding CanDownload}"/>
+        </Grid>
+    </Grid>
+</UserControl>

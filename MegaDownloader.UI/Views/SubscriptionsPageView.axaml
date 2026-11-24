@@ -1,0 +1,244 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+             x:Class="MegaDownloader.UI.Views.SubscriptionsPageView"
+             x:DataType="vm:SubscriptionsPageViewModel">
+    <UserControl.Styles>
+        <Style Selector="ListBox.rows ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!-- The Fluent highlight would otherwise paint over the row's own background
+             and wash out the status colours. -->
+        <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Md.Selection}" />
+        </Style>
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Classes="reveal" Margin="20,18,20,14" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+
+        <!-- Source switch -->
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="h1" Text="{DynamicResource Loc.CloudSubscriptions}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Button Classes="quiet toolbar" Classes.active="{Binding ShowAccountFolders}"
+                        Content="{DynamicResource Loc.MegaAccounts}" Command="{Binding ShowAccountModeCommand}" />
+                <Button Classes="quiet toolbar" Classes.active="{Binding ShowPublicFolders}"
+                        Content="{DynamicResource Loc.PublicFolderLinks}" Command="{Binding ShowPublicModeCommand}" />
+            </StackPanel>
+            <Button Grid.Column="3" Classes="quiet icon" Command="{Binding RefreshCommand}"
+                    ToolTip.Tip="{DynamicResource Loc.Refresh}"
+                    AutomationProperties.Name="{DynamicResource Loc.Refresh}" Width="30" Height="30">
+                <TextBlock Text="⟳" FontSize="16" />
+            </Button>
+        </Grid>
+
+        <!-- Account-bound folders -->
+        <Grid Grid.Row="1" Grid.RowSpan="2" RowDefinitions="Auto,Auto,2*,3*,Auto" RowSpacing="8"
+              IsVisible="{Binding ShowAccountFolders}">
+            <Grid ColumnDefinitions="Auto,260,*" ColumnSpacing="8">
+                <TextBlock Text="{DynamicResource Loc.MegaAccounts}" Classes="settingLabel" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}"
+                          MinWidth="240" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Loc.MegaAccounts}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SubscriptionAccountChoice">
+                            <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="6">
+                <Button Grid.Column="0" Classes="quiet toolbar" Content="{DynamicResource Loc.EditSettings}"
+                        Command="{Binding EditSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="1" Classes="quiet toolbar" Content="{DynamicResource Loc.CheckSelectedFolder}"
+                        Command="{Binding CheckSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="2" Classes="quiet toolbar" Content="{DynamicResource Loc.CheckAllFolders}"
+                        Command="{Binding CheckAllCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="3" Classes="quiet toolbar" Content="{DynamicResource Loc.PauseOrResume}"
+                        Command="{Binding TogglePauseSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <TextBlock Grid.Column="4" Classes="caption" Text="{Binding Status}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
+            </Grid>
+
+            <Border Grid.Row="2" Classes="card" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="1.6*,1.7*,130,130,1.2*" ColumnSpacing="10" Margin="10,6">
+                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Name}" />
+                            <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.MegaDriveSavePath}" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.LastCheck}" />
+                            <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.NextCheck}" />
+                            <TextBlock Grid.Column="4" Classes="caption" Text="{DynamicResource Loc.Status}" />
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="1" Classes="rows" ItemsSource="{Binding Subscriptions}"
+                             SelectedItem="{Binding SelectedSubscription}" Background="Transparent" BorderThickness="0"
+                             Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SubscriptionRowViewModel">
+                                <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="10,6">
+                                    <Grid ColumnDefinitions="1.6*,1.7*,130,130,1.2*" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Destination}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Classes="caption" Text="{Binding LastCheckText}" />
+                                        <TextBlock Grid.Column="3" Classes="caption" Text="{Binding NextCheckText}" />
+                                        <TextBlock Grid.Column="4" Classes="caption" Text="{Binding StatusText}"
+                                                   Classes.error="{Binding HasError}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+
+            <Border Grid.Row="3" Classes="card" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="34,1.2*,2*,100,120,130" ColumnSpacing="10" Margin="10,6">
+                            <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.BoundFolder}" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Path}" />
+                            <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.Size}" TextAlignment="Right" />
+                            <TextBlock Grid.Column="4" Classes="caption" Text="{DynamicResource Loc.Change}" />
+                            <TextBlock Grid.Column="5" Classes="caption" Text="{DynamicResource Loc.Status}" />
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="1" Classes="rows" ItemsSource="{Binding Reports}" Background="Transparent"
+                             BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SubscriptionReportRowViewModel">
+                                <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="10,5">
+                                    <Grid ColumnDefinitions="34,1.2*,2*,100,120,130" ColumnSpacing="10">
+                                        <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsCheckable}"
+                                                  VerticalAlignment="Center" AutomationProperties.Name="{Binding Name}" />
+                                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding FolderName}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{Binding PathText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PathText}" />
+                                        <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SizeText}" TextAlignment="Right" />
+                                        <TextBlock Grid.Column="4" Classes="caption" Text="{Binding ChangeText}" />
+                                        <TextBlock Grid.Column="5" Classes="caption" Text="{Binding StatusText}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="caption" Text="{Binding Status}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Classes="quiet toolbar" Content="{DynamicResource Loc.Clear}"
+                        Command="{Binding ClearSelectionCommand}" />
+                <Button Grid.Column="2" Classes="accent" Content="{Binding AddButtonText}"
+                        Command="{Binding AddSelectedCommand}" IsEnabled="{Binding CanAdd}" />
+            </Grid>
+        </Grid>
+
+        <!-- Anonymous public folder links -->
+        <Grid Grid.Row="1" Grid.RowSpan="2" DataContext="{Binding PublicFolders}"
+              x:DataType="vm:PublicFoldersViewModel" RowDefinitions="Auto,Auto,2*,3*,Auto" RowSpacing="8"
+              IsVisible="{Binding $parent[UserControl].((vm:SubscriptionsPageViewModel)DataContext).ShowPublicFolders}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding LinkText}" PlaceholderText="{DynamicResource Loc.PublicFolderLinkPlaceholder}"
+                         AutomationProperties.Name="{DynamicResource Loc.PublicFolderLinks}" />
+                <Button Grid.Column="1" Classes="accent" Content="{DynamicResource Loc.SubscribeToFolder}"
+                        Command="{Binding SubscribeCommand}" IsEnabled="{Binding CanSubscribe}" />
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="6">
+                <Button Grid.Column="0" Classes="quiet toolbar" Content="{DynamicResource Loc.EditSettings}"
+                        Command="{Binding EditSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="1" Classes="quiet toolbar" Content="{DynamicResource Loc.CheckSelectedFolder}"
+                        Command="{Binding CheckSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="2" Classes="quiet toolbar" Content="{DynamicResource Loc.CheckAllFolders}"
+                        Command="{Binding CheckAllCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="3" Classes="quiet toolbar" Content="{DynamicResource Loc.PauseOrResume}"
+                        Command="{Binding TogglePauseSelectedCommand}" IsEnabled="{Binding HasSubscriptions}" />
+                <Button Grid.Column="4" Classes="quiet toolbar" HorizontalAlignment="Left"
+                        Content="{DynamicResource Loc.Remove}" Command="{Binding RemoveSelectedCommand}"
+                        IsEnabled="{Binding HasSubscriptions}" />
+            </Grid>
+
+            <Border Grid.Row="2" Classes="card" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="1.6*,1.7*,90,130,130,1.2*" ColumnSpacing="10" Margin="10,6">
+                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Name}" />
+                            <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.MegaDriveSavePath}" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Files}" TextAlignment="Right" />
+                            <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.LastCheck}" />
+                            <TextBlock Grid.Column="4" Classes="caption" Text="{DynamicResource Loc.NextCheck}" />
+                            <TextBlock Grid.Column="5" Classes="caption" Text="{DynamicResource Loc.Status}" />
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="1" Classes="rows" ItemsSource="{Binding Subscriptions}"
+                             SelectedItem="{Binding SelectedSubscription}" Background="Transparent" BorderThickness="0"
+                             Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PublicFolderRowViewModel">
+                                <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="10,6">
+                                    <Grid ColumnDefinitions="1.6*,1.7*,90,130,130,1.2*" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Link}" />
+                                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Destination}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Classes="caption" Text="{Binding FileCount}" TextAlignment="Right" />
+                                        <TextBlock Grid.Column="3" Classes="caption" Text="{Binding LastCheckText}" />
+                                        <TextBlock Grid.Column="4" Classes="caption" Text="{Binding NextCheckText}" />
+                                        <TextBlock Grid.Column="5" Classes="caption" Text="{Binding StatusText}"
+                                                   Classes.error="{Binding HasError}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+
+            <Border Grid.Row="3" Classes="card" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="34,1.2*,2*,100,120,130" ColumnSpacing="10" Margin="10,6">
+                            <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.BoundFolder}" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Path}" />
+                            <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.Size}" TextAlignment="Right" />
+                            <TextBlock Grid.Column="4" Classes="caption" Text="{DynamicResource Loc.Change}" />
+                            <TextBlock Grid.Column="5" Classes="caption" Text="{DynamicResource Loc.Status}" />
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="1" Classes="rows" ItemsSource="{Binding Reports}" Background="Transparent"
+                             BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PublicFolderFileRowViewModel">
+                                <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="10,5">
+                                    <Grid ColumnDefinitions="34,1.2*,2*,100,120,130" ColumnSpacing="10">
+                                        <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsCheckable}"
+                                                  VerticalAlignment="Center" AutomationProperties.Name="{Binding Name}" />
+                                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding FolderName}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{Binding PathText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PathText}" />
+                                        <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SizeText}" TextAlignment="Right" />
+                                        <TextBlock Grid.Column="4" Classes="caption" Text="{Binding ChangeText}" />
+                                        <TextBlock Grid.Column="5" Classes="caption" Text="{Binding StatusText}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="caption" Text="{Binding Status}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Classes="quiet toolbar" Content="{DynamicResource Loc.Clear}"
+                        Command="{Binding ClearSelectionCommand}" />
+                <Button Grid.Column="2" Classes="accent" Content="{Binding AddButtonText}"
+                        Command="{Binding AddSelectedCommand}" IsEnabled="{Binding CanAdd}" />
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

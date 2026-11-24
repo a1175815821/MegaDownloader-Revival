@@ -3,6 +3,7 @@ using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MegaDownloader.UI.Services;
+using MegaDownloader.UI.ViewModels.Pages;
 
 namespace MegaDownloader.UI.ViewModels;
 
@@ -12,6 +13,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
     private readonly DownloadsPageViewModel _downloads;
+    private readonly MegaAccountService _accounts;
 
     [ObservableProperty]
     private NavigationItemViewModel? selectedNavigationItem;
@@ -25,6 +27,13 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string themeLabel = string.Empty;
 
+    [ObservableProperty]
+    private string accountStatus = string.Empty;
+
+    public bool HasAccountStatus => !string.IsNullOrEmpty(AccountStatus);
+
+    partial void OnAccountStatusChanged(string value) => OnPropertyChanged(nameof(HasAccountStatus));
+
     public MainWindowViewModel(
         INavigationService navigation,
         IThemeService theme,
@@ -33,12 +42,19 @@ public partial class MainWindowViewModel : ViewModelBase
         ActivationService activation,
         DownloadsPageViewModel downloadsPage,
         SettingsPageViewModel settingsPage,
-        StreamingPageViewModel streamingPage)
+        StreamingPageViewModel streamingPage,
+        CloudDrivePageViewModel cloudDrivePage,
+        SubscriptionsPageViewModel subscriptionsPage,
+        AccountPageViewModel accountPage,
+        MegaAccountService accounts)
     {
         _navigation = navigation;
         _theme = theme;
         _dialogs = dialogs;
         _downloads = downloadsPage;
+        _accounts = accounts;
+        _accounts.Changed += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(UpdateAccountStatus);
+        UpdateAccountStatus();
 
         // Clipboard monitoring is opt-in through the configuration; the monitor itself
         // checks the setting on every tick, so toggling it needs no restart. Links it
@@ -57,21 +73,28 @@ public partial class MainWindowViewModel : ViewModelBase
         NavigationItems =
         [
             new("Downloads", GetIcon("Downloads"), downloadsPage),
+            new("Cloud drive", GetIcon("Folder"), cloudDrivePage),
+            new("Subscriptions", GetIcon("Library"), subscriptionsPage),
             new("Streaming library", GetIcon("Library"), streamingPage),
-            new("Settings", GetIcon("Settings"), settingsPage)
+            new("Settings", GetIcon("Settings"), settingsPage),
+            new("MEGA account", GetIcon("Key"), accountPage)
         ];
         UiText.Changed += (_, _) =>
         {
             foreach (var item in NavigationItems)
                 item.ApplyLanguage();
+            accountPage.ApplyLanguage();
+            cloudDrivePage.ApplyLanguage();
+            subscriptionsPage.ApplyLanguage();
             UpdateThemeLabel();
+            UpdateAccountStatus();
             StatusText = UiText.Get("Ready");
         };
 
         _navigation.CurrentPageChanged += (_, _) => CurrentPage = _navigation.CurrentPage;
 
         SelectedNavigationItem = NavigationItems[0];
-        CurrentPage = _navigation.CurrentPage;
+        CurrentPage = _navigation.CurrentPage ?? downloadsPage;
         UpdateThemeLabel();
     }
 
@@ -129,5 +152,13 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         ThemeLabel = UiText.Format("Theme: {0}", UiText.Get(_theme.Mode.ToString()));
         OnPropertyChanged(nameof(ThemeIcon));
+    }
+
+    private void UpdateAccountStatus()
+    {
+        MegaAccountService.Status status = _accounts.GetStatus();
+        AccountStatus = string.IsNullOrEmpty(status.Email)
+            ? string.Empty
+            : "MEGA: " + MegaAccountText.DisplayName(status) + " · " + MegaAccountText.Summary(status);
     }
 }

@@ -47,6 +47,10 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     private int queuedCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WaitingText))]
+    private int pausedCount;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFailed))]
     private int failedCount;
 
@@ -54,6 +58,32 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private int completedCount;
+
+    [ObservableProperty]
+    private string waitingText = string.Empty;
+
+    [ObservableProperty]
+    private bool showMetrics = true;
+
+    [ObservableProperty]
+    private string detailSpeed = string.Empty;
+
+    [ObservableProperty]
+    private string detailProgress = string.Empty;
+
+    [ObservableProperty]
+    private string detailIdentity = string.Empty;
+
+    [ObservableProperty]
+    private string detailSource = string.Empty;
+
+    [ObservableProperty]
+    private string detailDownloaded = string.Empty;
+
+    [ObservableProperty]
+    private string detailEta = string.Empty;
+
+    public bool HasSelectedDownload => SelectedDownload is not null;
 
     [ObservableProperty]
     private bool hasFiles;
@@ -105,7 +135,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DetailsToggleText))]
-    private bool showDetails = true;
+    private bool showDetails = false;
 
     public string DetailsToggleText => UiText.Get(ShowDetails ? "Collapse details" : "Show details");
 
@@ -133,9 +163,8 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     public IReadOnlyList<QueueFilterOption> Filters { get; } =
     [
         new(QueueFilter.All, "All statuses"),
-        new(QueueFilter.Active, "Active"),
-        new(QueueFilter.Queued, "Queued"),
-        new(QueueFilter.Paused, "Paused"),
+        new(QueueFilter.Active, "Downloading"),
+        new(QueueFilter.Waiting, "Waiting"),
         new(QueueFilter.Completed, "Completed"),
         new(QueueFilter.Failed, "Failed")
     ];
@@ -176,6 +205,33 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     /// <summary>Called by the view after the list selection changed.</summary>
     public void UpdateBatchSelection() => SelectionCount = SelectedDownloads.Count;
+
+    /// <summary>Drops the low-frequency speed column and the detail panel on narrow windows.</summary>
+    public void SetCompact(bool compact)
+    {
+        ShowMetrics = !compact;
+        if (compact)
+            ShowDetails = false;
+        foreach (var row in _rowCache.Values)
+            row.ShowMetrics = ShowMetrics;
+    }
+
+    /// <summary>
+    /// The category rail costs 190 DIP of width. Below that point the queue itself needs
+    /// the room more than the rail does, so it folds away and the status chips on each
+    /// row keep carrying the same information.
+    /// </summary>
+    [ObservableProperty]
+    private bool showRail = true;
+
+    /// <summary>Applies every width-dependent decision from one measurement.</summary>
+    public void SetAvailableWidth(double width)
+    {
+        if (width <= 0)
+            return;
+        SetCompact(width < 980);
+        ShowRail = width >= 880;
+    }
 
     private async Task LoadAsync()
     {
@@ -250,7 +306,14 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void ResetFilter() => SelectedFilter = Filters[0];
+    private void ResetFilter()
+    {
+        SearchText = string.Empty;
+        _appliedSearch = string.Empty;
+        HasSearch = false;
+        SelectedFilter = Filters[0];
+        Refresh(forceRebuild: true);
+    }
 
     [RelayCommand]
     private void ClearSearch()
@@ -510,6 +573,54 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Set by the view: pick a download identity for the selected rows.</summary>
+    public Func<string, Task<IdentityPickResult?>>? PickIdentityAsync { get; set; }
+
+    internal async Task ChangeIdentityAsync(DownloadItemViewModel row)
+    {
+        if (PickIdentityAsync is null)
+            return;
+        var targets = SelectedDownloads.Contains(row) ? SelectedDownloads.ToList() : new List<DownloadItemViewModel> { row };
+        var files = new List<Fichero>();
+        var seen = new HashSet<Fichero>(ReferenceEqualityComparer.Instance);
+        foreach (DownloadItemViewModel target in targets)
+        {
+            IEnumerable<Fichero> items = target.Item switch
+            {
+                Fichero file => new[] { file },
+                Paquete package => package.SnapshotFicheros(),
+                _ => Array.Empty<Fichero>()
+            };
+            foreach (Fichero file in items)
+            {
+                if (seen.Add(file))
+                    files.Add(file);
+            }
+        }
+        files.RemoveAll(file => file.DescargaEstado() == Estado.Completado);
+        if (files.Count == 0)
+            return;
+        string current = files[0].EffectiveMegaAccountEmail;
+        IdentityPickResult? picked = await PickIdentityAsync(current);
+        if (picked is null || !picked.Confirmed)
+            return;
+        string problem = _engine.ChangeDownloadIdentity(files, picked.Email);
+        if (problem.Length > 0)
+        {
+            string text = problem switch
+            {
+                "MegaDrive_AccountBound" => UiText.Get("Private cloud tasks keep their original MEGA account."),
+                "MegaAccount_QueueAccountInUse" => UiText.Get("Stop the selected downloads before changing their identity."),
+                "MegaAccount_QueueOnlyFiles" => UiText.Get("MEGA accounts can only be assigned to public single-file tasks."),
+                _ => MegaAccountText.ErrorText(-1003)
+            };
+            await _dialogs.ShowMessageAsync(UiText.Get("Download identity"), text);
+            return;
+        }
+        SetFeedback(UiText.Get("Download identity changed."));
+        Refresh(forceRebuild: true);
+    }
+
     internal async Task ShowPropertiesAsync(object item)
     {
         if (await _dialogs.ShowPropertiesAsync(item))
@@ -633,7 +744,11 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 
     partial void OnSelectedFilterChanged(QueueFilterOption? value) => Refresh(forceRebuild: true);
 
-    partial void OnSelectedDownloadChanged(DownloadItemViewModel? value) => UpdateDetails(value);
+    partial void OnSelectedDownloadChanged(DownloadItemViewModel? value)
+    {
+        UpdateDetails(value);
+        OnPropertyChanged(nameof(HasSelectedDownload));
+    }
 
     partial void OnSelectionCountChanged(int value) => OnPropertyChanged(nameof(CanBatch));
 
@@ -645,6 +760,12 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             DetailState = string.Empty;
             DetailPath = string.Empty;
             DetailSize = string.Empty;
+            DetailSpeed = string.Empty;
+            DetailProgress = string.Empty;
+            DetailIdentity = string.Empty;
+            DetailSource = string.Empty;
+            DetailDownloaded = string.Empty;
+            DetailEta = string.Empty;
             DetailError = string.Empty;
             HasDetailError = false;
             return;
@@ -653,16 +774,31 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         DetailTitle = row.Title;
         DetailState = row.StateText;
         DetailSize = row.SizeText;
+        DetailSpeed = row.SpeedText;
+        DetailProgress = row.ProgressText;
+        DetailIdentity = row.IdentityText;
+        DetailSource = string.Empty;
+        DetailDownloaded = string.Empty;
+        DetailEta = string.Empty;
         switch (row.Item)
         {
             case Fichero file:
                 DetailPath = file.RutaLocal is null
                     ? string.Empty
                     : Path.Combine(file.RutaLocal, file.NombreFichero ?? string.Empty);
+                DetailSource = file.LinkVisible && !string.IsNullOrWhiteSpace(file.URL)
+                    ? file.URL
+                    : UiText.Get("Private MEGA file");
+                DetailDownloaded = FormatBytes((long)(file.TamanoBytes * (double)file.DescargaPorcentaje() / 100d)) +
+                    " / " + FormatBytes(file.TamanoBytes);
+                DetailEta = file.DescargaTiempoEstimadoDescarga();
                 DetailError = file.DescripcionError ?? string.Empty;
                 break;
             case Paquete package:
                 DetailPath = package.RutaLocal ?? string.Empty;
+                DetailSource = UiText.Get("Package");
+                DetailDownloaded = FormatBytes(package.DescargaTamanoBytes()) + " · " +
+                    ((double)package.DescargaPorcentaje()).ToString("0.0", UiText.Culture) + "%";
                 DetailError = string.Empty;
                 break;
         }
@@ -732,8 +868,12 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             CanStopAll = _engine.IsLoaded && _engine.State != DownloadEngineState.Stopped;
             ActiveCount = engineSummary.Active;
             QueuedCount = engineSummary.Queued;
+            PausedCount = engineSummary.Paused;
             CompletedCount = engineSummary.Completed;
             FailedCount = engineSummary.Failed;
+            WaitingText = BuildWaitingText(engineSummary);
+            UpdateFilterCounts(engineSummary.Active, engineSummary.Queued, engineSummary.Paused,
+                engineSummary.Completed, engineSummary.Failed);
             TransferSpeed = FormatSpeed(engineSummary.SpeedKBs);
             if (sampleSpeed)
             {
@@ -765,6 +905,38 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         finally
         {
             _loading = false;
+        }
+    }
+
+    private string BuildWaitingText(QueueSummary summary)
+    {
+        if (MegaQuotaManager.IsQuarantined() && MegaQuotaManager.GetRemaining() is TimeSpan remaining)
+            return UiText.Format("MEGA quota cooldown · {0}", FormatDuration(remaining));
+        if (_engine.State == DownloadEngineState.Paused && !_engine.ScheduleAllowsDownloadsNow)
+            return UiText.Get("Paused by the download schedule");
+        int waiting = summary.Queued + summary.Paused;
+        return waiting > 0
+            ? UiText.Format("{0} waiting", waiting)
+            : UiText.Get("No waiting tasks");
+    }
+
+    private static string FormatDuration(TimeSpan span) =>
+        span.TotalHours >= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"{(int)span.TotalHours}h {span.Minutes}m")
+            : string.Create(CultureInfo.InvariantCulture, $"{Math.Max(1, (int)Math.Ceiling(span.TotalMinutes))} min");
+
+    private void UpdateFilterCounts(int active, int queued, int paused, int completed, int failed)
+    {
+        foreach (var filter in Filters)
+        {
+            filter.Count = filter.Value switch
+            {
+                QueueFilter.Active => active,
+                QueueFilter.Waiting => queued + paused,
+                QueueFilter.Completed => completed,
+                QueueFilter.Failed => failed,
+                _ => active + queued + paused + completed + failed
+            };
         }
     }
 
@@ -857,8 +1029,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
     {
         QueueFilter.Active => state is Estado.Descargando or Estado.CreandoLocal or Estado.Verificando
             or Estado.ComprobandoMD5 or Estado.Descomprimiendo or Estado.EsperandoVolumenes,
-        QueueFilter.Queued => state == Estado.EnCola,
-        QueueFilter.Paused => state == Estado.Pausado,
+        QueueFilter.Waiting => state is Estado.EnCola or Estado.Pausado,
         QueueFilter.Completed => state == Estado.Completado,
         QueueFilter.Failed => state == Estado.Erroneo,
         _ => true
@@ -869,7 +1040,7 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         if (_rowCache.TryGetValue(item, out var row))
             return row;
 
-        row = new DownloadItemViewModel(this, item, isPackage);
+        row = new DownloadItemViewModel(this, item, isPackage) { ShowMetrics = ShowMetrics };
         _rowCache[item] = row;
         return row;
     }
@@ -915,11 +1086,25 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         row.SizeText = FormatBytes(package.DescargaTamanoBytes());
         row.SpeedText = package.DescargaVelocidadKBs() > 0 ? FormatSpeed(package.DescargaVelocidadKBs()) : string.Empty;
         row.DetailText = UiText.Format("{0} files · {1}", files.Count, row.SizeText);
+        string[] identities = files.Select(file => file.EffectiveMegaAccountEmail)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        row.HasIdentity = identities.Any(identity => identity.Length > 0);
+        row.IdentityText = identities.Length == 1
+            ? MegaAccountText.IdentityCaption(identities[0])
+            : UiText.Get("Mixed");
         row.CanStart = package.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = package.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
         row.CanRetry = package.DescargaEstado() == Estado.Erroneo && files.Any(file => !file.EsErrorPermanente);
-        row.IsCompleted = package.DescargaEstado() == Estado.Completado;
-        row.IsFailed = package.DescargaEstado() == Estado.Erroneo;
+        ApplyRowState(row, package.DescargaEstado());
+    }
+
+    private static void ApplyRowState(DownloadItemViewModel row, Estado state)
+    {
+        row.IsActive = state is Estado.Descargando or Estado.CreandoLocal or Estado.Verificando
+            or Estado.ComprobandoMD5 or Estado.Descomprimiendo or Estado.EsperandoVolumenes;
+        row.IsWaiting = state is Estado.EnCola or Estado.Pausado;
+        row.IsCompleted = state == Estado.Completado;
+        row.IsFailed = state == Estado.Erroneo;
     }
 
     private static string FileTitle(Fichero file)
@@ -944,12 +1129,13 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
         row.DetailText = string.IsNullOrWhiteSpace(eta)
             ? row.SizeText
             : UiText.Format("{0} · {1} remaining", row.SizeText, eta);
+        row.HasIdentity = file.UsesMegaAccount;
+        row.IdentityText = file.UsesMegaAccount ? MegaAccountText.IdentityCaption(file.EffectiveMegaAccountEmail) : string.Empty;
 
         row.CanStart = file.DescargaEstado() is Estado.EnCola or Estado.Pausado or Estado.Erroneo;
         row.CanPause = file.DescargaEstado() is Estado.Descargando or Estado.CreandoLocal;
         row.CanRetry = file.DescargaEstado() == Estado.Erroneo && !file.EsErrorPermanente;
-        row.IsCompleted = file.DescargaEstado() == Estado.Completado;
-        row.IsFailed = file.DescargaEstado() == Estado.Erroneo;
+        ApplyRowState(row, file.DescargaEstado());
     }
 
     /// <summary>
@@ -1070,6 +1256,18 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
 }
 
 /// <summary>One flat, virtualized row: a package header or one of its files.</summary>
+public sealed class IdentityPickResult
+{
+    public IdentityPickResult(string email, bool confirmed)
+    {
+        Email = email;
+        Confirmed = confirmed;
+    }
+
+    public string Email { get; }
+    public bool Confirmed { get; }
+}
+
 public partial class DownloadItemViewModel : ObservableObject
 {
     private readonly DownloadsPageViewModel _owner;
@@ -1100,6 +1298,12 @@ public partial class DownloadItemViewModel : ObservableObject
     private string detailText = string.Empty;
 
     [ObservableProperty]
+    private string identityText = string.Empty;
+
+    [ObservableProperty]
+    private bool hasIdentity;
+
+    [ObservableProperty]
     private string sizeText = string.Empty;
 
     [ObservableProperty]
@@ -1109,7 +1313,9 @@ public partial class DownloadItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ProgressText))]
     private double progress;
 
-    public string ProgressText => (Progress / 100).ToString("0.0%", UiText.Culture);
+    public string ProgressText => Progress <= 0 && !IsCompleted
+        ? "—"
+        : (Progress / 100).ToString("0.0%", UiText.Culture);
 
     internal void ApplyLanguage() => OnPropertyChanged(nameof(ProgressText));
 
@@ -1123,10 +1329,20 @@ public partial class DownloadItemViewModel : ObservableObject
     private bool canRetry;
 
     [ObservableProperty]
+    private bool isActive;
+
+    [ObservableProperty]
+    private bool isWaiting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private bool isCompleted;
 
     [ObservableProperty]
     private bool isFailed;
+
+    [ObservableProperty]
+    private bool showMetrics = true;
 
     [ObservableProperty]
     private bool hasChildren;
@@ -1167,6 +1383,9 @@ public partial class DownloadItemViewModel : ObservableObject
     private void MoveDown() => _owner.MoveItem(Item, QueueMove.Down);
 
     [RelayCommand]
+    private Task ChangeIdentityAsync() => _owner.ChangeIdentityAsync(this);
+
+    [RelayCommand]
     private void OpenFile() => _owner.OpenOutput(Item, openFolder: false);
 
     [RelayCommand]
@@ -1182,12 +1401,22 @@ public partial class DownloadItemViewModel : ObservableObject
     private Task DeleteAsync() => _owner.RemoveItemAsync(Item, deleteFiles: true);
 }
 
-public enum QueueFilter { All, Active, Queued, Paused, Completed, Failed }
+public enum QueueFilter { All, Active, Waiting, Completed, Failed }
 
-public sealed class QueueFilterOption(QueueFilter value, string label) : ObservableObject
+public sealed partial class QueueFilterOption(QueueFilter value, string label) : ObservableObject
 {
     public QueueFilter Value { get; } = value;
     public string Label => UiText.Get(label);
 
-    internal void ApplyLanguage() => OnPropertyChanged(nameof(Label));
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CountText))]
+    private int count;
+
+    public string CountText => Count > 0 ? Count.ToString(UiText.Culture) : string.Empty;
+
+    internal void ApplyLanguage()
+    {
+        OnPropertyChanged(nameof(Label));
+        OnPropertyChanged(nameof(CountText));
+    }
 }

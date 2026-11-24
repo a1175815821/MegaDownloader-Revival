@@ -31,4 +31,40 @@
     <EmbeddedResource Include="Localization/*.json" LogicalName="Desktop.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    MEGA account bridge. The Windows x64 library ships in the repository; macOS and
+    Linux builds are produced by .github/workflows/native-account.yml and can be
+    placed under prebuilt/<rid>/ before publishing.
+  -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == 'win-x64')">
+    <Content Include="../Native/MegaAccount/prebuilt/x64/*.dll"
+             Link="%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../Native/MegaAccount/prebuilt/x64/MEGA-SDK-LICENSE.txt"
+             Link="MEGA-SDK-LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-arm64' and Exists('../Native/MegaAccount/prebuilt/osx-arm64/libMegaAccountBridge.dylib')">
+    <Content Include="../Native/MegaAccount/prebuilt/osx-arm64/libMegaAccountBridge.dylib"
+             Link="libMegaAccountBridge.dylib"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../Native/MegaAccount/prebuilt/osx-arm64/MEGA-SDK-LICENSE.txt"
+             Link="MEGA-SDK-LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' and Exists('../Native/MegaAccount/prebuilt/linux-x64/libMegaAccountBridge.so')">
+    <Content Include="../Native/MegaAccount/prebuilt/linux-x64/libMegaAccountBridge.so"
+             Link="libMegaAccountBridge.so"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../Native/MegaAccount/prebuilt/linux-x64/MEGA-SDK-LICENSE.txt"
+             Link="MEGA-SDK-LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

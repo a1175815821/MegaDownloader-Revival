@@ -16,7 +16,10 @@ public sealed class ViewLocator : IDataTemplate
         if (data is null)
             return null;
 
-        var name = data.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
+        // Page view models live under ViewModels.Pages while their views stay in Views.
+        var name = data.GetType().FullName!
+            .Replace(".ViewModels.Pages.", ".Views.", StringComparison.Ordinal)
+            .Replace("ViewModel", "View", StringComparison.Ordinal);
         var type = Type.GetType(name);
 
         if (type is null)

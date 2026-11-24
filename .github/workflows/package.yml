@@ -1,0 +1,84 @@
+name: package
+
+# Builds the two installable packages from the same commit the regression suite runs
+# on. Signing and notarization stay manual: they need an Apple Developer ID and an
+# Apple account, and a signed artifact is what a release attaches, not a CI output.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version (for example 2.9.0)
+        required: true
+        default: "2.9.0"
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish
+        run: >
+          dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release
+          -r osx-arm64 --self-contained true -p:PublishSingleFile=true
+          -o dist/osx-arm64
+
+      - name: Build the app bundle
+        run: |
+          chmod +x packaging/macos/make-app.sh
+          ./packaging/macos/make-app.sh dist/osx-arm64 dist "${{ inputs.version }}"
+
+      - name: Zip the bundle
+        run: /usr/bin/ditto -c -k --keepParent dist/MegaDownloader.app "dist/MegaDownloader-${{ inputs.version }}-osx-arm64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MegaDownloader-${{ inputs.version }}-osx-arm64
+          path: dist/MegaDownloader-${{ inputs.version }}-osx-arm64.zip
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish
+        run: >
+          dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release
+          -r linux-x64 --self-contained true -p:PublishSingleFile=true
+          -o dist/linux-x64
+
+      - name: Build the .deb
+        run: |
+          chmod +x packaging/linux/make-deb.sh
+          ./packaging/linux/make-deb.sh dist/linux-x64 dist "${{ inputs.version }}" amd64
+
+      - name: Install and smoke-test the package
+        run: |
+          sudo apt-get install -y ./dist/megadownloader_${{ inputs.version }}_amd64.deb
+          test -x /usr/bin/megadownloader
+          test -f /usr/share/applications/MegaDownloader.desktop
+          grep -q 'x-scheme-handler/mega' /usr/share/applications/MegaDownloader.desktop
+          # A headless runner has no display, so start the installed binary under a
+          # virtual one: this proves the launcher, the library search path and the
+          # bundled runtime resolve from /usr/lib/megadownloader.
+          sudo apt-get install -y xvfb
+          profile=$(mktemp -d)
+          xvfb-run -a env MEGADOWNLOADER_DATA_DIR="$profile" timeout 25 /usr/bin/megadownloader &
+          pid=$!
+          sleep 15
+          if ! test -d "$profile/Config"; then
+            echo "The installed package did not create its profile" >&2
+            exit 1
+          fi
+          kill "$pid" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MegaDownloader-${{ inputs.version }}-linux-x64
+          path: dist/megadownloader_${{ inputs.version }}_amd64.deb

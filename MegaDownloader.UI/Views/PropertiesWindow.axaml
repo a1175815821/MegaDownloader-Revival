@@ -6,7 +6,7 @@
         Title="{DynamicResource Loc.PropertiesLabel}"
         Width="660" Height="640"
         MinWidth="560" MinHeight="560"
-        CanResize="True"
+        CanResize="True" Background="{DynamicResource Md.Canvas}"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
 
     <Window.Styles>
@@ -17,7 +17,7 @@
 
     <Grid RowDefinitions="Auto,*,Auto" Margin="26,18" RowSpacing="14" Classes="reveal">
 
-        <Border BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,0,0,1" Padding="0,0,0,12">
+        <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="0,0,0,12">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Header}" Classes="h1" TextTrimming="CharacterEllipsis" />
                 <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding Name}" />
@@ -54,7 +54,7 @@
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                             <TextBox Text="{Binding Path}"
                                      IsEnabled="{Binding CanEditPath}"
-                                     Watermark="{DynamicResource Loc.DownloadFolder}" />
+                                     PlaceholderText="{DynamicResource Loc.DownloadFolder}" />
                             <Button Grid.Column="1"
                                     Content="{DynamicResource Loc.Browse}"
                                     Command="{Binding BrowseCommand}"
@@ -74,7 +74,7 @@
                             <CheckBox Content="{DynamicResource Loc.LimitSpeedTo}" IsChecked="{Binding LimitSpeed}" />
                             <TextBox Text="{Binding SpeedLimitText}"
                                      IsEnabled="{Binding LimitSpeed}"
-                                     Watermark="{DynamicResource Loc.EG512KBSOr2MBS}"
+                                     PlaceholderText="{DynamicResource Loc.EG512KBSOr2MBS}"
                                      Width="220" />
                         </StackPanel>
 
@@ -82,7 +82,7 @@
                         <TextBox Text="{Binding Password}"
                                  IsEnabled="{Binding ExtractArchives}"
                                  PasswordChar="●"
-                                 Watermark="{DynamicResource Loc.ArchivePasswordOptional}" />
+                                 PlaceholderText="{DynamicResource Loc.ArchivePasswordOptional}" />
                     </StackPanel>
                 </Border>
 

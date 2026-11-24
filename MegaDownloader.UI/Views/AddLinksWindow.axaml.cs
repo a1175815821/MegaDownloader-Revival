@@ -20,6 +20,7 @@ public partial class AddLinksWindow : Window
         // Shift-click toggles a range of checkboxes, the same gesture the queue uses.
         // Tunnelling: the row checkbox must not also toggle itself on release.
         AddHandler(PointerPressedEvent, OnTreePointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnShortcutKeyDown, RoutingStrategies.Tunnel);
 
         // A container dropped while the window is open joins the next batch instead of
         // opening a second window.
@@ -47,6 +48,25 @@ public partial class AddLinksWindow : Window
     /// the next batch instead of a second window.</summary>
     public void ShowPendingBatch(int count) =>
         (DataContext as AddLinksViewModel)?.SetPendingBatch(count);
+
+    private void OnShortcutKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            return;
+        if (DataContext is not AddLinksViewModel model)
+            return;
+
+        if (model.IsStepTwo)
+        {
+            if (model.RecheckCommand.CanExecute(null))
+                model.RecheckCommand.Execute(null);
+        }
+        else if (model.CheckCommand.CanExecute(null))
+        {
+            model.CheckCommand.Execute(null);
+        }
+        e.Handled = true;
+    }
 
     private async void PasteLinks(object? sender, RoutedEventArgs e)
     {

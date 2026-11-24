@@ -6,12 +6,13 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Md.ButtonBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{DynamicResource Md.Fore}" />
-        <Setter Property="CornerRadius" Value="3" />
-        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="MinHeight" Value="36" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="Padding" Value="13,5" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Template">
             <ControlTemplate>
                 <Border Name="PART_Border"
@@ -51,6 +52,7 @@
 
         <Style Selector="^:focus-visible /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource Md.Accent}" />
+            <Setter Property="BorderThickness" Value="2" />
         </Style>
 
         <Style Selector="^:disabled /template/ Border#PART_Border">
@@ -69,6 +71,7 @@
 
         <Style Selector="^.accent /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource Md.AccentFore}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style Selector="^.accent:pointerover /template/ Border#PART_Border">
@@ -89,6 +92,18 @@
         <Style Selector="^.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource Md.ButtonDisabledFore}" />
         </Style>
+
+        <Style Selector="^.danger /template/ Border#PART_Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="^.danger /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="^.danger:pointerover /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.ErrorBack}" />
+        </Style>
+
         <Style Selector="^.rail /template/ Border#PART_Border">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -102,6 +117,7 @@
         <Style Selector="^.rail:focus-visible /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource Md.RailAccent}" />
         </Style>
+
         <Style Selector="^.quiet /template/ Border#PART_Border">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -114,6 +130,30 @@
         </Style>
         <Style Selector="^.quiet:focus-visible /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource Md.Accent}" />
+        </Style>
+
+        <!-- A quiet button that stays selected: used for mode switches such as
+             account folders vs public folder links. -->
+        <Style Selector="^.active /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.Selection}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Md.Accent}" />
+        </Style>
+        <Style Selector="^.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource Md.Accent}" />
+        </Style>
+        <Style Selector="^.active:pointerover /template/ Border#PART_Border">
+            <Setter Property="Background" Value="{DynamicResource Md.Selection}" />
+        </Style>
+
+        <Style Selector="^.toolbar">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="^.toolbar.icon">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
         </Style>
     </ControlTheme>
 </ResourceDictionary>

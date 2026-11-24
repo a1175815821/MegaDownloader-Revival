@@ -22,4 +22,6 @@
     <StreamGeometry x:Key="Icon.Chevron">M8,4 L16,12 8,20 6.5,18.5 13,12 6.5,5.5 Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Arrow">M3,11 H17 L11,5 12.5,3.5 21,12 12.5,20.5 11,19 17,13 H3 Z</StreamGeometry>
     <StreamGeometry x:Key="Icon.Search">M10,2 A8,8 0 1 0 15,16 L21,22 22.5,20.5 16.5,14.5 A8,8 0 0 0 10,2 Z M10,4 A6,6 0 1 1 10,16 A6,6 0 0 1 10,4 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Error">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M11,6 H13 V14 H11 Z M11,16 H13 V18 H11 Z</StreamGeometry>
+    <StreamGeometry x:Key="Icon.Info">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M11,10 H13 V18 H11 Z M11,6 H13 V8 H11 Z</StreamGeometry>
 </ResourceDictionary>

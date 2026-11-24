@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using MegaDownloader.Platform;
 using MegaDownloader.UI.Services;
 using MegaDownloader.UI.ViewModels;
+using MegaDownloader.UI.ViewModels.Pages;
 using MegaDownloader.UI.Views;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -71,6 +72,12 @@ public partial class App : Application
             Criptografia.SetSecretProtector(
                 PlatformServicesFactory.CreateSecretProtector(Services.GetRequiredService<IPlatformServices>()));
 
+            // Remembered MEGA sessions restore in the background; the queue does not wait
+            // for the account connections.
+            _ = Services.GetRequiredService<MegaAccountService>().RestoreAsync();
+            Services.GetRequiredService<MegaSubscriptionService>().Start();
+            Services.GetRequiredService<MegaPublicFolderService>().Start();
+
             var engine = Services.GetRequiredService<DownloadEngineService>();
             UiText.Refresh();
 
@@ -118,6 +125,11 @@ public partial class App : Application
                 // would construct the view model and start loading the queue at shutdown.
                 activation.Dispose();
                 Services.GetService<ClipboardMonitor>()?.Dispose();
+                Services.GetService<MegaSubscriptionService>()?.Dispose();
+                Services.GetService<MegaPublicFolderService>()?.Dispose();
+                Services.GetService<CloudDrivePageViewModel>()?.Dispose();
+                Services.GetService<AccountPageViewModel>()?.Dispose();
+                Services.GetService<SubscriptionsPageViewModel>()?.Dispose();
                 Services.GetService<DownloadsPageViewModel>()?.Dispose();
                 WebServerHost.Stop();
 
@@ -148,6 +160,16 @@ public partial class App : Application
         services.AddSingleton<INavigationService, NavigationService>();
 
         services.AddSingleton<DownloadEngineService>();
+        services.AddSingleton<MegaAccountService>(_ => MegaAccountService.Current);
+        services.AddSingleton<MegaSubscriptionService>();
+        services.AddSingleton(provider => new MegaPublicFolderStore(
+            provider.GetRequiredService<IPlatformServices>().GetAppDataDirectory("MegaDownloader")));
+        services.AddSingleton(provider => new MegaPublicFolderService(
+            provider.GetRequiredService<DownloadEngineService>(),
+            provider.GetRequiredService<MegaPublicFolderStore>(),
+            MegaAccountService.Current.DriveHistory,
+            provider.GetRequiredService<DownloadEngineService>().Config));
+        services.AddSingleton<PublicFoldersViewModel>();
         services.AddSingleton<LinkIntakeService>();
         services.AddSingleton<AddLinksCoordinator>();
         services.AddSingleton<ClipboardMonitor>();
@@ -161,6 +183,9 @@ public partial class App : Application
         services.AddTransient<AddLinksViewModel>();
         services.AddSingleton<SettingsPageViewModel>();
         services.AddSingleton<StreamingPageViewModel>();
+        services.AddSingleton<CloudDrivePageViewModel>();
+        services.AddSingleton<SubscriptionsPageViewModel>();
+        services.AddSingleton<AccountPageViewModel>();
         services.AddSingleton<MainWindowViewModel>();
     }
 }

@@ -3,7 +3,8 @@
         xmlns:vm="using:MegaDownloader.UI.ViewModels"
         x:Class="MegaDownloader.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Mega Downloader" Icon="/Assets/App.ico" Width="1260" Height="790" MinWidth="930" MinHeight="625"
+        Title="Mega Downloader" Icon="/Assets/App.ico" Width="1320" Height="860" MinWidth="940" MinHeight="620"
+        Background="{DynamicResource Md.Canvas}"
         WindowStartupLocation="CenterScreen">
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+N" Command="{Binding AddLinksCommand}" />
@@ -13,36 +14,87 @@
         <KeyBinding Gesture="F1" Command="{Binding ShowGuideCommand}" />
     </Window.KeyBindings>
 
-    <Grid RowDefinitions="Auto,*,Auto">
-        <Border Padding="32,0" BorderBrush="{DynamicResource Md.Fore}" BorderThickness="0,0,0,1">
-            <Grid Height="70" ColumnDefinitions="Auto,*,Auto,*,Auto">
-                <StackPanel Orientation="Horizontal" Spacing="13" VerticalAlignment="Center">
-                    <Viewbox Width="35" Height="34" VerticalAlignment="Center"><Canvas Width="36" Height="34"><Path Fill="{DynamicResource Md.Accent}" Data="M2,22 L18,30 L34,22 L34,27 L18,35 L2,27 Z M2,15 L18,23 L34,15 L34,20 L18,28 L2,20 Z M2,8 L18,0 L34,8 L18,16 Z"/></Canvas></Viewbox>
-                    <TextBlock Text="Mega Downloader" VerticalAlignment="Center" FontFamily="Georgia" FontSize="24" FontWeight="Bold"/>
+    <Grid ColumnDefinitions="224,*">
+        <!-- Workspace rail: brand, navigation, account and theme at a glance. -->
+        <Border Grid.Column="0" Background="{DynamicResource Md.Sidebar}"
+                BorderBrush="{DynamicResource Md.SidebarLine}" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="14,20,14,14">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource Md.Accent}">
+                        <PathIcon Data="{StaticResource Icon.Brand}" Width="21" Height="21"
+                                  Foreground="{DynamicResource Md.AccentFore}" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="Mega Downloader" FontSize="14.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Md.SidebarFore}" />
+                        <TextBlock Text="Download workspace" FontSize="10.5"
+                                   Foreground="{DynamicResource Md.SidebarMuted}" />
+                    </StackPanel>
                 </StackPanel>
-                <ListBox Grid.Column="2" x:Name="Navigation" ItemsSource="{Binding NavigationItems}"
+
+                <TextBlock Grid.Row="1" Classes="sidebar-label" Text="WORKSPACES" Margin="12,26,0,7" />
+
+                <ListBox Grid.Row="2" x:Name="Navigation" ItemsSource="{Binding NavigationItems}"
                          SelectedItem="{Binding SelectedNavigationItem}" ItemContainerTheme="{StaticResource NavItemTheme}"
-                         Background="Transparent" BorderThickness="0" Padding="0" VerticalAlignment="Stretch"
+                         Background="Transparent" BorderThickness="0" Padding="0" VerticalAlignment="Top"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                    <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate><DataTemplate x:DataType="vm:NavigationItemViewModel">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    </DataTemplate></ListBox.ItemTemplate>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:NavigationItemViewModel">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <PathIcon Data="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12.5"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
                 </ListBox>
-                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Spacing="4">
-                    <Button Classes="quiet icon" Command="{Binding ShowGuideCommand}" ToolTip.Tip="{DynamicResource Loc.QuickStart}" AutomationProperties.Name="{DynamicResource Loc.QuickStart}"><PathIcon Data="{StaticResource Icon.Help}"/></Button>
-                    <Button Classes="quiet icon" Command="{Binding CycleThemeCommand}" ToolTip.Tip="{Binding ThemeLabel}" AutomationProperties.Name="{Binding ThemeLabel}">
-                        <PathIcon Data="{Binding ThemeIcon}"/>
-                    </Button>
+
+                <StackPanel Grid.Row="3" Spacing="9">
+                    <Border Background="{DynamicResource Md.SidebarSelected}" CornerRadius="8" Padding="10,8"
+                            IsVisible="{Binding HasAccountStatus}">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="sidebar-label" Text="MEGA ACCOUNT" />
+                            <TextBlock Text="{Binding AccountStatus}" FontSize="11.5"
+                                       Foreground="{DynamicResource Md.SidebarFore}" TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding AccountStatus}" />
+                        </StackPanel>
+                    </Border>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="caption" Foreground="{DynamicResource Md.SidebarMuted}"
+                                   Text="{Binding ThemeLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="quiet icon toolbar" Command="{Binding CycleThemeCommand}"
+                                ToolTip.Tip="{Binding ThemeLabel}" AutomationProperties.Name="{Binding ThemeLabel}"
+                                Foreground="{DynamicResource Md.SidebarMuted}">
+                            <PathIcon Data="{Binding ThemeIcon}" Width="15" Height="15" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Classes="caption" Foreground="{DynamicResource Md.SidebarMuted}"
+                               Text="{Binding VersionText}" />
                 </StackPanel>
             </Grid>
         </Border>
-        <TransitioningContentControl Grid.Row="1" x:Name="PageHost" Content="{Binding CurrentPage}" ClipToBounds="True" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-            <TransitioningContentControl.PageTransition><CrossFade Duration="0:0:0.18"/></TransitioningContentControl.PageTransition>
-        </TransitioningContentControl>
-        <Border Grid.Row="2" Classes="band" Padding="32,7"><Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
-            <TextBlock Classes="caption" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" ToolTip.Tip="{Binding StatusText}"/>
-            <TextBlock Grid.Column="1" Classes="caption" FontFamily="Consolas" Text="{Binding VersionText}"/>
-        </Grid></Border>
+
+        <Grid Grid.Column="1" RowDefinitions="*,Auto">
+            <TransitioningContentControl x:Name="PageHost" Content="{Binding CurrentPage}" ClipToBounds="True"
+                                         HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.16" />
+                </TransitioningContentControl.PageTransition>
+            </TransitioningContentControl>
+
+            <Border Grid.Row="1" Classes="band" Padding="20,7">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <TextBlock Classes="caption" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis"
+                               AutomationProperties.LiveSetting="Polite" ToolTip.Tip="{Binding StatusText}" />
+                    <TextBlock Grid.Column="1" Classes="caption" FontFamily="{DynamicResource Md.NumericFont}"
+                               Text="{Binding VersionText}" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

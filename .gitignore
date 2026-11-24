@@ -11,6 +11,10 @@
 [Rr]elease/
 x64/
 x86/
+# The MEGA account bridge ships as a prebuilt x64 payload (see 0829e13 on main);
+# it is part of the source tree, not of a local build.
+!Native/MegaAccount/prebuilt/x64/
+!Native/MegaAccount/prebuilt/x64/**
 TestResults/
 artifacts/
 dist/

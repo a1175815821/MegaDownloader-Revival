@@ -70,7 +70,7 @@ namespace MegaDownloader
             public string Cookies;
         }
 
-        private class ProxySettings
+        internal sealed class ProxySettings
         {
             public readonly Uri Address;
             public readonly string Username;
@@ -98,8 +98,21 @@ namespace MegaDownloader
                     TryCreateProxyAddress(host, port, ref address);
                 settings = new ProxySettings(address, Config.ProxyUser, Config.ProxyPassword);
             }
+            ProxySettings previous = GetMegaAccountProxy();
+            if (previous is null && settings is null)
+                return;
+            if (previous is not null && settings is not null &&
+                Equals(previous.Address, settings.Address) &&
+                previous.Username == settings.Username &&
+                previous.Password == settings.Password)
+            {
+                return;
+            }
             System.Threading.Volatile.Write(ref _proxy, settings);
+            MegaAccountService.Current.UpdateProxies();
         }
+
+        internal static ProxySettings GetMegaAccountProxy() => System.Threading.Volatile.Read(ref _proxy);
 
         /// <summary>Accepts a host, IP, or HTTP proxy address. The separate port field takes precedence.
     /// An inline port ("127.0.0.1:8000", "[::1]:8000") is stripped; the configured port wins.</summary>

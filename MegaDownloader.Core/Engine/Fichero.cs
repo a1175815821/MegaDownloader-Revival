@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Xml;
 using Microsoft.VisualBasic;
 using Microsoft.VisualBasic.CompilerServices;
@@ -26,6 +29,59 @@ namespace MegaDownloader
         public SecureString _URLFichero; // Codificado!!
 
         public string NombreFichero; // Solo el nombre del fichero, sin ruta
+
+        /// <summary>Selected MEGA account for this task; empty means anonymous.</summary>
+        public string MegaAccountEmail = string.Empty;
+
+        public string MegaAccountTransferEmail = string.Empty;
+        public ulong? MegaDriveNodeHandle;
+        public bool MegaDriveWaitingForQuota;
+        public int? MegaAccountErrorCode;
+
+        /// <summary>
+        /// Folder link this task came from when it was queued by a public-folder
+        /// subscription. Empty for everything else. It lets the anonymous completion
+        /// path record the delivery so the next check sees the file as downloaded.
+        /// </summary>
+        public string PublicFolderId = string.Empty;
+
+        /// <summary>Handle of the folder node for a public-folder task.</summary>
+        public ulong? PublicFolderHandle;
+
+        public string EffectiveMegaAccountEmail =>
+            MegaDriveNodeHandle.HasValue || string.IsNullOrEmpty(MegaAccountTransferEmail)
+                ? MegaAccountEmail
+                : MegaAccountTransferEmail;
+
+        internal bool IsMegaAccountConnecting =>
+            UsesMegaAccount && MegaAccountService.Current.GetStatus(EffectiveMegaAccountEmail).Connecting;
+
+        internal bool HasRecordedMegaAccountOutput =>
+            UsesMegaAccount && Porcentaje == 100m && !string.IsNullOrEmpty(completedFileName);
+
+        public bool UsesMegaAccount => MegaDriveNodeHandle.HasValue || !string.IsNullOrEmpty(MegaAccountEmail);
+
+        // Accept only direct public files; never turn a folder child or encoded link into one.
+        private static readonly Regex AccountFilePattern = new Regex(
+            "\\A(?:(?:https?://)?(?:www\\.)?mega\\.(?:co\\.)?nz/(?:file/(?<id>[A-Za-z0-9_-]{8})#|#!(?<id>[A-Za-z0-9_-]{8})!)|mega:(?:/{2,3})?#?!(?<id>[A-Za-z0-9_-]{8})!)(?<key>[A-Za-z0-9_-]{43})=?\\z",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        public static string GetMegaAccountLink(string link)
+        {
+            Match match = AccountFilePattern.Match(link ?? string.Empty);
+            if (!match.Success)
+                return null;
+            return "https://mega.nz/file/" + match.Groups["id"].Value + "#" + match.Groups["key"].Value;
+        }
+
+        public static bool IsPermanentMegaAccountError(int code) =>
+            code == -9 || code == -11 || code == -14 || code == -16;
+
+        // SDK internal/network, rate/connection limits, incomplete and temporary failures.
+        private static readonly int[] TransientMegaAccountErrors = { -1, -3, -4, -6, -13, -18, -19 };
+
+        public static bool IsTransientMegaAccountError(int code) =>
+            Array.IndexOf(TransientMegaAccountErrors, code) >= 0;
 
         public string PartialFileName = FileDownloader.CreatePartialFileName();
 
@@ -410,57 +466,73 @@ namespace MegaDownloader
         private bool _Actualizando = false;
         public void ActualizarInformacionFichero(Configuracion Config, ref Conexion.TipoError ErrorObtenido, bool ComprobacionAntesDescarga, System.Threading.CancellationToken ct = default)
         {
-            if (!_Actualizando)
+            bool usesAccount;
+            Estado previous;
+            lock (Mutex.FicheroDownloader)
             {
+                if (_Actualizando || disposedValue || _accountDownload is not null)
+                    return;
+                usesAccount = UsesMegaAccount;
                 _Actualizando = true;
-                try
+                previous = EstadoDescarga;
+                EstadoDescarga = Estado.Verificando;
+            }
+
+            try
+            {
+                if (usesAccount)
                 {
-                    var EstadoAnterior = DescargaEstado();
-                    SetDescargaEstado = Estado.Verificando;
+                    VerifyMegaAccountFile(ref ErrorObtenido, ct);
+                    return;
+                }
 
-                    var Info = Conexion.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga, ct);
-                    // B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
-                    // 同锁互斥,否则关机存盘会读到半新半旧的撕裂对象(新 Key+旧 Size+旧分片表)。
-                    // 网络 IO 已在锁外完成,此处仅内存赋值,持锁极短无性能影响。
-                    lock (Mutex.FicheroDownloader)
+                var Info = Conexion.ObtenerInformacionFichero(Config, FileID, FileKey, ComprobacionAntesDescarga, ct);
+                // B2-⑩:字段批量回写必须持 FicheroDownloader 锁,与 GuardarXML/ActualizarDatosDescarga
+                // 同锁互斥,否则关机存盘会读到半新半旧的撕裂对象(新 Key+旧 Size+旧分片表)。
+                // 网络 IO 已在锁外完成,此处仅内存赋值,持锁极短无性能影响。
+                lock (Mutex.FicheroDownloader)
+                {
+                    if (Info is not null && Info.Err == Conexion.TipoError.SinErrores)
                     {
-                        if (Info is not null && Info.Err == Conexion.TipoError.SinErrores)
+                        if (!string.IsNullOrEmpty(Info.URL))
+                            URLFichero = Info.URL;
+                        // F5: a verified 0-byte file must store 0, not keep a stale size.
+                        TamanoBytes = Math.Max(0L, Info.Tamano);
+                        if (!string.IsNullOrEmpty(Info.Nombre) && (DatosPartes is null || !DatosPartes.AllFinished || string.IsNullOrEmpty(NombreFichero)))
                         {
-                            if (!string.IsNullOrEmpty(Info.URL))
-                                URLFichero = Info.URL;
-                            // F5: a verified 0-byte file must store 0, not keep a stale size.
-                            TamanoBytes = Math.Max(0L, Info.Tamano);
-                            if (!string.IsNullOrEmpty(Info.Nombre) && (DatosPartes is null || !DatosPartes.AllFinished || string.IsNullOrEmpty(NombreFichero)))
-                            {
-                                // A completed task may already use a collision suffix on disk.
-                                // Keep that name while recovering extraction/verification.
-                                NombreFichero = PathGuard.SanitizeFileName(Info.Nombre, "file");
-                            }
-                            MD5 = Info.MD5;
-                            DescargaProcesada = true;
-                            SetDescargaEstado = EstadoAnterior;
-                            FileKey = Info.FileKey;
-                            FileID = Info.FileID;
+                            // A completed task may already use a collision suffix on disk.
+                            // Keep that name while recovering extraction/verification.
+                            NombreFichero = PathGuard.SanitizeFileName(Info.Nombre, "file");
                         }
-                        else if (Info is not null && Info.Err != Conexion.TipoError.SinErrores)
+                        MD5 = Info.MD5;
+                        DescargaProcesada = true;
+                        SetDescargaEstado = previous;
+                        FileKey = Info.FileKey;
+                        FileID = Info.FileID;
+                    }
+                    else if (Info is not null && Info.Err != Conexion.TipoError.SinErrores)
+                    {
+                        ErrorObtenido = Info.Err;
+                        if (Info.Err == Conexion.TipoError.QuotaExceeded)
                         {
-                            ErrorObtenido = Info.Err;
-                            if (Info.Err == Conexion.TipoError.QuotaExceeded)
-                            {
-                                EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." + Constants.vbNewLine + " * File code: " + FileID + Constants.vbNewLine + " * Internal info: " + Info.Errtxt, false, true);
+                            EstablecerError("MEGA transfer quota exceeded (EOVERQUOTA / HTTP 509)." + Constants.vbNewLine + " * File code: " + FileID + Constants.vbNewLine + " * Internal info: " + Info.Errtxt, false, true);
 
-                            }
-                            else
-                            {
-                                EstablecerError("The file could not be verified." + Constants.vbNewLine + " * File code: " + FileID + Constants.vbNewLine + " * Error type: " + Info.Err.ToString() + Constants.vbNewLine + " * Internal info: " + Info.Errtxt);
+                        }
+                        else
+                        {
+                            EstablecerError("The file could not be verified." + Constants.vbNewLine + " * File code: " + FileID + Constants.vbNewLine + " * Error type: " + Info.Err.ToString() + Constants.vbNewLine + " * Internal info: " + Info.Errtxt);
 
 
-                            }
                         }
                     }
                 }
-                finally
+            }
+            finally
+            {
+                lock (Mutex.FicheroDownloader)
                 {
+                    if (EstadoDescarga == Estado.Verificando)
+                        EstadoDescarga = previous;
                     _Actualizando = false;
                 }
             }
@@ -495,7 +567,9 @@ namespace MegaDownloader
                 // 界面入口会先在后台线程 PrepareOutputOwnership() 预热,这里通常命中缓存。
                 string completado = GetCompletedFileForDeletion();
                 Ruta = completado ?? string.Empty;
-                string parcial = FileDownloader.GetPartialFilePath(RutaLocal, NombreFichero, PartialFileName);
+                string parcial = UsesMegaAccount && string.IsNullOrEmpty(PartialFileName)
+                    ? null
+                    : FileDownloader.GetPartialFilePath(RutaLocal, NombreFichero, PartialFileName);
                 lock (Mutex.DeletingFiles)
                 {
                     try
@@ -570,7 +644,7 @@ namespace MegaDownloader
                 }
             }
 
-            if (completedFileName is not null || !DescargaComenzada)
+            if (UsesMegaAccount || completedFileName is not null || !DescargaComenzada)
                 return null;
             // Older queues have no output marker. Require a real MetaMAC match before
             // treating a same-named existing file as their completed output.
@@ -669,6 +743,721 @@ namespace MegaDownloader
         }
 
         #region Downloader
+
+        private CancellationTokenSource _accountDownload;
+        private Estado? _accountCancelTarget;
+        private bool _discardPrivateCheckpointOnStop;
+
+        public bool CanChangeDownloadIdentity() =>
+            !disposedValue && !_Actualizando && _accountDownload is null && bgArranque is null &&
+            (Downloader is null || Downloader.CanStart) &&
+            (EstadoDescarga == Estado.EnCola || EstadoDescarga == Estado.Pausado || EstadoDescarga == Estado.Erroneo) &&
+            string.IsNullOrEmpty(completedFileName);
+
+        /// <summary>The caller holds the downloader lock across the selected tasks.</summary>
+        public void ChangeDownloadIdentity(string email)
+        {
+            if (string.Equals(MegaAccountEmail, email, StringComparison.OrdinalIgnoreCase) && MegaAccountTransferEmail.Length == 0)
+                return;
+            ResetearDescarga(preserveProgress: true);
+            bool changeBackend = UsesMegaAccount != !string.IsNullOrEmpty(email);
+            MegaAccountEmail = email ?? string.Empty;
+            MegaAccountTransferEmail = string.Empty;
+            if (changeBackend)
+            {
+                DescargaProcesada = false;
+                if (UsesMegaAccount)
+                    ResetMegaAccountProgress();
+                else
+                    ThrottledStreamController.GetController().SetMaxSpeed(FileID, LimiteVelocidad * 1024L);
+            }
+            if (EstadoDescarga == Estado.Erroneo || (changeBackend && EstadoDescarga == Estado.Pausado))
+                EstadoDescarga = Estado.EnCola;
+        }
+
+        private int ReadMegaAccountInfo(string email, out string name, out long size)
+        {
+            string link = MegaDriveNodeHandle.HasValue ? null : GetMegaAccountLink(URL);
+            if (link is null && !MegaDriveNodeHandle.HasValue)
+            {
+                name = null;
+                size = 0;
+                return -2;
+            }
+            int code = MegaAccountService.Current.Inspect(email, link, out name, out size, MegaDriveNodeHandle);
+            return code == 0 && (string.IsNullOrEmpty(name) || size < 0) ? -2 : code;
+        }
+
+        public void RecordMegaAccountTransfer(string email) =>
+            MegaAccountTransferEmail = string.Equals(email, MegaAccountEmail, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : email;
+
+        private void ApplyMegaAccountInfo(string name, long size)
+        {
+            if (string.IsNullOrEmpty(completedFileName))
+                NombreFichero = PathGuard.SanitizeFileName(name, "file");
+            TamanoBytes = size;
+            DescargaProcesada = true;
+        }
+
+        private void VerifyMegaAccountFile(ref Conexion.TipoError errorResult, CancellationToken ct)
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                string email = EffectiveMegaAccountEmail;
+                var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int code;
+                string name;
+                long size;
+                do
+                {
+                    ct.ThrowIfCancellationRequested();
+                    tried.Add(email);
+                    code = ReadMegaAccountInfo(email, out name, out size);
+                    if (code != MegaAccountService.OverQuota || MegaDriveNodeHandle.HasValue)
+                        break;
+                    string nextEmail = MegaAccountService.Current.NextTransferAccount(email, tried);
+                    if (nextEmail.Length == 0)
+                        break;
+                    email = nextEmail;
+                }
+                while (true);
+
+                ct.ThrowIfCancellationRequested();
+                lock (Mutex.FicheroDownloader)
+                {
+                    if (disposedValue)
+                        return;
+                    if (!MegaDriveNodeHandle.HasValue)
+                        RecordMegaAccountTransfer(email);
+                    if (code == 0)
+                    {
+                        ApplyMegaAccountInfo(name, size);
+                    }
+                    else
+                    {
+                        errorResult = Conexion.TipoError.Otros;
+                        SetMegaAccountError(code);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log.WriteWarning("MEGA account metadata failed: " + Log.SafeException(ex));
+                lock (Mutex.FicheroDownloader)
+                {
+                    if (disposedValue)
+                        return;
+                    errorResult = Conexion.TipoError.Otros;
+                    SetMegaAccountLocalError();
+                }
+            }
+        }
+
+        private void StartMegaAccountDownload()
+        {
+            if (!HasRecordedMegaAccountOutput && IsMegaAccountConnecting)
+                return;
+            lock (Mutex.FicheroDownloader)
+            {
+                if (disposedValue || _Actualizando || _accountDownload is not null ||
+                    (EstadoDescarga != Estado.EnCola && EstadoDescarga != Estado.Pausado))
+                {
+                    return;
+                }
+                var source = new CancellationTokenSource();
+                _accountDownload = source;
+                _accountCancelTarget = null;
+                Interlocked.Exchange(ref _cancellationNotified, 0);
+                EstadoDescarga = Estado.CreandoLocal;
+                DescargaComenzada = true;
+                if (!MegaDriveNodeHandle.HasValue && !HasRecordedMegaAccountOutput)
+                    ResetMegaAccountProgress();
+                MegaDriveWaitingForQuota = false;
+                FailedByQuota = false;
+                NumeroConexionesAbiertas = 1;
+                Task.Run(() => RunMegaAccountDownload(source));
+            }
+        }
+
+        private void RunMegaAccountDownload(CancellationTokenSource source)
+        {
+            CancellationToken token = source.Token;
+            string staging = null;
+            string output = null;
+            string cloudName = null;
+            int code = 0;
+            bool localFailure = false;
+            bool privateNode = MegaDriveNodeHandle.HasValue;
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                lock (Mutex.FicheroDownloader)
+                {
+                    if (_accountCancelTarget.HasValue)
+                        return;
+                    if (HasRecordedMegaAccountOutput)
+                    {
+                        var candidate = new System.IO.FileInfo(CompletedOutputPath(completedFileName));
+                        if (candidate.Exists && candidate.Length == TamanoBytes)
+                        {
+                            output = candidate.FullName;
+                            NombreFichero = completedFileName;
+                            BytesDescargados = TamanoBytes;
+                            Porcentaje = 100m;
+                        }
+                        else
+                        {
+                            completedFileName = string.Empty;
+                        }
+                    }
+                }
+
+                if (output is null)
+                {
+                    if (privateNode)
+                        code = DownloadPrivateMegaFile(token, ref staging, ref cloudName);
+                    else
+                        code = DownloadPublicMegaAccountFile(token, ref staging);
+                    if (code != 0)
+                        return;
+                    token.ThrowIfCancellationRequested();
+                    if (new System.IO.FileInfo(staging).Length != TamanoBytes)
+                        throw new System.IO.IOException("Unexpected MEGA SDK output size.");
+                    lock (Mutex.FicheroDownloader)
+                    {
+                        if (_accountCancelTarget.HasValue)
+                            return;
+                        output = DeliverMegaAccountFile(staging);
+                        completedFileName = System.IO.Path.GetFileName(output);
+                        NombreFichero = completedFileName;
+                        RecordVerifiedOutput(output);
+                        BytesDescargados = TamanoBytes;
+                        Porcentaje = 100m;
+                    }
+                    if (privateNode)
+                        MegaAccountService.Current.RecordDriveDelivery(MegaAccountEmail, MegaDriveNodeHandle.Value, cloudName, output);
+                }
+                downloader_Completed(null, EventArgs.Empty);
+            }
+            catch (OperationCanceledException)
+            {
+                code = -13;
+            }
+            catch (Exception ex)
+            {
+                localFailure = true;
+                Log.WriteWarning("MEGA account download failed: " + Log.SafeException(ex));
+            }
+            finally
+            {
+                if (staging is not null)
+                {
+                    try
+                    {
+                        if (!privateNode)
+                            System.IO.File.Delete(staging);
+                        else if (output is not null)
+                            DeletePrivateMegaCheckpoint(staging);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.WriteWarning("MEGA account staging cleanup failed: " + Log.SafeException(ex));
+                    }
+                }
+
+                bool notify;
+                lock (Mutex.FicheroDownloader)
+                {
+                    NumeroConexionesAbiertas = 0;
+                    VelocidadKBs = 0m;
+                    if (privateNode)
+                        TiempoEstimadoDescarga = string.Empty;
+                    notify = _accountCancelTarget.GetValueOrDefault(Estado.Pausado) == Estado.EnCola;
+                    if (output is null)
+                    {
+                        if (!privateNode || _discardPrivateCheckpointOnStop)
+                            ResetMegaAccountProgress();
+                        if (_accountCancelTarget.HasValue)
+                        {
+                            EstadoDescarga = _accountCancelTarget.Value;
+                        }
+                        else if (localFailure)
+                        {
+                            SetMegaAccountLocalError();
+                        }
+                        else if (privateNode && code == MegaAccountService.OverQuota &&
+                            MegaAccountService.Current.GetStatus(MegaAccountEmail).QuotaReached)
+                        {
+                            MegaDriveWaitingForQuota = true;
+                            FailedByQuota = true;
+                            EstadoDescarga = Estado.EnCola;
+                        }
+                        else
+                        {
+                            SetMegaAccountError(code);
+                        }
+                    }
+                    if (_discardPrivateCheckpointOnStop)
+                    {
+                        TryDeletePrivateMegaCheckpoint();
+                        _discardPrivateCheckpointOnStop = false;
+                    }
+                    _accountDownload = null;
+                    _accountCancelTarget = null;
+                }
+                source.Dispose();
+                if (notify)
+                    NotifyCancellationComplete();
+            }
+        }
+
+        private int DownloadPublicMegaAccountFile(CancellationToken token, ref string staging)
+        {
+            string link = GetMegaAccountLink(URL);
+            if (link is null)
+                return -2;
+            MegaAccountService service = MegaAccountService.Current;
+            string email = EffectiveMegaAccountEmail;
+            var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            System.IO.Directory.CreateDirectory(RutaLocal);
+            do
+            {
+                token.ThrowIfCancellationRequested();
+                tried.Add(email);
+                lock (Mutex.FicheroDownloader)
+                {
+                    RecordMegaAccountTransfer(email);
+                    ResetMegaAccountProgress();
+                }
+
+                int code = 0;
+                if (!DescargaProcesada)
+                {
+                    code = ReadMegaAccountInfo(email, out string name, out long size);
+                    if (code == 0)
+                    {
+                        lock (Mutex.FicheroDownloader)
+                            ApplyMegaAccountInfo(name, size);
+                    }
+                }
+                if (code == 0)
+                {
+                    staging = PathGuard.GetSafePathUnderRoot(RutaLocal,
+                        ".mega-sdk-" + Guid.NewGuid().ToString("N") + ".tmp", allowRoot: false);
+                    token.ThrowIfCancellationRequested();
+                    EstadoDescarga = Estado.Descargando;
+                    code = service.Download(email, link, staging, UpdateMegaAccountProgress, token);
+                }
+                if (code != MegaAccountService.OverQuota)
+                    return code;
+                token.ThrowIfCancellationRequested();
+                string nextEmail = service.NextTransferAccount(email, tried);
+                if (nextEmail.Length == 0)
+                    return code;
+                if (staging is not null)
+                {
+                    System.IO.File.Delete(staging);
+                    staging = null;
+                }
+                email = nextEmail;
+            }
+            while (true);
+        }
+
+        private int DownloadPrivateMegaFile(CancellationToken token, ref string staging, ref string cloudName)
+        {
+            MegaAccountService service = MegaAccountService.Current;
+            string email = EffectiveMegaAccountEmail;
+            ulong node = MegaDriveNodeHandle.Value;
+            int code = service.InspectPrivateDownload(email, node, out cloudName, out long size, out string key);
+            if (code != 0)
+                return code;
+            token.ThrowIfCancellationRequested();
+            if (string.IsNullOrEmpty(cloudName) || size < 0)
+                return -2;
+            lock (Mutex.FicheroDownloader)
+                ApplyMegaAccountInfo(cloudName, size);
+
+            System.IO.Directory.CreateDirectory(RutaLocal);
+            staging = PrivateMegaStagingPath();
+            string binding = Utils.SecretFingerprint(email.ToUpperInvariant() + "\n" +
+                node.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" +
+                size.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + key);
+            using (System.IO.FileStream file = OpenPrivateMegaCheckpoint(staging, binding, size))
+            {
+                long offset = file.Position;
+                UpdateMegaAccountProgress(offset, size, 0);
+                token.ThrowIfCancellationRequested();
+                EstadoDescarga = Estado.Descargando;
+
+                byte[] buffer = null;
+                long lastFlush = offset;
+                Exception writeError = null;
+                MegaAccountNative.StreamData append = (data, count, speed) =>
+                {
+                    // No managed exception can escape through the SDK callback.
+                    try
+                    {
+                        if (token.IsCancellationRequested)
+                            return 0;
+                        if (count <= 0 || count > size - file.Position)
+                            throw new System.IO.IOException("Unexpected MEGA stream length.");
+                        if (buffer is null || buffer.Length < count)
+                            buffer = new byte[count];
+                        Marshal.Copy(data, buffer, 0, count);
+                        file.Write(buffer, 0, count);
+                        if (file.Position - lastFlush >= 8L * 1024L * 1024L)
+                        {
+                            file.Flush(flushToDisk: true);
+                            lastFlush = file.Position;
+                        }
+                        UpdateMegaAccountProgress(file.Position, size, speed);
+                        return 1;
+                    }
+                    catch (Exception ex)
+                    {
+                        writeError = ex;
+                        return 0;
+                    }
+                };
+                code = service.StreamPrivateDownload(email, node, key, size, offset, append, token);
+                file.Flush(flushToDisk: true);
+                lock (Mutex.FicheroDownloader)
+                {
+                    // Pause can race the last write callback. Report the flushed length,
+                    // even when normal progress callbacks are already suppressed.
+                    SetMegaAccountProgress(file.Length, size, 0);
+                }
+                if (writeError is not null)
+                    throw new System.IO.IOException("Could not write the MEGA checkpoint.", writeError);
+                if (code != 0)
+                    return code;
+                token.ThrowIfCancellationRequested();
+                if (file.Length != size)
+                    throw new System.IO.IOException("Incomplete MEGA streaming output.");
+            }
+
+            // Streaming decrypts but does not validate the entire file. This includes the
+            // previously saved prefix, even if no new network bytes were needed this time.
+            token.ThrowIfCancellationRequested();
+            if (!Criptografia.VerifyMegaMetaMac(staging, key))
+            {
+                DeletePrivateMegaCheckpoint(staging);
+                lock (Mutex.FicheroDownloader)
+                    SetMegaAccountProgress(0, size, 0);
+                throw new System.IO.IOException("MEGA private file failed MetaMAC verification.");
+            }
+            return 0;
+        }
+
+        private string PrivateMegaStagingPath()
+        {
+            string taskFile = FileDownloader.ValidatePartialFileName(PartialFileName);
+            return PathGuard.GetSafePathUnderRoot(RutaLocal,
+                System.IO.Path.GetFileNameWithoutExtension(taskFile) + ".mega.part", allowRoot: false);
+        }
+
+        private string PrivateMegaOwnerPrefix()
+        {
+            string source = Utils.SecretFingerprint(EffectiveMegaAccountEmail.ToUpperInvariant() + "\n" +
+                MegaDriveNodeHandle.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return "MegaDownloader private partial v1 " + PartialFileName + " " + source + " ";
+        }
+
+        private static bool PrivateMegaFileExists(string path)
+        {
+            try
+            {
+                System.IO.FileAttributes attributes = System.IO.File.GetAttributes(path);
+                if ((attributes & (System.IO.FileAttributes.Directory | System.IO.FileAttributes.ReparsePoint)) != 0)
+                    throw new System.IO.IOException("Invalid MEGA checkpoint file type.");
+                return true;
+            }
+            catch (System.IO.FileNotFoundException)
+            {
+                return false;
+            }
+            catch (System.IO.DirectoryNotFoundException)
+            {
+                return false;
+            }
+        }
+
+        private string ReadPrivateMegaBinding(string staging)
+        {
+            string marker = staging + ".owner";
+            if (!PrivateMegaFileExists(marker))
+                return null;
+            string prefix = PrivateMegaOwnerPrefix();
+            using (System.IO.FileStream file = System.IO.File.Open(marker, System.IO.FileMode.Open,
+                System.IO.FileAccess.Read, System.IO.FileShare.Read))
+            {
+                if (file.Length != prefix.Length + 44)
+                    return null;
+                using (var reader = new System.IO.StreamReader(file, System.Text.Encoding.ASCII))
+                {
+                    string text = reader.ReadToEnd();
+                    if (text.StartsWith(prefix, StringComparison.Ordinal) && text.Length == prefix.Length + 44)
+                        return text.Substring(prefix.Length);
+                }
+            }
+            return null;
+        }
+
+        private System.IO.FileStream OpenPrivateMegaCheckpoint(string staging, string binding, long size)
+        {
+            string stored = ReadPrivateMegaBinding(staging);
+            if (stored is not null && !string.Equals(stored, binding, StringComparison.Ordinal))
+            {
+                DeletePrivateMegaCheckpoint(staging);
+                stored = null;
+            }
+            bool exists = PrivateMegaFileExists(staging);
+            if (stored is null)
+            {
+                if (exists)
+                    throw new System.IO.IOException("MEGA checkpoint has no task ownership marker.");
+                DeleteIncompletePrivateMegaMarker(staging);
+                string owner = staging + ".owner";
+                string temp = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(staging),
+                    ".mega-owner-" + Guid.NewGuid().ToString("N") + ".tmp");
+                try
+                {
+                    using (System.IO.FileStream marker = System.IO.File.Open(temp, System.IO.FileMode.CreateNew,
+                        System.IO.FileAccess.Write, System.IO.FileShare.None))
+                    {
+                        byte[] bytes = System.Text.Encoding.ASCII.GetBytes(PrivateMegaOwnerPrefix() + binding);
+                        marker.Write(bytes, 0, bytes.Length);
+                        marker.Flush(flushToDisk: true);
+                    }
+                    System.IO.File.Move(temp, owner);
+                }
+                finally
+                {
+                    if (System.IO.File.Exists(temp))
+                        System.IO.File.Delete(temp);
+                }
+            }
+
+            System.IO.FileStream file = System.IO.File.Open(staging,
+                exists ? System.IO.FileMode.Open : System.IO.FileMode.CreateNew,
+                System.IO.FileAccess.Write, System.IO.FileShare.Read);
+            try
+            {
+                // The part is never preallocated. For an incomplete file, start at an AES
+                // block boundary, replaying at most the last 15 bytes on the next range read.
+                long offset = file.Length;
+                if (offset > size)
+                    offset = 0;
+                if (offset < size)
+                    offset -= offset % 16L;
+                if (offset != file.Length)
+                    file.SetLength(offset);
+                file.Position = offset;
+                return file;
+            }
+            catch
+            {
+                file.Dispose();
+                throw;
+            }
+        }
+
+        private void RestorePrivateMegaProgress()
+        {
+            ResetMegaAccountProgress();
+            if (string.IsNullOrWhiteSpace(RutaLocal))
+                return;
+            try
+            {
+                string staging = PrivateMegaStagingPath();
+                if (ReadPrivateMegaBinding(staging) is null || !PrivateMegaFileExists(staging))
+                    return;
+                long length = new System.IO.FileInfo(staging).Length;
+                if (length <= TamanoBytes)
+                    UpdateMegaAccountProgress(length, TamanoBytes, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Could not recover MEGA private checkpoint progress: " + Log.SafeException(ex));
+            }
+        }
+
+        // Older versions created the owner file before opening the partial. A torn
+        // marker can be reclaimed if the partial was never created and the prefix matches.
+        private void DeleteIncompletePrivateMegaMarker(string staging)
+        {
+            string owner = staging + ".owner";
+            if (!PrivateMegaFileExists(owner))
+                return;
+            string prefix = PrivateMegaOwnerPrefix();
+            using (System.IO.FileStream file = System.IO.File.Open(owner, System.IO.FileMode.Open,
+                System.IO.FileAccess.Read, System.IO.FileShare.Read))
+            {
+                if (file.Length >= prefix.Length + 44)
+                    return;
+                using (var reader = new System.IO.StreamReader(file, System.Text.Encoding.ASCII,
+                    detectEncodingFromByteOrderMarks: false))
+                {
+                    string text = reader.ReadToEnd();
+                    if (!prefix.StartsWith(text, StringComparison.Ordinal) &&
+                        !text.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+            }
+            System.IO.File.Delete(owner);
+        }
+
+        private void DeletePrivateMegaCheckpoint(string staging)
+        {
+            if (ReadPrivateMegaBinding(staging) is null)
+            {
+                if (!PrivateMegaFileExists(staging))
+                    DeleteIncompletePrivateMegaMarker(staging);
+                return;
+            }
+            if (PrivateMegaFileExists(staging))
+                System.IO.File.Delete(staging);
+            System.IO.File.Delete(staging + ".owner");
+        }
+
+        private void TryDeletePrivateMegaCheckpoint()
+        {
+            if (string.IsNullOrEmpty(PartialFileName) || string.IsNullOrWhiteSpace(RutaLocal))
+                return;
+            try
+            {
+                DeletePrivateMegaCheckpoint(PrivateMegaStagingPath());
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Could not delete MEGA private checkpoint: " + Log.SafeException(ex));
+            }
+        }
+
+        // Task removal and full reset discard owned staging; ordinary pause/stop/Dispose do not.
+        public void DiscardPrivateMegaCheckpoint()
+        {
+            if (!MegaDriveNodeHandle.HasValue)
+                return;
+            lock (Mutex.FicheroDownloader)
+            {
+                MegaDriveWaitingForQuota = false;
+                if (_accountDownload is null)
+                    TryDeletePrivateMegaCheckpoint();
+                else
+                {
+                    _discardPrivateCheckpointOnStop = true;
+                    CancelMegaAccountDownload(Estado.EnCola);
+                }
+            }
+        }
+
+        private void UpdateMegaAccountProgress(long received, long total, long speed)
+        {
+            lock (Mutex.FicheroDownloader)
+            {
+                if (_accountCancelTarget.HasValue)
+                    return;
+                SetMegaAccountProgress(received, total, speed);
+            }
+        }
+
+        private void SetMegaAccountProgress(long received, long total, long speed)
+        {
+            BytesDescargados = Math.Max(0L, Math.Min(received, total));
+            Porcentaje = total > 0 ? (decimal)BytesDescargados * 100m / total : 0m;
+            VelocidadKBs = (decimal)Math.Max(0L, speed) / 1024m;
+        }
+
+        public static string MegaAccountCollisionLeaf(string leaf, int suffix)
+        {
+            int dot = leaf.LastIndexOf('.');
+            string ext = dot > 0 ? leaf.Substring(dot) : string.Empty;
+            string stem = dot > 0 ? leaf.Substring(0, dot) : leaf;
+            string tail = " (" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")" + ext;
+            int keep = 240 - tail.Length;
+            return keep < 1 ? null : stem.Substring(0, Math.Min(stem.Length, keep)) + tail;
+        }
+
+        private string DeliverMegaAccountFile(string staging)
+        {
+            string leaf = PathGuard.SanitizeFileName(NombreFichero, "file");
+            string candidate = CompletedOutputPath(leaf);
+            int suffix = 1;
+            do
+            {
+                if (!string.Equals(candidate, staging, StringComparison.OrdinalIgnoreCase) &&
+                    !System.IO.Directory.Exists(candidate))
+                {
+                    try
+                    {
+                        // File.Move never replaces an existing file, including one just delivered by the anonymous engine.
+                        System.IO.File.Move(staging, candidate);
+                        return candidate;
+                    }
+                    catch (System.IO.IOException) when (System.IO.File.Exists(candidate) || System.IO.Directory.Exists(candidate))
+                    {
+                    }
+                }
+                suffix++;
+                candidate = CompletedOutputPath(MegaAccountCollisionLeaf(leaf, suffix) ?? Guid.NewGuid().ToString("N"));
+            }
+            while (true);
+        }
+
+        private void ResetMegaAccountProgress()
+        {
+            BytesDescargados = 0L;
+            Porcentaje = 0m;
+            VelocidadKBs = 0m;
+            TiempoEstimadoDescarga = string.Empty;
+        }
+
+        private void SetMegaAccountError(int code)
+        {
+            string message = MegaAccountService.ErrorText(code, connecting: true);
+            if (MegaDriveNodeHandle.HasValue)
+            {
+                if (code == -9 || code == -11 || code == -14)
+                    message = Language.GetText("MegaDrive_FileUnavailable");
+                if (code == MegaAccountService.BackendMissing)
+                    message = Language.GetText("MegaDrive_BackendMissing");
+            }
+            EstablecerError(message, IsPermanentMegaAccountError(code), code == MegaAccountService.OverQuota, code);
+        }
+
+        private void SetMegaAccountLocalError() =>
+            EstablecerError(Language.GetText("MegaAccount_LocalFileError"), false, false);
+
+        private void CancelMegaAccountDownload(Estado target, bool disposing = false)
+        {
+            bool notify = false;
+            lock (Mutex.FicheroDownloader)
+            {
+                if (disposing)
+                    disposedValue = true;
+                if (_accountDownload is not null)
+                {
+                    if (target == Estado.EnCola || !_accountCancelTarget.HasValue)
+                        _accountCancelTarget = target;
+                    // The SDK polls the token; staging cleanup and cancellation notification happen on its worker.
+                    _accountDownload.Cancel();
+                }
+                else if (!disposing && target == Estado.EnCola)
+                {
+                    EstadoDescarga = Estado.EnCola;
+                    notify = true;
+                }
+            }
+            if (notify)
+                NotifyCancellationComplete();
+        }
 
         private class DownloadWorker : BackgroundWorker
         {
@@ -840,21 +1629,29 @@ namespace MegaDownloader
 
         public void Start(ref Configuracion Config, int NumConexionesDisponibles, Paquete package = null)
         {
-            if (disposedValue || Estado.Erroneo == DescargaEstado())
-                return;
-
-            if (bgArranque is null && (Downloader is null || Downloader.CanStart))
+            lock (Mutex.FicheroDownloader)
             {
-                bool firstStart = !DescargaComenzada;
-                EstadoDescarga = Estado.CreandoLocal;
-                DescargaComenzada = true;
-                _StartupCancelled = false;
-                // B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
-                System.Threading.Interlocked.Exchange(ref _cancellationNotified, 0);
-                bgArranque = new DownloadWorker(ref Config, NumConexionesDisponibles) { Package = package, FirstStart = firstStart };
-                bgArranque.WorkerSupportsCancellation = false;
-                bgArranque.WorkerReportsProgress = false;
-                bgArranque.RunWorkerAsync();
+                if (UsesMegaAccount)
+                {
+                    StartMegaAccountDownload();
+                    return;
+                }
+                if (disposedValue || Estado.Erroneo == DescargaEstado())
+                    return;
+
+                if (bgArranque is null && (Downloader is null || Downloader.CanStart))
+                {
+                    bool firstStart = !DescargaComenzada;
+                    EstadoDescarga = Estado.CreandoLocal;
+                    DescargaComenzada = true;
+                    _StartupCancelled = false;
+                    // B7: 新一轮下载开始,允许后续取消再通知一次删除回调。
+                    System.Threading.Interlocked.Exchange(ref _cancellationNotified, 0);
+                    bgArranque = new DownloadWorker(ref Config, NumConexionesDisponibles) { Package = package, FirstStart = firstStart };
+                    bgArranque.WorkerSupportsCancellation = false;
+                    bgArranque.WorkerReportsProgress = false;
+                    bgArranque.RunWorkerAsync();
+                }
             }
         }
 
@@ -873,6 +1670,11 @@ namespace MegaDownloader
 
         public void Resume()
         {
+            if (UsesMegaAccount)
+            {
+                StartMegaAccountDownload();
+                return;
+            }
             if (Downloader is not null && Downloader.CanResume)
             {
                 ThrottledStreamController.GetController().Continuar(FileID);
@@ -882,6 +1684,11 @@ namespace MegaDownloader
 
         public void Pause()
         {
+            if (UsesMegaAccount)
+            {
+                CancelMegaAccountDownload(Estado.Pausado);
+                return;
+            }
             if (Downloader is not null && Downloader.CanPause)
             {
                 Downloader.Pause();
@@ -890,6 +1697,12 @@ namespace MegaDownloader
 
         public void Stop()
         {
+            if (UsesMegaAccount)
+            {
+                Interlocked.Exchange(ref _cancellationNotified, 0);
+                CancelMegaAccountDownload(Estado.EnCola);
+                return;
+            }
             // B1-④:先置验证取消标志,再等。bgArranque 不可 CancelAsync,只能靠标志自停。
             _StartupCancelled = true;
             // B7: 每次显式 Stop 都开启一个新的通知周期。同一次取消里随后到达的
@@ -1148,6 +1961,23 @@ namespace MegaDownloader
                     return;
                 EstadoDescarga = Estado.Completado;
 
+                // A public-folder subscription needs the delivered path to tell the next
+                // check that this file is already on disk.
+                if (PublicFolderId.Length > 0)
+                {
+                    try
+                    {
+                        string delivered = CompletedOutputPath(
+                            string.IsNullOrEmpty(completedFileName) ? NombreFichero : completedFileName);
+                        MegaAccountService.Current.RecordPublicFolderDelivery(PublicFolderId,
+                            PublicFolderHandle ?? 0UL, NombreFichero, delivered);
+                    }
+                    catch (Exception ex) when (ex is ArgumentException or System.IO.IOException)
+                    {
+                        Log.WriteWarning("Could not record the public folder delivery: " + Log.SafeException(ex));
+                    }
+                }
+
                 // Obsolete, MEGA doesn't check MD5
                 if (!string.IsNullOrEmpty(MD5))
                 {
@@ -1382,13 +2212,14 @@ namespace MegaDownloader
             EstablecerError(msj, IsPermanentErrorText(msj), IsQuotaErrorText(msj));
         }
 
-        private void EstablecerError(string msj, bool esPermanente, bool esQuota)
+        private void EstablecerError(string msj, bool esPermanente, bool esQuota, int? accountCode = null)
         {
             EstadoDescarga = Estado.Erroneo;
             DescripcionError = msj;
             FechaUltimoError = DateTime.Now;
             EsErrorPermanente = esPermanente;
             FailedByQuota = esQuota;
+            MegaAccountErrorCode = accountCode;
             if (esQuota)
                 EsErrorPermanente = false;
         }
@@ -1449,9 +2280,11 @@ namespace MegaDownloader
                 FechaUltimoError = default;
                 EsErrorPermanente = false;
                 FailedByQuota = false;
+                MegaAccountErrorCode = null;
                 TiempoEstimadoDescarga = "";
                 return;
             }
+            DiscardPrivateMegaCheckpoint();
             // 重置分块状态：AllFinished=False 且所有 chunk 回到未下载
             if (DatosPartes is not null)
             {
@@ -1478,10 +2311,11 @@ namespace MegaDownloader
             FechaUltimoError = default;
             EsErrorPermanente = false;
             FailedByQuota = false;
+            MegaAccountErrorCode = null;
             TiempoEstimadoDescarga = "";
 
             // 删除可能残留的 .part 文件（可能已损坏或处于不一致状态）
-            if (!string.IsNullOrWhiteSpace(RutaLocal) && !string.IsNullOrWhiteSpace(NombreFichero))
+            if (!UsesMegaAccount && !string.IsNullOrWhiteSpace(RutaLocal) && !string.IsNullOrWhiteSpace(NombreFichero))
             {
                 try
                 {
@@ -1510,6 +2344,11 @@ namespace MegaDownloader
         // IDisposable
         protected virtual void Dispose(bool disposing)
         {
+            if (UsesMegaAccount && disposing)
+            {
+                CancelMegaAccountDownload(Estado.Pausado, disposing: true);
+                return;
+            }
             if (!disposedValue)
             {
                 // B1-④:释放即取消验证,防关机后复活。
@@ -1607,6 +2446,28 @@ namespace MegaDownloader
             }
 
 
+            string argPathMegaAccountEmail = "MegaAccountEmail";
+            MegaAccountEmail = LeerNodo(ref XML, ref argPathMegaAccountEmail, "");
+            string argPathMegaDriveNodeHandle = "MegaDriveNodeHandle";
+            ulong driveHandle;
+            MegaDriveNodeHandle = ulong.TryParse(LeerNodo(ref XML, ref argPathMegaDriveNodeHandle, ""),
+                System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture,
+                out driveHandle) ? driveHandle : (ulong?)null;
+            if (MegaDriveNodeHandle.HasValue)
+                LinkVisible = false;
+            string argPathMegaAccountTransferEmail = "MegaAccountTransferEmail";
+            MegaAccountTransferEmail = UsesMegaAccount && !MegaDriveNodeHandle.HasValue
+                ? LeerNodo(ref XML, ref argPathMegaAccountTransferEmail, "")
+                : string.Empty;
+
+            string argPathPublicFolderId = "PublicFolderId";
+            PublicFolderId = LeerNodo(ref XML, ref argPathPublicFolderId, "");
+            string argPathPublicFolderHandle = "PublicFolderHandle";
+            ulong publicFolderHandle;
+            PublicFolderHandle = ulong.TryParse(LeerNodo(ref XML, ref argPathPublicFolderHandle, ""),
+                System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture,
+                out publicFolderHandle) ? publicFolderHandle : (ulong?)null;
+
             string argPath4 = "NombreFichero";
             NombreFichero = LeerNodo(ref XML, ref argPath4, "");
             string argPath5 = "PartialFileName";
@@ -1623,6 +2484,8 @@ namespace MegaDownloader
                     PartialFileName = FileDownloader.CreatePartialFileName();
                 }
             }
+            if (MegaDriveNodeHandle.HasValue && string.IsNullOrEmpty(PartialFileName))
+                PartialFileName = FileDownloader.CreatePartialFileName();
             string argPath6 = "RutaRelativa";
             RutaRelativa = LeerNodo(ref XML, ref argPath6, "");
             string argPath7 = "RutaLocal";
@@ -1724,6 +2587,13 @@ namespace MegaDownloader
                 string argPath20 = "EstadoDescarga";
                 EstadoDescarga = (Estado)Conversions.ToInteger(Enum.Parse(typeof(Estado), LeerNodo(ref XML, ref argPath20, "")));
             }
+            if (MegaDriveNodeHandle.HasValue)
+            {
+                string argPathWaiting = "MegaDriveWaitingForQuota";
+                bool.TryParse(LeerNodo(ref XML, ref argPathWaiting, "false"), out MegaDriveWaitingForQuota);
+                if (DescargaComenzada && string.IsNullOrEmpty(completedFileName) && EstadoDescarga != Estado.Completado)
+                    RestorePrivateMegaProgress();
+            }
             // RC:重启后查看错误空白/永久失败诈尸的根因——此前只存 Estado,不存描述与标记。
             string argPath22 = "DescripcionError";
             DescripcionError = LeerNodo(ref XML, ref argPath22, "");
@@ -1733,8 +2603,40 @@ namespace MegaDownloader
             bool.TryParse(LeerNodo(ref XML, ref argPath23, "false"), out EsErrorPermanente);
             string argPath24 = "FailedByQuota";
             bool.TryParse(LeerNodo(ref XML, ref argPath24, "false"), out FailedByQuota);
+            MegaAccountErrorCode = null;
+            if (UsesMegaAccount)
+            {
+                string argPathAccountCode = "MegaAccountErrorCode";
+                if (int.TryParse(LeerNodo(ref XML, ref argPathAccountCode, ""), out int accountCode))
+                {
+                    MegaAccountErrorCode = accountCode;
+                }
+                else if (EstadoDescarga == Estado.Erroneo && !string.IsNullOrEmpty(DescripcionError))
+                {
+                    // Older account tasks stored only the localized description.
+                    if (DescripcionError == MegaAccountService.ErrorText(MegaAccountService.OverQuota))
+                    {
+                        FailedByQuota = true;
+                    }
+                    else if (DescripcionError == MegaAccountService.ErrorText(MegaAccountService.SessionExpired))
+                    {
+                        MegaAccountErrorCode = MegaAccountService.SessionExpired;
+                    }
+                    else
+                    {
+                        foreach (int value in TransientMegaAccountErrors)
+                        {
+                            if (DescripcionError == MegaAccountService.ErrorText(value))
+                            {
+                                MegaAccountErrorCode = value;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
             // 兼容旧版派生标记:老队列无标记时按描述文本回推,避免重启后永久失败被自愈捞起。
-            if (!EsErrorPermanente && !FailedByQuota && !string.IsNullOrEmpty(DescripcionError))
+            else if (!EsErrorPermanente && !FailedByQuota && !string.IsNullOrEmpty(DescripcionError))
             {
                 EsErrorPermanente = IsPermanentErrorText(DescripcionError);
                 if (!EsErrorPermanente)
@@ -1830,6 +2732,30 @@ namespace MegaDownloader
                 {
                     NodoFic.AppendChild(XML.CreateElement("FileID")).InnerText = Criptografia.ToInsecureString(_FileID);
                 }
+                if (UsesMegaAccount)
+                {
+                    NodoFic.AppendChild(XML.CreateElement("MegaAccountEmail")).InnerText = MegaAccountEmail;
+                    if (MegaDriveNodeHandle.HasValue)
+                    {
+                        NodoFic.AppendChild(XML.CreateElement("MegaDriveNodeHandle")).InnerText =
+                            MegaDriveNodeHandle.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        if (MegaDriveWaitingForQuota)
+                            NodoFic.AppendChild(XML.CreateElement("MegaDriveWaitingForQuota")).InnerText = "true";
+                    }
+                    else if (MegaAccountTransferEmail.Length > 0)
+                    {
+                        NodoFic.AppendChild(XML.CreateElement("MegaAccountTransferEmail")).InnerText = MegaAccountTransferEmail;
+                    }
+                }
+                if (PublicFolderId.Length > 0)
+                {
+                    NodoFic.AppendChild(XML.CreateElement("PublicFolderId")).InnerText = PublicFolderId;
+                    if (PublicFolderHandle.HasValue)
+                    {
+                        NodoFic.AppendChild(XML.CreateElement("PublicFolderHandle")).InnerText =
+                            PublicFolderHandle.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                }
                 NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero;
                 NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName;
                 if (completedFileName is not null)
@@ -1871,6 +2797,11 @@ namespace MegaDownloader
                 NodoFic.AppendChild(XML.CreateElement("DescripcionError")).InnerText = descToSave;
                 NodoFic.AppendChild(XML.CreateElement("EsErrorPermanente")).InnerText = EsErrorPermanente.ToString();
                 NodoFic.AppendChild(XML.CreateElement("FailedByQuota")).InnerText = FailedByQuota.ToString();
+                if (MegaAccountErrorCode.HasValue)
+                {
+                    NodoFic.AppendChild(XML.CreateElement("MegaAccountErrorCode")).InnerText =
+                        MegaAccountErrorCode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
                 NodoFic.AppendChild(XML.CreateElement("MarcadoParaBorrarFicheroLocal")).InnerText = MarcadoParaBorrarFicheroLocal.ToString();
                 NodoFic.AppendChild(XML.CreateElement("TiempoEstimadoDescarga")).InnerText = TiempoEstimadoDescarga;
                 NodoFic.AppendChild(XML.CreateElement("PausaIndividual")).InnerText = PausaIndividual.ToString();

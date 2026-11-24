@@ -39,7 +39,19 @@ public partial class DownloadsPageView : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (DataContext is DownloadsPageViewModel model)
+        {
+            model.PickIdentityAsync = current => IdentityPickerWindow.ShowAsync(this, current);
+            model.SetAvailableWidth(Bounds.Width);
+        }
         SubscribeSelectionSync();
+    }
+
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
+    {
+        base.OnSizeChanged(e);
+        if (DataContext is DownloadsPageViewModel model)
+            model.SetAvailableWidth(e.NewSize.Width);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

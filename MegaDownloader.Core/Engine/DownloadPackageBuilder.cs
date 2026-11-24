@@ -81,7 +81,7 @@ namespace MegaDownloader
             return preview;
         }
 
-        public static Paquete Build(List<URLProcessor.FileURL> URLs2, string packageName, string destination, bool createDirectory, bool extractArchives, string password, CancellationToken cancellation, IProgress<int> progress = null)
+        public static Paquete Build(List<URLProcessor.FileURL> URLs2, string packageName, string destination, bool createDirectory, bool extractArchives, string password, CancellationToken cancellation, IProgress<int> progress = null, string megaAccountEmail = "", string publicFolderId = "")
         {
             cancellation.ThrowIfCancellationRequested();
 
@@ -172,8 +172,16 @@ namespace MegaDownloader
                         URLFile = URLFile.Replace(Fichero.HIDDEN_LINK, "");
                     }
 
-                    var oFichero = new Fichero(URLFile);
+                    if (!string.IsNullOrEmpty(megaAccountEmail) &&
+                        (!Visible || !string.IsNullOrEmpty(URL.Path) || !string.IsNullOrEmpty(URL.FolderName) ||
+                         Fichero.GetMegaAccountLink(URLFile) is null))
+                    {
+                        throw new ArgumentException(Language.GetText("AddLinks_MegaAccountFilesOnly"));
+                    }
+
+                    var oFichero = new Fichero(URLFile) { MegaAccountEmail = megaAccountEmail };
                     oPaquete.ListaFicheros.Add(oFichero);
+                    oFichero.PublicFolderId = publicFolderId;
                     oFichero.LinkVisible = Visible;
                     oFichero.RutaLocal = ruta;
                     oFichero.RutaRelativa = URL.Path;

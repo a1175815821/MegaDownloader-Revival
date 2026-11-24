@@ -1,0 +1,79 @@
+name: native-account
+
+# Builds the MEGA account bridge for the two preview targets. The SDK is pinned to
+# v10.21.1 and every platform uses the same vcpkg baseline as the SDK checkout.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/avalonia
+    paths:
+      - "Native/MegaAccount/**"
+      - ".github/workflows/native-account.yml"
+
+jobs:
+  bridge:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            rid: osx-arm64
+            triplet: arm64-osx
+            library: libMegaAccountBridge.dylib
+            arch: arm64
+          - os: ubuntu-24.04
+            rid: linux-x64
+            triplet: x64-linux
+            library: libMegaAccountBridge.so
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check out the pinned MEGA SDK
+        run: >
+          git clone --depth 1 --branch v10.21.1
+          https://github.com/meganz/sdk.git "${{ runner.temp }}/mega-sdk"
+
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config autoconf automake libtool
+
+      - name: Check out vcpkg
+        run: >
+          git clone --filter=blob:none
+          https://github.com/microsoft/vcpkg.git "${{ runner.temp }}/vcpkg"
+
+      - name: Bootstrap vcpkg
+        run: "${{ runner.temp }}/vcpkg/bootstrap-vcpkg.sh -disableMetrics"
+
+      - name: Configure
+        run: >
+          cmake -S Native/MegaAccount -B "${{ runner.temp }}/bridge"
+          -DCMAKE_BUILD_TYPE=Release
+          -DMEGA_SDK_DIR="${{ runner.temp }}/mega-sdk"
+          -DVCPKG_ROOT="${{ runner.temp }}/vcpkg"
+          -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+
+      - name: Build
+        run: cmake --build "${{ runner.temp }}/bridge" --config Release --parallel
+
+      - name: Stage the platform library
+        shell: bash
+        run: |
+          mkdir -p "Native/MegaAccount/prebuilt/${{ matrix.rid }}"
+          found=$(find "${{ runner.temp }}/bridge" -name "${{ matrix.library }}" -type f | head -n 1)
+          test -n "$found"
+          cp "$found" "Native/MegaAccount/prebuilt/${{ matrix.rid }}/${{ matrix.library }}"
+          cp "${{ runner.temp }}/mega-sdk/LICENSE" "Native/MegaAccount/prebuilt/${{ matrix.rid }}/MEGA-SDK-LICENSE.txt"
+
+      - name: Upload the library
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaAccountBridge-${{ matrix.rid }}
+          path: Native/MegaAccount/prebuilt/${{ matrix.rid }}

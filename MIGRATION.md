@@ -295,6 +295,8 @@ Packaging: `dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release
 - Windows: `WindowsPlatformServices.cs` (DPAPI, HKCU autostart, mega:// protocol, shutdown)
 - macOS/Linux: `UnixPlatformServices.cs` (encrypted secret store, XDG/LaunchAgents autostart, xdg-mime, open/shutdown)
 - Avalonia shell: `MegaDownloader.UI/` starts on Windows/macOS/Linux; business features are progressively movable from `MegaDownloader.Full` into `MegaDownloader.Core` behind the platform interfaces
+- MEGA accounts: `MegaDownloader.Core/Services/MegaAccountService.cs` bridges the native SDK (`Native/MegaAccount`, Windows prebuilt plus macOS/Linux CI builds), and the Avalonia shell adds account, cloud-drive and directory-subscription pages. Private node transfers keep a `.mega.part` checkpoint and verify the whole-file MetaMAC; public downloads can switch accounts when quota runs out.
+- Desktop workbench: the Avalonia shell now uses shared P3 styles (`Themes/Colors.axaml`, `Button.axaml`, `Controls.axaml`) with a cool palette, embedded Source Sans 3 plus system CJK fallback, a workspace rail, queue categories, an aligned queue table, on-demand details, a compact footer, a redesigned Add Links flow and grouped Settings. The 679-item queue and narrow-window smoke were checked on Windows; macOS/Linux visual acceptance remains.
 
 Major items still required before a full cross-platform release:
 

@@ -1,0 +1,124 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+             x:Class="MegaDownloader.UI.Views.AccountPageView"
+             x:DataType="vm:AccountPageViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="TextBox.field">
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Classes="reveal" Margin="20,18,20,14" RowDefinitions="Auto,Auto,*" RowSpacing="14">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="h1" Text="{DynamicResource Loc.MegaAccounts}"/>
+                <TextBlock Classes="muted" Text="{DynamicResource Loc.MegaAccountsHint}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Classes="quiet toolbar" Content="{DynamicResource Loc.CheckForUpdates}" Command="{Binding RefreshDetailsCommand}"
+                        IsVisible="{Binding HasSelection}" IsEnabled="{Binding CanRefreshDetails}"/>
+                <Button Classes="accent" Content="{DynamicResource Loc.AddAccount}" Command="{Binding BeginAddCommand}"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Padding="12,8" IsVisible="{Binding HasNotice}" Background="{DynamicResource Md.AltBack}"
+                BorderBrush="{DynamicResource Md.Border}" BorderThickness="1">
+            <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Sign-in form -->
+        <Border Grid.Row="2" Classes="card" IsVisible="{Binding IsLoginMode}" Padding="24,20" MaxWidth="560"
+                HorizontalAlignment="Left" VerticalAlignment="Top">
+            <StackPanel Spacing="10">
+                <TextBlock Classes="h2" Text="{Binding LoginHeading}" TextWrapping="Wrap"/>
+                <TextBlock Classes="muted" Text="{DynamicResource Loc.MegaAccountLoginHint}" TextWrapping="Wrap"
+                           IsVisible="{Binding !LoginEmailReadOnly}"/>
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.Email}"/>
+                <TextBox Classes="field" Text="{Binding LoginEmail}" IsReadOnly="{Binding LoginEmailReadOnly}"
+                         PlaceholderText="{DynamicResource Loc.MegaAccountEmail}" AutomationProperties.Name="{DynamicResource Loc.Email}"/>
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.Password}"/>
+                <TextBox Classes="field" Text="{Binding LoginPassword}" PasswordChar="●"
+                         AutomationProperties.Name="{DynamicResource Loc.Password}"/>
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.MegaAccountAlias}" IsVisible="{Binding !LoginEmailReadOnly}"/>
+                <TextBox Classes="field" Text="{Binding LoginAlias}" IsVisible="{Binding !LoginEmailReadOnly}"
+                         PlaceholderText="{DynamicResource Loc.MegaAccountAliasOptional}"/>
+                <CheckBox Content="{DynamicResource Loc.MegaAccountRemember}" IsChecked="{Binding LoginRemember}"/>
+                <StackPanel Spacing="4" IsVisible="{Binding ShowMfa}">
+                    <TextBlock Classes="caption" Text="{DynamicResource Loc.TwoFactorCode}"/>
+                    <TextBox Text="{Binding MfaCode}" PasswordChar="●" AutomationProperties.Name="{DynamicResource Loc.TwoFactorCode}"/>
+                </StackPanel>
+                <TextBlock Classes="caption" Classes.error="True" Text="{Binding Message}" TextWrapping="Wrap"
+                           IsVisible="{Binding HasMessage}" AutomationProperties.LiveSetting="Polite"/>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelLoginCommand}"
+                            IsVisible="{Binding HasAccounts}" IsEnabled="{Binding !IsWorking}"/>
+                    <Button Classes="accent" Content="{DynamicResource Loc.SignIn}" Command="{Binding SignInCommand}"
+                            IsEnabled="{Binding !IsWorking}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Account roster and selected details -->
+        <Grid Grid.Row="2" ColumnDefinitions="280,1*" ColumnSpacing="22" IsVisible="{Binding !IsLoginMode}">
+            <Border Classes="card" Padding="8">
+                <Grid RowDefinitions="*,Auto" RowSpacing="0">
+                    <ListBox ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" Background="Transparent"
+                             BorderThickness="0" Margin="6" AutomationProperties.Name="{DynamicResource Loc.MegaAccounts}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AccountRowViewModel">
+                                <StackPanel Spacing="2" Margin="4,6">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Classes="caption" Text="{Binding Caption}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Classes="caption" Text="{Binding Summary}"
+                                               Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Grid.Row="1" Classes="quiet toolbar" Content="{DynamicResource Loc.AddAccount}" Command="{Binding BeginAddCommand}"
+                            Margin="10,4,10,10" HorizontalAlignment="Left"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Classes="card" Padding="22,18">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasSelection}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Classes="h2" Text="{Binding SelectedName}" TextWrapping="Wrap"/>
+                        <TextBlock Classes="caption" Text="{Binding SelectedEmail}" IsVisible="{Binding SelectedEmail}"/>
+                        <TextBlock Text="{Binding SelectedSummary}" TextWrapping="Wrap" Classes.error="{Binding SelectedIsError}"/>
+                        <TextBlock Classes="caption" Classes.error="True" Text="{Binding Message}" TextWrapping="Wrap"
+                                   IsVisible="{Binding HasMessage}" AutomationProperties.LiveSetting="Polite"/>
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="18" RowSpacing="4" Margin="0,4">
+                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Plan}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SelectedPlan}"/>
+                            <TextBlock Grid.Row="1" Classes="caption" Text="{DynamicResource Loc.Storage}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedStorage}"/>
+                            <TextBlock Grid.Row="2" Classes="caption" Text="{DynamicResource Loc.Transfer}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedTransfer}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4">
+                            <TextBox Text="{Binding AliasInput}" PlaceholderText="{DynamicResource Loc.Alias}"
+                                     AutomationProperties.Name="{DynamicResource Loc.Alias}"/>
+                            <Button Grid.Column="1" Content="{DynamicResource Loc.Save}" Command="{Binding SaveAliasCommand}"
+                                    IsEnabled="{Binding CanSaveAlias}"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6">
+                            <Button Content="{DynamicResource Loc.SetAsDefault}" Command="{Binding SetDefaultCommand}"
+                                    IsEnabled="{Binding CanSetDefault}"/>
+                            <Button Content="{DynamicResource Loc.SignInAgain}" Command="{Binding ReLoginCommand}"
+                                    IsVisible="{Binding HasSelection}"/>
+                            <Button Content="{DynamicResource Loc.SignOut}" Command="{Binding SignOutCommand}"
+                                    IsEnabled="{Binding CanSignOut}"/>
+                            <Button Classes="quiet toolbar" Content="{DynamicResource Loc.RemoveAccount}" Command="{Binding RemoveCommand}"
+                                    IsEnabled="{Binding CanRemove}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

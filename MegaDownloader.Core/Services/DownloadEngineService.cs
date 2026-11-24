@@ -124,6 +124,61 @@ namespace MegaDownloader
 
         /// <summary>Identity → display metadata for every file already queued, used by
         /// link preflight to flag duplicates (WinForms Main.GetQueuedLinkSnapshot).</summary>
+        /// <summary>Cloud-drive tasks in the queue for one account. Subscription checks use
+        /// this to tell an already queued file from a missing one.</summary>
+        public List<MegaDriveQueueItem> SnapshotCloudQueue(string email)
+        {
+            var files = new List<MegaDriveQueueItem>();
+            lock (Mutex.ListaDescargas)
+            {
+                lock (Mutex.FicheroDownloader)
+                {
+                    foreach (Paquete package in _packages)
+                    {
+                        if (package.ListaFicheros is null)
+                            continue;
+                        foreach (Fichero file in package.ListaFicheros)
+                        {
+                            if (file.MegaDriveNodeHandle.HasValue &&
+                                string.Equals(file.MegaAccountEmail, email, StringComparison.OrdinalIgnoreCase))
+                            {
+                                files.Add(new MegaDriveQueueItem(file.MegaDriveNodeHandle.Value, file.RutaLocal,
+                                    file.NombreFichero, file.TamanoBytes,
+                                    file.DescargaEstado() == Estado.Completado));
+                            }
+                        }
+                    }
+                }
+            }
+            return files;
+        }
+
+        /// <summary>
+        /// Assigns one download identity to the selected pending tasks. Returns an empty
+        /// string when the change was applied, otherwise the reason key for the caller.
+        /// </summary>
+        public string ChangeDownloadIdentity(IEnumerable<Fichero> files, string email)
+        {
+            lock (Mutex.FicheroDownloader)
+            {
+                foreach (Fichero file in files)
+                {
+                    if (file.MegaDriveNodeHandle.HasValue)
+                        return "MegaDrive_AccountBound";
+                    if (!file.CanChangeDownloadIdentity())
+                        return "MegaAccount_QueueAccountInUse";
+                    if (!string.IsNullOrEmpty(email) && Fichero.GetMegaAccountLink(file.URL) is null)
+                        return "MegaAccount_QueueOnlyFiles";
+                }
+                foreach (Fichero file in files)
+                    file.ChangeDownloadIdentity(email);
+            }
+            _saveRequested = true;
+            Interlocked.Increment(ref _queueVersion);
+            RefreshAggregatesCore();
+            return string.Empty;
+        }
+
         public Dictionary<string, URLProcessor.FileURL> GetQueuedLinkSnapshot()
         {
             var result = new Dictionary<string, URLProcessor.FileURL>(StringComparer.Ordinal);
@@ -541,6 +596,15 @@ namespace MegaDownloader
                 UserNotification.ShowInfo(blocked, "Download");
                 return;
             }
+            if (CloudQuotaBlocks(file))
+            {
+                MegaAccountService.Status status = MegaAccountService.Current.GetStatus(file.MegaAccountEmail);
+                string text = Language.GetText("MegaDrive_WaitingQuota");
+                if (status.QuotaRetryUtc.HasValue)
+                    text += " · " + FormatQuotaRemaining(status.QuotaRetryUtc.Value - DateTime.UtcNow);
+                UserNotification.ShowInfo(text, "Download");
+                return;
+            }
 
             lock (_stateGate)
                 _state = DownloadEngineState.Running;
@@ -625,7 +689,8 @@ namespace MegaDownloader
 
         private static void ResetForRetry(Fichero file)
         {
-            file.ResetearDescarga(preserveProgress: file.FailedByQuota);
+            // A private node's checkpoint is the only resume source; keep it on retry.
+            file.ResetearDescarga(preserveProgress: file.FailedByQuota || file.MegaDriveNodeHandle.HasValue);
             file.PausaIndividual = false;
             file.SetDescargaEstado = Estado.EnCola;
         }
@@ -818,6 +883,7 @@ namespace MegaDownloader
                 DownloadEngineState state = State;
                 if (state == DownloadEngineState.Running)
                 {
+                    WakeAccountFailures();
                     RunScheduler();
                 }
                 else if (state == DownloadEngineState.Paused)
@@ -879,7 +945,7 @@ namespace MegaDownloader
                                 active++;
                                 continue;
                             }
-                            if (quotaHold || file.PausaIndividual)
+                            if (quotaHold || file.PausaIndividual || !AccountBackendAllowsStart(file))
                                 continue;
                             if (fileState == Estado.Pausado)
                             {
@@ -943,6 +1009,114 @@ namespace MegaDownloader
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>Account tasks wait for a connected, non-quota-blocked account; the
+        /// anonymous engine's cooldown does not apply to them.</summary>
+        private static bool AccountBackendAllowsStart(Fichero file)
+        {
+            if (!file.UsesMegaAccount || file.HasRecordedMegaAccountOutput)
+                return true;
+            if (file.IsMegaAccountConnecting)
+                return false;
+            return !CloudQuotaBlocks(file);
+        }
+
+        private static bool CloudQuotaBlocks(Fichero file)
+        {
+            if (!file.MegaDriveNodeHandle.HasValue || file.HasRecordedMegaAccountOutput)
+                return false;
+            MegaAccountService.Status account = MegaAccountService.Current.GetStatus(file.MegaAccountEmail);
+            return account.SignedIn && account.QuotaReached;
+        }
+
+        private static string FormatQuotaRemaining(TimeSpan span)
+        {
+            int totalSec = Math.Max(1, (int)Math.Ceiling(span.TotalSeconds));
+            if (totalSec < 120)
+            {
+                if (totalSec < 60)
+                    return totalSec + " s";
+                return "1 min " + (totalSec - 60) + " s";
+            }
+            int totalMin = totalSec / 60;
+            int h = totalMin / 60;
+            int m = totalMin % 60;
+            return h > 0 ? h + " h " + m + " min" : m + " min";
+        }
+
+        /// <summary>
+        /// Account retries follow the account state instead of the anonymous quota flag:
+        /// a signed-in account with allowance retries session/transient failures, and a
+        /// quota failure wakes when the reported deadline passes or another account can
+        /// take the public transfer.
+        /// </summary>
+        private void WakeAccountFailures()
+        {
+            MegaAccountService service = MegaAccountService.Current;
+            if (service.IsRestoring)
+                return;
+
+            var pending = new List<Fichero>();
+            DateTime retryBefore = DateTime.Now.AddMinutes(-Math.Max(1, _config.ResetearErroresPeriodoMinutos));
+            lock (Mutex.ListaDescargas)
+            {
+                foreach (Paquete package in _packages)
+                {
+                    if (package.ListaFicheros is null)
+                        continue;
+                    foreach (Fichero file in package.ListaFicheros)
+                    {
+                        if (!file.UsesMegaAccount || file.DescargaEstado() != Estado.Erroneo ||
+                            file.EsErrorPermanente || file.PausaIndividual)
+                        {
+                            continue;
+                        }
+
+                        MegaAccountService.Status status = service.GetStatus(file.EffectiveMegaAccountEmail);
+                        bool available = status.SignedIn && !status.Connecting && !status.QuotaReached;
+                        bool retryDue = file.FechaUltimoError.GetValueOrDefault() < retryBefore;
+                        if (file.FailedByQuota)
+                        {
+                            if (available && (!status.QuotaDelayUnknown || retryDue))
+                            {
+                                pending.Add(file);
+                            }
+                            else if (!file.MegaDriveNodeHandle.HasValue)
+                            {
+                                var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    file.EffectiveMegaAccountEmail
+                                };
+                                string next = service.NextTransferAccount(file.EffectiveMegaAccountEmail, tried, retryDue);
+                                if (next.Length > 0)
+                                {
+                                    file.RecordMegaAccountTransfer(next);
+                                    pending.Add(file);
+                                }
+                            }
+                        }
+                        else if (available)
+                        {
+                            int code = file.MegaAccountErrorCode.GetValueOrDefault();
+                            if (code == MegaAccountService.SessionExpired || code == MegaAccountService.Busy ||
+                                (_config.ResetearErrores && retryDue && Fichero.IsTransientMegaAccountError(code)))
+                            {
+                                pending.Add(file);
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (Fichero file in pending)
+            {
+                file.MegaDriveWaitingForQuota = false;
+                file.ResetearDescarga(preserveProgress: true);
+                file.SetDescargaEstado = Estado.EnCola;
+                _saveRequested = true;
+                Log.WriteInfo("Retrying MEGA account task " + file.FileID + " automatically.");
             }
         }
 
@@ -1083,6 +1257,8 @@ namespace MegaDownloader
 
         private static void RemoveFile(Fichero file, bool deleteFiles, Paquete package)
         {
+            if (deleteFiles)
+                file.DiscardPrivateMegaCheckpoint();
             try
             {
                 file.RemovePendingExtraction();

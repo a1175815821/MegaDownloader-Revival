@@ -35,6 +35,22 @@ namespace MegaDownloader
         private Dictionary<string, long> _htMaxSpeed;
         private long _globalMaxSpeed;
 
+        // SDK transfers do not run through ThrottledStream: the native bridge reads its
+        // own byte allocation from this budget.
+        private readonly HashSet<AccountDownloadBudget> _accountDownloads = new HashSet<AccountDownloadBudget>();
+
+        public sealed class AccountDownloadBudget
+        {
+            internal int Transfers;
+            private long _bytesPerSecond;
+
+            public long BytesPerSecond
+            {
+                get => System.Threading.Volatile.Read(ref _bytesPerSecond);
+                set => System.Threading.Volatile.Write(ref _bytesPerSecond, value);
+            }
+        }
+
         private ThrottledStreamController()
         {
             lock (Mutex)
@@ -77,11 +93,12 @@ namespace MegaDownloader
             lock (Mutex)
             {
 
-                if (_StreamList.Count == 0)
+                int participants = _StreamList.Count + _accountDownloads.Count;
+                if (participants == 0)
                     return;
 
                 // Velocidad maxima global de cada stream
-                long SpeedGlobalIndividual = (long)Math.Round(_globalMaxSpeed / (double)_StreamList.Count);
+                long SpeedGlobalIndividual = (long)Math.Round(_globalMaxSpeed / (double)participants);
 
                 long MaxSpeed;
 
@@ -127,14 +144,7 @@ namespace MegaDownloader
                     }
                 }
 
-                int StreamsRestantes = 0;
-                foreach (ThrottledStream stream in _StreamList)
-                {
-                    if (!StreamsConLimiteIndividual.Contains(stream))
-                    {
-                        StreamsRestantes += 1;
-                    }
-                }
+                int StreamsRestantes = participants - StreamsConLimiteIndividual.Count;
                 if (StreamsRestantes > 0)
                 {
 
@@ -148,6 +158,10 @@ namespace MegaDownloader
                         {
                             stream.MaximumBytesPerSecond = MaxSpeed;
                         }
+                    }
+                    foreach (AccountDownloadBudget budget in _accountDownloads)
+                    {
+                        budget.BytesPerSecond = MaxSpeed;
                     }
 
                 }
@@ -167,6 +181,31 @@ namespace MegaDownloader
         #endregion
 
         #region Región pública
+
+        /// <summary>Registers one native SDK transfer in the shared speed allocation.</summary>
+        public void BeginAccountDownload(AccountDownloadBudget budget)
+        {
+            lock (Mutex)
+            {
+                budget.Transfers++;
+                if (budget.Transfers > 1)
+                    return;
+                _accountDownloads.Add(budget);
+                _RecalcularVelocidad();
+            }
+        }
+
+        public void EndAccountDownload(AccountDownloadBudget budget)
+        {
+            lock (Mutex)
+            {
+                budget.Transfers--;
+                if (budget.Transfers > 0)
+                    return;
+                _accountDownloads.Remove(budget);
+                _RecalcularVelocidad();
+            }
+        }
 
         // Llamar cuando creamos un stream nuevo
         public void AddStream(ref ThrottledStream Stream, string Id)

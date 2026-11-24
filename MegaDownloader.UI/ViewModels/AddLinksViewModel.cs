@@ -16,8 +16,10 @@ namespace MegaDownloader.UI.ViewModels;
 public partial class AddLinksViewModel : ViewModelBase, IDisposable
 {
     private readonly DownloadEngineService _engine;
+    private readonly MegaAccountService _accounts;
     private readonly Dictionary<BatchLinkPreflight.Entry, PreflightRowViewModel> _rowsByEntry =
         new(ReferenceEqualityComparer.Instance);
+    private bool _updatingIdentities;
     private PreflightSelection? _selection;
     private PreflightTree? _tree;
     private PreflightSession? _session;
@@ -108,9 +110,24 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string pendingBatch = string.Empty;
 
-    public AddLinksViewModel(DownloadEngineService engine)
+    [ObservableProperty]
+    private ObservableCollection<DownloadIdentityChoice> identities = new();
+
+    [ObservableProperty]
+    private DownloadIdentityChoice? selectedIdentity;
+
+    [ObservableProperty]
+    private string identityNotice = string.Empty;
+
+    [ObservableProperty]
+    private bool identityNoticeIsError;
+
+    public AddLinksViewModel(DownloadEngineService engine, MegaAccountService accounts)
     {
         _engine = engine;
+        _accounts = accounts;
+        RebuildIdentities(_accounts.DefaultEmail);
+        _accounts.Changed += OnAccountsChanged;
 
         var config = engine.Config;
         bool reuseLast = config.MantenerUltimaConfiguracion && UltimaConfiguracionUsada.ExisteUltimaConfiguracion;
@@ -147,7 +164,11 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
     public bool HasPendingBatch => !string.IsNullOrWhiteSpace(PendingBatch);
 
+    public bool HasIdentityNotice => !string.IsNullOrWhiteSpace(IdentityNotice);
+
     public bool CanGoBack => !IsImporting && !IsInspecting;
+
+    public string SelectedIdentityEmail => SelectedIdentity?.Email ?? string.Empty;
 
     public string AddButtonText => SelectedCount > 0 ? UiText.Format("Add {0} selected", SelectedCount) : UiText.Get("Add selected");
 
@@ -227,6 +248,122 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
 
     partial void OnPendingBatchChanged(string value) => OnPropertyChanged(nameof(HasPendingBatch));
 
+    partial void OnIdentityNoticeChanged(string value) => OnPropertyChanged(nameof(HasIdentityNotice));
+
+    partial void OnSelectedIdentityChanged(DownloadIdentityChoice? value)
+    {
+        if (_updatingIdentities)
+            return;
+        UpdateIdentityNotice();
+        _session?.Dispose();
+        _session = null;
+        if (IsInspecting || IsImporting)
+            return;
+        _tree = null;
+        _selection = null;
+        Rows.Clear();
+        _rowsByEntry.Clear();
+        Categories.Clear();
+        HasEntries = false;
+        SelectedCount = 0;
+        UpdateSelectionSummary();
+        if (Step == 1)
+        {
+            if (CanCheck)
+                _ = CheckAsync();
+            else
+                Step = 0;
+        }
+    }
+
+    private void OnAccountsChanged(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_disposed)
+                RebuildIdentities(SelectedIdentityEmail);
+        });
+
+    private void RebuildIdentities(string selectedEmail)
+    {
+        _updatingIdentities = true;
+        try
+        {
+            var choices = new ObservableCollection<DownloadIdentityChoice>
+            {
+                new(string.Empty, UiText.Get("Anonymous"), false)
+            };
+            foreach (MegaAccountService.Status status in _accounts.GetAccounts())
+            {
+                string caption = string.IsNullOrEmpty(status.AliasName)
+                    ? status.Email
+                    : status.AliasName + " (" + status.Email + ")";
+                bool available = status.SignedIn && !status.Connecting;
+                if (!available)
+                    caption += " · " + MegaAccountText.Summary(status);
+                choices.Add(new DownloadIdentityChoice(status.Email, caption, !available));
+            }
+            string keep = selectedEmail;
+            if (keep.Length > 0 && !choices.Any(choice => string.Equals(choice.Email, keep, StringComparison.OrdinalIgnoreCase)))
+            {
+                choices.Add(new DownloadIdentityChoice(keep,
+                    keep + " · " + UiText.Get("Sign in to MEGA again"), true));
+            }
+            Identities = choices;
+            SelectedIdentity = choices.FirstOrDefault(choice =>
+                string.Equals(choice.Email, keep, StringComparison.OrdinalIgnoreCase)) ?? choices[0];
+        }
+        finally
+        {
+            _updatingIdentities = false;
+        }
+        UpdateIdentityNotice();
+    }
+
+    private void UpdateIdentityNotice()
+    {
+        string email = SelectedIdentityEmail;
+        int access = _accounts.GetAccessError(email);
+        IdentityNoticeIsError = access != 0;
+        IdentityNotice = access == 0 ? string.Empty : MegaAccountService.ErrorText(access, connecting: true);
+    }
+
+    private List<BatchLinkPreflight.Entry> InspectAccountLink(string url, CancellationToken token, string email)
+    {
+        var entry = new BatchLinkPreflight.Entry
+        {
+            Name = "—",
+            State = BatchLinkPreflight.LinkState.Invalid
+        };
+        string? link = Fichero.GetMegaAccountLink(url);
+        if (link is null)
+        {
+            entry.Detail = UiText.Get("Account downloads support direct public file links only. Switch the download identity to Anonymous to add folders or encoded links.");
+        }
+        else
+        {
+            token.ThrowIfCancellationRequested();
+            int code = _accounts.Inspect(email, link, out string name, out long size);
+            token.ThrowIfCancellationRequested();
+            entry.Name = Fichero.ExtraerFileID(url);
+            entry.Source = new URLProcessor.FileURL(url, string.Empty);
+            if (code == 0 && !string.IsNullOrEmpty(name) && size >= 0)
+            {
+                entry.Name = PathGuard.SanitizeFileName(name, "file");
+                entry.SizeBytes = size;
+                entry.Source.DisplayName = entry.Name;
+                entry.Source.SizeBytes = size;
+                entry.State = BatchLinkPreflight.LinkState.Ready;
+            }
+            else
+            {
+                entry.Detail = MegaAccountService.ErrorText(code == 0 ? -2 : code, connecting: true);
+                if (!Fichero.IsPermanentMegaAccountError(code))
+                    entry.State = BatchLinkPreflight.LinkState.Unavailable;
+            }
+        }
+        return new List<BatchLinkPreflight.Entry> { entry };
+    }
+
     partial void OnSpaceInsufficientChanged(bool value) => OnPropertyChanged(nameof(CanAdd));
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
@@ -250,6 +387,14 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        string identity = SelectedIdentityEmail;
+        int access = _accounts.GetAccessError(identity);
+        if (access != 0)
+        {
+            SetNotice(MegaAccountService.ErrorText(access, connecting: true), true);
+            return;
+        }
+
         IsInspecting = true;
         HasEntries = false;
         Rows.Clear();
@@ -260,7 +405,9 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         SelectedCount = 0;
         UpdateSelectionSummary();
 
-        _session ??= new PreflightSession(_engine.Config);
+        _session ??= identity.Length == 0
+            ? new PreflightSession(_engine.Config)
+            : new PreflightSession((url, token) => InspectAccountLink(url, token, identity));
         string requestedText = LinksText;
         var request = _session.Prepare(requestedText);
         _preparedText = requestedText;
@@ -446,6 +593,13 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
             SetNotice(UiText.Get("The download queue is still loading. Try again in a moment."), true);
             return;
         }
+        string identity = SelectedIdentityEmail;
+        int access = _accounts.GetAccessError(identity);
+        if (access != 0)
+        {
+            SetNotice(MegaAccountService.ErrorText(access, connecting: true), true);
+            return;
+        }
 
         // Snapshot the selection at submit time so a later tree change cannot alter it.
         var chosen = new List<URLProcessor.FileURL>();
@@ -497,7 +651,9 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
                     CreateSubdirectory,
                     ExtractArchives,
                     Password,
-                    token),
+                    token,
+                    progress: null,
+                    megaAccountEmail: identity),
                 token);
 
             if (!StartDownload)
@@ -823,6 +979,7 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        _accounts.Changed -= OnAccountsChanged;
         StopProgressTimer();
         _importCancellation?.Cancel();
         _importCancellation?.Dispose();
@@ -830,6 +987,20 @@ public partial class AddLinksViewModel : ViewModelBase, IDisposable
         _session?.Dispose();
         _session = null;
     }
+}
+
+public sealed class DownloadIdentityChoice
+{
+    public DownloadIdentityChoice(string email, string caption, bool unavailable)
+    {
+        Email = email;
+        Caption = caption;
+        Unavailable = unavailable;
+    }
+
+    public string Email { get; }
+    public string Caption { get; }
+    public bool Unavailable { get; }
 }
 
 /// <summary>One preflight row: a folder node or a file leaf.</summary>
@@ -905,6 +1076,8 @@ public partial class PreflightRowViewModel : ObservableObject
     public string PathText => IsFolder || Entry?.Source is null
         ? string.Empty
         : (Entry.Source.Path ?? string.Empty).Replace('\\', '/');
+
+    public bool HasPath => !string.IsNullOrWhiteSpace(PathText);
 
     [ObservableProperty]
     private bool isSelected;

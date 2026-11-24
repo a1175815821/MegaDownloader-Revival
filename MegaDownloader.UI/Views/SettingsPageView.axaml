@@ -1,241 +1,332 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:MegaDownloader.UI.ViewModels" x:Class="MegaDownloader.UI.Views.SettingsPageView" x:DataType="vm:SettingsPageViewModel">
-  <UserControl.Styles>
-    <Style Selector="TextBlock.saveError">
-      <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
-    </Style>
-  </UserControl.Styles>
-  <Grid Classes="reveal" Margin="32,20" RowDefinitions="Auto,*" RowSpacing="20">
-    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="18">
-      <TextBlock Classes="h1" Text="{DynamicResource Loc.Settings}" TextWrapping="Wrap" />
-      <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SaveStatus}" Classes.saveError="{Binding SaveStatusIsError}" IsVisible="{Binding HasSaveStatus}" VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-      <Button Grid.Column="2" VerticalAlignment="Center" Classes="accent" Content="{DynamicResource Loc.SaveChanges}" Command="{Binding SaveCommand}" />
-    </Grid>
-    <Grid Grid.Row="1" ColumnDefinitions="1.1*,1,1*" ColumnSpacing="22">
-      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="0,0,8,15" Spacing="14">
-          <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="0,0,0,9">
-            <TextBlock Classes="h2" Text="{DynamicResource Loc.Downloads}" TextWrapping="Wrap" />
-          </Border>
-          <Border Background="{DynamicResource Md.AltBack}" Padding="10,7">
-            <TextBlock Classes="caption" Text="{Binding EffectiveSummary}" TextWrapping="Wrap"
-                       AutomationProperties.LiveSetting="Polite" />
-          </Border>
-          <StackPanel Spacing="5">
-            <TextBlock Classes="label" Text="{DynamicResource Loc.DefaultFolder}" TextWrapping="Wrap" />
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-              <TextBox Text="{Binding DefaultFolder}" PlaceholderText="{DynamicResource Loc.DefaultFolder}" AutomationProperties.Name="{DynamicResource Loc.DefaultFolder}" />
-              <Button Grid.Column="1" Command="{Binding BrowseFolderCommand}" Content="{DynamicResource Loc.Browse}" />
-            </Grid>
-          </StackPanel>
-          <CheckBox IsChecked="{Binding WatchClipboard}">
-            <TextBlock Text="{DynamicResource Loc.AddMEGALinksCopiedToTheClipboard}" TextWrapping="Wrap" />
-          </CheckBox>
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
-            <StackPanel Spacing="5">
-              <TextBlock Classes="label" Text="{DynamicResource Loc.SimultaneousDownloads}" TextWrapping="Wrap" />
-              <NumericUpDown Value="{Binding SimultaneousDownloads}" Minimum="1" Maximum="20" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MegaDownloader.UI.ViewModels"
+             x:Class="MegaDownloader.UI.Views.SettingsPageView"
+             x:DataType="vm:SettingsPageViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.saveError">
+            <Setter Property="Foreground" Value="{DynamicResource Md.ErrorFore}" />
+        </Style>
+        <Style Selector="TextBlock.settingLabel">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Classes="reveal" Margin="20,18" RowDefinitions="Auto,*" RowSpacing="14">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+            <StackPanel Spacing="2">
+                <TextBlock Classes="h1" Text="{DynamicResource Loc.Settings}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding SaveStatus}" Classes.saveError="{Binding SaveStatusIsError}"
+                           IsVisible="{Binding HasSaveStatus}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             </StackPanel>
-            <Panel Grid.Column="1">
-              <StackPanel Spacing="5">
-                <TextBlock Classes="label" Text="{DynamicResource Loc.ConnectionsPerFile}" TextWrapping="Wrap" />
-                <NumericUpDown Value="{Binding ConnectionsPerFile}" Minimum="1" Maximum="16" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
-              </StackPanel>
-            </Panel>
-          </Grid>
-          <Expander Header="{DynamicResource Loc.PackageDefaults}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <CheckBox IsChecked="{Binding CreateSubdirectory}">
-                <TextBlock Text="{DynamicResource Loc.CreateASubfolderForEachPackage}" TextWrapping="Wrap" />
-              </CheckBox>
-              <CheckBox IsChecked="{Binding ExtractArchives}">
-                <TextBlock Text="{DynamicResource Loc.ExtractArchivesAutomatically}" TextWrapping="Wrap" />
-              </CheckBox>
-              <CheckBox IsChecked="{Binding StartOnLaunch}">
-                <TextBlock Text="{DynamicResource Loc.StartDownloadsWhenTheAppOpens}" TextWrapping="Wrap" />
-              </CheckBox>
-              <CheckBox IsChecked="{Binding KeepLastOptions}">
-                <TextBlock Text="{DynamicResource Loc.RememberTheLastUsedAddLinksOptions}" TextWrapping="Wrap" />
-              </CheckBox>
-            </StackPanel>
-          </Expander>
-          <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="0,0,0,9">
-            <TextBlock Classes="h2" Text="{DynamicResource Loc.Appearance}" TextWrapping="Wrap" />
-          </Border>
-          <StackPanel Spacing="5">
-            <TextBlock Classes="label" Text="{DynamicResource Loc.InterfaceLanguage}" TextWrapping="Wrap" />
-            <ComboBox x:Name="LanguagePicker" AutomationProperties.Name="{DynamicResource Loc.InterfaceLanguage}" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:LanguageOption">
-                  <TextBlock Text="{Binding Name}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
-          <StackPanel Spacing="5">
-            <TextBlock Classes="label" Text="{DynamicResource Loc.Theme}" TextWrapping="Wrap" />
-            <ComboBox ItemsSource="{Binding ThemeOptions}" SelectedIndex="{Binding SelectedThemeIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="{DynamicResource Loc.Theme}" />
-          </StackPanel>
-        </StackPanel>
-      </ScrollViewer>
-      <Border Grid.Column="1" Background="{DynamicResource Md.Border}" />
-      <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="0,0,8,15" Spacing="8">
-          <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1" Padding="0,0,0,9">
-            <TextBlock Classes="h2" Text="{DynamicResource Loc.Advanced}" TextWrapping="Wrap" />
-          </Border>
-          <Expander Header="{DynamicResource Loc.SpeedAndStartup}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <StackPanel Spacing="5">
-                <TextBlock Classes="label" Text="{DynamicResource Loc.GlobalSpeedLimit}" TextWrapping="Wrap" />
-                <NumericUpDown Value="{Binding GlobalSpeedLimitKBs}" Minimum="0" Maximum="1048576" Increment="64" FormatString="0" HorizontalAlignment="Stretch" />
-                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.KBS0MeansUnlimited}" />
-                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.SingleTasksCanHaveTheirOwnLimitInProperties}" />
-              </StackPanel>
-              <CheckBox IsChecked="{Binding StartWithWindows}">
-                <TextBlock Text="{DynamicResource Loc.LaunchMegaDownloaderWhenISignIn}" TextWrapping="Wrap" />
-              </CheckBox>
-              <StackPanel Spacing="5">
-                <TextBlock Classes="label" Text="{DynamicResource Loc.VLCFolder}" TextWrapping="Wrap" />
-                <TextBox Text="{Binding VlcPath}" PlaceholderText="{DynamicResource Loc.FolderThatContainsVlcExe}" AutomationProperties.Name="{DynamicResource Loc.FolderThatContainsVlcExe}" />
-              </StackPanel>
-            </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.DownloadSchedule}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <CheckBox IsChecked="{Binding ScheduleEnabled}">
-                <TextBlock Text="{DynamicResource Loc.OnlyDownloadInsideAScheduledWindow}" TextWrapping="Wrap" />
-              </CheckBox>
-              <StackPanel IsEnabled="{Binding ScheduleEnabled}" Spacing="10">
-                <CheckBox IsChecked="{Binding ScheduleDaily}">
-                  <TextBlock Text="{DynamicResource Loc.DailyWindow}" TextWrapping="Wrap" />
-                </CheckBox>
-                <StackPanel IsVisible="{Binding ScheduleDaily}" Spacing="9">
-                  <StackPanel Spacing="5">
-                    <TextBlock Classes="label" Text="{DynamicResource Loc.Start}" TextWrapping="Wrap" />
-                    <TimePicker SelectedTime="{Binding ScheduleStart}" ClockIdentifier="24HourClock" HorizontalAlignment="Left" />
-                  </StackPanel>
-                  <StackPanel Spacing="5">
-                    <TextBlock Classes="label" Text="{DynamicResource Loc.End}" TextWrapping="Wrap" />
-                    <TimePicker SelectedTime="{Binding ScheduleEnd}" ClockIdentifier="24HourClock" HorizontalAlignment="Left" />
-                  </StackPanel>
-                </StackPanel>
-                <StackPanel IsVisible="{Binding !ScheduleDaily}" Spacing="9">
-                  <StackPanel Spacing="5">
-                    <TextBlock Classes="label" Text="{DynamicResource Loc.Starts}" TextWrapping="Wrap" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                      <DatePicker SelectedDate="{Binding ScheduleOnceStartDate}" HorizontalAlignment="Stretch" />
-                      <TimePicker Grid.Column="1" SelectedTime="{Binding ScheduleOnceStartTime}" ClockIdentifier="24HourClock" />
-                    </Grid>
-                  </StackPanel>
-                  <StackPanel Spacing="5">
-                    <TextBlock Classes="label" Text="{DynamicResource Loc.Ends}" TextWrapping="Wrap" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                      <DatePicker SelectedDate="{Binding ScheduleOnceEndDate}" HorizontalAlignment="Stretch" />
-                      <TimePicker Grid.Column="1" SelectedTime="{Binding ScheduleOnceEndTime}" ClockIdentifier="24HourClock" />
-                    </Grid>
-                  </StackPanel>
-                </StackPanel>
-                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.UsesLocalTimeAndSupportsWindowsThatCrossMidnight}" />
-                <Border Background="{DynamicResource Md.AltBack}" Padding="10,7">
-                  <TextBlock Classes="caption" Text="{Binding ScheduleSummary}" TextWrapping="Wrap"
-                             AutomationProperties.LiveSetting="Polite" />
+            <Button Grid.Column="1" VerticalAlignment="Center" Classes="accent"
+                    Content="{DynamicResource Loc.SaveChanges}" Command="{Binding SaveCommand}" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel HorizontalAlignment="Stretch" Spacing="14" Margin="0,0,16,18">
+                <!-- Download -->
+                <Border Classes="section">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.Downloads}" />
+                        <TextBlock Classes="caption" Text="{Binding EffectiveSummary}" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" Margin="0,4,0,6" />
+
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.DefaultFolder}" />
+                                <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Text="{Binding DefaultFolder}" PlaceholderText="{DynamicResource Loc.DefaultFolder}"
+                                             AutomationProperties.Name="{DynamicResource Loc.DefaultFolder}" />
+                                    <Button Grid.Column="1" Command="{Binding BrowseFolderCommand}" Content="{DynamicResource Loc.Browse}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.SimultaneousDownloads}" />
+                                <NumericUpDown Grid.Column="1" Value="{Binding SimultaneousDownloads}" Minimum="1" Maximum="20"
+                                               Increment="1" FormatString="0" HorizontalAlignment="Left" Width="150" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.ConnectionsPerFile}" />
+                                <NumericUpDown Grid.Column="1" Value="{Binding ConnectionsPerFile}" Minimum="1" Maximum="16"
+                                               Increment="1" FormatString="0" HorizontalAlignment="Left" Width="150" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.GlobalSpeedLimit}" />
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.KBS0MeansUnlimited}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <NumericUpDown Grid.Column="2" Value="{Binding GlobalSpeedLimitKBs}" Minimum="0" Maximum="1048576"
+                                               Increment="64" FormatString="0" Width="150" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
                 </Border>
-              </StackPanel>
+
+                <!-- Behavior -->
+                <Border Classes="section">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.Behavior}" />
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.Clipboard}" />
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.AddMEGALinksCopiedToTheClipboard}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <CheckBox Grid.Column="2" IsChecked="{Binding WatchClipboard}"
+                                          AutomationProperties.Name="{DynamicResource Loc.AddMEGALinksCopiedToTheClipboard}" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.StartWithWindows}" />
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.LaunchMegaDownloaderWhenISignIn}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <CheckBox Grid.Column="2" IsChecked="{Binding StartWithWindows}"
+                                          AutomationProperties.Name="{DynamicResource Loc.StartWithWindows}" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.StartOnLaunch}" />
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.StartDownloadsWhenTheAppOpens}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <CheckBox Grid.Column="2" IsChecked="{Binding StartOnLaunch}"
+                                          AutomationProperties.Name="{DynamicResource Loc.StartOnLaunch}" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.RememberOptions}" />
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.RememberTheLastUsedAddLinksOptions}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <CheckBox Grid.Column="2" IsChecked="{Binding KeepLastOptions}"
+                                          AutomationProperties.Name="{DynamicResource Loc.RememberOptions}" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.PackageDefaults}" HorizontalContentAlignment="Stretch"
+                                      HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="8">
+                                    <CheckBox IsChecked="{Binding CreateSubdirectory}">
+                                        <TextBlock Text="{DynamicResource Loc.CreateASubfolderForEachPackage}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <CheckBox IsChecked="{Binding ExtractArchives}">
+                                        <TextBlock Text="{DynamicResource Loc.ExtractArchivesAutomatically}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.DownloadSchedule}" HorizontalContentAlignment="Stretch"
+                                      HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="10">
+                                    <CheckBox IsChecked="{Binding ScheduleEnabled}">
+                                        <TextBlock Text="{DynamicResource Loc.OnlyDownloadInsideAScheduledWindow}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <StackPanel IsEnabled="{Binding ScheduleEnabled}" Spacing="9">
+                                        <CheckBox IsChecked="{Binding ScheduleDaily}">
+                                            <TextBlock Text="{DynamicResource Loc.DailyWindow}" TextWrapping="Wrap" />
+                                        </CheckBox>
+                                        <StackPanel IsVisible="{Binding ScheduleDaily}" Spacing="8">
+                                            <Grid ColumnDefinitions="110,Auto" ColumnSpacing="10">
+                                                <TextBlock Classes="caption" Text="{DynamicResource Loc.Start}" VerticalAlignment="Center" />
+                                                <TimePicker Grid.Column="1" SelectedTime="{Binding ScheduleStart}" ClockIdentifier="24HourClock" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="110,Auto" ColumnSpacing="10">
+                                                <TextBlock Classes="caption" Text="{DynamicResource Loc.End}" VerticalAlignment="Center" />
+                                                <TimePicker Grid.Column="1" SelectedTime="{Binding ScheduleEnd}" ClockIdentifier="24HourClock" />
+                                            </Grid>
+                                        </StackPanel>
+                                        <StackPanel IsVisible="{Binding !ScheduleDaily}" Spacing="8">
+                                            <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
+                                                <TextBlock Classes="caption" Text="{DynamicResource Loc.Starts}" VerticalAlignment="Center" />
+                                                <DatePicker SelectedDate="{Binding ScheduleOnceStartDate}" HorizontalAlignment="Stretch" />
+                                                <TimePicker Grid.Column="2" SelectedTime="{Binding ScheduleOnceStartTime}" ClockIdentifier="24HourClock" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
+                                                <TextBlock Classes="caption" Text="{DynamicResource Loc.Ends}" VerticalAlignment="Center" />
+                                                <DatePicker SelectedDate="{Binding ScheduleOnceEndDate}" HorizontalAlignment="Stretch" />
+                                                <TimePicker Grid.Column="2" SelectedTime="{Binding ScheduleOnceEndTime}" ClockIdentifier="24HourClock" />
+                                            </Grid>
+                                        </StackPanel>
+                                        <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.UsesLocalTimeAndSupportsWindowsThatCrossMidnight}" />
+                                        <Border Classes="notice">
+                                            <TextBlock Classes="caption" Text="{Binding ScheduleSummary}" TextWrapping="Wrap"
+                                                       AutomationProperties.LiveSetting="Polite" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.VLCFolder}" />
+                                <TextBox Grid.Column="1" Text="{Binding VlcPath}" PlaceholderText="{DynamicResource Loc.FolderThatContainsVlcExe}"
+                                         AutomationProperties.Name="{DynamicResource Loc.FolderThatContainsVlcExe}" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Network -->
+                <Border Classes="section">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.Network}" />
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.HTTPProxy}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="9">
+                                    <CheckBox IsChecked="{Binding UseProxy}">
+                                        <TextBlock Text="{DynamicResource Loc.UseAnHTTPProxy}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <StackPanel IsEnabled="{Binding UseProxy}" Spacing="8">
+                                        <Grid ColumnDefinitions="110,*,100" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Host}" VerticalAlignment="Center" />
+                                            <TextBox Text="{Binding ProxyHost}" PlaceholderText="proxy.example.com" />
+                                            <NumericUpDown Grid.Column="2" Value="{Binding ProxyPort}" Minimum="1" Maximum="65535"
+                                                           Increment="1" FormatString="0" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.User}" VerticalAlignment="Center" />
+                                            <TextBox Text="{Binding ProxyUser}" PlaceholderText="{DynamicResource Loc.Optional}"
+                                                     AutomationProperties.Name="{DynamicResource Loc.Optional}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Password}" VerticalAlignment="Center" />
+                                            <TextBox Text="{Binding ProxyPassword}" PlaceholderText="{DynamicResource Loc.Optional}"
+                                                     AutomationProperties.Name="{DynamicResource Loc.Optional}" PasswordChar="●" />
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding ProxyPasswordNeedsReentry}"
+                                               Text="{DynamicResource Loc.TheSavedProxyPasswordCouldNotBeDecryptedOn}" />
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.StreamingServer}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="9">
+                                    <CheckBox IsChecked="{Binding StreamingEnabled}">
+                                        <TextBlock Text="{DynamicResource Loc.EnableTheStreamingServer}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <Grid ColumnDefinitions="110,*" ColumnSpacing="10" IsEnabled="{Binding StreamingEnabled}">
+                                        <TextBlock Classes="caption" Text="{DynamicResource Loc.Port}" VerticalAlignment="Center" />
+                                        <NumericUpDown Grid.Column="1" Value="{Binding StreamingPort}" Minimum="0" Maximum="65535"
+                                                       Increment="1" FormatString="0" HorizontalAlignment="Left" Width="150" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="110,*" ColumnSpacing="10" IsEnabled="{Binding StreamingEnabled}">
+                                        <TextBlock Classes="caption" Text="{DynamicResource Loc.Password}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding StreamingPassword}" PlaceholderText="{DynamicResource Loc.Optional}"
+                                                 AutomationProperties.Name="{DynamicResource Loc.Optional}" PasswordChar="●" />
+                                    </Grid>
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding StreamingPasswordNeedsReentry}"
+                                               Text="{DynamicResource Loc.TheSavedStreamingPasswordCouldNotBeDecryptedOn}" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.ThePlayerAndLibraryUseTheSameLocalServer}" />
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.WebRemote}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="9">
+                                    <CheckBox IsChecked="{Binding WebServerEnabled}">
+                                        <TextBlock Text="{DynamicResource Loc.EnableTheWebRemoteControl}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <StackPanel IsEnabled="{Binding WebServerEnabled}" Spacing="8">
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Port}" VerticalAlignment="Center" />
+                                            <NumericUpDown Grid.Column="1" Value="{Binding WebServerPort}" Minimum="0" Maximum="65535"
+                                                           Increment="1" FormatString="0" HorizontalAlignment="Left" Width="150" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.PageTitle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding WebServerTitle}" PlaceholderText="{DynamicResource Loc.DefaultsToTheApplicationName}"
+                                                     AutomationProperties.Name="{DynamicResource Loc.DefaultsToTheApplicationName}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.SessionTimeout}" VerticalAlignment="Center" />
+                                            <NumericUpDown Grid.Column="1" Value="{Binding WebServerTimeout}" Minimum="0" Maximum="99"
+                                                           Increment="1" FormatString="0" HorizontalAlignment="Left" Width="150" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Password}" VerticalAlignment="Center" />
+                                            <TextBox Text="{Binding WebServerPassword}" PlaceholderText="{DynamicResource Loc.RequiredForLANAccess}"
+                                                     AutomationProperties.Name="{DynamicResource Loc.RequiredForLANAccess}" PasswordChar="●" />
+                                        </Grid>
+                                        <CheckBox IsChecked="{Binding WebServerAllowLan}">
+                                            <TextBlock Text="{DynamicResource Loc.AllowOtherDevicesOnTheNetwork}" TextWrapping="Wrap" />
+                                        </CheckBox>
+                                        <TextBox Text="{Binding WebServerBindIp}" PlaceholderText="{DynamicResource Loc.BindIPEmptyAllInterfaces}"
+                                                 AutomationProperties.Name="{DynamicResource Loc.BindIPEmptyAllInterfaces}"
+                                                 IsEnabled="{Binding WebServerAllowLan}" />
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="{DynamicResource Loc.LoopbackOnlyByDefaultAllowingLANAccessRequiresA}" />
+                                    </StackPanel>
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="{DynamicResource Loc.SavingRestartsBothServersSoPortAndPasswordChanges}" />
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                        <Border Classes="setting" Padding="0,8">
+                            <Expander Header="{DynamicResource Loc.PreSharedKeys}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="8">
+                                    <TextBox Text="{Binding PreSharedKeysText}" PlaceholderText="{DynamicResource Loc.OneKeyPerLine}"
+                                             AutomationProperties.Name="{DynamicResource Loc.OneKeyPerLine}" AcceptsReturn="True"
+                                             MinHeight="90" VerticalContentAlignment="Top" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.UsedToDecryptLinksProtectedByAPreShared}" />
+                                </StackPanel>
+                            </Expander>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Appearance -->
+                <Border Classes="section">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.Appearance}" />
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.InterfaceLanguage}" />
+                                <ComboBox Grid.Column="1" x:Name="LanguagePicker" HorizontalAlignment="Left" MinWidth="240"
+                                          AutomationProperties.Name="{DynamicResource Loc.InterfaceLanguage}"
+                                          ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:LanguageOption">
+                                            <TextBlock Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.Theme}" />
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Left" MinWidth="240"
+                                          ItemsSource="{Binding ThemeOptions}" SelectedIndex="{Binding SelectedThemeIndex}"
+                                          AutomationProperties.Name="{DynamicResource Loc.Theme}" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Storage -->
+                <Border Classes="section">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.Storage}" />
+                        <Border Classes="setting">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="18">
+                                <TextBlock Classes="settingLabel" Text="{DynamicResource Loc.ApplicationData}" />
+                                <TextBox Grid.Column="1" Text="{Binding AppDataPath, Mode=OneWay}" IsReadOnly="True" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
             </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.HTTPProxy}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <CheckBox IsChecked="{Binding UseProxy}">
-                <TextBlock Text="{DynamicResource Loc.UseAnHTTPProxy}" TextWrapping="Wrap" />
-              </CheckBox>
-              <StackPanel IsEnabled="{Binding UseProxy}" Spacing="10">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Host}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding ProxyHost}" PlaceholderText="proxy.example.com" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Port}" TextWrapping="Wrap" />
-                  <NumericUpDown Value="{Binding ProxyPort}" Minimum="1" Maximum="65535" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.User}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding ProxyUser}" PlaceholderText="{DynamicResource Loc.Optional}" AutomationProperties.Name="{DynamicResource Loc.Optional}" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Password}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding ProxyPassword}" PlaceholderText="{DynamicResource Loc.Optional}" AutomationProperties.Name="{DynamicResource Loc.Optional}" PasswordChar="●" />
-                </StackPanel>
-              </StackPanel>
-              <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding ProxyPasswordNeedsReentry}" Text="{DynamicResource Loc.TheSavedProxyPasswordCouldNotBeDecryptedOn}" />
-            </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.PreSharedKeys}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <TextBox Text="{Binding PreSharedKeysText}" PlaceholderText="{DynamicResource Loc.OneKeyPerLine}" AutomationProperties.Name="{DynamicResource Loc.OneKeyPerLine}" AcceptsReturn="True" MinHeight="100" VerticalContentAlignment="Top" />
-              <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.UsedToDecryptLinksProtectedByAPreShared}" />
-            </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.StreamingServer}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <CheckBox IsChecked="{Binding StreamingEnabled}">
-                <TextBlock Text="{DynamicResource Loc.EnableTheStreamingServer}" TextWrapping="Wrap" />
-              </CheckBox>
-              <StackPanel IsEnabled="{Binding StreamingEnabled}" Spacing="10">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Port}" TextWrapping="Wrap" />
-                  <NumericUpDown Value="{Binding StreamingPort}" Minimum="0" Maximum="65535" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Password}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding StreamingPassword}" PlaceholderText="{DynamicResource Loc.Optional}" AutomationProperties.Name="{DynamicResource Loc.Optional}" PasswordChar="●" />
-                </StackPanel>
-              </StackPanel>
-              <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding StreamingPasswordNeedsReentry}" Text="{DynamicResource Loc.TheSavedStreamingPasswordCouldNotBeDecryptedOn}" />
-              <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.ThePlayerAndLibraryUseTheSameLocalServer}" />
-            </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.WebRemote}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <CheckBox IsChecked="{Binding WebServerEnabled}">
-                <TextBlock Text="{DynamicResource Loc.EnableTheWebRemoteControl}" TextWrapping="Wrap" />
-              </CheckBox>
-              <StackPanel IsEnabled="{Binding WebServerEnabled}" Spacing="10">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Port}" TextWrapping="Wrap" />
-                  <NumericUpDown Value="{Binding WebServerPort}" Minimum="0" Maximum="65535" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.PageTitle}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding WebServerTitle}" PlaceholderText="{DynamicResource Loc.DefaultsToTheApplicationName}" AutomationProperties.Name="{DynamicResource Loc.DefaultsToTheApplicationName}" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.SessionTimeout}" TextWrapping="Wrap" />
-                  <NumericUpDown Value="{Binding WebServerTimeout}" Minimum="0" Maximum="99" Increment="1" FormatString="0" HorizontalAlignment="Stretch" />
-                  <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.Minutes}" />
-                </StackPanel>
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="label" Text="{DynamicResource Loc.Password}" TextWrapping="Wrap" />
-                  <TextBox Text="{Binding WebServerPassword}" PlaceholderText="{DynamicResource Loc.RequiredForLANAccess}" AutomationProperties.Name="{DynamicResource Loc.RequiredForLANAccess}" PasswordChar="●" />
-                </StackPanel>
-                <CheckBox IsChecked="{Binding WebServerAllowLan}">
-                  <TextBlock Text="{DynamicResource Loc.AllowOtherDevicesOnTheNetwork}" TextWrapping="Wrap" />
-                </CheckBox>
-                <TextBox Text="{Binding WebServerBindIp}" PlaceholderText="{DynamicResource Loc.BindIPEmptyAllInterfaces}" AutomationProperties.Name="{DynamicResource Loc.BindIPEmptyAllInterfaces}" IsEnabled="{Binding WebServerAllowLan}" />
-                <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.LoopbackOnlyByDefaultAllowingLANAccessRequiresA}" />
-              </StackPanel>
-              <TextBlock Classes="caption" TextWrapping="Wrap" Text="{DynamicResource Loc.SavingRestartsBothServersSoPortAndPasswordChanges}" />
-            </StackPanel>
-          </Expander>
-          <Expander Header="{DynamicResource Loc.Storage}" HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="13">
-              <StackPanel Spacing="5">
-                <TextBlock Classes="label" Text="{DynamicResource Loc.ApplicationData}" TextWrapping="Wrap" />
-                <TextBox Text="{Binding AppDataPath, Mode=OneWay}" IsReadOnly="True" />
-              </StackPanel>
-            </StackPanel>
-          </Expander>
-        </StackPanel>
-      </ScrollViewer>
+        </ScrollViewer>
     </Grid>
-  </Grid>
 </UserControl>

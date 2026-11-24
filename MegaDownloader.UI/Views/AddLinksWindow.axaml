@@ -4,10 +4,10 @@
         x:Class="MegaDownloader.UI.Views.AddLinksWindow"
         x:DataType="vm:AddLinksViewModel"
         Title="{DynamicResource Loc.AddLinks}"
-        Width="1080" Height="740" MinWidth="760" MinHeight="560"
+        Width="1120" Height="800" MinWidth="820" MinHeight="600"
+        Background="{DynamicResource Md.Canvas}"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <Window.KeyBindings>
-        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CheckCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
     </Window.KeyBindings>
     <Window.Styles>
@@ -19,166 +19,224 @@
         </Style>
         <Style Selector="ListBox.preflight ListBoxItem">
             <Setter Property="Padding" Value="0" />
-            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <Style Selector="Border.step">
             <Setter Property="Background" Value="{DynamicResource Md.AltBack}" />
             <Setter Property="CornerRadius" Value="999" />
-            <Setter Property="Padding" Value="9,2" />
+            <Setter Property="Padding" Value="10,3" />
             <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+        <Style Selector="Border.step.active">
+            <Setter Property="Background" Value="{DynamicResource Md.Selection}" />
         </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="28,20,28,16" RowSpacing="14">
-        <!-- Header: step indicator -->
-        <StackPanel Orientation="Horizontal">
-            <Border Classes="step"><TextBlock Classes="caption" Text="{DynamicResource Loc.StepOneLinks}"/></Border>
-            <Border Classes="step" IsVisible="{Binding IsStepTwo}">
-                <TextBlock Classes="caption" Text="{DynamicResource Loc.StepTwoFiles}"/>
-            </Border>
-        </StackPanel>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="24,18,24,14" RowSpacing="14">
+        <!-- Step indicator and title. -->
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Classes="step" Classes.active="{Binding IsStepOne}">
+                    <TextBlock Classes="caption" Text="{DynamicResource Loc.StepOneLinks}" />
+                </Border>
+                <Border Classes="step" Classes.active="{Binding IsStepTwo}">
+                    <TextBlock Classes="caption" Text="{DynamicResource Loc.StepTwoFiles}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="1">
+                <TextBlock Classes="h2" Text="{DynamicResource Loc.MEGALinks}" IsVisible="{Binding IsStepOne}" />
+                <TextBlock Classes="h2" Text="{DynamicResource Loc.StepTwoFiles}" IsVisible="{Binding IsStepTwo}" />
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.PasteMegaLinksOnePerLine}" IsVisible="{Binding IsStepOne}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.ChooseFilesAndSaveLocation}" IsVisible="{Binding IsStepTwo}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Grid>
 
-        <!-- Step 1: collect links -->
-        <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12" IsVisible="{Binding IsStepOne}">
-            <TextBlock Classes="h2" Text="{DynamicResource Loc.MEGALinks}" TextWrapping="Wrap"/>
-            <TextBox Grid.Row="1" x:Name="LinkInput" Text="{Binding LinksText}"
-                     IsReadOnly="{Binding IsInspecting}" IsEnabled="{Binding !IsImporting}"
-                     AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
-                     PlaceholderText="{DynamicResource Loc.PasteMegaLinksOnePerLine}"
-                     AutomationProperties.Name="{DynamicResource Loc.MEGALinks}"/>
-            <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <TextBlock Classes="muted" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.WatchOnline}" Command="{Binding WatchOnlineCommand}"
-                        ToolTip.Tip="{DynamicResource Loc.WatchTheFirstLinkWhileItDownloads}"/>
-                <Button Grid.Column="2" Classes="quiet" Content="{DynamicResource Loc.Paste}" Click="PasteLinks" IsEnabled="{Binding !IsInspecting}"/>
-            </Grid>
-            <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                <StackPanel VerticalAlignment="Center" Spacing="3">
-                    <TextBlock Classes="caption" Text="{Binding Notice}" IsVisible="{Binding HasNotice}"
-                               Classes.error="{Binding NoticeIsError}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
-                    <ProgressBar Height="4" Value="{Binding ProgressValue}" IsVisible="{Binding IsInspecting}"
-                                 IsIndeterminate="{Binding IsProgressIndeterminate}"/>
-                </StackPanel>
-                <Button Grid.Column="1" IsCancel="True" Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}"/>
-                <Button Grid.Column="2" Classes="accent" Content="{DynamicResource Loc.CheckLinks}"
-                        Command="{Binding CheckCommand}" ToolTip.Tip="Ctrl+Enter"/>
+        <!-- Step 1: one generous input surface. -->
+        <Grid Grid.Row="1" RowDefinitions="*,Auto" RowSpacing="12" IsVisible="{Binding IsStepOne}">
+            <Border Classes="card" Padding="20,18">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Classes="section-title" Text="{DynamicResource Loc.MEGALinks}" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Classes="caption" Text="{DynamicResource Loc.DownloadIdentity}" VerticalAlignment="Center" />
+                            <ComboBox MinWidth="220" MaxWidth="300" ItemsSource="{Binding Identities}" SelectedItem="{Binding SelectedIdentity}"
+                                      AutomationProperties.Name="{DynamicResource Loc.DownloadIdentity}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DownloadIdentityChoice">
+                                        <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+                    <TextBox Grid.Row="1" x:Name="LinkInput" Text="{Binding LinksText}"
+                             IsReadOnly="{Binding IsInspecting}" IsEnabled="{Binding !IsImporting}"
+                             AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                             MinHeight="250" FontSize="14" Padding="14,12"
+                             PlaceholderText="{DynamicResource Loc.PasteMegaLinksOnePerLine}"
+                             AutomationProperties.Name="{DynamicResource Loc.MEGALinks}" />
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <StackPanel VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Classes="caption" Text="{Binding Notice}" IsVisible="{Binding HasNotice}"
+                                       Classes.error="{Binding NoticeIsError}" TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <ProgressBar Height="4" Value="{Binding ProgressValue}" IsVisible="{Binding IsInspecting}"
+                                         IsIndeterminate="{Binding IsProgressIndeterminate}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.WatchOnline}" Command="{Binding WatchOnlineCommand}"
+                                ToolTip.Tip="{DynamicResource Loc.WatchTheFirstLinkWhileItDownloads}" />
+                        <Button Grid.Column="2" Classes="quiet" Content="{DynamicResource Loc.Paste}" Click="PasteLinks"
+                                IsEnabled="{Binding !IsInspecting}" />
+                    </Grid>
+                </Grid>
+            </Border>
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,2">
+                <TextBlock Classes="caption" Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <Button Grid.Column="1" Classes="accent" Content="{DynamicResource Loc.CheckLinks}"
+                        Command="{Binding CheckCommand}" ToolTip.Tip="Ctrl+Enter" />
             </Grid>
         </Grid>
 
-        <!-- Step 2: folder tree + destination -->
-        <Grid Grid.Row="1" ColumnDefinitions="1.6*,1*" ColumnSpacing="20" IsVisible="{Binding IsStepTwo}">
-            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                    <TextBox Text="{Binding FilterText}" PlaceholderText="{DynamicResource Loc.FilterByName}"
-                             AutomationProperties.Name="{DynamicResource Loc.FilterByName}"/>
-                    <ComboBox Grid.Column="1" Margin="8,0,0,0" MinWidth="120" MaxWidth="150"
-                              ItemsSource="{Binding Categories}" SelectedItem="{Binding CategoryFilter}"
-                              PlaceholderText="{DynamicResource Loc.Type}"/>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" Margin="8,0,0,0">
-                        <Button Classes="quiet" Content="{DynamicResource Loc.SelectAll}" Command="{Binding SelectAllCommand}"/>
-                        <Button Classes="quiet" Content="{DynamicResource Loc.Clear}" Command="{Binding ClearSelectionCommand}"/>
-                    </StackPanel>
-                </Grid>
-
-                <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,2,0,0">
-                    <TextBlock Classes="caption" Text="{Binding SelectionSummary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                    <Button Grid.Column="1" Classes="quiet" Content="{DynamicResource Loc.ExpandAll}" Command="{Binding ExpandAllCommand}"/>
-                    <Button Grid.Column="2" Classes="quiet" Content="{DynamicResource Loc.CollapseAll}" Command="{Binding CollapseAllCommand}"/>
-                </Grid>
-
-                <Border Grid.Row="2" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1">
-                    <Grid RowDefinitions="Auto,*">
-                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="6,7" ColumnSpacing="10">
-                            <TextBlock Classes="caption" Text="{DynamicResource Loc.Name}" Width="220"/>
-                            <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.Status}"/>
-                            <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Size}" MinWidth="96" TextAlignment="Right"/>
+        <!-- Step 2: file tree gets the space; options are deliberately secondary. -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,300" ColumnSpacing="14" IsVisible="{Binding IsStepTwo}">
+            <Border Classes="card" Padding="0" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                    <Border Padding="12,10" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto,120" ColumnSpacing="8">
+                            <TextBox Text="{Binding FilterText}" PlaceholderText="{DynamicResource Loc.FilterByName}"
+                                     AutomationProperties.Name="{DynamicResource Loc.FilterByName}" />
+                            <ComboBox Grid.Column="1" MinWidth="120" MaxWidth="150" ItemsSource="{Binding Categories}"
+                                      SelectedItem="{Binding CategoryFilter}" PlaceholderText="{DynamicResource Loc.Type}" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                                <Button Classes="quiet toolbar" Content="{DynamicResource Loc.SelectAll}" Command="{Binding SelectAllCommand}" />
+                                <Button Classes="quiet toolbar" Content="{DynamicResource Loc.Clear}" Command="{Binding ClearSelectionCommand}" />
+                            </StackPanel>
                         </Grid>
-                        <ListBox Grid.Row="1" x:Name="PreflightList" Classes="preflight" ItemsSource="{Binding Rows}"
-                                 Background="Transparent" BorderThickness="0" Padding="0"
-                                 IsEnabled="{Binding !IsImporting}"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:PreflightRowViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="{Binding Indent, Converter={x:Static vm:IndentToThicknessConverter.Instance}}">
-                                        <Button Classes="quiet icon" Command="{Binding ToggleCommand}" IsVisible="{Binding IsFolder}"
-                                                Width="22" Height="26" Padding="0">
-                                            <TextBlock Text="{Binding Chevron}" FontSize="15"/>
-                                        </Button>
-                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsChecked}" IsVisible="{Binding IsFolder}"
-                                                  VerticalAlignment="Center" ToolTip.Tip="{Binding Name}"/>
-                                        <CheckBox Grid.Column="1" IsChecked="{Binding IsSelected}" IsVisible="{Binding IsFile}"
-                                                  IsEnabled="{Binding CanSelect}" VerticalAlignment="Center"
-                                                  ToolTip.Tip="{Binding Name}" AutomationProperties.Name="{Binding Name}"/>
-                                        <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
-                                            <TextBlock Classes="caption" Text="{Binding PathText}" IsVisible="{Binding PathText}"
-                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PathText}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="3" Spacing="1" VerticalAlignment="Center" MinWidth="96">
-                                            <TextBlock Classes="caption" Text="{Binding StateText}"
-                                                       Classes.ready="{Binding IsReady}" Classes.error="{Binding IsErrorState}"
-                                                       TextAlignment="Right"/>
-                                            <TextBlock Classes="caption" Text="{Binding SizeText}" TextAlignment="Right"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                    </Border>
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="12,7">
+                        <TextBlock Classes="caption" Text="{Binding SelectionSummary}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <Button Grid.Column="1" Classes="quiet toolbar" Content="{DynamicResource Loc.ExpandAll}" Command="{Binding ExpandAllCommand}" />
+                        <Button Grid.Column="2" Classes="quiet toolbar" Content="{DynamicResource Loc.CollapseAll}" Command="{Binding CollapseAllCommand}" />
                     </Grid>
-                </Border>
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1,0,0">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid ColumnDefinitions="22,24,*,Auto" Margin="12,6" ColumnSpacing="8">
+                                <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Name}" />
+                                <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.Size}" MinWidth="96" TextAlignment="Right" />
+                            </Grid>
+                            <ListBox Grid.Row="1" x:Name="PreflightList" Classes="preflight" ItemsSource="{Binding Rows}"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     IsEnabled="{Binding !IsImporting}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PreflightRowViewModel">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="{Binding Indent, Converter={x:Static vm:IndentToThicknessConverter.Instance}}">
+                                            <Button Classes="quiet icon toolbar" Command="{Binding ToggleCommand}" IsVisible="{Binding IsFolder}"
+                                                    Width="22" Height="26" Padding="0">
+                                                <TextBlock Text="{Binding Chevron}" FontSize="15" />
+                                            </Button>
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding IsChecked}" IsVisible="{Binding IsFolder}"
+                                                      VerticalAlignment="Center" ToolTip.Tip="{Binding Name}" />
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding IsSelected}" IsVisible="{Binding IsFile}"
+                                                      IsEnabled="{Binding CanSelect}" VerticalAlignment="Center"
+                                                      ToolTip.Tip="{Binding Name}" AutomationProperties.Name="{Binding Name}" />
+                                            <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                                                <TextBlock Classes="caption" Text="{Binding PathText}" IsVisible="{Binding HasPath}"
+                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PathText}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3" Spacing="1" VerticalAlignment="Center" MinWidth="96">
+                                                <TextBlock Classes="caption" Text="{Binding StateText}"
+                                                           Classes.ready="{Binding IsReady}" Classes.error="{Binding IsErrorState}"
+                                                           TextAlignment="Right" />
+                                                <TextBlock Classes="caption" Text="{Binding SizeText}" TextAlignment="Right" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+                    <TextBlock Grid.Row="3" Classes="caption" Text="{Binding PendingBatch}" IsVisible="{Binding HasPendingBatch}"
+                               Margin="12,6" TextWrapping="Wrap" />
+                </Grid>
+            </Border>
 
-                <TextBlock Grid.Row="3" Classes="caption" Text="{Binding PendingBatch}" IsVisible="{Binding HasPendingBatch}" TextWrapping="Wrap"/>
-            </Grid>
-
-            <!-- Destination and options -->
-            <Border Grid.Column="1" Background="{DynamicResource Md.AltBack}" Padding="18,16">
+            <Border Grid.Column="1" Classes="card" Padding="14,12">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="12" IsEnabled="{Binding !IsImporting}">
-                        <TextBlock Classes="h2" Text="{DynamicResource Loc.DownloadFolder}" TextWrapping="Wrap"/>
-                        <TextBox Text="{Binding Destination}" PlaceholderText="{DynamicResource Loc.ChooseAFolder}"
-                                 AutomationProperties.Name="{DynamicResource Loc.ChooseAFolder}"/>
-                        <Button Command="{Binding BrowseCommand}" HorizontalAlignment="Left" Content="{DynamicResource Loc.Browse}"/>
-                        <TextBlock Classes="caption" Text="{Binding DestinationPreview}" TextWrapping="Wrap"/>
-                        <TextBlock Classes="caption" Text="{Binding SpaceText}" TextWrapping="Wrap"
-                                   Classes.error="{Binding SpaceInsufficient}"/>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="section-title" Text="{DynamicResource Loc.DownloadIdentity}" />
+                            <ComboBox ItemsSource="{Binding Identities}" SelectedItem="{Binding SelectedIdentity}"
+                                      AutomationProperties.Name="{DynamicResource Loc.DownloadIdentity}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DownloadIdentityChoice">
+                                        <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Classes="caption" Classes.error="{Binding IdentityNoticeIsError}" Text="{Binding IdentityNotice}"
+                                       TextWrapping="Wrap" IsVisible="{Binding HasIdentityNotice}" />
+                        </StackPanel>
 
-                        <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1" Padding="0,10,0,0">
-                            <StackPanel Spacing="10">
-                                <TextBlock Classes="h2" Text="{DynamicResource Loc.PackageOptions}" TextWrapping="Wrap"/>
-                                <TextBox Text="{Binding PackageName}" PlaceholderText="{DynamicResource Loc.PackageNameOptional}"
-                                         AutomationProperties.Name="{DynamicResource Loc.PackageNameOptional}"/>
-                                <TextBox Text="{Binding Password}" PlaceholderText="{DynamicResource Loc.ArchivePasswordOptional}"
-                                         AutomationProperties.Name="{DynamicResource Loc.ArchivePasswordOptional}" PasswordChar="●"/>
-                                <CheckBox IsChecked="{Binding CreateSubdirectory}">
-                                    <TextBlock Text="{DynamicResource Loc.CreateASubfolderForThisPackage}" TextWrapping="Wrap"/>
-                                </CheckBox>
-                                <CheckBox IsChecked="{Binding ExtractArchives}">
-                                    <TextBlock Text="{DynamicResource Loc.ExtractArchivesAutomatically}" TextWrapping="Wrap"/>
-                                </CheckBox>
-                                <CheckBox IsChecked="{Binding StartDownload}">
-                                    <TextBlock Text="{DynamicResource Loc.StartDownloadingAfterAdding}" TextWrapping="Wrap"/>
-                                </CheckBox>
-                            </StackPanel>
+                        <Border BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+                            <Expander Header="{DynamicResource Loc.AdvancedOptions}" HorizontalContentAlignment="Stretch"
+                                      HorizontalAlignment="Stretch" IsExpanded="False">
+                                <StackPanel Spacing="9">
+                                    <TextBox Text="{Binding PackageName}" PlaceholderText="{DynamicResource Loc.PackageNameOptional}"
+                                             AutomationProperties.Name="{DynamicResource Loc.PackageNameOptional}" />
+                                    <TextBox Text="{Binding Password}" PlaceholderText="{DynamicResource Loc.ArchivePasswordOptional}"
+                                             AutomationProperties.Name="{DynamicResource Loc.ArchivePasswordOptional}" PasswordChar="●" />
+                                    <CheckBox IsChecked="{Binding CreateSubdirectory}">
+                                        <TextBlock Text="{DynamicResource Loc.CreateASubfolderForThisPackage}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <CheckBox IsChecked="{Binding ExtractArchives}">
+                                        <TextBlock Text="{DynamicResource Loc.ExtractArchivesAutomatically}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                    <CheckBox IsChecked="{Binding StartDownload}">
+                                        <TextBlock Text="{DynamicResource Loc.StartDownloadingAfterAdding}" TextWrapping="Wrap" />
+                                    </CheckBox>
+                                </StackPanel>
+                            </Expander>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>
 
-        <!-- Footer -->
+        <!-- Fixed footer: destination, selection and the step action never move. -->
         <Border Grid.Row="2" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                <StackPanel VerticalAlignment="Center" Spacing="3">
-                    <TextBlock Classes="caption" Text="{Binding Status}" IsVisible="{Binding HasEntries}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Classes="caption" Text="{Binding Status}" IsVisible="{Binding HasEntries}" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Classes="caption" Text="{Binding SelectionSummary}" IsVisible="{Binding IsStepTwo}" />
+                    </StackPanel>
                     <TextBlock Classes="caption" Classes.error="{Binding NoticeIsError}" Text="{Binding Notice}"
-                               IsVisible="{Binding HasNotice}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                               IsVisible="{Binding HasNotice}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsStepTwo}">
+                        <TextBox Text="{Binding Destination}" PlaceholderText="{DynamicResource Loc.ChooseAFolder}"
+                                 AutomationProperties.Name="{DynamicResource Loc.ChooseAFolder}" />
+                        <Button Grid.Column="1" Content="{DynamicResource Loc.Browse}" Command="{Binding BrowseCommand}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="12" IsVisible="{Binding IsStepTwo}">
+                        <TextBlock Classes="caption" Text="{Binding DestinationPreview}" TextWrapping="Wrap" />
+                        <TextBlock Classes="caption" Classes.error="{Binding SpaceInsufficient}" Text="{Binding SpaceText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
                 </StackPanel>
-                <Button Grid.Column="1" Content="{DynamicResource Loc.Back}" Command="{Binding BackCommand}"
-                        IsVisible="{Binding IsStepTwo}" IsEnabled="{Binding CanGoBack}"/>
-                <Button Grid.Column="2" IsCancel="True" Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}"/>
-                <Button Grid.Column="3" Classes="accent" Content="{Binding AddButtonText}" Command="{Binding AddCommand}"
-                        IsVisible="{Binding IsStepTwo}"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                    <Button Content="{DynamicResource Loc.Back}" Command="{Binding BackCommand}"
+                            IsVisible="{Binding IsStepTwo}" IsEnabled="{Binding CanGoBack}" />
+                    <Button Content="{DynamicResource Loc.Recheck}" Command="{Binding RecheckCommand}"
+                            IsVisible="{Binding IsStepTwo}" />
+                    <Button IsCancel="True" Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}" />
+                    <Button Classes="accent" Content="{Binding AddButtonText}" Command="{Binding AddCommand}"
+                            IsVisible="{Binding IsStepTwo}" IsEnabled="{Binding CanAdd}" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

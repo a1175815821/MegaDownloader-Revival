@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+        x:Class="MegaDownloader.UI.Views.SubscriptionSettingsWindow"
+        x:DataType="vm:SubscriptionSettingsViewModel"
+        Title="{DynamicResource Loc.BoundFolderSettings}"
+        Width="600" Height="500" MinWidth="520" MinHeight="440"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
+    <Grid Margin="24,18,24,16" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" RowSpacing="10">
+        <TextBlock Classes="h2" Text="{Binding FolderName}" TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="1" Spacing="3">
+            <TextBlock Classes="caption" Text="{DynamicResource Loc.MegaDriveSavePath}"/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding Destination}" AutomationProperties.Name="{DynamicResource Loc.MegaDriveSavePath}"/>
+                <Button Grid.Column="1" Content="{DynamicResource Loc.Browse}" Command="{Binding BrowseCommand}"/>
+            </Grid>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Spacing="3">
+            <TextBlock Classes="caption" Text="{DynamicResource Loc.Extensions}"/>
+            <TextBox Text="{Binding Extensions}" PlaceholderText="{DynamicResource Loc.ExtensionsPlaceholder}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Spacing="6">
+            <CheckBox Content="{DynamicResource Loc.CheckDaily}" IsChecked="{Binding DailyCheck}"/>
+            <TimePicker SelectedTime="{Binding CheckTime}" ClockIdentifier="24HourClock" IsEnabled="{Binding DailyCheck}"
+                        HorizontalAlignment="Left"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Spacing="4">
+            <RadioButton GroupName="QueueMode" Content="{DynamicResource Loc.ReviewBeforeAdding}" IsChecked="{Binding IsReviewMode, Mode=TwoWay}"/>
+            <RadioButton GroupName="QueueMode" Content="{DynamicResource Loc.AddAutomatically}" IsChecked="{Binding IsAutomaticMode, Mode=TwoWay}"/>
+            <CheckBox Content="{DynamicResource Loc.PauseSubscription}" IsChecked="{Binding Paused}"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="5" Classes="caption" Text="{Binding ValidationMessage}" TextWrapping="Wrap"
+                   Foreground="{DynamicResource Md.ErrorFore}" IsVisible="{Binding HasValidationMessage}"/>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}"/>
+            <Button Classes="accent" Content="{DynamicResource Loc.Save}" Command="{Binding ConfirmCommand}"/>
+        </StackPanel>
+    </Grid>
+</Window>

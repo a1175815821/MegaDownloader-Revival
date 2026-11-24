@@ -60,43 +60,85 @@ public sealed class UnixPlatformServices : IPlatformServices
         return reader.ReadToEnd();
     }
 
-    public void SetAutoStart(bool enabled, string executablePath, string arguments)
+    public void SetAutoStart(bool enabled, string executablePath, string arguments) =>
+        ApplyAutoStart(_kind, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            enabled, executablePath, arguments);
+
+    /// <summary>
+    /// Creates or removes the login-autostart entry under <paramref name="homeDirectory"/>.
+    /// Split out so the enable/disable cycle can be checked without touching the real
+    /// profile.
+    /// </summary>
+    public static void ApplyAutoStart(PlatformKind kind, string homeDirectory, bool enabled,
+        string executablePath, string arguments)
     {
-        var autostartDir = _kind == PlatformKind.MacOS
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "autostart");
-        Directory.CreateDirectory(autostartDir);
-        var file = _kind == PlatformKind.MacOS
-            ? Path.Combine(autostartDir, "com.megadownloader.plist")
-            : Path.Combine(autostartDir, "MegaDownloader.desktop");
+        string file = AutoStartFile(kind, homeDirectory);
         if (!enabled)
         {
-            if (File.Exists(file)) File.Delete(file);
+            if (File.Exists(file))
+                File.Delete(file);
             return;
         }
-        if (_kind == PlatformKind.MacOS)
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, BuildAutoStartEntry(kind, executablePath, arguments));
+    }
+
+    public static bool IsAutoStartEnabled(PlatformKind kind, string homeDirectory) =>
+        File.Exists(AutoStartFile(kind, homeDirectory));
+
+    /// <summary>The file a login session reads for this platform and user.</summary>
+    public static string AutoStartFile(PlatformKind kind, string homeDirectory) =>
+        kind == PlatformKind.MacOS
+            ? Path.Combine(homeDirectory, "Library", "LaunchAgents", "com.megadownloader.plist")
+            : Path.Combine(homeDirectory, ".config", "autostart", "MegaDownloader.desktop");
+
+    /// <summary>
+    /// The login-autostart entry for one platform. An installed package is started
+    /// through its stable entry point (<c>/usr/bin/megadownloader</c>) so the entry
+    /// survives an upgrade that replaces the binary in <c>/usr/lib/megadownloader</c>.
+    /// </summary>
+    public static string BuildAutoStartEntry(PlatformKind kind, string executablePath, string arguments)
+    {
+        string command = StableExecutable(executablePath);
+        string quoted = Quote(command);
+        string suffix = string.IsNullOrWhiteSpace(arguments) ? string.Empty : " " + arguments.Trim();
+        if (kind == PlatformKind.MacOS)
         {
-            File.WriteAllText(file, $"""
+            // ProgramArguments is an array, so a path with spaces needs no quoting.
+            return $"""
                 <?xml version="1.0" encoding="UTF-8"?>
                 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
                 <plist version="1.0"><dict>
                   <key>Label</key><string>com.megadownloader</string>
-                  <key>ProgramArguments</key><array><string>{executablePath}</string></array>
+                  <key>ProgramArguments</key><array><string>{System.Security.SecurityElement.Escape(command)}</string></array>
                   <key>RunAtLoad</key><true/>
                 </dict></plist>
-                """);
+                """;
         }
-        else
+        return $"""
+            [Desktop Entry]
+            Type=Application
+            Name=Mega Downloader
+            Exec={quoted}{suffix}
+            Hidden=false
+            X-GNOME-Autostart-enabled=true
+            """;
+    }
+
+    /// <summary>
+    /// Maps a binary inside an installed package to its launcher. Anything else (a
+    /// development build, a self-contained folder) keeps the path it was started from.
+    /// </summary>
+    public static string StableExecutable(string executablePath)
+    {
+        if (string.IsNullOrEmpty(executablePath))
+            return string.Empty;
+        foreach (string prefix in new[] { "/usr/lib/megadownloader/", "/opt/megadownloader/" })
         {
-            File.WriteAllText(file, $"""
-                [Desktop Entry]
-                Type=Application
-                Name=Mega Downloader
-                Exec={executablePath} {arguments}
-                Hidden=false
-                X-GNOME-Autostart-enabled=true
-                """);
+            if (executablePath.StartsWith(prefix, StringComparison.Ordinal))
+                return "/usr/bin/megadownloader";
         }
+        return executablePath;
     }
 
     public void SetMegaProtocolHandler(bool enabled, string executablePath)

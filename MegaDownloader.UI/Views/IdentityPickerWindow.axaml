@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+        x:Class="MegaDownloader.UI.Views.IdentityPickerWindow"
+        x:DataType="vm:IdentityPickerViewModel"
+        Title="{DynamicResource Loc.DownloadIdentity}"
+        Width="480" Height="420" MinWidth="400" MinHeight="320"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
+    <Grid Margin="22,18,22,16" RowDefinitions="Auto,*,Auto" RowSpacing="10">
+        <TextBlock Classes="muted" Text="{DynamicResource Loc.ChooseDownloadIdentity}" TextWrapping="Wrap"/>
+        <ListBox Grid.Row="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}"
+                 Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="1">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:IdentityChoice">
+                    <StackPanel Spacing="1" Margin="4,4">
+                        <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Caption}"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}"/>
+            <Button Classes="accent" Content="{DynamicResource Loc.Save}" Command="{Binding ConfirmCommand}"
+                    IsEnabled="{Binding SelectedChoice.Available}"/>
+        </StackPanel>
+    </Grid>
+</Window>

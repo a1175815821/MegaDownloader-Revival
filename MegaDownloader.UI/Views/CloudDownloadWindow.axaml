@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MegaDownloader.UI.ViewModels.Pages"
+        x:Class="MegaDownloader.UI.Views.CloudDownloadWindow"
+        x:DataType="vm:CloudDownloadViewModel"
+        Title="{DynamicResource Loc.CloudDownload}"
+        Width="780" Height="540" MinWidth="620" MinHeight="420"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
+    <Grid Margin="24,18,24,16" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+        <StackPanel Spacing="3">
+            <TextBlock Classes="h2" Text="{Binding Title}" TextWrapping="Wrap"/>
+            <TextBlock Classes="caption" Text="{Binding Summary}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="caption" Text="{DynamicResource Loc.MegaDriveSavePath}"/>
+                <TextBox Text="{Binding Destination}" AutomationProperties.Name="{DynamicResource Loc.MegaDriveSavePath}"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="{DynamicResource Loc.Browse}" Command="{Binding BrowseCommand}"
+                    VerticalAlignment="Bottom"/>
+        </Grid>
+
+        <CheckBox Grid.Row="2" IsChecked="{Binding SkipQueued}" IsVisible="{Binding HasQueued}"
+                  Content="{DynamicResource Loc.SkipFilesAlreadyQueued}"/>
+
+        <Border Grid.Row="3" BorderBrush="{DynamicResource Md.Border}" BorderThickness="1">
+            <Grid RowDefinitions="Auto,*">
+                <Border Background="{DynamicResource Md.AltBack}" BorderBrush="{DynamicResource Md.Border}" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="2*,1.6*,100,140" ColumnSpacing="10" Margin="10,6">
+                        <TextBlock Classes="caption" Text="{DynamicResource Loc.Name}"/>
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{DynamicResource Loc.Folder}"/>
+                        <TextBlock Grid.Column="2" Classes="caption" Text="{DynamicResource Loc.Size}" TextAlignment="Right"/>
+                        <TextBlock Grid.Column="3" Classes="caption" Text="{DynamicResource Loc.Status}"/>
+                    </Grid>
+                </Border>
+                <ListBox Grid.Row="1" ItemsSource="{Binding Rows}" Background="Transparent" BorderThickness="0" Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CloudDownloadRow">
+                            <Grid ColumnDefinitions="2*,1.6*,100,140" ColumnSpacing="10" Margin="10,5">
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
+                                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Folder}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Size}" TextAlignment="Right"/>
+                                <TextBlock Grid.Column="3" Classes="caption" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Classes="caption" Text="{Binding Summary}" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="{DynamicResource Loc.Cancel}" Command="{Binding CancelCommand}"/>
+            <Button Grid.Column="2" Classes="accent" Content="{Binding AcceptText}" Command="{Binding ConfirmCommand}"
+                    IsEnabled="{Binding CanAccept}"/>
+        </Grid>
+    </Grid>
+</Window>
