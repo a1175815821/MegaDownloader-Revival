@@ -135,6 +135,8 @@ InternalConfig.local.xml
 release-staging/
 release-stage/
 dist-rc2/
+# 打包输出目录(发布用 exe/zip,不进仓库)
+artifacts/
 # 本地一次性检查脚本
 _check.py
 
