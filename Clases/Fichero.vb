@@ -1,6 +1,8 @@
 Imports System.Collections.Specialized
 Imports System.Text.RegularExpressions
 Imports System.ComponentModel
+Imports System.Runtime.InteropServices
+Imports Microsoft.Win32.SafeHandles
 Imports System.Xml
 Imports System.Security
 Imports System.Threading
@@ -79,11 +81,10 @@ Public Class Fichero
     ' Empty means no delivered output; Nothing identifies an older queue entry.
     Private completedFileName As String = ""
 
-    ''' <summary>B3: 本会话内已由下载器校验并交付的成品。删除时按"路径+大小+写入时间"
-    ''' 复核未被外部替换即可复用,不必对 GB 级文件重算一次全文件 MetaMAC。</summary>
-    Private _verifiedOutputPath As String = Nothing
-    Private _verifiedOutputLength As Long = -1
-    Private _verifiedOutputWriteUtc As Long = 0
+    Private _verifiedOutputPath As String
+    Private _verifiedOutputIdentity As String
+    Private _outputConfirmationIdentity As String
+    Friend OutputPreservedPath As String
 
     ''' <summary>B4: 16 字节(4 词)公链 key 没有内嵌 MetaMAC。预热时标记出来,
     ''' 由界面一次性请求用户显式确认,而不是静默把成品留在磁盘上。</summary>
@@ -473,8 +474,18 @@ Public Class Fichero
 			SyncLock Mutex.DeletingFiles
 				Try
 					If Not String.IsNullOrEmpty(completado) Then
-						If System.IO.File.Exists(completado) Then System.IO.File.Delete(completado)
-						completedFileName = ""
+                        ' Delete the same file handle whose identity was checked.
+                        Const FileDispositionInfo As Integer = 4
+                        Using handle = OpenCompletedOutput(completado, forDeletion:=True)
+                            Dim identity = ReadCompletedOutputIdentity(handle)
+                            If identity IsNot Nothing AndAlso identity = _verifiedOutputIdentity Then
+                                Dim deleteFile As Byte = 1
+                                If Not SetFileInformationByHandle(handle, FileDispositionInfo, deleteFile, 1UI) Then Throw New Win32Exception()
+                                completedFileName = ""
+                            ElseIf System.IO.File.Exists(completado) Then
+                                OutputPreservedPath = completado
+                            End If
+                        End Using
 					End If
 					If System.IO.File.Exists(parcial) Then
 						Ruta = parcial
@@ -506,59 +517,55 @@ Public Class Fichero
     End Function
 
     Private Function GetCompletedFileForDeletion() As String
-        If Not String.IsNullOrEmpty(completedFileName) Then Return CompletedOutputPath(completedFileName)
-
-        ' B3: 本会话内下载器已完成校验的成品,只要路径/大小/写入时间未变就直接复用,
-        ' 不再对同一个 GB 级文件重算一次全文件 MetaMAC。必须放在旧队列守卫之前:
-        ' 新建任务的 completedFileName 是 ""(非 Nothing),否则会被提前拦掉。
-        If Not String.IsNullOrEmpty(_verifiedOutputPath) Then
-            Try
-                Dim verifiedPath As String = CompletedOutputPath(System.IO.Path.GetFileName(_verifiedOutputPath))
-                If String.Equals(verifiedPath, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) AndAlso
-                   System.IO.File.Exists(verifiedPath) Then
-                    Dim verifiedInfo As New System.IO.FileInfo(verifiedPath)
-                    If verifiedInfo.Length = _verifiedOutputLength AndAlso
-                       verifiedInfo.LastWriteTimeUtc.Ticks = _verifiedOutputWriteUtc Then
-                        completedFileName = System.IO.Path.GetFileName(verifiedPath)
-                        Return verifiedPath
-                    End If
-                End If
-            Catch ex As Exception
-                Log.WriteWarning("Verified output can no longer be reused for " & Me.FileID & ": " & Log.SafeException(ex))
-            End Try
-        End If
-
-        If UsesMegaAccount OrElse completedFileName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
-        ' Older queues have no output marker. Require a real MetaMAC match before
-        ' treating a same-named existing file as their completed output.
-        If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
-           EstadoDescarga <> Estado.EsperandoVolumenes AndAlso EstadoDescarga <> Estado.ComprobandoMD5 AndAlso (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
-
+        OutputPreservedPath = Nothing
         OutputNeedsConfirmation = False
         OutputConfirmationPath = Nothing
+        Dim recordedName = completedFileName
+        Dim hasRecordedName = Not String.IsNullOrEmpty(recordedName)
+        If Not hasRecordedName AndAlso _verifiedOutputPath Is Nothing Then
+            If UsesMegaAccount OrElse recordedName IsNot Nothing OrElse Not DescargaComenzada Then Return Nothing
+            If EstadoDescarga <> Estado.Completado AndAlso EstadoDescarga <> Estado.Descomprimiendo AndAlso
+               EstadoDescarga <> Estado.EsperandoVolumenes AndAlso EstadoDescarga <> Estado.ComprobandoMD5 AndAlso
+               (DatosPartes Is Nothing OrElse Not DatosPartes.AllFinished) Then Return Nothing
+        End If
+
         Try
-            Dim candidate As String = CompletedOutputPath(NombreFichero)
-            If Not System.IO.File.Exists(candidate) OrElse New System.IO.FileInfo(candidate).Length <> TamanoBytes Then Return Nothing
-            Dim key As String = Me.FileKey
-            If key.Contains("=###n=") Then key = key.Substring(0, key.IndexOf("=###n="))
-            If Criptografia.base64urldecodeBytes(key).Length <> 32 Then
-                ' B4: 4 词公链 key(16 字节)没有内嵌 MetaMAC,原实现在此静默返回 Nothing,
-                ' 用户以为删掉了成品,文件却一直留在磁盘上。前置条件已经限定
-                ' "任务确实完成 + 同名 + 大小精确一致 + 下载已开始",交由用户显式确认。
-                If Not Me.ConfirmUnverifiedOutputDeletion Then
-                    OutputNeedsConfirmation = True
-                    OutputConfirmationPath = candidate
-                    Log.WriteWarning("Legacy link has no MetaMAC; keeping output pending explicit confirmation: " & candidate)
-                    Return Nothing
+            Dim candidate = CompletedOutputPath(If(hasRecordedName, recordedName,
+                If(System.IO.Path.GetFileName(_verifiedOutputPath), NombreFichero)))
+            If Not System.IO.File.Exists(candidate) Then Return Nothing
+            OutputPreservedPath = candidate
+            Using handle = OpenCompletedOutput(candidate)
+                Dim identity = ReadCompletedOutputIdentity(handle)
+                If identity Is Nothing Then Return Nothing
+                If _verifiedOutputPath IsNot Nothing Then
+                    If Not String.Equals(candidate, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) OrElse
+                       identity <> _verifiedOutputIdentity Then Return Nothing
+                Else
+                    ' Older queues stored only a name. Recover ownership with the public link's MetaMAC.
+                    If MegaDriveNodeHandle.HasValue OrElse New System.IO.FileInfo(candidate).Length <> TamanoBytes Then Return Nothing
+                    Dim key As String = Me.FileKey
+                    If key.Contains("=###n=") Then key = key.Substring(0, key.IndexOf("=###n="))
+                    If Criptografia.base64urldecodeBytes(key).Length = 32 Then
+                        If Not Criptografia.VerifyMegaMetaMac(candidate, key) Then Return Nothing
+                    Else
+                        If hasRecordedName Then Return Nothing
+                        If Not ConfirmUnverifiedOutputDeletion Then
+                            _outputConfirmationIdentity = identity
+                            OutputNeedsConfirmation = True
+                            OutputConfirmationPath = candidate
+                            Return Nothing
+                        End If
+                        If _outputConfirmationIdentity IsNot Nothing AndAlso _outputConfirmationIdentity <> identity Then Return Nothing
+                    End If
+                    _verifiedOutputIdentity = identity
+                    _verifiedOutputPath = candidate
                 End If
-                completedFileName = NombreFichero
-                Return candidate
-            End If
-            If Not Criptografia.VerifyMegaMetaMac(candidate, key) Then Return Nothing
-            completedFileName = NombreFichero
+            End Using
+            completedFileName = System.IO.Path.GetFileName(candidate)
+            OutputPreservedPath = Nothing
             Return candidate
         Catch ex As Exception
-            Log.WriteWarning("Keeping unverified legacy output for " & Me.FileID & ": " & Log.SafeException(ex))
+            Log.WriteWarning("Keeping unverified output for " & Me.FileID & ": " & Log.SafeException(ex))
             Return Nothing
         End Try
     End Function
@@ -573,20 +580,64 @@ Public Class Fichero
         End Try
     End Sub
 
-    ''' <summary>B3/B6: 记录下载器已验证并交付的成品元数据,供删除时复用。</summary>
     Public Sub RecordVerifiedOutput(ByVal path As String)
+        If String.IsNullOrEmpty(path) Then Return
         Try
-            If String.IsNullOrEmpty(path) Then Return
-            Dim full As String = System.IO.Path.GetFullPath(path)
-            Dim info As New System.IO.FileInfo(full)
-            _verifiedOutputPath = full
-            _verifiedOutputLength = info.Length
-            _verifiedOutputWriteUtc = info.LastWriteTimeUtc.Ticks
+            Dim full = System.IO.Path.GetFullPath(path)
+            Using handle = OpenCompletedOutput(full)
+                _verifiedOutputIdentity = ReadCompletedOutputIdentity(handle)
+                _verifiedOutputPath = If(_verifiedOutputIdentity Is Nothing, Nothing, full)
+            End Using
         Catch ex As Exception
             _verifiedOutputPath = Nothing
-            Log.WriteWarning("Could not cache verified output: " & Log.SafeException(ex))
+            _verifiedOutputIdentity = Nothing
+            Log.WriteWarning("Could not record verified output: " & Log.SafeException(ex))
         End Try
     End Sub
+
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure CompletedOutputInfo
+        Public Attributes As IO.FileAttributes
+        Public CreationTime As ComTypes.FILETIME
+        Public LastAccessTime As ComTypes.FILETIME
+        Public LastWriteTime As ComTypes.FILETIME
+        Public VolumeSerial As UInteger
+        Public SizeHigh As UInteger
+        Public SizeLow As UInteger
+        Public LinkCount As UInteger
+        Public IndexHigh As UInteger
+        Public IndexLow As UInteger
+    End Structure
+
+    <DllImport("kernel32.dll", CharSet:=CharSet.Unicode, SetLastError:=True)>
+    Private Shared Function CreateFile(path As String, access As UInteger, share As IO.FileShare, security As IntPtr,
+                                       mode As IO.FileMode, flags As UInteger, template As IntPtr) As SafeFileHandle
+    End Function
+
+    <DllImport("kernel32.dll")>
+    Private Shared Function GetFileInformationByHandle(handle As SafeFileHandle, ByRef info As CompletedOutputInfo) As Boolean
+    End Function
+
+    <DllImport("kernel32.dll", SetLastError:=True)>
+    Private Shared Function SetFileInformationByHandle(handle As SafeFileHandle, infoClass As Integer, ByRef deleteFile As Byte, size As UInteger) As Boolean
+    End Function
+
+    Private Shared Function OpenCompletedOutput(path As String, Optional forDeletion As Boolean = False) As SafeFileHandle
+        Const ReadAttributes As UInteger = &H80UI
+        Const DeleteAccess As UInteger = &H10000UI
+        Const OpenReparsePoint As UInteger = &H200000UI
+        Dim access = ReadAttributes Or If(forDeletion, DeleteAccess, 0UI)
+        Return CreateFile(PathGuard.ArchiveIoPath(path), access, IO.FileShare.ReadWrite, IntPtr.Zero,
+                          IO.FileMode.Open, OpenReparsePoint, IntPtr.Zero)
+    End Function
+
+    Private Shared Function ReadCompletedOutputIdentity(handle As SafeFileHandle) As String
+        Dim info As CompletedOutputInfo
+        If handle.IsInvalid OrElse Not GetFileInformationByHandle(handle, info) OrElse
+           (info.Attributes And (IO.FileAttributes.Directory Or IO.FileAttributes.ReparsePoint)) <> 0 OrElse
+           (info.IndexHigh = 0 AndAlso info.IndexLow = 0) Then Return Nothing
+        Return $"{info.VolumeSerial:X8}:{info.IndexHigh:X8}{info.IndexLow:X8}:{info.CreationTime.dwHighDateTime:X8}{info.CreationTime.dwLowDateTime:X8}:{info.LastWriteTime.dwHighDateTime:X8}{info.LastWriteTime.dwLowDateTime:X8}:{info.SizeHigh:X8}{info.SizeLow:X8}"
+    End Function
 	
 	Public Function ObtenerNombreSinExtension As String
 		
@@ -626,6 +677,9 @@ Public Class Fichero
         If changeBackend Then
             DescargaProcesada = False
             If UsesMegaAccount Then
+                ' ResetearDescarga already captured the anonymous checkpoint.
+                DetachDownloader()
+                NumeroConexionesAbiertas = 0
                 ResetMegaAccountProgress()
             Else
                 ThrottledStreamController.GetController.SetMaxSpeed(FileID, CLng(LimiteVelocidad) * 1024L)
@@ -644,6 +698,19 @@ Public Class Fichero
     Friend Sub RecordMegaAccountTransfer(email As String)
         MegaAccountTransferEmail = If(String.Equals(email, MegaAccountEmail, StringComparison.OrdinalIgnoreCase), "", email)
     End Sub
+
+    Friend Function HasAvailableMegaAccountForRetry(allowUnknownDelay As Boolean) As Boolean
+        Dim service = MegaAccountService.Current
+        Dim email = EffectiveMegaAccountEmail
+        Dim status = service.GetStatus(email)
+        If status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached Then Return True
+        If MegaDriveNodeHandle.HasValue OrElse String.IsNullOrEmpty(MegaAccountTransferEmail) Then Return False
+
+        Dim nextEmail = service.NextTransferAccount(email, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {email}, allowUnknownDelay)
+        If nextEmail = "" Then Return False
+        RecordMegaAccountTransfer(nextEmail)
+        Return True
+    End Function
 
     Private Sub ApplyMegaAccountInfo(name As String, size As Long)
         If String.IsNullOrEmpty(completedFileName) Then NombreFichero = PathGuard.SanitizeFileName(name, "file")
@@ -1396,7 +1463,7 @@ Public Class Fichero
 	Private Sub downloader_FileRenamed(ByVal sender As System.Object, ByVal e As FileRenamedEventArgs)
 		Try
 			If e Is Nothing OrElse String.IsNullOrEmpty(e.FileName) Then Return
-            CompletedOutputPath(e.FileName)
+            RecordVerifiedOutput(CompletedOutputPath(e.FileName))
             completedFileName = e.FileName
 			If Not String.Equals(Me.NombreFichero, e.FileName, StringComparison.Ordinal) Then
 				Log.WriteInfo("Final file name for " & Me.FileID & ": " & e.FileName)
@@ -1494,8 +1561,10 @@ Public Class Fichero
             Dim source As FileDownloader = TryCast(sender, FileDownloader)
             If source IsNot Nothing AndAlso Not String.IsNullOrEmpty(source.CompletedFilePath) Then
                 PathGuard.EnsurePathUnderRoot(Me.RutaLocal, source.CompletedFilePath, allowRoot:=False)
+                If Not String.Equals(_verifiedOutputPath, source.CompletedFilePath, StringComparison.OrdinalIgnoreCase) Then
+                    RecordVerifiedOutput(source.CompletedFilePath)
+                End If
                 completedFileName = System.IO.Path.GetFileName(source.CompletedFilePath)
-                RecordVerifiedOutput(source.CompletedFilePath)
             End If
         Catch ex As Exception
             Log.WriteError("Completed output path could not be verified for " & Me.FileID & ": " & Log.SafeException(ex))
@@ -1569,6 +1638,24 @@ Public Class Fichero
 	End Sub
 	
 	
+    Private Sub DetachDownloader()
+        Dim previous = Me.Downloader
+        If previous Is Nothing Then Return
+        RemoveHandler previous.Resumed, AddressOf downloader_Started
+        RemoveHandler previous.Started, AddressOf downloader_Started
+        RemoveHandler previous.Paused, AddressOf downloader_Paused
+        RemoveHandler previous.CancelRequested, AddressOf downloader_CancelRequested
+        RemoveHandler previous.Canceled, AddressOf downloader_Canceled
+        RemoveHandler previous.Completed, AddressOf downloader_Completed
+        RemoveHandler previous.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
+        RemoveHandler previous.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
+        RemoveHandler previous.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
+        RemoveHandler previous.FileLocalCreated, AddressOf downloader_FileLocalCreated
+        RemoveHandler previous.FileRenamed, AddressOf downloader_FileRenamed
+        Me.Downloader = Nothing
+        previous.Dispose()
+    End Sub
+
 	Private Sub downloader_Canceled(ByVal sender As System.Object, ByVal e As System.EventArgs)
 		' B8: 上一轮取消的迟到事件不能把新一轮刚装配好的 downloader 清成 Nothing,
 		' 也不能把正在进行的下载状态改回 EnCola。
@@ -1577,24 +1664,7 @@ Public Class Fichero
 				Log.WriteWarning("Ignored a late cancellation from a replaced downloader for " & Me.FileID)
 				Return
 			End If
-			If Me.Downloader IsNot Nothing Then
-				
-				RemoveHandler Me.Downloader.Resumed, AddressOf downloader_Started
-				RemoveHandler Me.Downloader.Started, AddressOf downloader_Started
-				RemoveHandler Me.Downloader.Paused, AddressOf downloader_Paused
-				RemoveHandler Me.Downloader.CancelRequested, AddressOf downloader_CancelRequested
-				RemoveHandler Me.Downloader.Canceled, AddressOf downloader_Canceled
-				RemoveHandler Me.Downloader.Completed, AddressOf downloader_Completed
-				RemoveHandler Me.Downloader.FileDownloadSucceeded, AddressOf downloader_FileDownloadSucceeded
-				RemoveHandler Me.Downloader.FileDownloadFailed, AddressOf downloader_FileDownloadFailed
-			RemoveHandler Me.Downloader.ChunkDownloadFailed, AddressOf downloader_ChunkDownloadFailed
-			RemoveHandler Me.Downloader.FileLocalCreated, AddressOf downloader_FileLocalCreated
-			RemoveHandler Me.Downloader.FileRenamed, AddressOf downloader_FileRenamed
-				
-				Me.Downloader.Dispose()
-				
-			End If
-			Me.Downloader = Nothing
+			DetachDownloader()
 		End SyncLock
 		
 		If Me.MarcadoParaBorrarFicheroLocal Then
@@ -1627,7 +1697,7 @@ Public Class Fichero
 		' 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
 		Dim needDeferredCompletion As Boolean = False
 		SyncLock Mutex.FicheroDownloader
-			If Me.Downloader IsNot Nothing Then
+			If Not UsesMegaAccount AndAlso Me.Downloader IsNot Nothing Then
 				
 				Me.NumeroConexionesAbiertas = Me.Downloader.OpenConnections
 				
@@ -1756,6 +1826,9 @@ Public Class Fichero
 	''' </summary>
 	Public Sub ResetearDescarga(Optional ByVal preserveProgress As Boolean = False)
         CaptureDownloaderProgress()
+        If EstadoDescarga = Estado.Erroneo AndAlso Not String.IsNullOrEmpty(MegaAccountTransferEmail) Then
+            HasAvailableMegaAccountForRetry(allowUnknownDelay:=True)
+        End If
 		If preserveProgress Then
 			SyncLock Me._errorChunkLock
 				Me.NumErroresChunk = 0
@@ -1924,9 +1997,16 @@ Public Class Fichero
         Me.RutaLocal = LeerNodo(XML, "RutaLocal", "")
         Dim completedNode As XmlNode = XML.SelectSingleNode("CompletedFileName")
         completedFileName = If(completedNode Is Nothing, Nothing, completedNode.InnerText)
+        _verifiedOutputIdentity = Nothing
+        _verifiedOutputPath = Nothing
         If Not String.IsNullOrEmpty(completedFileName) Then
             Try
-                CompletedOutputPath(completedFileName)
+                Dim path = CompletedOutputPath(completedFileName)
+                Dim identity = LeerNodo(XML, "CompletedFileIdentity", "")
+                If identity <> "" Then
+                    _verifiedOutputIdentity = identity
+                    _verifiedOutputPath = path
+                End If
             Catch ex As ArgumentException
                 completedFileName = ""
                 Log.WriteWarning("Invalid persisted completed file name; keeping existing files.")
@@ -2090,6 +2170,9 @@ Public Class Fichero
         NodoFic.AppendChild(XML.CreateElement("NombreFichero")).InnerText = NombreFichero
         NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName
         If completedFileName IsNot Nothing Then NodoFic.AppendChild(XML.CreateElement("CompletedFileName")).InnerText = completedFileName
+        If Not String.IsNullOrEmpty(completedFileName) AndAlso _verifiedOutputIdentity IsNot Nothing Then
+            NodoFic.AppendChild(XML.CreateElement("CompletedFileIdentity")).InnerText = _verifiedOutputIdentity
+        End If
         NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal
         NodoFic.AppendChild(XML.CreateElement("RutaRelativa")).InnerText = RutaRelativa
         NodoFic.AppendChild(XML.CreateElement("TamanoBytes")).InnerText = TamanoBytes.ToString

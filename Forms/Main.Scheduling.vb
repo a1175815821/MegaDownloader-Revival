@@ -17,12 +17,23 @@ Partial Public Class Main
     Private Sub ScheduleTick(sender As Object, e As EventArgs)
         SyncLock scheduleActionLock
             If Cerrando OrElse Config Is Nothing OrElse Config.LoadTransientError OrElse Paquete.HasTransientLoadError OrElse System.Threading.Volatile.Read(_startupQueueLoading) Then Return
-            If scheduleMenuItem IsNot Nothing Then scheduleMenuItem.Checked = Config.DownloadSchedule.Enabled
-            Select Case scheduleController.Evaluate(Config.DownloadSchedule, DateTime.Now, EstadoAplicacion = TipoEstadoAplicacion.Descargando)
+            Dim schedule = Config.DownloadSchedule
+            If scheduleMenuItem IsNot Nothing Then scheduleMenuItem.Checked = schedule.Enabled
+            Dim currentTime = DateTime.Now
+            Dim downloading = EstadoAplicacion = TipoEstadoAplicacion.Descargando
+            If Not downloading AndAlso Not schedule.AllowsDownload(currentTime) Then
+                SyncLock Mutex.ListaDescargas
+                    downloading = ListaPaquetes.Any(Function(package) package.ListaFicheros.Any(
+                        Function(file) file.DescargaIndividual AndAlso
+                            (file.DescargaEstado() = Estado.Descargando OrElse file.DescargaEstado() = Estado.CreandoLocal)))
+                End SyncLock
+            End If
+            Select Case scheduleController.Evaluate(schedule, currentTime, downloading)
                 Case DownloadScheduleController.ScheduleAction.Pause
                     QuitarDescargasIndividuales()
                     EstadoAplicacion = TipoEstadoAplicacion.Pausa
                     ThrottledStreamController.GetController.Abortar()
+                    PonerFicherosEnPausa()
                     Log.WriteInfo("Download schedule paused the queue.")
                 Case DownloadScheduleController.ScheduleAction.Start
                     ' Leave PausaIndividual intact. Quota gating is also enforced in

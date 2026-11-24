@@ -244,6 +244,10 @@ Friend NotInheritable Class MegaDriveDownload
             ct.ThrowIfCancellationRequested()
             paths.Add(relative, PathGuard.GetSafePathUnderRoot(root, relative, allowRoot:=False))
         Next
+        Dim conflict = paths.Values.FirstOrDefault(AddressOf File.Exists)
+        If conflict IsNot Nothing Then
+            Throw New ApplicationException(Language.GetText("MegaDrive_DirectoryFileConflict") & vbCrLf & vbCrLf & conflict)
+        End If
         For Each path In paths.Values
             ct.ThrowIfCancellationRequested()
             Directory.CreateDirectory(path)

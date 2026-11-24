@@ -336,7 +336,28 @@ public partial class RegressionTests {
             restored.CargarXML(node);restored.MarcadoParaBorrarFicheroLocal=true;restored.BorrarFicheroLocal();
             Check(File.ReadAllText(outside)=="preserved","invalid output marker cannot delete outside the task directory");
         }
-        Print("deletion_ownership","queued/failed/finalizing/collision/legacy cases passed");
+        string replacedDir=Path.Combine(root,"delete-replaced");Directory.CreateDirectory(replacedDir);
+        string replaced=Path.Combine(replacedDir,"photo.bin"), moved=Path.Combine(replacedDir,"moved.bin");
+        using(var file=new Fichero {RutaLocal=replacedDir,NombreFichero="photo.bin",MegaAccountEmail="delete@example.invalid"})
+        using(var restored=new Fichero()) {
+            File.WriteAllText(replaced,"original");
+            InvokePrivate(file,"downloader_FileRenamed",null,new FileRenamedEventArgs("photo.bin"));
+            restored.CargarXML(file.GuardarXML(new System.Xml.XmlDocument(),true));
+            restored.PrepareOutputOwnership();
+            DateTime writeTime=File.GetLastWriteTimeUtc(replaced);
+            File.Move(replaced,moved);
+            File.WriteAllText(replaced,"replaced");
+            File.SetLastWriteTimeUtc(replaced,writeTime);
+            foreach(var task in new[]{file,restored}) {
+                task.MarcadoParaBorrarFicheroLocal=true;
+                task.BorrarFicheroLocal();
+                Check(File.ReadAllText(replaced)=="replaced" && File.ReadAllText(moved)=="original",
+                      "same-size, same-timestamp replacement survives remove+delete in memory and after restore");
+                string preserved=(string)typeof(Fichero).GetField("OutputPreservedPath",hidden).GetValue(task);
+                Check(preserved==Path.GetFullPath(replaced),"an unverified replacement is reported as kept: "+preserved);
+            }
+        }
+        Print("deletion_ownership","queued/failed/finalizing/collision/legacy/replacement cases passed");
     }
     static void LockedPrimaryCases() {
         string path=Path.Combine(root,"locked-primary.xml");
@@ -1364,6 +1385,19 @@ public partial class RegressionTests {
             paused.DescargaIndividual=true;
             typeof(Main).GetMethod("ScheduleTick",hidden).Invoke(form,new object[]{null,EventArgs.Empty});
             Check(stateField.GetValue(form).ToString()=="Pausa" && !paused.DescargaIndividual,"scheduled stop also stops individually forced downloads");
+
+            using(var forced=new Fichero {MegaAccountEmail="schedule@example.invalid",DescargaIndividual=true,EstadoDescarga=Estado.Descargando})
+            using(var transfer=new CancellationTokenSource()) {
+                var cancellation=typeof(Fichero).GetField("accountDownload",hidden);
+                cancellation.SetValue(forced,transfer);
+                pack.AgregarFichero(forced);
+                config.DownloadSchedule=new DownloadScheduleSettings {Enabled=true,Daily=false,OnceStart=DateTime.Now.AddMinutes(-2),OnceEnd=DateTime.Now.AddMinutes(-1)};
+                try {
+                    InvokePrivate(form,"ScheduleTick",null,EventArgs.Empty);
+                    Check(!forced.DescargaIndividual && transfer.IsCancellationRequested && stateField.GetValue(form).ToString()=="Pausa",
+                          "expired window cancels a forced transfer even when the queue was already paused");
+                } finally {cancellation.SetValue(forced,null);}
+            }
         }
         // This uninitialized test object has no native window or real configuration.
         GC.SuppressFinalize(form);
@@ -2577,6 +2611,27 @@ public partial class RegressionTests {
             file.BorrarFicheroLocal();
             Check(!File.Exists(partial) && File.Exists(unrelated) && File.Exists(output),"account task deletion cleans its old anonymous partial only");
         }
+        using(var file=new Fichero(direct))using(var oldDownloader=new FileDownloader(true)) {
+            var downloader=typeof(Fichero).GetProperty("Downloader",hidden);
+            var parts=new FileDownloader.DataPart(1000,1);
+            parts.SetProgress(0,250);
+            string checkpoint=FileDownloader.CreatePartialFileName();
+            oldDownloader.AddFileInfo(file.FileID,file.FileKey,"",name,parts,checkpoint);
+            oldDownloader.File.Size=1000;
+            typeof(FileDownloader).GetField("m_currentFileSize",hidden).SetValue(oldDownloader,1000L);
+            typeof(FileDownloader).GetField("m_currentFileProgress",hidden).SetValue(oldDownloader,250L);
+            downloader.SetValue(file,oldDownloader,null);
+            file.EstadoDescarga=Estado.Erroneo;
+            Check((bool)InvokePrivate(file,"CanChangeDownloadIdentity"),"idle anonymous downloader allows an identity change");
+            InvokePrivate(file,"ChangeDownloadIdentity",email);
+            file.EstadoDescarga=Estado.Descargando;
+            InvokePrivate(file,"UpdateMegaAccountProgress",800L,1000L,1024L);
+            file.ActualizarDatosDescarga();
+            Check(downloader.GetValue(file,null)==null && file.BytesDescargados==800 && file.Porcentaje==80 && file.VelocidadKBs==1,
+                  "refresh keeps the active account backend's progress and speed");
+            Check(file.DatosPartes==parts && file.PartialFileName==checkpoint,
+                  "switching backend keeps the anonymous checkpoint");
+        }
     }
     static void MegaAccountSpeedPropertiesCases() {
         using(var account=new Fichero {MegaAccountEmail="speed@example.invalid",LimiteVelocidad=64,RutaLocal=root})
@@ -2672,11 +2727,24 @@ public partial class RegressionTests {
                 setError.Invoke(task,new object[]{-9});
                 Check(task.EsErrorPermanente && !(bool)retry.Invoke(null,new object[]{task,true,true}),"permanent account errors do not retry");
 
+                quotaDelayUnknown.SetValue(status,false);
+                value.SetValue(entry,status);
+                const string expired="expired-retry@example.invalid";
+                var expiredEntry=SeedMegaAccount(service,expired,"",false);
+                try {
+                    var effective=typeof(Fichero).GetProperty("EffectiveMegaAccountEmail",hidden);
+                    foreach(bool automatic in new[]{true,false}) {
+                        InvokePrivate(task,"RecordMegaAccountTransfer",expired);
+                        setError.Invoke(task,new object[]{-15});
+                        if(automatic) Check((bool)retry.Invoke(null,new object[]{task,false,false}),"expired public fallback can retry immediately");
+                        else task.ResetearDescarga(true);
+                        Check((string)effective.GetValue(task,null)==email,"public retry returns to an available account");
+                    }
+                } finally {entries.Remove(expiredEntry);}
+
                 const string blocked="blocked-retry@example.invalid";
                 var fallback=SeedMegaAccount(service,blocked,"",true,remaining:0L);
                 try {
-                    quotaDelayUnknown.SetValue(status,false);
-                    value.SetValue(entry,status);
                     var transfer=typeof(Fichero).GetField("MegaAccountTransferEmail",hidden);
                     transfer.SetValue(task,blocked);
                     setError.Invoke(task,new object[]{-17});
@@ -2727,6 +2795,14 @@ public partial class RegressionTests {
                 Check((string)effective.GetValue(restored,null)==email,"private files stay bound to their original account");
             }
         } finally {foreach(var file in package.ListaFicheros)file.Dispose();}
+
+        string conflictRoot=Path.Combine(root,"cloud-directory-conflict");Directory.CreateDirectory(conflictRoot);
+        string conflict=Path.Combine(conflictRoot,"课程素材");File.WriteAllText(conflict,"local file");
+        Exception conflictError=null;
+        try {InvokePrivate(plan,"Build",email,conflictRoot,"Cloud drive",false,CancellationToken.None);}
+        catch(TargetInvocationException ex) {conflictError=ex.InnerException;}
+        Check(conflictError is ApplicationException && conflictError.Message.Contains(Path.GetFullPath(conflict)) && File.ReadAllText(conflict)=="local file",
+              "cloud folder collision identifies the blocking path and keeps the local file: "+conflictError);
 
         var serviceType=typeof(Main).Assembly.GetType("MegaDownloader.MegaAccountService",true);
         var store=Path.Combine(root,"cloud-preferences");

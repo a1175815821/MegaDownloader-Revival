@@ -95,11 +95,11 @@ Partial Public Class Main
 
     Private Shared Function CanRetryMegaAccountFailure(file As Fichero, retryDue As Boolean, autoRetry As Boolean) As Boolean
         If file.PausaIndividual Then Return False
-        Dim service = MegaAccountService.Current
-        Dim email = file.EffectiveMegaAccountEmail
-        Dim status = service.GetStatus(email)
-        Dim available = status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached
         If file.FailedByQuota Then
+            Dim service = MegaAccountService.Current
+            Dim email = file.EffectiveMegaAccountEmail
+            Dim status = service.GetStatus(email)
+            Dim available = status.SignedIn AndAlso Not status.Connecting AndAlso Not status.QuotaReached
             If available AndAlso (Not status.QuotaDelayUnknown OrElse retryDue) Then Return True
             If file.MegaDriveNodeHandle.HasValue Then Return False
             Dim nextEmail = service.NextTransferAccount(email, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {email}, retryDue)
@@ -107,10 +107,10 @@ Partial Public Class Main
             file.RecordMegaAccountTransfer(nextEmail)
             Return True
         End If
-        If Not available Then Return False
         Dim code = file.MegaAccountErrorCode.GetValueOrDefault()
-        Return code = MegaAccountService.SessionExpired OrElse code = MegaAccountService.Busy OrElse
+        Dim shouldRetry = code = MegaAccountService.SessionExpired OrElse code = MegaAccountService.Busy OrElse
             (autoRetry AndAlso retryDue AndAlso Fichero.IsTransientMegaAccountError(code))
+        Return shouldRetry AndAlso file.HasAvailableMegaAccountForRetry(retryDue)
     End Function
 
     Private Shared Function CloudQuotaBlocks(file As Fichero) As Boolean

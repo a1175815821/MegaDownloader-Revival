@@ -4383,6 +4383,9 @@ Public Class Main
                     Eliminar(desc, True, False)
                 Next
                 RefreshListaDescargas(True)
+                If candidatos.Any(Function(file) file.OutputPreservedPath IsNot Nothing) Then
+                    ToastForm.ShowToast(Me, Language.GetText("Delete_OutputOwnershipChanged"))
+                End If
             End Sub
         preparador.RunWorkerAsync()
     End Sub
@@ -4547,6 +4550,9 @@ Public Class Main
                 If fic.MarcadoParaBorrarFicheroLocal Then
                     fic.DiscardPrivateMegaCheckpoint()
                     fic.BorrarFicheroLocal()
+                    If fic.OutputPreservedPath IsNot Nothing AndAlso IsHandleCreated Then
+                        ToastForm.ShowToast(Me, Language.GetText("Delete_OutputOwnershipChanged"))
+                    End If
                 End If
                 Dim paqLimpieza As Paquete = fic.LimpiezaPaquete
                 fic.LimpiezaPaquete = Nothing
