@@ -71,6 +71,7 @@ Friend NotInheritable Class PublicFolderSubscriptions
             Dim previous As MegaDriveSubscription = Nothing
             If Not subscriptions.TryGetValue(settings.Folder, previous) Then Return False
             Dim item = previous.Copy()
+            Dim extensionsChanged As Boolean = Not String.Equals(item.Extensions, settings.Extensions, StringComparison.Ordinal)
             item.Destination = settings.Destination
             item.Extensions = settings.Extensions
             item.AutoQueue = settings.AutoQueue
@@ -78,6 +79,13 @@ Friend NotInheritable Class PublicFolderSubscriptions
             If item.CheckMinutes <> settings.CheckMinutes OrElse item.CheckMinutes.HasValue <> settings.CheckMinutes.HasValue Then
                 item.CheckMinutes = settings.CheckMinutes
                 item.ScheduleFromUtc = Date.UtcNow
+            End If
+            If extensionsChanged Then
+                ' The baseline was captured through the old filter, so a file it left out could
+                ' never be reported again after the filter widens. Re-baseline the next scan,
+                ' like editing the filter of a cloud drive subscription does.
+                item.Files.Clear()
+                item.KnownPublicFiles = Nothing
             End If
             ReplaceItem(item)
             Return True

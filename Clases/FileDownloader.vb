@@ -1446,10 +1446,18 @@ Public Class FileDownloader
                                         If InitDescarga < Chunk.StartIndex OrElse InitDescarga > Chunk.StartIndex + Chunk.Index Then
                                             exc = New ApplicationException(String.Format("Error when downloading chunk {0}-{1}: received start {2}", ChunkStart, ChunkStop, InitDescarga))
                                         ElseIf InitDescarga <> Chunk.StartIndex + Chunk.Index Then
-                                            ' Align resume to what the server actually sent (must stay inside chunk)
-                                            Chunk.Index = InitDescarga - Chunk.StartIndex
-                                            ChunkStart = Chunk.StartIndex + Chunk.Index
-                                            ChunkStop = Chunk.StartIndex + Chunk.Size - 1
+                                            ' The server sent an earlier start inside this chunk. Adopt it only when
+                                            ' it is block-aligned: the CTR keystream is seeked in whole 16-byte
+                                            ' blocks, so an unaligned adopted offset would decrypt the rest of the
+                                            ' chunk with the wrong keystream (same rule as the pre-request guard).
+                                            If (InitDescarga And 15) <> 0 Then
+                                                exc = New ApplicationException(String.Format(
+                                                    "Server resumed chunk {0}-{1} at unaligned offset {2}; aborting chunk to avoid keystream misalignment.", ChunkStart, ChunkStop, InitDescarga))
+                                            Else
+                                                Chunk.Index = InitDescarga - Chunk.StartIndex
+                                                ChunkStart = Chunk.StartIndex + Chunk.Index
+                                                ChunkStop = Chunk.StartIndex + Chunk.Size - 1
+                                            End If
                                         End If
                                     End If
                                     If exc Is Nothing AndAlso EndDescarga < ChunkStart Then

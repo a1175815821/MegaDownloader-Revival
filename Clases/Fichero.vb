@@ -68,6 +68,16 @@ Public Class Fichero
         End Get
     End Property
 
+    ''' <summary>True when this task already delivered a file. A retry must then keep the completed
+    ''' progress so the downloader reuses that file and only the failed post-download step (automatic
+    ''' extraction) runs again, instead of downloading the whole file a second time and leaving a
+    ''' "name (2)" duplicate behind.</summary>
+    Friend ReadOnly Property HasDeliveredOutput As Boolean
+        Get
+            Return Not String.IsNullOrEmpty(completedFileName)
+        End Get
+    End Property
+
     Friend ReadOnly Property UsesMegaAccount As Boolean
         Get
             Return MegaDriveNodeHandle.HasValue OrElse Not String.IsNullOrEmpty(MegaAccountEmail)
@@ -561,6 +571,22 @@ Public Class Fichero
         Return Nothing
     End Function
 
+    ''' <summary>True when the candidate path still holds the file whose identity was verified at
+    ''' delivery. Older queue entries stored no identity; they keep the previous name+length check.</summary>
+    Private Function RecordedOutputIsVerified(path As String) As Boolean
+        If _verifiedOutputPath Is Nothing Then Return True
+        If _verifiedOutputIdentity Is Nothing Then Return False
+        If Not String.Equals(path, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) Then Return False
+        Try
+            Using handle = OpenCompletedOutput(path)
+                Return ReadCompletedOutputIdentity(handle) = _verifiedOutputIdentity
+            End Using
+        Catch ex As Exception When TypeOf ex Is ArgumentException OrElse TypeOf ex Is System.IO.IOException OrElse
+                                   TypeOf ex Is UnauthorizedAccessException
+            Return False
+        End Try
+    End Function
+
     Private Function GetCompletedFileForDeletion() As String
         OutputPreservedPath = Nothing
         OutputNeedsConfirmation = False
@@ -834,7 +860,7 @@ Public Class Fichero
                 If accountCancelTarget.HasValue Then Return
                 If HasRecordedMegaAccountOutput Then
                     Dim candidate As New System.IO.FileInfo(CompletedOutputPath(completedFileName))
-                    If candidate.Exists AndAlso candidate.Length = TamanoBytes Then
+                    If candidate.Exists AndAlso candidate.Length = TamanoBytes AndAlso RecordedOutputIsVerified(candidate.FullName) Then
                         output = candidate.FullName
                         NombreFichero = completedFileName
                         BytesDescargados = TamanoBytes

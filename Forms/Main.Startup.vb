@@ -18,6 +18,15 @@ Partial Public Class Main
         UpdateStartupActionAvailability()
     End Sub
 
+    ''' <summary>The startup queue is not merely loading: it could not be loaded and still is
+    ''' unavailable, so actions that need the queue cannot run yet.</summary>
+    Friend ReadOnly Property StartupQueueUnavailable As Boolean
+        Get
+            Return Not Volatile.Read(_startupQueueLoading) AndAlso
+                (Paquete.HasTransientLoadError OrElse Paquete.HasCorruptLoadError)
+        End Get
+    End Property
+
     Private Sub UpdateStartupActionAvailability()
         Dim ready As Boolean = Not Volatile.Read(_startupQueueLoading) AndAlso Config IsNot Nothing AndAlso
                                Not Config.LoadTransientError AndAlso Not Paquete.HasTransientLoadError AndAlso Not Cerrando

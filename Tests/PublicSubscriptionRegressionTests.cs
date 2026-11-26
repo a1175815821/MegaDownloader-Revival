@@ -171,6 +171,21 @@ public partial class RegressionTests {
             Check(table.RowCount==2 && Enumerable.Range(0,table.RowCount).Any(i=>Convert.ToString(table[2,i].Value)==Path.Combine("Week 2","Second.pdf")),
                 "the real subscription window shows public discoveries with nested relative paths");
         }
+        // The baseline was captured through "pdf", so the already-known PNG would never be
+        // reported after the filter widens unless the stale baseline and report are dropped.
+        var widened=CallSubscription(reopened,"Find",id);
+        SetSubscriptionProperty(widened,"Extensions","pdf, png");
+        Check((bool)CallSubscription(reopened,"SaveSettings",widened) &&
+              SubscriptionProperty(CallSubscription(reopened,"Find",id),"KnownPublicFiles")==null &&
+              PublicReports(CallSubscription(reopened,"Find",id)).Length==0,
+            "changing the extension filter drops the report and baseline captured through the old filter");
+        var rescanned=CallSubscription(reopened,"Find",id);
+        var pngListing=ParsePublicFixture(NotesFolder,1,true);
+        var pngScan=CallSubscription(pngListing,"Plan",NotesFolder,SubscriptionProperty(rescanned,"FolderPaths"));
+        apply.Invoke(null,new[]{rescanned,pngScan,false});
+        var widenedNames=PublicReports(rescanned).Select(file=>(string)SubscriptionProperty(file,"Name")).ToList();
+        Check(widenedNames.Count==3 && widenedNames.Contains("Image.png"),
+            "widening the extension filter reports the existing file the old filter excluded");
         CallSubscription(reopened,"Remove",id);
         Check(((IList)CallSubscription(reopened,"ReadAll")).Count==0 && File.Exists(filePath),"unsubscribe removes tracking without deleting deliveries");
     }

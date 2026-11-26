@@ -151,7 +151,8 @@ Partial Public Class Main
 
     ''' <summary>失败横幅“重试”：与 Retry All Failed 菜单同语义——重置全部非永久 Erroneo 回 EnCola。
     ''' 永久错误（EsErrorPermanente=True）不重试：链接已失效/密钥错误，自动重下只会烧配额（与自愈调度一致）。
-    ''' 配额失败保留断点（ResetearDescarga(preserveProgress:=True)），普通失败全量重置。 </summary>
+    ''' 配额失败保留断点（ResetearDescarga(preserveProgress:=True)），普通失败全量重置。
+    ''' 已交付过文件的任务同样保留:重试只重跑失败的后处理,不会再下一遍并留下副本。 </summary>
     Private Sub FailureRetry_Click(sender As Object, e As EventArgs)
         Try
             Dim retried As Integer = 0
@@ -166,7 +167,8 @@ Partial Public Class Main
                 Next
             End SyncLock
             For Each fic As Fichero In pend
-                fic.ResetearDescarga(preserveProgress:=fic.FailedByQuota OrElse fic.MegaDriveNodeHandle.HasValue)
+                fic.ResetearDescarga(preserveProgress:=fic.FailedByQuota OrElse fic.MegaDriveNodeHandle.HasValue OrElse
+                                     fic.HasDeliveredOutput)
                 fic.PausaIndividual = False
                 fic.SetDescargaEstado = Estado.EnCola
                 retried += 1

@@ -475,11 +475,24 @@ Public Class Paquete
                     owner.AppendChild(owner.ImportNode(nodes(index), True))
                     isolated(index) = owner.DocumentElement
                 Next
+                ' Parallel.For wraps a worker exception in AggregateException, which ReadQueueFile's
+                ' classifier does not recognise: one damaged field would be treated as a transient
+                ' lock and the intact .bak would never be tried. Rethrow the inner exception so a
+                ' parallel load classifies exactly like a serial one.
+                Dim failures As New System.Collections.Concurrent.ConcurrentQueue(Of Exception)()
                 Parallel.For(0, nodes.Count, New ParallelOptions With {.MaxDegreeOfParallelism = concurrency, .CancellationToken = cancellationToken},
                     Sub(index)
-                        loaded(index) = New Fichero()
-                        loaded(index).CargarXML(isolated(index))
+                        Try
+                            loaded(index) = New Fichero()
+                            loaded(index).CargarXML(isolated(index))
+                        Catch ex As Exception
+                            failures.Enqueue(ex)
+                        End Try
                     End Sub)
+                Dim failure As Exception = Nothing
+                If failures.TryDequeue(failure) Then
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw()
+                End If
             End If
             cancellationToken.ThrowIfCancellationRequested()
             Me.ListaFicheros = New Generic.List(Of Fichero)(loaded)

@@ -319,14 +319,21 @@ Partial Public Class Main
         workbenchClear.Enabled = workbenchSearch.TextLength > 0
         UiStyles.SetText(workbenchDetails, Language.GetText(If(detailsRequested AndAlso workbenchDetails.Enabled, "UI_HideDetails", "UI_ShowDetails")))
         workbenchDetails.AccessibleName = workbenchDetails.Text
-        If ListaDescargas.EmptyListMsg <> String.Empty Then ListaDescargas.EmptyListMsg = String.Empty
+        ' While the startup queue is loading or could not be loaded, the list's own
+        ' "Loading please wait" / "Downloads could not be loaded" message must stay visible:
+        ' the empty-queue prompt would cover it and wrongly claim the queue is simply empty.
+        Dim queuePending As Boolean = System.Threading.Volatile.Read(_startupQueueLoading)
+        Dim queueUnavailable As Boolean = Paquete.HasTransientLoadError OrElse Paquete.HasCorruptLoadError
+        If Not queuePending AndAlso Not queueUnavailable Then
+            If ListaDescargas.EmptyListMsg <> String.Empty Then ListaDescargas.EmptyListMsg = String.Empty
+        End If
         If workbenchEmpty IsNot Nothing Then
             Dim filtered As Boolean = queueQuery.Length > 0 OrElse _navScope <> DownloadEstadoFilter.NavScope.All
             UiStyles.SetText(workbenchEmptyTitle, Language.GetText(If(filtered, "UI_NoMatches", "UI_EmptyTitle")))
             UiStyles.SetText(workbenchEmptyHint, Language.GetText(If(filtered, "UI_EmptyFilter", "UI_EmptyHint")))
             UiStyles.SetText(workbenchEmptyAction, Language.GetText("Add links"))
             workbenchEmptyAction.Visible = Not filtered
-            Dim isEmpty As Boolean = ListaDescargas.Items.Count = 0
+            Dim isEmpty As Boolean = Not queuePending AndAlso Not queueUnavailable AndAlso ListaDescargas.Items.Count = 0
             workbenchEmpty.Visible = isEmpty
             If isEmpty AndAlso Controls.GetChildIndex(workbenchEmpty) <> 0 Then workbenchEmpty.BringToFront()
         End If

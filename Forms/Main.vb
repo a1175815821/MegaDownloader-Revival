@@ -2266,7 +2266,7 @@ Public Class Main
         Try
             Dim lista As Generic.List(Of Fichero) = CollectErroneoFiles()
             For Each fic As Fichero In lista
-                fic.ResetearDescarga(preserveProgress:=fic.MegaDriveNodeHandle.HasValue)
+                fic.ResetearDescarga(preserveProgress:=fic.MegaDriveNodeHandle.HasValue OrElse fic.HasDeliveredOutput)
                 fic.SetDescargaEstado = Estado.EnCola
             Next
             Log.WriteWarning("Retrying all failed files: " & lista.Count)
@@ -3751,7 +3751,7 @@ Public Class Main
                 Fichero.DescargaIndividual = True
                 Fichero.Start(Me.Config, Me.Config.ConexionesPorFichero)
             ElseIf Fichero.DescargaEstado = Estado.Erroneo AndAlso Not Fichero.EsErrorPermanente Then
-                Fichero.ResetearDescarga(preserveProgress:=Fichero.MegaDriveNodeHandle.HasValue)
+                Fichero.ResetearDescarga(preserveProgress:=Fichero.MegaDriveNodeHandle.HasValue OrElse Fichero.HasDeliveredOutput)
                 Fichero.PausaIndividual = False
                 Fichero.SetDescargaEstado = Estado.EnCola
                 Fichero.DescargaIndividual = True
@@ -5144,7 +5144,7 @@ Public Class Main
 
         Dim ventanaError As New Credits
         ventanaError.Text = Language.GetText("About")
-        ventanaError.ShowDialog()
+        ventanaError.ShowDialog(Me)
         ventanaError.Dispose()
 
     End Sub
@@ -5457,10 +5457,11 @@ Public Class Main
         End If
     End Sub
 
-    Private Sub VerErrorToolStripMenuItem_Click(sender As Object, e As System.EventArgs) Handles VerErrorToolStripMenuItem.Click
-
+    ''' <summary>Error text for the "See error" action. A task saved by an older version may have
+    ''' failed without a persisted description; it must not inherit an unrelated quota message.</summary>
+    Friend Shared Function ErrorReportText(selected As System.Collections.IEnumerable) As String
         Dim ht As New HashSet(Of String) ' Evitamos repetidos (por ejemplo si seleccionamos un paquete y sus ficheros, saldrían los errores 2 veces)
-        For Each obj As Object In ListaDescargas.SelectedObjects
+        For Each obj As Object In selected
             If TypeOf (obj) Is Paquete Then
                 For Each fic As Fichero In CType(obj, Paquete).ListaFicheros
                     If fic.DescargaEstado = Estado.Erroneo AndAlso Not String.IsNullOrWhiteSpace(fic.DescripcionError) Then
@@ -5472,7 +5473,6 @@ Public Class Main
                 If fic.DescargaEstado = Estado.Erroneo AndAlso Not String.IsNullOrWhiteSpace(fic.DescripcionError) Then
                     ht.Add(fic.DescripcionError)
                 End If
-
             End If
         Next
         Dim msg As String = ""
@@ -5481,18 +5481,16 @@ Public Class Main
         Next
         msg = msg.Trim
         ' RC:老队列重启后描述为空时不再弹空白窗,给可操作 fallback。
-        If String.IsNullOrWhiteSpace(msg) Then
-            msg = Language.GetText("Quota_Error")
-            If String.IsNullOrWhiteSpace(msg) OrElse msg = "Quota_Error" Then
-                msg = "No error details available (e.g. queue saved by an older version). Please retry the download; a fresh error will include details."
-            End If
-        End If
+        If msg.Length = 0 Then msg = Language.GetText("Notify_UnknownError")
+        Return msg
+    End Function
 
+    Private Sub VerErrorToolStripMenuItem_Click(sender As Object, e As System.EventArgs) Handles VerErrorToolStripMenuItem.Click
 
         Dim ventanaError As New PantallaMsg
         ventanaError.Text = Language.GetText("Error information")
-        ventanaError.TextoError = msg
-        ventanaError.ShowDialog()
+        ventanaError.TextoError = ErrorReportText(ListaDescargas.SelectedObjects)
+        ventanaError.ShowDialog(Me)
         ventanaError.Dispose()
     End Sub
 
@@ -5592,7 +5590,7 @@ Public Class Main
         If TypeOf (ListaDescargas.SelectedObject) Is IDescarga Then
             Dim v As New PropiedadesDescarga
             v.Descarga = CType(ListaDescargas.SelectedObject, IDescarga)
-            v.ShowDialog()
+            v.ShowDialog(Me)
 
             v.Dispose()
         End If
@@ -5696,6 +5694,10 @@ Public Class Main
     End Sub
 
     Private Sub AgregarLink()
+        If StartupQueueUnavailable Then
+            ToastForm.ShowToast(Me, Language.GetText("Queue_LoadFailed"))
+            Return
+        End If
         AgregarLink(String.Empty, String.Empty, True, False)
     End Sub
 

@@ -241,6 +241,9 @@ Public Partial Class ELCAccountControl
 				If Not String.IsNullOrEmpty(txtELCAccountURL.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountUser.Text) OrElse _
 				   Not String.IsNullOrEmpty(txtELCAccountAlias.Text) OrElse Not String.IsNullOrEmpty(txtELCAccountKey.Text) Then
 					If MessageBox.Show(Language.GetText("ELC discard new account confirm"), Language.GetText("Note"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> Windows.Forms.DialogResult.Yes Then
+						' New mode has no current account row: keep the grid in the same state
+						' Add new established instead of leaving the clicked row highlighted.
+						dgELCUsers.ClearSelection()
 						Return
 					End If
 				End If

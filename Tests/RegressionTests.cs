@@ -183,6 +183,8 @@ public partial class RegressionTests {
             new CaseDef("quota_countdown_format","core",QuotaCountdownFormatCases),
             new CaseDef("ui_feature_dialogs","ui",FeatureDialogs),
             new CaseDef("failure_banner","ui",FailureBannerCases),
+            new CaseDef("queue_error_report","audit",QueueErrorReportCases),
+            new CaseDef("workbench_empty_state","ui",WorkbenchEmptyStateCases),
             new CaseDef("archive_edges","archive",ArchiveEdges),
             new CaseDef("confirmed_audit_fixes","audit",ConfirmedAuditFixes),
             new CaseDef("queue_backup_integrity","queue",QueueBackupIntegrity),
@@ -256,6 +258,7 @@ public partial class RegressionTests {
             DownloadCase(server,Plain,Key,"resume-modern",2048,true);
             DownloadCase(server,Plain,Key,"missing-modern-with-foreign-legacy",2048,false);
             DownloadCase(server,Plain,Key,"resume-corrupt-final",4096,false);
+            RangeStartCases(server,Plain,Key);
             StreamingCases(server,Plain,Key);
         }
     }
@@ -2522,6 +2525,34 @@ public partial class RegressionTests {
         }
         done.Dispose();
     }
+    static void RangeStartCases(LocalFileServer server,byte[] plain,string key) {
+        // A 206 that starts earlier than requested inside a partially downloaded chunk is
+        // adopted by the client. An unaligned start must abort the chunk: the CTR keystream
+        // is seeked in 16-byte blocks, so decrypting from a floored offset would corrupt the
+        // rest of the chunk (silently for links without an embedded MetaMAC).
+        string d=Path.Combine(root,"resume-earlier-range"); Directory.CreateDirectory(d);
+        string path=Path.Combine(d,"data.bin");
+        string partialName=FileDownloader.CreatePartialFileName();
+        string part=FileDownloader.GetPartialFilePath(d,"data.bin",partialName);
+        byte[] partial=new byte[plain.Length]; Array.Copy(plain,partial,2048); File.WriteAllBytes(part,partial);
+        var dp=new FileDownloader.DataPart(plain.Length,1); dp.ChunkList[0].Index=2048; dp.ChunkList[0].SyncedIndex=2048;
+        var failed=new ManualResetEvent(false); Exception chunkError=null;
+        server.ForcedRangeStart=2004;
+        try {
+            using(var fd=new FileDownloader(false)) {
+                fd.DeleteFilesAfterCancel=false;
+                fd.LocalDirectory=d; fd.AddFileInfo("TESTFILE",key,server.Url,"data.bin",dp,partialName);
+                fd.ChunkDownloadFailed+=(s,e)=>{ chunkError=e; failed.Set(); };
+                fd.Start();
+                failed.WaitOne(10000);
+                fd.Stop();
+            }
+        } finally { server.ForcedRangeStart=null; }
+        Check(chunkError!=null && chunkError.Message.Contains("unaligned"),
+              "an unaligned earlier Content-Range start aborts the chunk: "+(chunkError==null?"":chunkError.Message));
+        Check(!File.Exists(path) && File.ReadAllBytes(part).SequenceEqual(partial),
+              "an aborted unaligned resume transfers no bytes and leaves the resume data intact");
+    }
     // Windows (Hyper-V/WinNAT) reserves dynamic port ranges: an ephemeral port a raw
     // TcpListener accepts can still be refused by HTTP.sys (WSAEACCES / sharing violation,
     // "Error starting web server"). Probe with a real HttpListener and retry so fixtures
@@ -2733,6 +2764,25 @@ public partial class RegressionTests {
                   "refresh keeps the active account backend's progress and speed");
             Check(file.DatosPartes==parts && file.PartialFileName==checkpoint,
                   "switching backend keeps the anonymous checkpoint");
+        }
+        string identityName=Path.Combine(directory,"identity.bin");
+        File.WriteAllBytes(identityName,new byte[16]);
+        using(var file=new Fichero()) {
+            file.RutaLocal=directory;file.NombreFichero="identity.bin";file.TamanoBytes=16;file.Porcentaje=100;
+            typeof(Fichero).GetField("completedFileName",hidden).SetValue(file,"identity.bin");
+            file.RecordVerifiedOutput(identityName);
+            var verified=typeof(Fichero).GetMethod("RecordedOutputIsVerified",hidden);
+            Check((bool)verified.Invoke(file,new object[]{identityName}),
+                  "a delivered output is reused while its recorded identity still matches");
+            File.WriteAllBytes(identityName,new byte[16]);
+            File.SetLastWriteTimeUtc(identityName,DateTime.UtcNow.AddMinutes(-5));
+            Check(!(bool)verified.Invoke(file,new object[]{identityName}),
+                  "a same-length replacement at the recorded path is not reused as the delivered file");
+        }
+        using(var legacy=new Fichero()) {
+            typeof(Fichero).GetField("completedFileName",hidden).SetValue(legacy,"identity.bin");
+            Check((bool)typeof(Fichero).GetMethod("RecordedOutputIsVerified",hidden).Invoke(legacy,new object[]{identityName}),
+                  "an older queue without a stored identity keeps the name+length fallback");
         }
     }
     static void MegaAccountSpeedPropertiesCases() {
@@ -3430,9 +3480,12 @@ public partial class RegressionTests {
                 var normal=new Fichero{FileID="BANNER_N",NombreFichero="normal.bin",RutaLocal=root};
                 var permanent=new Fichero{FileID="BANNER_P",NombreFichero="dead.bin",RutaLocal=root,EsErrorPermanente=true};
                 var quota=new Fichero{FileID="BANNER_Q",NombreFichero="quota.bin",RutaLocal=root,FailedByQuota=true};
+                var delivered=new Fichero{FileID="BANNER_D",NombreFichero="delivered.bin",RutaLocal=root};
                 quota.DatosPartes=new FileDownloader.DataPart(4096,1);quota.DatosPartes.SetProgress(0,2048);
                 normal.DatosPartes=new FileDownloader.DataPart(4096,1);normal.DatosPartes.SetProgress(0,2048);
-                var pack=new Paquete{Nombre="banner"};pack.AgregarFichero(normal);pack.AgregarFichero(permanent);pack.AgregarFichero(quota);
+                delivered.DatosPartes=new FileDownloader.DataPart(4096,1);delivered.DatosPartes.SetProgress(0,4096);
+                typeof(Fichero).GetField("completedFileName",hidden).SetValue(delivered,"delivered.bin");
+                var pack=new Paquete{Nombre="banner"};pack.AgregarFichero(normal);pack.AgregarFichero(permanent);pack.AgregarFichero(quota);pack.AgregarFichero(delivered);
                 type.GetField("ListaPaquetes",hidden).SetValue(main,new List<Paquete>{pack});
                 try{
                     Refresh();
@@ -3459,13 +3512,17 @@ public partial class RegressionTests {
                     Check(panel.Visible&&label.Text.Contains("1"),"a different failure re-shows the banner even with the same count");
                     normal.EstadoDescarga=Estado.Erroneo;
                     quota.EstadoDescarga=Estado.Erroneo;
+                    delivered.EstadoDescarga=Estado.Erroneo;
                     Refresh();
-                    Check(label.Text.Contains("3"),"banner count tracks every failed task");
+                    Check(label.Text.Contains("4"),"banner count tracks every failed task");
                     retry.PerformClick();
                     Check(normal.EstadoDescarga==Estado.EnCola,"retry wakes an ordinary failure");
                     Check(permanent.EstadoDescarga==Estado.Erroneo,"retry never re-downloads a permanent failure");
                     Check(quota.EstadoDescarga==Estado.EnCola&&quota.DatosPartes.GetTotalProgress()==2048,"retry wakes a quota failure and preserves its resume progress");
                     Check(normal.DatosPartes.GetTotalProgress()==0,"ordinary retry resets progress for a clean restart");
+                    Check((bool)typeof(Fichero).GetProperty("HasDeliveredOutput",hidden).GetValue(delivered) &&
+                          delivered.EstadoDescarga==Estado.EnCola&&delivered.DatosPartes.GetTotalProgress()==4096,
+                        "retry of a delivered file keeps its completed progress so the downloader reuses it instead of downloading again");
                     Check(panel.Visible&&label.Text.Contains("1"),"after retry only the permanent failure remains counted");
                     dismiss.PerformClick();
                     permanent.EstadoDescarga=Estado.EnCola;
@@ -3474,11 +3531,68 @@ public partial class RegressionTests {
                     normal.EstadoDescarga=Estado.Erroneo;
                     Refresh();
                     Check(panel.Visible&&label.Text.Contains("1"),"a later single failure is visible after the previous one clears");
-                }finally{normal.Dispose();permanent.Dispose();quota.Dispose();}
+                }finally{normal.Dispose();permanent.Dispose();quota.Dispose();delivered.Dispose();}
             }
         }finally{
             for(int i=0;i<languageFields.Length;i++)typeof(Language).GetField(languageFields[i],shared).SetValue(null,before[i]);
             typeof(Language).GetField("culture",shared).SetValue(null,oldCulture);
+        }
+    }
+
+    static void QueueErrorReportCases() {
+        using(var failed=new Fichero{EstadoDescarga=Estado.Erroneo,RutaLocal=root,NombreFichero="failed.bin"}) {
+            var report=typeof(Main).GetMethod("ErrorReportText",shared);
+            var text=(string)report.Invoke(null,new object[]{new object[]{failed}});
+            Check(text==Language.GetText("Notify_UnknownError") && text.IndexOf("quota",StringComparison.OrdinalIgnoreCase)<0,
+                  "a failed task without a stored description shows the localized generic fallback, not the quota text");
+            failed.DescripcionError="boom";
+            text=(string)report.Invoke(null,new object[]{new object[]{failed}});
+            Check(text=="boom","a stored description is shown verbatim");
+        }
+    }
+
+    static void WorkbenchEmptyStateCases() {
+        using(var main=new PresentationMain()) {
+            var type=typeof(Main);
+            main.Config=(Configuracion)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(Configuracion));
+            main.Config.ConfigUI=new ConfiguracionUI();
+            type.GetMethod("CrearMenus",hidden).Invoke(main,null);
+            type.GetMethod("InitWorkbench",hidden).Invoke(main,null);
+            type.GetMethod("DefinirColumnas",hidden).Invoke(main,null);
+            type.GetMethod("InitNavRail",hidden).Invoke(main,null);
+            type.GetMethod("InitQuotaBanner",hidden).Invoke(main,null);
+            type.GetMethod("InitFailureBanner",hidden).Invoke(main,null);
+            type.GetMethod("InitDownloadAreaLayout",hidden).Invoke(main,null);
+            main.ShowInTaskbar=false;main.StartPosition=System.Windows.Forms.FormStartPosition.Manual;main.Location=new System.Drawing.Point(-30000,-30000);
+            main.Show();System.Windows.Forms.Application.DoEvents();
+            var panel=(System.Windows.Forms.Panel)type.GetField("workbenchEmpty",hidden).GetValue(main);
+            var list=(BrightIdeasSoftware.TreeListView)type.GetProperty("ListaDescargas",hidden).GetValue(main,null);
+            var loading=type.GetField("_startupQueueLoading",hidden);
+            var heading=type.GetMethod("UpdateWorkbenchHeading",hidden);
+            var queueFields=new[]{"_LoadTransientError","_LoadCorruptError","_LastSavedXML","_TransientSkipLogged"}
+                .Select(n=>typeof(Paquete).GetField(n,shared)).ToArray();
+            var queueValues=queueFields.Select(f=>f.GetValue(null)).ToArray();
+            object originalLoading=loading.GetValue(main);
+            try {
+                Paquete.CommitTransientRecovery();
+                loading.SetValue(main,false);
+                heading.Invoke(main,null);
+                Check(panel.Visible,"an empty loaded queue shows the start prompt");
+                list.EmptyListMsg="Loading please wait";
+                loading.SetValue(main,true);
+                heading.Invoke(main,null);
+                Check(!panel.Visible && list.EmptyListMsg=="Loading please wait",
+                      "the start prompt does not cover the list while the startup queue loads");
+                loading.SetValue(main,false);
+                Paquete.ArmTransientWriteProtection();
+                list.EmptyListMsg="Downloads could not be loaded";
+                heading.Invoke(main,null);
+                Check(!panel.Visible && list.EmptyListMsg=="Downloads could not be loaded",
+                      "a failed queue load keeps the start prompt hidden and the failure text visible");
+            } finally {
+                loading.SetValue(main,originalLoading);
+                for(int i=0;i<queueFields.Length;i++) queueFields[i].SetValue(null,queueValues[i]);
+            }
         }
     }
 
@@ -3802,6 +3916,9 @@ public partial class RegressionTests {
         public int ApiCalls;
         public ManualResetEvent ApiEntered,ApiRelease;
         public ManualResetEvent HeadEntered,HeadRelease;
+        // Advertise an earlier (optionally unaligned) Content-Range start inside the requested
+        // range, without sending a body. Used to prove the client rejects a misaligned resume.
+        public long? ForcedRangeStart;
         public LocalFileServer(byte[] content) {
             data=content;
             // Retry the actual HTTP.sys bind: a reserved/conflicting port must not fail the
@@ -3836,7 +3953,19 @@ public partial class RegressionTests {
                         c.Response.ContentLength64=data.Length;c.Response.Close();continue;
                     }
                     long start=0,end=data.Length-1;
-                    if(r!=null) { string[] p=r.Substring(6).Split('-'); start=long.Parse(p[0]); if(p[1]!="") end=Math.Min(end,long.Parse(p[1])); c.Response.StatusCode=206; c.Response.Headers.Add("Content-Range","bytes "+start+"-"+end+"/"+data.Length); }
+                    if(r!=null) {
+                        string[] p=r.Substring(6).Split('-'); start=long.Parse(p[0]); if(p[1]!="") end=Math.Min(end,long.Parse(p[1]));
+                        long? forced=ForcedRangeStart;
+                        if(forced.HasValue && forced.Value<start) {
+                            c.Response.StatusCode=206;
+                            c.Response.Headers.Add("Content-Range","bytes "+forced.Value+"-"+end+"/"+data.Length);
+                            c.Response.ContentLength64=0;
+                            lock(ranges) ranges.Add(r);
+                            c.Response.Close();
+                            continue;
+                        }
+                        c.Response.StatusCode=206; c.Response.Headers.Add("Content-Range","bytes "+start+"-"+end+"/"+data.Length);
+                    }
                     lock(ranges) ranges.Add(r??"no-range");
                     c.Response.ContentLength64=end-start+1;
                     int length=(int)(end-start+1); int fragment=Interlocked.Exchange(ref FragmentNext,0);
