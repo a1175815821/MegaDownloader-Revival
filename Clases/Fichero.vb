@@ -1779,10 +1779,24 @@ Public Class Fichero
 	End Sub
 	
 	
-	''' <summary>P0-4:非活跃文件每 tick 只需清掉瞬态速度/ETA，不再进全局锁。</summary>
+	''' <summary>P0-4:非活跃文件每 tick 只需清掉瞬态速度/ETA，不再进全局锁。
+	''' 但完成/后处理态必须把进度收尾到 100%：下载可能在两个 tick 之间完成，
+	''' 最后一次活跃 tick 的百分比会停在中间值（实测 55%），状态却已经是 Completado。</summary>
 	Friend Sub ClearTransientProgress()
 		If VelocidadKBs <> 0D Then VelocidadKBs = 0D
 		If Not String.IsNullOrEmpty(TiempoEstimadoDescarga) Then TiempoEstimadoDescarga = ""
+		If EstadoDescarga = Estado.Completado OrElse EstadoDescarga = Estado.ComprobandoMD5 OrElse
+		   EstadoDescarga = Estado.Descomprimiendo OrElse EstadoDescarga = Estado.EsperandoVolumenes Then
+			If Porcentaje <> 100D OrElse BytesDescargados <> TamanoBytes Then
+				SyncLock Mutex.FicheroDownloader
+					If EstadoDescarga = Estado.Completado OrElse EstadoDescarga = Estado.ComprobandoMD5 OrElse
+					   EstadoDescarga = Estado.Descomprimiendo OrElse EstadoDescarga = Estado.EsperandoVolumenes Then
+						BytesDescargados = TamanoBytes
+						Porcentaje = 100D
+					End If
+				End SyncLock
+			End If
+		End If
 	End Sub
 
 	Public Sub ActualizarDatosDescarga()

@@ -3442,6 +3442,20 @@ public partial class RegressionTests {
             WebRequest.DefaultWebProxy=previousProxy;
             busy.Stop();
         }
+
+        // P0-4 regression: a download can finish between two 430ms ticks. Once the
+        // state is Completed the idle tick must finalize the stale active percentage
+        // instead of leaving e.g. 55% next to "Completed" forever.
+        using(var completed=new Fichero { TamanoBytes=9200000, BytesDescargados=5070000, Porcentaje=55, EstadoDescarga=Estado.Completado }) {
+            typeof(Fichero).GetMethod("ClearTransientProgress",hidden).Invoke(completed,null);
+            Check(completed.Porcentaje==100&&completed.BytesDescargados==9200000,
+                  "a completed file finalizes a stale mid-download percentage");
+        }
+        using(var paused=new Fichero { TamanoBytes=1000, BytesDescargados=400, Porcentaje=40, EstadoDescarga=Estado.Pausado }) {
+            typeof(Fichero).GetMethod("ClearTransientProgress",hidden).Invoke(paused,null);
+            Check(paused.Porcentaje==40&&paused.BytesDescargados==400,
+                  "a paused file keeps its real progress");
+        }
     }
     // Permanent vs quota error classification drives self-healing and the failure-banner
     // retry filter; a misclassification either burns quota re-downloading dead links or
