@@ -203,8 +203,12 @@ namespace MegaDownloader
                 try
                 {
                     // Cada library es un nodo  "<ExportedXML>" ... "</ExportedXML>"
+                    // Reject DTDs: imported libraries come from untrusted links and
+                    // XmlDocument.LoadXml would otherwise resolve external entities.
                     var xml = new XmlDocument();
-                    xml.LoadXml(library);
+                    var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+                    using (var reader = XmlReader.Create(new StringReader(library), settings))
+                        xml.Load(reader);
 
                     foreach (XmlNode element in xml.DocumentElement.SelectNodes("Elements/Element"))
                     {
@@ -227,7 +231,7 @@ namespace MegaDownloader
                 }
                 catch (Exception ex)
                 {
-                    Log.WriteError("Error trying to import library [ImportLibrary] - error " + ex.ToString() + " - Data: " + library);
+                    Log.WriteError("Error trying to import library [ImportLibrary] - " + Log.SafeException(ex));
                 }
 
             }

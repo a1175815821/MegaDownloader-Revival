@@ -162,10 +162,20 @@ namespace MegaDownloader
                     Link = link.URL,
                     Name = PathGuard.SanitizeFileName(link.DisplayName ?? string.Empty, "file"),
                     RelativePath = link.Path ?? string.Empty,
-                    Bytes = link.SizeBytes ?? 0L
+                    Bytes = link.SizeBytes ?? 0L,
+                    VersionKey = PublicFolderVersionKey(Fichero.ExtraerFileID(link.URL),
+                        Fichero.ExtraerFileKey(link.URL), link.SizeBytes ?? 0L)
                 });
             }
             return files;
+        }
+
+        /// <summary>Fingerprint of the file identity and size, matching main's
+        /// PublicFolderListing.VersionOf: a same-size file with a different key is a new version.</summary>
+        internal static string PublicFolderVersionKey(string fileId, string fileKey, long bytes)
+        {
+            string identity = BatchLinkPreflight.Identity(fileId, fileKey);
+            return identity is null ? null : Utils.SecretFingerprint(identity + "\n" + bytes.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         /// <summary>Compares a fresh listing with the previous report and the delivered
@@ -196,8 +206,12 @@ namespace MegaDownloader
             foreach (MegaPublicFolderFile file in discovered)
             {
                 if (previous.TryGetValue(file.FileId, out MegaPublicFolderFile prior))
+                {
                     file.Updated = prior.Bytes != file.Bytes || prior.Name != file.Name ||
-                        prior.RelativePath != file.RelativePath;
+                        prior.RelativePath != file.RelativePath ||
+                        (file.VersionKey is not null && prior.VersionKey is not null &&
+                         file.VersionKey != prior.VersionKey);
+                }
                 if (delivered.Contains(Path.GetFullPath(MegaPublicFolderSubscription.LocalPath(root, file))))
                 {
                     file.Status = MegaPublicFolderFileState.Downloaded;

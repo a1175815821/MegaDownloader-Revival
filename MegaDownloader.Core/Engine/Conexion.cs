@@ -174,10 +174,25 @@ namespace MegaDownloader
             return Uri.TryCreate("http://" + authority + ":" + port.ToString(System.Globalization.CultureInfo.InvariantCulture), UriKind.Absolute, out address);
         }
 
+        // Global ServicePointManager defaults were rewritten on every request. They are
+        // process-wide, so apply them once on first use instead.
+        private static readonly Lazy<bool> _globalNetworkSettingsApplied = new Lazy<bool>(() =>
+        {
+            try
+            {
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                ServicePointManager.DefaultConnectionLimit = 10000;
+            }
+            catch (Exception ex)
+            {
+                Log.WriteWarning("Could not apply global network settings: " + Log.SafeException(ex));
+            }
+            return true;
+        }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
         public static HttpWebRequest CreateHttpWebRequest(string Url)
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            ServicePointManager.DefaultConnectionLimit = 10000;
+            _ = _globalNetworkSettingsApplied.Value;
 
             HttpWebRequest webrq = (HttpWebRequest)WebRequest.Create(Url);
             webrq.Timeout = 60000;

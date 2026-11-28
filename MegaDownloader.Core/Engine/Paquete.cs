@@ -624,11 +624,25 @@ namespace MegaDownloader
                         owner.AppendChild(owner.ImportNode(nodes[index], true));
                         isolated[index] = owner.DocumentElement;
                     }
+                    // Parallel.For wraps worker exceptions in AggregateException, which the
+                    // queue-load classifier does not recognise: one damaged field would be
+                    // treated as a transient lock and the intact .bak would never be tried.
+                    // Rethrow the original exception with its original stack instead.
+                    var failures = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
                     Parallel.For(0, nodes.Count, new ParallelOptions() { MaxDegreeOfParallelism = concurrency, CancellationToken = cancellationToken }, index =>
-    {
-        loaded[index] = new Fichero();
-        loaded[index].CargarXML(isolated[index]);
-    });
+                    {
+                        try
+                        {
+                            loaded[index] = new Fichero();
+                            loaded[index].CargarXML(isolated[index]);
+                        }
+                        catch (Exception ex)
+                        {
+                            failures.Enqueue(ex);
+                        }
+                    });
+                    if (failures.TryDequeue(out Exception failure))
+                        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
                 }
                 cancellationToken.ThrowIfCancellationRequested();
                 ListaFicheros = new List<Fichero>(loaded);

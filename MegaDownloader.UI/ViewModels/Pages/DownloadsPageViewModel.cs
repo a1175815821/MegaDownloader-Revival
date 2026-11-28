@@ -879,8 +879,21 @@ public partial class DownloadsPageViewModel : ViewModelBase, IDisposable
             {
                 if (_speedSamples.Count == 60)
                     _speedSamples.Dequeue();
-                _speedSamples.Enqueue((double)engineSummary.SpeedKBs);
-                SpeedHistory = _speedSamples.ToArray();
+                double sample = (double)engineSummary.SpeedKBs;
+                bool unchanged = _speedSamples.Count > 0 &&
+                    Math.Abs(_speedSamples.Last() - sample) < 0.001 &&
+                    SpeedHistory is double[] history && history.Length == 60;
+                if (_speedSamples.Count == 60)
+                    _speedSamples.Dequeue();
+                _speedSamples.Enqueue(sample);
+                // The graph redraws whenever this reference changes. Idle ticks with the
+                // same speed reuse the existing array instead of forcing a full redraw.
+                if (!unchanged)
+                {
+                    var next = new double[_speedSamples.Count];
+                    _speedSamples.CopyTo(next, 0);
+                    SpeedHistory = next;
+                }
             }
 
             Summary = UiText.Format("{0} active · {1} queued · {2} paused · {3} completed · {4} failed",

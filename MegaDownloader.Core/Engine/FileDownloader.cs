@@ -1639,6 +1639,11 @@ namespace MegaDownloader
             // 该标记在每次上报前置位,外层 Catch 只对"尚未上报过"的裸区异常补报一次。
             // 注意:必须声明在最外层 Try 之前,否则 VB 块作用域导致 Catch 里看不到。
             bool failureReported = false;
+            byte[] BufferMem = null;
+            byte[] BufferDisk = null;
+            byte[] poolMem = null;
+            byte[] poolDisk = null;
+            Criptografia.SicSeekableBlockCipher oCipher = null;
             try
             {
 
@@ -1662,8 +1667,15 @@ namespace MegaDownloader
                 long readings = 0L;
                 int currentBuffersize = 0;
                 int currentPackageSize = -1;
-                var BufferMem = new byte[PackageSize];
-                var BufferDisk = new byte[BufferSize];
+                // Pool the hot-path buffers. Chunks are often much smaller than the configured
+                // package size; renting only what this chunk needs removes per-chunk LOH churn.
+                // ArrayPool may return a larger array, so every length below uses .Length.
+                int memRequest = (int)Math.Min((long)PackageSize, Math.Max(1L, Chunk.Size));
+                int diskRequest = (int)Math.Min((long)BufferSize, Math.Max((long)PackageSize, Chunk.Size));
+                poolMem = System.Buffers.ArrayPool<byte>.Shared.Rent(memRequest);
+                poolDisk = System.Buffers.ArrayPool<byte>.Shared.Rent(diskRequest);
+                BufferMem = poolMem;
+                BufferDisk = poolDisk;
                 int bytesDownloadedSinceLastTimer = 0;
                 var speedTimer = new Stopwatch();
                 var arraySpeed = new KeyValuePair<double, double>[m_stopWatchCycles];
@@ -1785,10 +1797,21 @@ namespace MegaDownloader
                                                 }
                                                 else if (InitDescarga != Chunk.StartIndex + Chunk.Index)
                                                 {
-                                                    // Align resume to what the server actually sent (must stay inside chunk)
-                                                    Chunk.Index = InitDescarga - Chunk.StartIndex;
-                                                    ChunkStart = Chunk.StartIndex + Chunk.Index;
-                                                    ChunkStop = Chunk.StartIndex + Chunk.Size - 1L;
+                                                    // The CTR keystream is seeked in whole 16-byte blocks. Adopt the
+                                                    // server's start only when it is block-aligned; otherwise decrypting
+                                                    // the rest of the chunk would silently use the wrong keystream.
+                                                    if ((InitDescarga & 15L) != 0L)
+                                                    {
+                                                        exc = new ApplicationException(string.Format(
+                                                            "Server resumed chunk {0}-{1} at unaligned offset {2}; aborting chunk to avoid keystream misalignment.",
+                                                            ChunkStart, ChunkStop, InitDescarga));
+                                                    }
+                                                    else
+                                                    {
+                                                        Chunk.Index = InitDescarga - Chunk.StartIndex;
+                                                        ChunkStart = Chunk.StartIndex + Chunk.Index;
+                                                        ChunkStop = Chunk.StartIndex + Chunk.Size - 1L;
+                                                    }
                                                 }
                                             }
                                             if (exc is null && EndDescarga < ChunkStart)
@@ -1832,7 +1855,7 @@ namespace MegaDownloader
                         // Inicializamos el Cipher (floor seek by absolute file offset)
                         Log.WriteDebug("Starting SicBlockCipher seek position " + ChunkStart);
                         var crono = DateTime.Now;
-                        var oCipher = Criptografia.GetInstaceCipher(FileKeyWithoutN);
+                        oCipher = Criptografia.GetInstaceCipher(FileKeyWithoutN);
                         oCipher.SeekToFileOffset(ChunkStart);
                         Log.WriteDebug("Finishing SicBlockCipher seek [" + DateTime.Now.Subtract(crono).TotalMilliseconds + "ms]");
 
@@ -1861,7 +1884,7 @@ namespace MegaDownloader
                                 }
 
                                 // Not trigger.WaitOne(0) -> IsPaused? -> Flush to disk
-                                if (currentBuffersize > 0 & (Chunk.Index + currentBuffersize >= Chunk.Size | !trigger.WaitOne(0) | worker.CancellationPending | currentBuffersize + PackageSize > BufferSize))
+                                if (currentBuffersize > 0 & (Chunk.Index + currentBuffersize >= Chunk.Size | !trigger.WaitOne(0) | worker.CancellationPending | currentBuffersize + BufferMem.Length > BufferDisk.Length))
 
 
 
@@ -1894,9 +1917,9 @@ namespace MegaDownloader
                                     currentPackageSize = 0;
                                     bool unexpectedEof = false;
 
-                                    while (currentPackageSize < PackageSize)
+                                    while (currentPackageSize < BufferMem.Length)
                                     {
-                                        int bytesDownloaded = TStream.Read(BufferMem, currentPackageSize, PackageSize - currentPackageSize);
+                                        int bytesDownloaded = TStream.Read(BufferMem, currentPackageSize, BufferMem.Length - currentPackageSize);
                                         currentPackageSize += bytesDownloaded;
 
                                         if (bytesDownloaded == 0)
@@ -1927,8 +1950,8 @@ namespace MegaDownloader
                                         throw new ApplicationException("UnexpectedEndOfStream: zero-byte read with incomplete chunk.");
                                     }
 
-                                    for (int tempIndex = 0, loopTo = currentPackageSize - 1; oCipher.GetBlockSize() >= 0 ? tempIndex <= loopTo : tempIndex >= loopTo; tempIndex += oCipher.GetBlockSize())
-                                        oCipher.ProcessBlock(BufferMem, tempIndex, BufferDisk, currentBuffersize + tempIndex);
+                                    int cipherBlocks = (currentPackageSize + oCipher.GetBlockSize() - 1) / oCipher.GetBlockSize();
+                                    oCipher.ProcessBlocks(BufferMem, 0, BufferDisk, currentBuffersize, cipherBlocks);
                                 }
 
                                 catch (WebException ex)
@@ -2071,6 +2094,17 @@ namespace MegaDownloader
                         }
                     }
                 }
+            }
+            finally
+            {
+                // Both buffers are fully consumed (flushed) before this point; return them
+                // even on early exits so retries reuse the same arrays.
+                if (poolMem is not null)
+                    System.Buffers.ArrayPool<byte>.Shared.Return(poolMem);
+                if (poolDisk is not null)
+                    System.Buffers.ArrayPool<byte>.Shared.Return(poolDisk);
+                // Release the batched AES transform and its key schedule.
+                oCipher?.Dispose();
             }
         }
 

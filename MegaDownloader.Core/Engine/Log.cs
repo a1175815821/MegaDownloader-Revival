@@ -33,6 +33,8 @@ namespace MegaDownloader
             }
         }
 
+        public static bool IsDebugEnabled => _LogLevel >= LevelLogType.Debug;
+
         public static void WriteError(string Text)
         {
             WriteLog(Redact(Text), LevelLogType.Minimal);
@@ -67,16 +69,22 @@ namespace MegaDownloader
 
         public static void WriteWarning(string Text)
         {
+            if (_LogLevel < LevelLogType.Normal)
+                return;
             WriteLog(Redact(Text), LevelLogType.Normal);
         }
 
         public static void WriteInfo(string Text)
         {
+            if (_LogLevel < LevelLogType.Info)
+                return;
             WriteLog(Redact(Text), LevelLogType.Info);
         }
 
         public static void WriteDebug(string Text)
         {
+            if (_LogLevel < LevelLogType.Debug)
+                return;
             WriteLog(Redact(Text), LevelLogType.Debug);
         }
 

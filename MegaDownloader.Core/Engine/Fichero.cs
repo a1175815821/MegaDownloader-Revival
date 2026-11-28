@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -56,6 +56,11 @@ namespace MegaDownloader
         internal bool IsMegaAccountConnecting =>
             UsesMegaAccount && MegaAccountService.Current.GetStatus(EffectiveMegaAccountEmail).Connecting;
 
+        /// <summary>True when this task already delivered a file. A retry must keep the
+        /// completed progress so the downloader reuses that file and only the failed
+        /// post-download step runs again, instead of downloading a "(2)" duplicate.</summary>
+        internal bool HasDeliveredOutput => !string.IsNullOrEmpty(completedFileName);
+
         internal bool HasRecordedMegaAccountOutput =>
             UsesMegaAccount && Porcentaje == 100m && !string.IsNullOrEmpty(completedFileName);
 
@@ -88,11 +93,21 @@ namespace MegaDownloader
         // Empty means no delivered output; Nothing identifies an older queue entry.
         private string completedFileName = "";
 
-        /// <summary>B3: 本会话内已由下载器校验并交付的成品。删除时按"路径+大小+写入时间"
-    /// 复核未被外部替换即可复用,不必对 GB 级文件重算一次全文件 MetaMAC。</summary>
+        /// <summary>
+        /// Identity of the delivered file, recorded immediately after its bytes were
+        /// verified. Deletion and retry reuse check it before touching the file, so a file
+        /// replaced after delivery is preserved instead of deleted or reused.
+        /// </summary>
+        private string _verifiedOutputIdentity = null;
+
+        /// <summary>Set when a candidate output was preserved because its identity changed.</summary>
+        public string OutputPreservedPath = null;
+
+        /// <summary>
+        /// B3: output verified during this session. The identity above records the exact
+        /// file state at verification time on every platform.
+        /// </summary>
         private string _verifiedOutputPath = null;
-        private long _verifiedOutputLength = -1;
-        private long _verifiedOutputWriteUtc = 0L;
 
         /// <summary>B4: 16 字节(4 词)公链 key 没有内嵌 MetaMAC。预热时标记出来,
     /// 由界面一次性请求用户显式确认,而不是静默把成品留在磁盘上。</summary>
@@ -576,9 +591,22 @@ namespace MegaDownloader
                     {
                         if (!string.IsNullOrEmpty(completado))
                         {
-                            if (System.IO.File.Exists(completado))
+                            bool owned = true;
+                            if (!string.IsNullOrEmpty(_verifiedOutputIdentity) &&
+                                string.Equals(completado, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Confirm the verified file is still the same one before
+                                // deleting. Delete by path: callers may still hold the output
+                                // open just after a download finished.
+                                owned = ReadCompletedOutputIdentity(completado) == _verifiedOutputIdentity;
+                            }
+                            if (owned && System.IO.File.Exists(completado))
+                            {
                                 System.IO.File.Delete(completado);
-                            completedFileName = "";
+                                completedFileName = "";
+                            }
+                            else if (!owned)
+                                OutputPreservedPath = completado;
                         }
                         if (System.IO.File.Exists(parcial))
                         {
@@ -615,42 +643,57 @@ namespace MegaDownloader
             return result;
         }
 
+        /// <summary>
+        /// A portable identity for a delivered file: full path, length and both timestamps.
+        /// These are recorded from the exact file that was verified, so a replacement at the
+        /// same path changes at least one of them and is preserved instead of deleted.
+        /// </summary>
+        private static string ReadCompletedOutputIdentity(string fullPath)
+        {
+            try
+            {
+                var info = new System.IO.FileInfo(fullPath);
+                if (!info.Exists || (info.Attributes & System.IO.FileAttributes.Directory) != 0)
+                    return null;
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}|{1}|{2}|{3}", fullPath, info.Length,
+                    info.CreationTimeUtc.Ticks, info.LastWriteTimeUtc.Ticks);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is System.IO.IOException || ex is UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>True when the current file at <paramref name="path"/> is still the one whose
+        /// identity was recorded at delivery. Old queue entries stored no identity and keep the
+        /// previous name+length check.</summary>
+        private bool RecordedOutputIsVerified(string path)
+        {
+            if (_verifiedOutputPath is null)
+                return true;
+            if (_verifiedOutputIdentity is null)
+                return false;
+            if (!string.Equals(path, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase))
+                return false;
+            return ReadCompletedOutputIdentity(path) == _verifiedOutputIdentity;
+        }
+
         private string GetCompletedFileForDeletion()
         {
+            // Owned output recorded during this session or in the queue: check the
+            // recorded identity before deleting or reusing anything.
+            if (_verifiedOutputPath is not null && !string.IsNullOrEmpty(_verifiedOutputIdentity))
+                return RecordedOutputIsVerified(_verifiedOutputPath) ? _verifiedOutputPath : null;
+            // Legacy queue entry (no recorded identity): keep the original ownership check.
             if (!string.IsNullOrEmpty(completedFileName))
                 return CompletedOutputPath(completedFileName);
-
-            // B3: 本会话内下载器已完成校验的成品,只要路径/大小/写入时间未变就直接复用,
-            // 不再对同一个 GB 级文件重算一次全文件 MetaMAC。必须放在旧队列守卫之前:
-            // 新建任务的 completedFileName 是 ""(非 Nothing),否则会被提前拦掉。
-            if (!string.IsNullOrEmpty(_verifiedOutputPath))
-            {
-                try
-                {
-                    string verifiedPath = CompletedOutputPath(System.IO.Path.GetFileName(_verifiedOutputPath));
-                    if (string.Equals(verifiedPath, _verifiedOutputPath, StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(verifiedPath))
-                    {
-                        var verifiedInfo = new System.IO.FileInfo(verifiedPath);
-                        if (verifiedInfo.Length == _verifiedOutputLength && verifiedInfo.LastWriteTimeUtc.Ticks == _verifiedOutputWriteUtc)
-                        {
-                            completedFileName = System.IO.Path.GetFileName(verifiedPath);
-                            return verifiedPath;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.WriteWarning("Verified output can no longer be reused for " + FileID + ": " + Log.SafeException(ex));
-                }
-            }
-
             if (UsesMegaAccount || completedFileName is not null || !DescargaComenzada)
                 return null;
-            // Older queues have no output marker. Require a real MetaMAC match before
-            // treating a same-named existing file as their completed output.
-            if (EstadoDescarga != Estado.Completado && EstadoDescarga != Estado.Descomprimiendo && EstadoDescarga != Estado.EsperandoVolumenes && EstadoDescarga != Estado.ComprobandoMD5 && (DatosPartes is null || !DatosPartes.AllFinished))
+            if (EstadoDescarga != Estado.Completado && EstadoDescarga != Estado.Descomprimiendo &&
+                EstadoDescarga != Estado.EsperandoVolumenes && EstadoDescarga != Estado.ComprobandoMD5 &&
+                (DatosPartes is null || !DatosPartes.AllFinished))
                 return null;
-
             OutputNeedsConfirmation = false;
             OutputConfirmationPath = null;
             try
@@ -663,9 +706,6 @@ namespace MegaDownloader
                     key = key.Substring(0, key.IndexOf("=###n="));
                 if (Criptografia.base64urldecodeBytes(key).Length != 32)
                 {
-                    // B4: 4 词公链 key(16 字节)没有内嵌 MetaMAC,原实现在此静默返回 Nothing,
-                    // 用户以为删掉了成品,文件却一直留在磁盘上。前置条件已经限定
-                    // "任务确实完成 + 同名 + 大小精确一致 + 下载已开始",交由用户显式确认。
                     if (!ConfirmUnverifiedOutputDeletion)
                     {
                         OutputNeedsConfirmation = true;
@@ -710,14 +750,15 @@ namespace MegaDownloader
                 if (string.IsNullOrEmpty(path))
                     return;
                 string full = System.IO.Path.GetFullPath(path);
-                var info = new System.IO.FileInfo(full);
+                completedFileName = System.IO.Path.GetFileName(full);
                 _verifiedOutputPath = full;
-                _verifiedOutputLength = info.Length;
-                _verifiedOutputWriteUtc = info.LastWriteTimeUtc.Ticks;
+                _verifiedOutputIdentity = null;
+                _verifiedOutputIdentity = ReadCompletedOutputIdentity(full);
             }
             catch (Exception ex)
             {
                 _verifiedOutputPath = null;
+                _verifiedOutputIdentity = null;
                 Log.WriteWarning("Could not cache verified output: " + Log.SafeException(ex));
             }
         }
@@ -1670,6 +1711,8 @@ namespace MegaDownloader
 
         public void Resume()
         {
+            if (disposedValue)
+                return;
             if (UsesMegaAccount)
             {
                 StartMegaAccountDownload();
@@ -1684,6 +1727,8 @@ namespace MegaDownloader
 
         public void Pause()
         {
+            if (disposedValue)
+                return;
             if (UsesMegaAccount)
             {
                 CancelMegaAccountDownload(Estado.Pausado);
@@ -1697,6 +1742,8 @@ namespace MegaDownloader
 
         public void Stop()
         {
+            if (disposedValue)
+                return;
             if (UsesMegaAccount)
             {
                 Interlocked.Exchange(ref _cancellationNotified, 0);
@@ -2107,6 +2154,10 @@ namespace MegaDownloader
             // ListaDescargas 锁内同步执行,否则 GB 级文件撞线时冻结 UI/调度数秒~数分钟。
             // 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
             bool needDeferredCompletion = false;
+            Estado etaState;
+            decimal etaSpeed;
+            long etaSize;
+            decimal etaPercent;
             lock (Mutex.FicheroDownloader)
             {
                 if (Downloader is not null)
@@ -2151,32 +2202,19 @@ namespace MegaDownloader
                         needDeferredCompletion = true;
                     }
                 }
-                if (EstadoDescarga == Estado.Descargando)
-                {
-                    if (VelocidadKBs == 0m)
-                    {
-                        TiempoEstimadoDescarga = " --- ";
-                    }
-                    else
-                    {
-                        decimal BytesRestantes = TamanoBytes - Porcentaje * TamanoBytes / 100m;
-                        double SegundosRestantes = (double)(BytesRestantes / (1024m * VelocidadKBs));
-                        var t = TimeSpan.FromSeconds(SegundosRestantes);
-                        if (SegundosRestantes > 3600d)
-                        {
-                            TiempoEstimadoDescarga = string.Format("{0:D2}h:{1:D2}m:{2:D2}s", t.Days * 24 + t.Hours, t.Minutes, t.Seconds);
-                        }
-                        else
-                        {
-                            TiempoEstimadoDescarga = string.Format("{0:D2}m:{1:D2}s", t.Minutes, t.Seconds);
-                        }
-                    }
-                }
-                else
-                {
-                    TiempoEstimadoDescarga = "";
-                }
+                // Snapshot ETA inputs under the lock; formatting (string.Format and
+                // TimeSpan arithmetic) happens outside it so the global file lock is
+                // held for the shortest possible time on every queue tick.
+                etaState = EstadoDescarga;
+                etaSpeed = VelocidadKBs;
+                etaSize = TamanoBytes;
+                etaPercent = Porcentaje;
             }
+            TiempoEstimadoDescarga = etaState != Estado.Descargando
+                ? string.Empty
+                : etaSpeed == 0m
+                    ? " --- "
+                    : FormatEta(etaSize, etaPercent, etaSpeed);
             if (needDeferredCompletion)
             {
                 try
@@ -2188,6 +2226,16 @@ namespace MegaDownloader
                     Log.WriteError("ActualizarDatosDescarga: failed to queue deferred completion: " + Log.SafeException(ex));
                 }
             }
+        }
+
+        private static string FormatEta(long size, decimal percent, decimal speedKBs)
+        {
+            decimal remaining = size - percent * size / 100m;
+            double seconds = (double)(remaining / (1024m * speedKBs));
+            var t = TimeSpan.FromSeconds(seconds);
+            return seconds > 3600d
+                ? string.Format("{0:D2}h:{1:D2}m:{2:D2}s", t.Days * 24 + t.Hours, t.Minutes, t.Seconds)
+                : string.Format("{0:D2}m:{1:D2}s", t.Minutes, t.Seconds);
         }
 
         /// <summary>
@@ -2267,6 +2315,8 @@ namespace MegaDownloader
 	/// 	''' </summary>
         public void ResetearDescarga(bool preserveProgress = false)
         {
+            if (disposedValue)
+                return;
             CaptureDownloaderProgress();
             if (preserveProgress)
             {
@@ -2492,11 +2542,19 @@ namespace MegaDownloader
             RutaLocal = LeerNodo(ref XML, ref argPath7, "");
             var completedNode = XML.SelectSingleNode("CompletedFileName");
             completedFileName = completedNode is null ? null : completedNode.InnerText;
+            _verifiedOutputIdentity = null;
+            _verifiedOutputPath = null;
             if (!string.IsNullOrEmpty(completedFileName))
             {
                 try
                 {
-                    CompletedOutputPath(completedFileName);
+                    string persistedPath = CompletedOutputPath(completedFileName);
+                    string identity = XML.SelectSingleNode("CompletedFileIdentity")?.InnerText ?? string.Empty;
+                    if (!string.IsNullOrEmpty(identity))
+                    {
+                        _verifiedOutputIdentity = identity;
+                        _verifiedOutputPath = persistedPath;
+                    }
                 }
                 catch (ArgumentException ex)
                 {
@@ -2760,6 +2818,8 @@ namespace MegaDownloader
                 NodoFic.AppendChild(XML.CreateElement("PartialFileName")).InnerText = PartialFileName;
                 if (completedFileName is not null)
                     NodoFic.AppendChild(XML.CreateElement("CompletedFileName")).InnerText = completedFileName;
+                if (!string.IsNullOrEmpty(completedFileName) && !string.IsNullOrEmpty(_verifiedOutputIdentity))
+                    NodoFic.AppendChild(XML.CreateElement("CompletedFileIdentity")).InnerText = _verifiedOutputIdentity;
                 NodoFic.AppendChild(XML.CreateElement("RutaLocal")).InnerText = RutaLocal;
                 NodoFic.AppendChild(XML.CreateElement("RutaRelativa")).InnerText = RutaRelativa;
                 NodoFic.AppendChild(XML.CreateElement("TamanoBytes")).InnerText = TamanoBytes.ToString();

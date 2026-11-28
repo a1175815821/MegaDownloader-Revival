@@ -270,7 +270,6 @@ namespace MegaDownloader
     /// Indica cuando se ha de hacer un flush de memoria
     /// </summary>
     /// <remarks></remarks>
-        private DateTime ProximoFlushMemoria = DateTime.MinValue;
 
         /// <summary>
     /// Indica la próxima comprobación del número máximo de conexiones
@@ -3691,21 +3690,10 @@ namespace MegaDownloader
                         }
                     }
 
-                    // Aprovechamos y hacemos un flush de memoria ya que este worker no hace mucho trabajo
-                    if (ProximoFlushMemoria < DateTime.Now)
-                    {
-                        int FrecFlush = 60;
-                        if (!int.TryParse(InternalConfiguration.ObtenerValueFromInternalConfig("FLUSH_MEMORY_PERIODO_REFRESCO_SEG"), out FrecFlush))
+                    // Forced GC and working-set trimming were removed: they frozen the UI
+                    // for seconds on large queues. The runtime manages the heap on its own.
 
-                        {
-                            FrecFlush = 60;
-                        }
-                        ProximoFlushMemoria = DateTime.Now.AddSeconds(FrecFlush);
-                        FlushMemory();
-                        Log.WriteDebug("Flush memory, next flush in " + FrecFlush + " seconds");
-                    }
-
-                    // Y de paso hacemos un flush de logs
+                    // Flush the log buffer.
                     Log.Flush(false);
 
                     System.Threading.Thread.Sleep(1000);
@@ -5850,23 +5838,6 @@ namespace MegaDownloader
 
 
         // Hace un "trim" de la memoria, equivalente a minimizar la ventana... muy útil cuando
-        // en .NET la memoria empieza a crecer y crecer y la máquina virtual no suelta la memoria
-        // no usada sino que la acapara...
-        public static void FlushMemory()
-        {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-            {
-                SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1);
-            }
-        }
-        [DllImport("kernel32.dll")]
-        private static extern int SetProcessWorkingSetSize(IntPtr process, int minimumWorkingSetSize, int maximumWorkingSetSize);
-
-
-
-
         // This delegate enables asynchronous calls for setting
         // the text property on a TextBox control.
         public delegate void MsgBoxCallback(string text, string caption, System.Windows.Forms.MessageBoxButtons buttons, System.Windows.Forms.MessageBoxIcon icon);

@@ -28,6 +28,13 @@ namespace MegaDownloader
         public string Name { get; set; }
         public string RelativePath { get; set; }
         public long Bytes { get; set; }
+
+        /// <summary>
+        /// Fingerprint of the file identity and size at the last check. A changed key or
+        /// a same-size replacement is reported as an update, unlike a plain name/size compare.
+        /// </summary>
+        public string VersionKey { get; set; }
+
         public bool Updated { get; set; }
 
         [Newtonsoft.Json.JsonIgnore]
@@ -83,12 +90,17 @@ namespace MegaDownloader
 
         public void ApplySettings(MegaFolderSubscriptionSettings settings, bool destinationChanged)
         {
+            // The baseline was captured through the old filter. A file it left out would
+            // never be reported after the filter widens, so re-baseline the next scan.
+            bool extensionsChanged = !string.Equals(Extensions ?? string.Empty,
+                MegaDriveSubscription.NormalizeExtensions(settings.Extensions) ?? string.Empty,
+                StringComparison.Ordinal);
             Destination = settings.Destination;
             Extensions = MegaDriveSubscription.NormalizeExtensions(settings.Extensions);
             CheckMinutes = settings.CheckMinutes;
             AutoQueue = settings.AutoQueue;
             Paused = settings.Paused;
-            if (destinationChanged)
+            if (destinationChanged || extensionsChanged)
                 Files.Clear();
         }
 

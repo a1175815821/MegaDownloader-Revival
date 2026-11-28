@@ -731,7 +731,7 @@ namespace MegaDownloader
         #region SicSeekableBlockCipher
 
         // Copied from SICBlockCipher.cs (BouncyCastle C#) with a new "IncrementCounter" property 
-        public class SicSeekableBlockCipher : IBlockCipher
+        public class SicSeekableBlockCipher : IBlockCipher, IDisposable
         {
 
             private readonly IBlockCipher cipher;
@@ -739,6 +739,14 @@ namespace MegaDownloader
             private readonly byte[] IV;
             private readonly byte[] counter;
             private readonly byte[] counterOut;
+
+            // P1-3: batch the counter blocks into one system-AES ECB transform (AES-NI).
+            // Any failure falls back to the per-block BouncyCastle path.
+            private const int WindowsAesBatchBytes = 4096;
+            private System.Security.Cryptography.Aes _windowsAes;
+            private System.Security.Cryptography.ICryptoTransform _windowsEncryptor;
+            private byte[] _counterBatch;
+            private byte[] _keystreamBatch;
 
             // *
             // * Basic constructor.
@@ -766,12 +774,53 @@ namespace MegaDownloader
 
                     Reset();
                     cipher.Init(true, ivParam.Parameters);
+                    ConfigureWindowsAes(ivParam.Parameters);
                 }
                 else
                 {
                     throw new ArgumentException("SIC mode requires ParametersWithIV", "parameters");
                 }
             }
+
+            private void ConfigureWindowsAes(ICipherParameters parameters)
+            {
+                DisposeWindowsAes();
+                if (blockSize != 16 || cipher is not AesEngine)
+                    return;
+                if (parameters is not KeyParameter keyParam)
+                    return;
+                byte[] keyBytes = keyParam.GetKey();
+                if (keyBytes is null || (keyBytes.Length != 16 && keyBytes.Length != 24 && keyBytes.Length != 32))
+                    return;
+                try
+                {
+                    // Aes.Create() dispatches to the OS AES (AES-NI) on every platform.
+                    var aes = System.Security.Cryptography.Aes.Create();
+                    _windowsAes = aes; // register first so catch disposes it
+                    aes.Mode = System.Security.Cryptography.CipherMode.ECB;
+                    aes.Padding = System.Security.Cryptography.PaddingMode.None;
+                    aes.Key = keyBytes;
+                    _windowsEncryptor = aes.CreateEncryptor();
+                    _counterBatch = new byte[WindowsAesBatchBytes];
+                    _keystreamBatch = new byte[WindowsAesBatchBytes];
+                }
+                catch
+                {
+                    DisposeWindowsAes();
+                }
+            }
+
+            private void DisposeWindowsAes()
+            {
+                _windowsEncryptor?.Dispose();
+                _windowsEncryptor = null;
+                _windowsAes?.Dispose();
+                _windowsAes = null;
+                _counterBatch = null;
+                _keystreamBatch = null;
+            }
+
+            public void Dispose() => DisposeWindowsAes();
 
             public string AlgorithmName
             {
@@ -809,6 +858,41 @@ namespace MegaDownloader
                 IncrementCounter();
 
                 return counter.Length;
+            }
+
+            /// <summary>
+            /// Equivalent to blockCount consecutive ProcessBlock calls, but batches counter
+            /// blocks into one system-AES ECB transform and XORs them in bulk.
+            /// </summary>
+            public void ProcessBlocks(byte[] input, int inOff, byte[] output, int outOff, int blockCount)
+            {
+                if (blockCount <= 0)
+                    return;
+                if (_windowsEncryptor is null || _counterBatch is null)
+                {
+                    int bs = blockSize;
+                    for (int i = 0; i < blockCount; i++)
+                        ProcessBlock(input, inOff + i * bs, output, outOff + i * bs);
+                    return;
+                }
+                int maxBlocks = _counterBatch.Length / blockSize;
+                int done = 0;
+                while (done < blockCount)
+                {
+                    int n = Math.Min(maxBlocks, blockCount - done);
+                    int byteCount = n * blockSize;
+                    for (int b = 0; b < n; b++)
+                    {
+                        Array.Copy(counter, 0, _counterBatch, b * blockSize, blockSize);
+                        AddToCounter(1);
+                    }
+                    _windowsEncryptor.TransformBlock(_counterBatch, 0, byteCount, _keystreamBatch, 0);
+                    int inBase = inOff + done * blockSize;
+                    int outBase = outOff + done * blockSize;
+                    for (int i = 0; i < byteCount; i++)
+                        output[outBase + i] = (byte)(_keystreamBatch[i] ^ input[inBase + i]);
+                    done += n;
+                }
             }
 
             // BouncyCastle 2.x added this span overload to IBlockCipher. Keep both paths
@@ -946,7 +1030,204 @@ namespace MegaDownloader
     /// (generateMetaMac + macsmac). Any mismatch means the bytes on disk genuinely
     /// differ from the uploaded file.
     /// </summary>
+        /// <summary>
+        /// P2-2/P2-1: a CBC-MAC chain is mathematically CBC encryption with the file
+        /// nonce repeated twice as IV. Use the system AES (AES-NI) for a whole MetaMAC
+        /// chunk at once and, for large files, compute chunks in parallel while the
+        /// file is read sequentially. Falls back to the legacy per-block BouncyCastle
+        /// path when a system AES is unavailable; the result is byte-identical.
+        /// </summary>
         private static bool VerifyMegaFileMac(string filePath, byte[] aesKey, int[] expectedMac, int[] nonceWords)
+        {
+            long fileLen = new FileInfo(filePath).Length;
+            if (fileLen == 0L)
+                return expectedMac[0] == 0 && expectedMac[1] == 0;
+            byte[] iv = BuildMacIv(nonceWords);
+            if (CreateMacCipher(aesKey, iv) is null)
+                return VerifyMegaFileMacLegacy(filePath, aesKey, expectedMac, nonceWords);
+            var chunks = BuildMacChunks(fileLen);
+            int[] fileMac = chunks.Count >= 8 && Environment.ProcessorCount >= 2
+                ? ComputeMacCbcParallel(filePath, aesKey, iv, chunks)
+                : ComputeMacCbcSequential(filePath, aesKey, iv, chunks);
+            return (fileMac[0] ^ fileMac[1]) == expectedMac[0] && (fileMac[2] ^ fileMac[3]) == expectedMac[1];
+        }
+
+        private struct MacChunk
+        {
+            public long Start;
+            public int Size;
+        }
+
+        private static byte[] BuildMacIv(int[] nonceWords)
+        {
+            var iv = new byte[16];
+            WriteWordLE(iv, 0, nonceWords[0]);
+            WriteWordLE(iv, 4, nonceWords[1]);
+            WriteWordLE(iv, 8, nonceWords[0]);
+            WriteWordLE(iv, 12, nonceWords[1]);
+            return iv;
+        }
+
+        /// <summary>MEGA ChunkedHash: 128 KiB * i for the first 8 chunks, then 1 MiB.</summary>
+        private static List<MacChunk> BuildMacChunks(long fileLen)
+        {
+            var chunks = new List<MacChunk>();
+            long start = 0L;
+            int number = 1;
+            while (start < fileLen)
+            {
+                long size = number <= 8 ? number * 0x20000L : 0x100000L;
+                int thisSize = (int)Math.Min(size, fileLen - start);
+                chunks.Add(new MacChunk { Start = start, Size = thisSize });
+                start += thisSize;
+                number += 1;
+            }
+            return chunks;
+        }
+
+        private static System.Security.Cryptography.Aes CreateMacCipher(byte[] aesKey, byte[] iv)
+        {
+            try
+            {
+                // AesCng is Windows-only; Aes.Create() uses the OS AES on every platform.
+                var aes = System.Security.Cryptography.Aes.Create();
+                aes.Mode = System.Security.Cryptography.CipherMode.CBC;
+                aes.Padding = System.Security.Cryptography.PaddingMode.None;
+                aes.Key = aesKey;
+                aes.IV = iv;
+                return aes;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static int ReadAtMost(FileStream fs, byte[] buffer, int count)
+        {
+            int total = 0;
+            while (total < count)
+            {
+                int n = fs.Read(buffer, total, count - total);
+                if (n == 0)
+                    break;
+                total += n;
+            }
+            return total;
+        }
+
+        /// <summary>CBC-encrypt one chunk (zero-padded tail); its last ciphertext block is the chunk MAC.</summary>
+        private static void ComputeChunkCbc(byte[] aesKey, byte[] iv, byte[] input, int inOff, int paddedSize,
+            byte[] output, int outOff, byte[] macs, int macOff)
+        {
+            if (paddedSize <= 0)
+            {
+                Array.Copy(iv, 0, macs, macOff, 16);
+                return;
+            }
+            using var aes = CreateMacCipher(aesKey, iv);
+            using var enc = aes.CreateEncryptor();
+            enc.TransformBlock(input, inOff, paddedSize, output, outOff);
+            Array.Copy(output, outOff + paddedSize - 16, macs, macOff, 16);
+        }
+
+        /// <summary>fileMac = AES(fileMac XOR chunkMac), matching the SDK macsmac fold.</summary>
+        private static void FoldChunkMac(AesEngine engine, int[] fileMac, byte[] macs, int macOff,
+            byte[] aesInput, byte[] aesOutput)
+        {
+            int m0 = fileMac[0] ^ BitConverter.ToInt32(macs, macOff);
+            int m1 = fileMac[1] ^ BitConverter.ToInt32(macs, macOff + 4);
+            int m2 = fileMac[2] ^ BitConverter.ToInt32(macs, macOff + 8);
+            int m3 = fileMac[3] ^ BitConverter.ToInt32(macs, macOff + 12);
+            WriteWordLE(aesInput, 0, m0);
+            WriteWordLE(aesInput, 4, m1);
+            WriteWordLE(aesInput, 8, m2);
+            WriteWordLE(aesInput, 12, m3);
+            engine.ProcessBlock(aesInput, 0, aesOutput, 0);
+            fileMac[0] = BitConverter.ToInt32(aesOutput, 0);
+            fileMac[1] = BitConverter.ToInt32(aesOutput, 4);
+            fileMac[2] = BitConverter.ToInt32(aesOutput, 8);
+            fileMac[3] = BitConverter.ToInt32(aesOutput, 12);
+        }
+
+        private static int[] ComputeMacCbcSequential(string filePath, byte[] aesKey, byte[] iv, List<MacChunk> chunks)
+        {
+            const int MaxChunk = 0x100000;
+            var fileMac = new int[] { 0, 0, 0, 0 };
+            var engine = new AesEngine();
+            engine.Init(true, new KeyParameter(aesKey));
+            var inBuf = new byte[MaxChunk + 15];
+            var outBuf = new byte[MaxChunk + 15];
+            var macs = new byte[16];
+            var aesInput = new byte[16];
+            var aesOutput = new byte[16];
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 0x10000))
+            {
+                foreach (var chunk in chunks)
+                {
+                    int total = ReadAtMost(fs, inBuf, chunk.Size);
+                    int padded = ((total + 15) / 16) * 16;
+                    if (padded > total)
+                        Array.Clear(inBuf, total, padded - total);
+                    ComputeChunkCbc(aesKey, iv, inBuf, 0, padded, outBuf, 0, macs, 0);
+                    FoldChunkMac(engine, fileMac, macs, 0, aesInput, aesOutput);
+                }
+            }
+            return fileMac;
+        }
+
+        /// <summary>Read up to 8 chunks sequentially, compute their CBC in parallel, fold in order.</summary>
+        private static int[] ComputeMacCbcParallel(string filePath, byte[] aesKey, byte[] iv, List<MacChunk> chunks)
+        {
+            const int GroupChunks = 8;
+            const int MaxChunk = 0x100000;
+            var fileMac = new int[] { 0, 0, 0, 0 };
+            var engine = new AesEngine();
+            engine.Init(true, new KeyParameter(aesKey));
+            var inBuf = new byte[GroupChunks * MaxChunk + 15];
+            var outBuf = new byte[GroupChunks * MaxChunk + 15];
+            var offsets = new int[GroupChunks];
+            var pads = new int[GroupChunks];
+            var macs = new byte[GroupChunks * 16];
+            var aesInput = new byte[16];
+            var aesOutput = new byte[16];
+            var options = new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Math.Min(4, Environment.ProcessorCount) };
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 0x10000))
+            {
+                int index = 0;
+                while (index < chunks.Count)
+                {
+                    int count = Math.Min(GroupChunks, chunks.Count - index);
+                    int groupBytes = 0;
+                    for (int j = 0; j < count; j++)
+                    {
+                        offsets[j] = groupBytes;
+                        groupBytes += chunks[index + j].Size;
+                    }
+                    int total = ReadAtMost(fs, inBuf, groupBytes);
+                    for (int j = 0; j < count; j++)
+                    {
+                        int size = chunks[index + j].Size;
+                        int got = Math.Max(0, Math.Min(size, total - offsets[j]));
+                        pads[j] = ((got + 15) / 16) * 16;
+                        if (pads[j] > got)
+                            Array.Clear(inBuf, offsets[j] + got, pads[j] - got);
+                    }
+                    if (count == 1)
+                        ComputeChunkCbc(aesKey, iv, inBuf, offsets[0], pads[0], outBuf, offsets[0], macs, 0);
+                    else
+                        System.Threading.Tasks.Parallel.For(0, count, options, j =>
+                            ComputeChunkCbc(aesKey, iv, inBuf, offsets[j], pads[j], outBuf, offsets[j], macs, j * 16));
+                    for (int j = 0; j < count; j++)
+                        FoldChunkMac(engine, fileMac, macs, j * 16, aesInput, aesOutput);
+                    index += count;
+                }
+            }
+            return fileMac;
+        }
+
+        /// <summary>Original per-block BouncyCastle implementation, kept as a portable fallback.</summary>
+        private static bool VerifyMegaFileMacLegacy(string filePath, byte[] aesKey, int[] expectedMac, int[] nonceWords)
         {
             var engine = new AesEngine();
             engine.Init(true, new KeyParameter(aesKey));

@@ -193,7 +193,8 @@ namespace MegaDownloader
 
         private async Task StreamAsync(HttpContext context, Conexion.InformacionFichero info, string fileKey, CancellationToken cancellationToken)
         {
-            Criptografia.SicSeekableBlockCipher cipher = Criptografia.GetInstaceCipher(fileKey);
+            // Batched CTR keeps a system AES transform; dispose it at the end of the stream.
+            using var cipher = Criptografia.GetInstaceCipher(fileKey);
 
             long rangeStart = 0L;
             long rangeEnd = 0L;
@@ -275,8 +276,7 @@ namespace MegaDownloader
                 Array.Clear(readBytes, currentPackageSize, paddedSize - currentPackageSize);
                 if (decrypted.Length < paddedSize)
                     decrypted = new byte[paddedSize];
-                for (int offset = 0; offset < paddedSize; offset += cipher.GetBlockSize())
-                    cipher.ProcessBlock(readBytes, offset, decrypted, offset);
+                cipher.ProcessBlocks(readBytes, 0, decrypted, 0, paddedSize / cipher.GetBlockSize());
 
                 int sendCount = (int)Math.Min(currentPackageSize - skip, content - downloadIndex);
                 if (sendCount <= 0)

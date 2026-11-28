@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MegaDownloader
 {
@@ -30,6 +31,7 @@ namespace MegaDownloader
         // and AddStream/RemoveStream fire once per chunk on reconnects.
         private HashSet<ThrottledStream> _StreamList;
         private Dictionary<string, List<ThrottledStream>> _htId;
+        private bool _lastAssignmentHadLimit;
 
         // Velocidad máxima
         private Dictionary<string, long> _htMaxSpeed;
@@ -88,7 +90,7 @@ namespace MegaDownloader
             // ** Stream 9: 50 -> Stream sin velocidad individual
             // ** Stream 10: 50 -> Stream sin velocidad individual
 
-            var str = new System.Text.StringBuilder();
+            var str = Log.IsDebugEnabled ? new System.Text.StringBuilder() : null;
 
             lock (Mutex)
             {
@@ -96,6 +98,13 @@ namespace MegaDownloader
                 int participants = _StreamList.Count + _accountDownloads.Count;
                 if (participants == 0)
                     return;
+
+                bool hasLimit = _globalMaxSpeed > 0L || _htMaxSpeed.Values.Any(speed => speed > 0L);
+                if (!hasLimit && !_lastAssignmentHadLimit &&
+                    _StreamList.All(stream => stream.MaximumBytesPerSecond == 0L) &&
+                    _accountDownloads.All(budget => budget.BytesPerSecond == 0L))
+                    return;
+                _lastAssignmentHadLimit = hasLimit;
 
                 // Velocidad maxima global de cada stream
                 long SpeedGlobalIndividual = (long)Math.Round(_globalMaxSpeed / (double)participants);
@@ -167,16 +176,20 @@ namespace MegaDownloader
                 }
 
 
-                foreach (ThrottledStream stream in _StreamList)
+                if (str is not null)
                 {
-                    if (str.Length > 0)
-                        str.Append(", ");
-                    str.Append("[").Append((int)Math.Round(stream.MaximumBytesPerSecond / 1024d)).Append("]");
+                    foreach (ThrottledStream stream in _StreamList)
+                    {
+                        if (str.Length > 0)
+                            str.Append(", ");
+                        str.Append("[").Append((int)Math.Round(stream.MaximumBytesPerSecond / 1024d)).Append("]");
+                    }
                 }
 
             }
 
-            Log.WriteDebug("Speed limit recalculated: " + str.ToString());
+            if (str is not null)
+                Log.WriteDebug("Speed limit recalculated: " + str.ToString());
         }
         #endregion
 

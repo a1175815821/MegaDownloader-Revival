@@ -690,7 +690,7 @@ namespace MegaDownloader
         private static void ResetForRetry(Fichero file)
         {
             // A private node's checkpoint is the only resume source; keep it on retry.
-            file.ResetearDescarga(preserveProgress: file.FailedByQuota || file.MegaDriveNodeHandle.HasValue);
+            file.ResetearDescarga(preserveProgress: file.FailedByQuota || file.MegaDriveNodeHandle.HasValue || file.HasDeliveredOutput);
             file.PausaIndividual = false;
             file.SetDescargaEstado = Estado.EnCola;
         }

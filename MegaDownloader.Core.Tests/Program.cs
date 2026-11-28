@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -72,6 +72,7 @@ namespace MegaDownloader.Core.Tests
                 AutoStartEntryCases(root);
                 MegaAccountStoreCases(root);
                 FicheroAccountXmlCases(root);
+                CatchUpSecurityCases(root);
                 ThrottledAccountBudgetCases();
 
                 Console.WriteLine();
@@ -825,6 +826,88 @@ namespace MegaDownloader.Core.Tests
                 "budget: releasing one transfer restores the other allocation");
             controller.EndAccountDownload(first);
             controller.SetMaxGlobalSpeed(0);
+        }
+
+        private static void CatchUpSecurityCases(string root)
+        {
+            // A public-share subscription re-baselines when its extension filter changes:
+            // widening the filter must not leave previously excluded files unreported.
+            var subscription = new MegaPublicFolderSubscription
+            {
+                FolderId = "SECURIT1",
+                Destination = Path.Combine(root, "security-destination"),
+                Extensions = "mp4"
+            };
+            subscription.Files.Add(new MegaPublicFolderFile { FileId = "N?1", Name = "old.mp4", Bytes = 1 });
+            var settings = subscription.ReadSettings();
+            settings.Extensions = "mkv";
+            subscription.ApplySettings(settings, destinationChanged: false);
+            Check(subscription.Extensions == "mkv", "security: subscription filter is updated");
+            Check(subscription.Files.Count == 0, "security: changing the filter re-baselines the subscription");
+            subscription.Files.Add(new MegaPublicFolderFile { FileId = "N?2", Name = "new.mkv", Bytes = 2 });
+            settings = subscription.ReadSettings();
+            settings.Destination = Path.Combine(root, "other-destination");
+            subscription.ApplySettings(settings, destinationChanged: true);
+            Check(subscription.Files.Count == 0, "security: changing the destination still re-baselines");
+
+            // Version keys detect a same-size replacement whose content key changed.
+            string versionA = MegaPublicFolderService.PublicFolderVersionKey("NODE0001", "KEY_A", 1024);
+            string versionB = MegaPublicFolderService.PublicFolderVersionKey("NODE0001", "KEY_B", 1024);
+            Check(versionA is not null && versionA != versionB,
+                "security: a same-size file with a different key has a new version key");
+            Check(versionA == MegaPublicFolderService.PublicFolderVersionKey("NODE0001", "KEY_A", 1024),
+                "security: the version key is stable for the same file");
+            Check(MegaPublicFolderService.PublicFolderVersionKey("NODE0001", null, 1024) is null,
+                "security: files without a key have no version key");
+
+            // Batched CTR must be byte-identical to the per-block path, including a seek
+            // and a partial final block.
+            string ctrKey = new string('A', 43);
+            byte[] payload = new byte[4099 + 16]; // padding for the final 16-byte block
+            new Random(12345).NextBytes(payload);
+            long seek = 16L * 1234567L;
+            using (var sequential = Criptografia.GetInstaceCipher(ctrKey))
+            using (var batched = Criptografia.GetInstaceCipher(ctrKey))
+            {
+                sequential.SeekToFileOffset(seek);
+                batched.SeekToFileOffset(seek);
+                byte[] expected = new byte[payload.Length];
+                for (int off = 0; off < 4099; off += 16)
+                    sequential.ProcessBlock(payload, off, expected, off);
+                byte[] actual = new byte[payload.Length];
+                batched.ProcessBlocks(payload, 0, actual, 0, (4099 + 15) / 16);
+                Check(expected.AsSpan(0, 4099).SequenceEqual(actual.AsSpan(0, 4099)),
+                    "security: batched CTR matches the per-block path after a seek and ragged tail");
+            }
+
+            // A delivered task keeps its progress on retry, so the downloader reuses the
+            // existing output instead of downloading a (2) duplicate after a failed decode.
+            string taskFolder = Path.Combine(root, "security-task-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(taskFolder);
+            string output = Path.Combine(taskFolder, "delivered.bin");
+            File.WriteAllBytes(output, new byte[] { 1, 2, 3, 4 });
+            var delivered = new Fichero("https://mega.nz/file/abcdefgh#" + new string('A', 43))
+            {
+                NombreFichero = "delivered.bin",
+                RutaLocal = taskFolder,
+                TamanoBytes = 4,
+                DescargaComenzada = true,
+                EstadoDescarga = Estado.Completado
+            };
+            delivered.RecordVerifiedOutput(output);
+            Check(delivered.HasDeliveredOutput,
+                "security: a delivered output is marked as delivered");
+            var xml = new System.Xml.XmlDocument();
+            var node = delivered.GuardarXML(xml, true);
+            Check(!string.IsNullOrEmpty(node.SelectSingleNode("CompletedFileIdentity")?.InnerText),
+                "security: a verified output stores its identity in the queue");
+            var loadedNode = (System.Xml.XmlNode)node.CloneNode(true);
+            var reloaded = new Fichero();
+            reloaded.CargarXML(loadedNode);
+            Check(reloaded.HasDeliveredOutput, "security: delivered output survives a queue reload");
+            Check(loadedNode.SelectSingleNode("CompletedFileIdentity")?.InnerText ==
+                node.SelectSingleNode("CompletedFileIdentity")?.InnerText,
+                "security: the recorded file identity survives a queue reload");
         }
 
         private static void DownloadScheduleCases()
