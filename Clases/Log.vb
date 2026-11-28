@@ -49,15 +49,27 @@ Public Class Log
         Return t
     End Function
 
+    ' P1-4: level filtering moved ahead of Redact. The three regex passes are the
+    ' expensive part of a dropped log line, and debug/info lines are dropped at the
+    ' default Normal level.
+    Public Shared ReadOnly Property IsDebugEnabled As Boolean
+        Get
+            Return _LogLevel >= LevelLogType.Debug
+        End Get
+    End Property
+
     Public Shared Sub WriteWarning(Text As String)
+        If _LogLevel < LevelLogType.Normal Then Exit Sub
         WriteLog(Redact(Text), LevelLogType.Normal)
     End Sub
 
     Public Shared Sub WriteInfo(Text As String)
+        If _LogLevel < LevelLogType.Info Then Exit Sub
         WriteLog(Redact(Text), LevelLogType.Info)
     End Sub
 
     Public Shared Sub WriteDebug(Text As String)
+        If _LogLevel < LevelLogType.Debug Then Exit Sub
         WriteLog(Redact(Text), LevelLogType.Debug)
     End Sub
 

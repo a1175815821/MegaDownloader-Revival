@@ -139,9 +139,30 @@ Public Class Conexion
         Return Uri.TryCreate("http://" & authority & ":" & port.ToString(Globalization.CultureInfo.InvariantCulture), UriKind.Absolute, address)
     End Function
 
+    ' P1-6: SecurityProtocol and DefaultConnectionLimit are process-wide switches, not
+    ' per-request settings. Setting them on every request writes shared state again and
+    ' again for no benefit. Applied once at startup (and lazily for tests/tools that
+    ' call CreateHttpWebRequest without the app entry point).
+    Private Shared ReadOnly _networkSettingsSync As New Object()
+    Private Shared _globalNetworkSettingsApplied As Integer
+
+    Friend Shared Sub EnsureGlobalNetworkSettings()
+        If System.Threading.Volatile.Read(_globalNetworkSettingsApplied) <> 0 Then Exit Sub
+        SyncLock _networkSettingsSync
+            If _globalNetworkSettingsApplied <> 0 Then Exit Sub
+            Try
+                System.Net.ServicePointManager.SecurityProtocol = Net.SecurityProtocolType.Tls12
+                System.Net.ServicePointManager.DefaultConnectionLimit = 10000
+                System.Threading.Volatile.Write(_globalNetworkSettingsApplied, 1)
+            Catch ex As Exception
+                ' Never let a global network tweak abort request creation; retry next time.
+                Log.WriteWarning("EnsureGlobalNetworkSettings failed: " & Log.SafeException(ex))
+            End Try
+        End SyncLock
+    End Sub
+
     Public Shared Function CreateHttpWebRequest(ByVal Url As String) As HttpWebRequest
-        System.Net.ServicePointManager.SecurityProtocol = Net.SecurityProtocolType.Tls12
-        System.Net.ServicePointManager.DefaultConnectionLimit = 10000
+        EnsureGlobalNetworkSettings()
 
         Dim webrq As HttpWebRequest = CType(Net.WebRequest.Create(Url), HttpWebRequest)
         webrq.Timeout = 60000

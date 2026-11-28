@@ -1325,6 +1325,15 @@ Public Class FileDownloader
         ' 该标记在每次上报前置位,外层 Catch 只对"尚未上报过"的裸区异常补报一次。
         ' 注意:必须声明在最外层 Try 之前,否则 VB 块作用域导致 Catch 里看不到。
         Dim failureReported As Boolean = False
+
+        ' P1-1: chunk 缓冲改为池化 + 按需分配。必须声明在最外层 Try 之前，
+        ' 才能在 Finally 里归还；原来在 Try 内 New，每次 chunk/重试都重新分配
+        ' 750KiB（LOH）+ 50KiB。
+        Dim BufferMem As Byte() = Nothing
+        Dim BufferDisk As Byte() = Nothing
+        ' P1-3: cipher 也必须声明在外层 Try 之前，才能在 Finally 里 Dispose
+        ' 系统 AES 批量路径持有的句柄。
+        Dim oCipher As Criptografia.SicSeekableBlockCipher = Nothing
         Try
 
             Dim worker As DownloaderWorker = CType(sender, DownloaderWorker)
@@ -1347,8 +1356,6 @@ Public Class FileDownloader
             Dim readings As Long = 0
             Dim currentBuffersize As Integer = 0
             Dim currentPackageSize As Int32 = -1
-            Dim BufferMem(Me.PackageSize - 1) As Byte
-            Dim BufferDisk(Me.BufferSize - 1) As Byte
             Dim bytesDownloadedSinceLastTimer As Integer = 0
             Dim speedTimer As New Stopwatch
             Dim arraySpeed(Me.m_stopWatchCycles - 1) As KeyValuePair(Of Double, Double)
@@ -1370,6 +1377,16 @@ Public Class FileDownloader
                     worker.ReportProgress(InvokeType.ChunkDownloadFailedRaiser, exc)
                     Exit Try
                 End If
+
+                ' P1-1: 按 chunk 实际大小申请（10KB 的 chunk 不再要 750KiB），
+                ' 并从池里租用同尺寸数组复用。读循环/flush 阈值一律使用实际数组
+                ' 长度，避免池返回更大数组后把 PackageSize/BufferSize 当成容量。
+                Dim bufferDiskRequest As Long = Math.Min(CLng(Me.BufferSize), Math.Max(CLng(Me.PackageSize), Chunk.Size))
+                Dim bufferMemRequest As Long = Math.Min(CLng(Me.PackageSize), Math.Max(1L, Chunk.Size))
+                BufferMem = DownloadBufferPool.Rent(bufferMemRequest)
+                BufferDisk = DownloadBufferPool.Rent(bufferDiskRequest)
+                Dim packageCapacity As Integer = BufferMem.Length
+                Dim bufferCapacity As Integer = BufferDisk.Length
 
 
                 Try
@@ -1494,7 +1511,7 @@ Public Class FileDownloader
                 ' Inicializamos el Cipher (floor seek by absolute file offset)
                 Log.WriteDebug("Starting SicBlockCipher seek position " & ChunkStart)
                 Dim crono As Date = Now
-                Dim oCipher As Criptografia.SicSeekableBlockCipher = Criptografia.GetInstaceCipher(FileKeyWithoutN)
+                oCipher = Criptografia.GetInstaceCipher(FileKeyWithoutN)
                 oCipher.SeekToFileOffset(ChunkStart)
                 Log.WriteDebug("Finishing SicBlockCipher seek [" & Now.Subtract(crono).TotalMilliseconds & "ms]")
 
@@ -1522,7 +1539,7 @@ Public Class FileDownloader
                             (Chunk.Index + currentBuffersize >= Chunk.Size Or _
                             Not trigger.WaitOne(0) Or _
                             worker.CancellationPending Or _
-                            currentBuffersize + Me.PackageSize > Me.BufferSize) Then
+                            currentBuffersize + packageCapacity > bufferCapacity) Then
 
                             Dim [continue] As Boolean = FlushToDisk(worker, FicheroPART, BufferDisk, currentBuffersize, Chunk)
                             If Not [continue] Then
@@ -1547,8 +1564,8 @@ Public Class FileDownloader
                             currentPackageSize = 0
                             Dim unexpectedEof As Boolean = False
 
-                            While currentPackageSize < Me.PackageSize
-                                Dim bytesDownloaded As Integer = TStream.Read(BufferMem, currentPackageSize, Me.PackageSize - currentPackageSize)
+                            While currentPackageSize < packageCapacity
+                                Dim bytesDownloaded As Integer = TStream.Read(BufferMem, currentPackageSize, packageCapacity - currentPackageSize)
                                 currentPackageSize += bytesDownloaded
 
                                 If bytesDownloaded = 0 Then
@@ -1573,9 +1590,10 @@ Public Class FileDownloader
                                 Throw New ApplicationException("UnexpectedEndOfStream: zero-byte read with incomplete chunk.")
                             End If
 
-                            For tempIndex As Integer = 0 To currentPackageSize - 1 Step oCipher.GetBlockSize
-                                oCipher.ProcessBlock(BufferMem, tempIndex, BufferDisk, currentBuffersize + tempIndex)
-                            Next
+                            ' P1-3: 整包一次批量 CTR（系统 AES/AES-NI），语义与逐块一致。
+                            Dim cipherBlockSize As Integer = oCipher.GetBlockSize()
+                            Dim cipherBlocks As Integer = (currentPackageSize + cipherBlockSize - 1) \ cipherBlockSize
+                            oCipher.ProcessBlocks(BufferMem, 0, BufferDisk, currentBuffersize, cipherBlocks)
 
                         Catch ex As WebException
                             ReportQuotaIfMatch(ex)
@@ -1689,6 +1707,11 @@ Public Class FileDownloader
                     End Try
                 End If
             End If
+        Finally
+            ' P1-1: 所有退出路径（含失败上报后的 Exit Sub）都把缓冲还给池。
+            DownloadBufferPool.ReturnBuffer(BufferMem)
+            DownloadBufferPool.ReturnBuffer(BufferDisk)
+            If oCipher IsNot Nothing Then oCipher.Dispose()
         End Try
     End Sub
 

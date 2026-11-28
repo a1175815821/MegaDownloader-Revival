@@ -51,6 +51,21 @@ Public Class ThrottledStreamController
         End SyncLock
     End Sub
 
+    ' P1-5: AddStream/RemoveStream fire per chunk connection, so this recalculation ran
+    ' for every chunk even when the user never configured a speed limit. Remember whether
+    ' the previous pass actually assigned a limit: the one transition from "limited" to
+    ' "unlimited" must still run once to reset the streams' MaximumBytesPerSecond to 0.
+    Private _lastAssignmentHadLimit As Boolean
+
+    ' Caller must hold Mutex.
+    Private Function HasConfiguredLimit() As Boolean
+        If _globalMaxSpeed > 0 Then Return True
+        For Each max As Long In _htMaxSpeed.Values
+            If max > 0 Then Return True
+        Next
+        Return False
+    End Function
+
     Private Sub _RecalcularVelocidad()
         ' La velocidad asignada es la menor entre la global y la individual
 
@@ -76,9 +91,38 @@ Public Class ThrottledStreamController
         ' ** Stream 9: 50 -> Stream sin velocidad individual
         ' ** Stream 10: 50 -> Stream sin velocidad individual
 
-        Dim str As New System.Text.StringBuilder
+        Dim str As System.Text.StringBuilder = Nothing
 
         SyncLock Mutex
+
+            Dim hasLimit As Boolean = HasConfiguredLimit()
+            If Not hasLimit Then
+                ' P1-5 快速路径：没有任何限速配置，且所有仍注册的参与者当前都已是
+                ' 无限速时，整段重算可以跳过。仍要检查参与者当前值：从"有限速"
+                ' 切到"无限速"的那一次必须完整跑一遍清零；被移出后再加入的流/
+                ' 预算也不能带着旧上限复活。
+                Dim alreadyUnlimited As Boolean = Not _lastAssignmentHadLimit
+                If alreadyUnlimited Then
+                    For Each stream As ThrottledStream In _StreamList
+                        If stream.MaximumBytesPerSecond <> 0 Then
+                            alreadyUnlimited = False
+                            Exit For
+                        End If
+                    Next
+                    If alreadyUnlimited Then
+                        For Each budget As AccountDownloadBudget In _accountDownloads
+                            If budget.BytesPerSecond <> 0 Then
+                                alreadyUnlimited = False
+                                Exit For
+                            End If
+                        Next
+                    End If
+                End If
+                If alreadyUnlimited Then Exit Sub
+                _lastAssignmentHadLimit = False
+            Else
+                _lastAssignmentHadLimit = True
+            End If
 
             Dim participants = _StreamList.Count + _accountDownloads.Count
             If participants = 0 Then Exit Sub
@@ -137,14 +181,18 @@ Public Class ThrottledStreamController
             End If
 
 
-            For Each stream As ThrottledStream In _StreamList
-                If str.Length > 0 Then str.Append(", ")
-                str.Append("[").Append(CInt(stream.MaximumBytesPerSecond / 1024)).Append("]")
-            Next
+            ' The log string is only built when Debug logging is actually enabled.
+            If Log.IsDebugEnabled Then
+                str = New System.Text.StringBuilder
+                For Each stream As ThrottledStream In _StreamList
+                    If str.Length > 0 Then str.Append(", ")
+                    str.Append("[").Append(CInt(stream.MaximumBytesPerSecond / 1024)).Append("]")
+                Next
+            End If
 
         End SyncLock
 
-        Log.WriteDebug("Speed limit recalculated: " & str.ToString)
+        If str IsNot Nothing Then Log.WriteDebug("Speed limit recalculated: " & str.ToString)
     End Sub
 #End Region
 

@@ -251,6 +251,7 @@
     <Compile Include="Clases\IDownloaderService.vb" />
     <Compile Include="Clases\DescompresionPriority.vb" />
     <Compile Include="Clases\DownloadAdvice.vb" />
+    <Compile Include="Clases\DownloadBufferPool.vb" />
     <Compile Include="Clases\InternalConfiguration.vb" />
     <Compile Include="Clases\Language.vb" />
     <Compile Include="Clases\Log.vb" />

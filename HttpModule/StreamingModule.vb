@@ -214,9 +214,8 @@ Public Class StreamingModule
                         ' only the bytes actually read may be sent to the client.
                         Array.Clear(readBytes, currentPackageSize, paddedSize - currentPackageSize)
                         Dim decrypted(paddedSize - 1) As Byte
-                        For tempIndex As Integer = 0 To paddedSize - 1 Step oCipher.GetBlockSize
-                            oCipher.ProcessBlock(readBytes, tempIndex, decrypted, tempIndex)
-                        Next
+                        ' P1-3: 整包一次批量 CTR（系统 AES/AES-NI）。
+                        oCipher.ProcessBlocks(readBytes, 0, decrypted, 0, paddedSize \ oCipher.GetBlockSize())
                         Dim sendCount As Integer = CInt(Math.Min(CLng(currentPackageSize - skip), content - DownloadIndex))
                         Dim Buffer(sendCount - 1) As Byte
                         System.Buffer.BlockCopy(decrypted, skip, Buffer, 0, sendCount)
@@ -249,6 +248,7 @@ Public Class StreamingModule
                 Throw
             Finally
 
+                If oCipher IsNot Nothing Then oCipher.Dispose()
                 If webResp IsNot Nothing Then webResp.Close()
             End Try
             Return True

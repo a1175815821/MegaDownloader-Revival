@@ -801,7 +801,43 @@ public partial class RegressionTests {
             controller.RemoveId("B2PERF");controller.RemoveId("OTHER");controller.Continuar();
             s1.Dispose();s2.Dispose();
         }
-        Print("batch2_perf","P-01/P-02/P-08/P-15 targeted checks passed");
+
+        // P1-1: pool semantics. Two concurrent rents must never share an array;
+        // a returned array must come back on the next same-size rent.
+        var poolType=typeof(FileDownloader).Assembly.GetType("MegaDownloader.DownloadBufferPool");
+        var rent=poolType.GetMethod("Rent",BindingFlags.Static|BindingFlags.NonPublic|BindingFlags.Public);
+        var give=poolType.GetMethod("ReturnBuffer",BindingFlags.Static|BindingFlags.NonPublic|BindingFlags.Public);
+        var p1=(byte[])rent.Invoke(null,new object[]{100000L});
+        var p2=(byte[])rent.Invoke(null,new object[]{100000L});
+        Check(!object.ReferenceEquals(p1,p2),"P1-1 concurrent chunk buffers are never shared");
+        give.Invoke(null,new object[]{p1});
+        var p3=(byte[])rent.Invoke(null,new object[]{100000L});
+        Check(object.ReferenceEquals(p1,p3),"P1-1 a returned chunk buffer is reused");
+        Check(p3.Length>=100000&&p3.Length<102400,"P1-1 buffer sizing rounds up to the pool granularity");
+        give.Invoke(null,new object[]{p2});give.Invoke(null,new object[]{p3});
+
+        // P1-3: the batched system-AES CTR path must be byte-identical to the
+        // BouncyCastle per-block path, including a non-zero seek and a ragged tail.
+        var getCipher=typeof(Criptografia).GetMethod("GetInstaceCipher",shared);
+        var slowCipher=(Criptografia.SicSeekableBlockCipher)getCipher.Invoke(null,new object[]{key});
+        var fastCipher=(Criptografia.SicSeekableBlockCipher)getCipher.Invoke(null,new object[]{key});
+        try {
+            long seek=16L*1234567L;
+            slowCipher.SeekToFileOffset(seek);fastCipher.SeekToFileOffset(seek);
+            int payload=4099, padded=(payload+15)/16*16;
+            byte[] src=new byte[padded];
+            for(int i=0;i<payload;i++) src[i]=(byte)(i*37+11);
+            byte[] perBlock=new byte[padded], batched=new byte[padded];
+            for(int i=0;i<payload;i+=16) slowCipher.ProcessBlock(src,i,perBlock,i);
+            int blocks=(payload+15)/16;
+            fastCipher.ProcessBlocks(src,0,batched,0,blocks);
+            bool same=true;
+            for(int i=0;i<padded;i++) if(perBlock[i]!=batched[i]) same=false;
+            Check(same,"P1-3 batched CTR matches the per-block BouncyCastle path (seek + ragged tail)");
+        } finally {
+            slowCipher.Dispose();fastCipher.Dispose();
+        }
+        Print("batch2_perf","P-01/P-02/P-08/P-15/P1-1/P1-3 targeted checks passed");
     }
     static void FinalReviewCases() {
         // Final review: P-01 moved queue serialization outside Mutex.ListaDescargas.

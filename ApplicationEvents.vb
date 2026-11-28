@@ -31,6 +31,8 @@ Namespace My
                 Return
             End If
 
+            ' P1-6: 进程级网络设置只做一次，请求构造不再重复写。
+            Global.MegaDownloader.Conexion.EnsureGlobalNetworkSettings()
 
             My.Application.MinimumSplashScreenDisplayTime = 600
             AddHandler AppDomain.CurrentDomain.AssemblyResolve, AddressOf LoadDLLFromStream
