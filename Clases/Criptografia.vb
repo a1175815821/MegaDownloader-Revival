@@ -727,11 +727,12 @@ Public Class Criptografia
                     ' 若仍失败，下面的 Catch 会禁用批量路径。
                     aes = System.Security.Cryptography.Aes.Create()
                 End Try
+                ' 先登记再配置：后续任何一步抛异常，Catch 里的 DisposeWindowsAes 才能释放它。
+                _windowsAes = aes
                 aes.Mode = System.Security.Cryptography.CipherMode.ECB
                 aes.Padding = System.Security.Cryptography.PaddingMode.None
                 aes.Key = keyBytes
                 _windowsEncryptor = aes.CreateEncryptor()
-                _windowsAes = aes
                 _counterBatch = New Byte(WindowsAesBatchBytes - 1) {}
                 _keystreamBatch = New Byte(WindowsAesBatchBytes - 1) {}
             Catch

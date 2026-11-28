@@ -1336,6 +1336,9 @@ public partial class RegressionTests {
                 search=revision("SearchVersion");a.RutaRelativa="renamed/path";
                 publish.Invoke(form,new object[]{items});
                 Check(revision("SearchVersion")>search,"relative path changes invalidate active searches");
+                long row=revision("RowVersion");a.DescripcionError="disk full";
+                publish.Invoke(form,new object[]{items});
+                Check(revision("RowVersion")>row,"error text changes refresh the row even when the state is unchanged");
             }
         } finally {GC.SuppressFinalize(form);}
     }

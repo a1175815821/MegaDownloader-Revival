@@ -76,6 +76,7 @@ Partial Public Class Main
         Friend State As Estado
         Friend Name As String
         Friend RelativePath As String
+        Friend ErrorText As String
     End Structure
 
     ' Published once per existing refresh cycle. Painting and counter updates only read it.
@@ -920,7 +921,7 @@ Partial Public Class Main
                 Dim fileState As Estado = file.DescargaEstado()
                 Dim fileScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.ScopeOf(fileState)
                 present(CInt(fileScope)) = True
-                current.Add(New QueueViewItem With {.Model = file, .Scope = fileScope, .State = fileState, .Name = file.NombreFichero, .RelativePath = file.RutaRelativa})
+                current.Add(New QueueViewItem With {.Model = file, .Scope = fileScope, .State = fileState, .Name = file.NombreFichero, .RelativePath = file.RutaRelativa, .ErrorText = file.DescripcionError})
             Next
             value.Totals(0) += 1
             For i As Integer = 1 To 4
@@ -945,7 +946,8 @@ Partial Public Class Main
                 searchChanged = searchChanged OrElse different OrElse Not String.Equals(before.Name, after.Name, StringComparison.Ordinal) OrElse
                     Not String.Equals(before.RelativePath, after.RelativePath, StringComparison.Ordinal)
                 rowChanged = rowChanged OrElse different OrElse before.State <> after.State OrElse
-                    Not String.Equals(before.Name, after.Name, StringComparison.Ordinal)
+                    Not String.Equals(before.Name, after.Name, StringComparison.Ordinal) OrElse
+                    Not String.Equals(before.ErrorText, after.ErrorText, StringComparison.Ordinal)
                 If scopeChanged AndAlso searchChanged AndAlso rowChanged Then Exit For
             Next
         End If

@@ -1430,6 +1430,7 @@ Public Class Fichero
     End Sub
 	
 	Public Sub [Resume]()
+        If disposedValue Then Return
         If UsesMegaAccount Then
             StartMegaAccountDownload()
             Return
@@ -1441,6 +1442,7 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub Pause()
+        If disposedValue Then Return
         If UsesMegaAccount Then
             CancelMegaAccountDownload(Estado.Pausado)
             Return
@@ -1451,6 +1453,7 @@ Public Class Fichero
 	End Sub
 	
 	Public Sub [Stop]()
+        If disposedValue Then Return
         If UsesMegaAccount Then
             Interlocked.Exchange(_cancellationNotified, 0)
             CancelMegaAccountDownload(Estado.EnCola)
@@ -1942,6 +1945,7 @@ Public Class Fichero
 	''' 避免"超时→删.part→重下→再超时"无限循环;手动重置仍用默认 False 从头来。
 	''' </summary>
 	Public Sub ResetearDescarga(Optional ByVal preserveProgress As Boolean = False)
+        If disposedValue Then Return
         CaptureDownloaderProgress()
         If EstadoDescarga = Estado.Erroneo AndAlso Not String.IsNullOrEmpty(MegaAccountTransferEmail) Then
             HasAvailableMegaAccountForRetry(allowUnknownDelay:=True)

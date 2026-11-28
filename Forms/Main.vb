@@ -3717,6 +3717,21 @@ Public Class Main
         End Try
     End Sub
 
+    ''' <summary>P0-8:快照可能已过期。动作前确认文件仍在队列里，避免和删除并发时
+    ''' 启动/恢复一个已经被移除的任务。</summary>
+    Private Function QueueContainsFile(package As Paquete, file As Fichero) As Boolean
+        SyncLock Mutex.ListaDescargas
+            Return QueueContainsFileLocked(package, file)
+        End SyncLock
+    End Function
+
+    ' Caller must hold Mutex.ListaDescargas.
+    Private Function QueueContainsFileLocked(package As Paquete, file As Fichero) As Boolean
+        If package Is Nothing OrElse file Is Nothing OrElse Me.ListaPaquetes Is Nothing Then Return False
+        If Not Me.ListaPaquetes.Contains(package) Then Return False
+        Return package.ListaFicheros IsNot Nothing AndAlso package.ListaFicheros.Contains(file)
+    End Function
+
     Private Sub PonerFicherosADescargar()
         PonerFicherosADescargarDesdeSnapshot(BuildQueueSnapshot())
     End Sub
@@ -3724,9 +3739,9 @@ Public Class Main
     Private Sub PonerFicherosADescargarDesdeSnapshot(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
         SyncLock Me
         If Not ScheduleAllowsStart() Then Return
-        Dim ColaDescarga As New Generic.List(Of Fichero) ' Lista de ficheros en cola
-        Dim ColaDescargaPausa As New Generic.List(Of Fichero) ' Lista de ficheros pausados en cola
-        Dim ColaReseteo As New Generic.List(Of Fichero) ' Lista de ficheros a resetear
+        Dim ColaDescarga As New Generic.List(Of KeyValuePair(Of Paquete, Fichero)) ' Lista de ficheros en cola
+        Dim ColaDescargaPausa As New Generic.List(Of KeyValuePair(Of Paquete, Fichero)) ' Lista de ficheros pausados en cola
+        Dim ColaReseteo As New Generic.List(Of KeyValuePair(Of Paquete, Fichero)) ' Lista de ficheros a resetear
         Dim NumFicherosDescargando As Integer = 0
         Dim NumConexionesAbiertas As Integer = 0
 
@@ -3753,20 +3768,21 @@ Public Class Main
                 If Fichero.DescargaEstado <> Estado.Erroneo OrElse Fichero.EsErrorPermanente Then Continue For
                 Dim retryDue = Fichero.FechaUltimoError.GetValueOrDefault() < retryBefore
                 If Fichero.UsesMegaAccount Then
-                    If CanRetryMegaAccountFailure(Fichero, retryDue, ResetearErrores) Then ColaReseteo.Add(Fichero)
+                    If CanRetryMegaAccountFailure(Fichero, retryDue, ResetearErrores) Then ColaReseteo.Add(New KeyValuePair(Of Paquete, Fichero)(kv.Key, Fichero))
                 ElseIf ResetearErrores OrElse breakthrough Then
                     If Fichero.FailedByQuota Then
-                        If If(breakthrough, retryDue, Not quotaHold) Then ColaReseteo.Add(Fichero)
+                        If If(breakthrough, retryDue, Not quotaHold) Then ColaReseteo.Add(New KeyValuePair(Of Paquete, Fichero)(kv.Key, Fichero))
                     ElseIf ResetearErrores AndAlso retryDue Then
-                        ColaReseteo.Add(Fichero)
+                        ColaReseteo.Add(New KeyValuePair(Of Paquete, Fichero)(kv.Key, Fichero))
                     End If
                 End If
             Next
         Next
-        For Each Fichero In ColaReseteo
-            Fichero.ResetearDescarga(preserveProgress:=True)
-            Fichero.SetDescargaEstado = Estado.EnCola
-            Log.WriteInfo("Retrying file " & Fichero.FileID & " automatically.")
+        For Each item In ColaReseteo
+            If Not QueueContainsFile(item.Key, item.Value) Then Continue For
+            item.Value.ResetearDescarga(preserveProgress:=True)
+            item.Value.SetDescargaEstado = Estado.EnCola
+            Log.WriteInfo("Retrying file " & item.Value.FileID & " automatically.")
         Next
 
 
@@ -3776,9 +3792,9 @@ Public Class Main
                 Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount,
                     Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not Fichero.IsWaitingForFixedAccount AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
                 If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
-                    ColaDescarga.Add(Fichero)
+                    ColaDescarga.Add(New KeyValuePair(Of Paquete, Fichero)(kv.Key, Fichero))
                 ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
-                    ColaDescargaPausa.Add(Fichero)
+                    ColaDescargaPausa.Add(New KeyValuePair(Of Paquete, Fichero)(kv.Key, Fichero))
                 ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
                     ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
                     NumFicherosDescargando += 1
@@ -3805,18 +3821,20 @@ Public Class Main
         '    Log.WriteInfo("We have " & ConexionesPorAbrir & " connections left")
         'End If
 
-        'Mutex.ListaDescargas.WaitOne()
-        Try
-            For Each Fichero As Fichero In ColaDescargaPausa ' Primero reanudamos los ficheros en pausa y luego el resto
-                If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
+        ' P0-8: 启动/恢复动作与删除共享 ListaDescargas 锁，避免快照过期后把已删除任务拉起来。
+        SyncLock Mutex.ListaDescargas
+            For Each item In ColaDescargaPausa ' Primero reanudamos los ficheros en pausa y luego el resto
+                Dim Fichero As Fichero = item.Value
+                If ConexionesPorAbrir > 0 AndAlso FicherosPorAbrir > 0 AndAlso QueueContainsFileLocked(item.Key, Fichero) Then
                     Log.WriteInfo("Continuing paused file download " & Fichero.NombreFichero)
                     Fichero.[Resume]()
                     ConexionesPorAbrir -= If(Fichero.UsesMegaAccount, 1, Fichero.NumeroConexionesAbiertas)
                     FicherosPorAbrir -= 1
                 End If
             Next
-            For Each Fichero As Fichero In ColaDescarga
-                If ConexionesPorAbrir > 0 And FicherosPorAbrir > 0 Then
+            For Each item In ColaDescarga
+                Dim Fichero As Fichero = item.Value
+                If ConexionesPorAbrir > 0 AndAlso FicherosPorAbrir > 0 AndAlso QueueContainsFileLocked(item.Key, Fichero) Then
                     ' One logical queue slot per SDK transfer; socket scheduling belongs to the SDK.
                     Dim ConexionesParaEstaDescarga As Integer = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
                     If ConexionesPorAbrir < ConexionesParaEstaDescarga Then ConexionesParaEstaDescarga = ConexionesPorAbrir
@@ -3826,9 +3844,7 @@ Public Class Main
                     FicherosPorAbrir -= 1
                 End If
             Next
-        Finally
-            'Mutex.ListaDescargas.ReleaseMutex()
-        End Try
+        End SyncLock
         End SyncLock
     End Sub
 
@@ -3876,6 +3892,7 @@ Public Class Main
             For Each kv In snapshot
                 For Each Fichero As Fichero In kv.Value
                     If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or Fichero.DescargaEstado = Estado.CreandoLocal Then
+                        If Not QueueContainsFile(kv.Key, Fichero) Then Continue For
                         Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
                         Fichero.Pause()
                     End If
@@ -3914,6 +3931,7 @@ Public Class Main
                     If (Fichero.DescargaEstado = Estado.Descargando AndAlso
                         (Not Fichero.DescargaIndividual OrElse (Cerrando AndAlso Fichero.MegaDriveNodeHandle.HasValue))) OrElse
                        Fichero.DescargaEstado = Estado.Pausado OrElse Fichero.DescargaEstado = Estado.CreandoLocal Then
+                        If Not QueueContainsFile(kv.Key, Fichero) Then Continue For
                         Log.WriteInfo("Stopping file " & Fichero.NombreFichero)
                         Fichero.Stop()
                     End If
