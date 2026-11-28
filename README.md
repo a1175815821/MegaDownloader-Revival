@@ -1,8 +1,9 @@
 # Mega Downloader — Revival
 
 Cross-platform revival of Mega Downloader. The original VB.NET application has been
-converted to C# on .NET 10; the UI is being rebuilt from scratch in Avalonia while the
-existing WinForms application stays runnable as a reference implementation.
+converted to C# on .NET 10 and the UI rebuilt from scratch in Avalonia. The historical
+WinForms C# copy and its regression harness have been retired; the earlier state is
+preserved as tag `winforms-baseline`.
 
 Repository: <https://github.com/a1175815821/MegaDownloader-Revival>
 
@@ -10,11 +11,10 @@ Repository: <https://github.com/a1175815821/MegaDownloader-Revival>
 
 | Path | Purpose |
 |---|---|
-| `src/` | Converted C# source, resources, language packs, bundled binaries |
+| `src/Resources/` | Language packs, internal config and embedded binaries used by Core |
 | `MegaDownloader.Core/` | Download engine, settings, localization and platform abstractions (cross-platform, net10.0) |
-| `MegaDownloader.UI/` | Avalonia shell — the new cross-platform UI (net10.0) |
-| `MegaDownloader.Full/` | Migrated WinForms application (net10.0-windows), feature-complete |
-| `MegaDownloader.Tests/` | Regression harness (1143 assertions) against the migrated code |
+| `MegaDownloader.UI/` | Avalonia shell — the cross-platform UI (net10.0) |
+| `MegaDownloader.Core.Tests/` | Cross-platform regression entry point (143 assertions) |
 
 ## Status
 
@@ -108,10 +108,10 @@ dotnet publish MegaDownloader.UI/MegaDownloader.UI.csproj -c Release -r win-x64 
 
 The result is `dist/win-x64/MegaDownloader.exe` (~67 MB, no runtime dependency).
 
-Run the legacy WinForms app:
+Run the cross-platform regression suite:
 
 ```bash
-dotnet run --project MegaDownloader.Full/MegaDownloader.Full.csproj
+dotnet run --project MegaDownloader.Core.Tests/MegaDownloader.Core.Tests.csproj
 ```
 
 ## Roadmap

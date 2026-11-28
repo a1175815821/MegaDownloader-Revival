@@ -12,8 +12,8 @@
 
   <!--
     Cross-platform foundation. This layer intentionally contains only platform-neutral
-    abstractions/models. The full migrated WinForms application lives in MegaDownloader.Full;
-    its UI-coupled business files will be moved here incrementally during cross-platform work.
+    abstractions/models. Business logic shared by the desktop UI lives here; UI-coupled
+    code stayed in the retired WinForms reference app (see tag winforms-baseline).
   -->
   <ItemGroup>
     <Compile Include="Compat/**/*.cs" />
