@@ -868,6 +868,195 @@ Public Class Criptografia
 #Region "MEGA MetaMAC"
 
     ''' <summary>
+    ''' P2-2/P2-1: CBC-MAC 链在数学上就是 CBC 加密，IV 是文件 nonce 重复两次。
+    ''' 这里用系统 AES 的 CBC 模式（Padding.None）一次处理整个 MetaMAC chunk，
+    ''' 吃 AES-NI；大文件再按“顺序读 + 并行算”分组处理，磁盘始终顺序读。
+    ''' 系统 AES 不可用时退回 BouncyCastle 逐块实现，结果完全一致。
+    ''' </summary>
+    Private Shared Function VerifyMegaFileMac(ByVal filePath As String, ByVal aesKey As Byte(), ByVal expectedMac As Integer(), ByVal nonceWords As Integer()) As Boolean
+        Dim fileLen As Long = New FileInfo(filePath).Length
+        If fileLen = 0 Then Return expectedMac(0) = 0 AndAlso expectedMac(1) = 0
+
+        Dim iv As Byte() = BuildMacIv(nonceWords)
+        Using probe As System.Security.Cryptography.Aes = CreateMacCipher(aesKey, iv)
+            If probe Is Nothing Then Return VerifyMegaFileMacLegacy(filePath, aesKey, expectedMac, nonceWords)
+        End Using
+
+        Dim chunks As Generic.List(Of MacChunk) = BuildMacChunks(fileLen)
+        Dim fileMac As Integer()
+        If chunks.Count >= 8 AndAlso Environment.ProcessorCount >= 2 Then
+            fileMac = ComputeMacCbcParallel(filePath, aesKey, iv, chunks)
+        Else
+            fileMac = ComputeMacCbcSequential(filePath, aesKey, iv, chunks)
+        End If
+
+        Return (fileMac(0) Xor fileMac(1)) = expectedMac(0) AndAlso (fileMac(2) Xor fileMac(3)) = expectedMac(1)
+    End Function
+
+    Private Structure MacChunk
+        Public Start As Long
+        Public Size As Integer
+    End Structure
+
+    Private Shared Function BuildMacIv(nonceWords As Integer()) As Byte()
+        Dim iv(15) As Byte
+        WriteWordLE(iv, 0, nonceWords(0))
+        WriteWordLE(iv, 4, nonceWords(1))
+        WriteWordLE(iv, 8, nonceWords(0))
+        WriteWordLE(iv, 12, nonceWords(1))
+        Return iv
+    End Function
+
+    ''' <summary>MEGA ChunkedHash: 128KiB × i（前 8 块），之后固定 1MiB。</summary>
+    Private Shared Function BuildMacChunks(fileLen As Long) As Generic.List(Of MacChunk)
+        Dim chunks As New Generic.List(Of MacChunk)()
+        Dim start As Long = 0
+        Dim number As Integer = 1
+        While start < fileLen
+            Dim size As Long = If(number <= 8, CLng(number) * &H20000L, &H100000L)
+            Dim thisSize As Integer = CInt(Math.Min(size, fileLen - start))
+            chunks.Add(New MacChunk With {.Start = start, .Size = thisSize})
+            start += thisSize
+            number += 1
+        End While
+        Return chunks
+    End Function
+
+    Private Shared Function CreateMacCipher(aesKey As Byte(), iv As Byte()) As System.Security.Cryptography.Aes
+        Try
+            Dim aes As System.Security.Cryptography.Aes
+            Try
+                aes = New System.Security.Cryptography.AesCng()
+            Catch
+                aes = System.Security.Cryptography.Aes.Create()
+            End Try
+            aes.Mode = System.Security.Cryptography.CipherMode.CBC
+            aes.Padding = System.Security.Cryptography.PaddingMode.None
+            aes.Key = aesKey
+            aes.IV = iv
+            Return aes
+        Catch
+            Return Nothing
+        End Try
+    End Function
+
+    Private Shared Function ReadAtMost(fs As FileStream, buffer As Byte(), count As Integer) As Integer
+        Dim total As Integer = 0
+        While total < count
+            Dim n As Integer = fs.Read(buffer, total, count - total)
+            If n = 0 Then Exit While
+            total += n
+        End While
+        Return total
+    End Function
+
+    ''' <summary>CBC 加密一个 chunk（零填充尾块），取最后一块密文作为 chunk MAC。</summary>
+    Private Shared Sub ComputeChunkCbc(aesKey As Byte(), iv As Byte(), input As Byte(), inOff As Integer, paddedSize As Integer,
+                                       output As Byte(), outOff As Integer, macs As Byte(), macOff As Integer)
+        If paddedSize <= 0 Then
+            Array.Copy(iv, 0, macs, macOff, 16)
+            Exit Sub
+        End If
+        Using aes As System.Security.Cryptography.Aes = CreateMacCipher(aesKey, iv)
+            Using enc As System.Security.Cryptography.ICryptoTransform = aes.CreateEncryptor()
+                enc.TransformBlock(input, inOff, paddedSize, output, outOff)
+            End Using
+        End Using
+        Array.Copy(output, outOff + paddedSize - 16, macs, macOff, 16)
+    End Sub
+
+    ''' <summary>fileMac = AES(fileMac XOR chunkMac)，与 SDK 的 macsmac 折叠一致。</summary>
+    Private Shared Sub FoldChunkMac(engine As AesEngine, fileMac As Integer(), macs As Byte(), macOff As Integer,
+                                    aesInput As Byte(), aesOutput As Byte())
+        Dim m0 As Integer = fileMac(0) Xor BitConverter.ToInt32(macs, macOff)
+        Dim m1 As Integer = fileMac(1) Xor BitConverter.ToInt32(macs, macOff + 4)
+        Dim m2 As Integer = fileMac(2) Xor BitConverter.ToInt32(macs, macOff + 8)
+        Dim m3 As Integer = fileMac(3) Xor BitConverter.ToInt32(macs, macOff + 12)
+        WriteWordLE(aesInput, 0, m0)
+        WriteWordLE(aesInput, 4, m1)
+        WriteWordLE(aesInput, 8, m2)
+        WriteWordLE(aesInput, 12, m3)
+        engine.ProcessBlock(aesInput, 0, aesOutput, 0)
+        fileMac(0) = BitConverter.ToInt32(aesOutput, 0)
+        fileMac(1) = BitConverter.ToInt32(aesOutput, 4)
+        fileMac(2) = BitConverter.ToInt32(aesOutput, 8)
+        fileMac(3) = BitConverter.ToInt32(aesOutput, 12)
+    End Sub
+
+    Private Shared Function ComputeMacCbcSequential(filePath As String, aesKey As Byte(), iv As Byte(), chunks As Generic.List(Of MacChunk)) As Integer()
+        Const MaxChunk As Integer = &H100000
+        Dim fileMac As Integer() = New Integer() {0, 0, 0, 0}
+        Dim engine As New AesEngine()
+        engine.Init(True, New KeyParameter(aesKey))
+        Dim inBuf(MaxChunk + 15) As Byte
+        Dim outBuf(MaxChunk + 15) As Byte
+        Dim macs(15) As Byte
+        Dim aesInput(15) As Byte
+        Dim aesOutput(15) As Byte
+        Using fs As New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, &H10000)
+            For Each chunk As MacChunk In chunks
+                Dim total As Integer = ReadAtMost(fs, inBuf, chunk.Size)
+                Dim padded As Integer = ((total + 15) \ 16) * 16
+                If padded > total Then Array.Clear(inBuf, total, padded - total)
+                ComputeChunkCbc(aesKey, iv, inBuf, 0, padded, outBuf, 0, macs, 0)
+                FoldChunkMac(engine, fileMac, macs, 0, aesInput, aesOutput)
+            Next
+        End Using
+        Return fileMac
+    End Function
+
+    ''' <summary>
+    ''' 顺序读 + 并行算：每次顺序读入最多 8 个 MetaMAC chunk，用 Parallel.For 分块做
+    ''' CBC，再按原顺序折叠。避免多个 worker 各自 seek 造成 HDD 随机读。
+    ''' </summary>
+    Private Shared Function ComputeMacCbcParallel(filePath As String, aesKey As Byte(), iv As Byte(), chunks As Generic.List(Of MacChunk)) As Integer()
+        Const GroupChunks As Integer = 8
+        Const MaxChunk As Integer = &H100000
+        Dim fileMac As Integer() = New Integer() {0, 0, 0, 0}
+        Dim engine As New AesEngine()
+        engine.Init(True, New KeyParameter(aesKey))
+        Dim inBuf(GroupChunks * MaxChunk + 15) As Byte
+        Dim outBuf(GroupChunks * MaxChunk + 15) As Byte
+        Dim offsets(GroupChunks - 1) As Integer
+        Dim pads(GroupChunks - 1) As Integer
+        Dim macs(GroupChunks * 16 - 1) As Byte
+        Dim aesInput(15) As Byte
+        Dim aesOutput(15) As Byte
+        Dim options As New System.Threading.Tasks.ParallelOptions With {.MaxDegreeOfParallelism = Math.Min(4, Environment.ProcessorCount)}
+        Using fs As New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, &H10000)
+            Dim index As Integer = 0
+            While index < chunks.Count
+                Dim count As Integer = Math.Min(GroupChunks, chunks.Count - index)
+                Dim groupBytes As Integer = 0
+                For j As Integer = 0 To count - 1
+                    offsets(j) = groupBytes
+                    groupBytes += chunks(index + j).Size
+                Next
+                Dim total As Integer = ReadAtMost(fs, inBuf, groupBytes)
+                For j As Integer = 0 To count - 1
+                    Dim size As Integer = chunks(index + j).Size
+                    Dim got As Integer = Math.Max(0, Math.Min(size, total - offsets(j)))
+                    pads(j) = ((got + 15) \ 16) * 16
+                    If pads(j) > got Then Array.Clear(inBuf, offsets(j) + got, pads(j) - got)
+                Next
+                If count = 1 Then
+                    ComputeChunkCbc(aesKey, iv, inBuf, offsets(0), pads(0), outBuf, offsets(0), macs, 0)
+                Else
+                    System.Threading.Tasks.Parallel.For(0, count, options,
+                        Sub(j As Integer)
+                            ComputeChunkCbc(aesKey, iv, inBuf, offsets(j), pads(j), outBuf, offsets(j), macs, j * 16)
+                        End Sub)
+                End If
+                For j As Integer = 0 To count - 1
+                    FoldChunkMac(engine, fileMac, macs, j * 16, aesInput, aesOutput)
+                Next
+                index += count
+            End While
+        End Using
+        Return fileMac
+    End Function
+
+    ''' <summary>
     ''' Verifies MEGA file MetaMAC (words 6-7 of the 8-word file key) over plaintext on disk.
     ''' Public link keys carry only 4 words (16 bytes, the AES key itself) and do NOT
     ''' embed a MetaMAC — verification is impossible for them and is skipped (True).
@@ -940,7 +1129,7 @@ Public Class Criptografia
     ''' (generateMetaMac + macsmac). Any mismatch means the bytes on disk genuinely
     ''' differ from the uploaded file.
     ''' </summary>
-    Private Shared Function VerifyMegaFileMac(ByVal filePath As String, ByVal aesKey As Byte(), ByVal expectedMac As Integer(), ByVal nonceWords As Integer()) As Boolean
+    Private Shared Function VerifyMegaFileMacLegacy(ByVal filePath As String, ByVal aesKey As Byte(), ByVal expectedMac As Integer(), ByVal nonceWords As Integer()) As Boolean
         Dim engine As New AesEngine()
         engine.Init(True, New KeyParameter(aesKey))
 
