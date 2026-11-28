@@ -52,7 +52,8 @@
 - **A download identity per subscription** — each public subscription downloads anonymously or with one of your MEGA accounts. The share is always checked through its public link, so a signed-out account never hides new files; a task waiting for that account shows “Waiting for MEGA sign-in”. Changing the identity affects only files queued afterwards.
 - **One subscriptions window** — the source list gains “Public shares”, so public and per-account cloud subscriptions are managed side by side: changes and status per file, check now, edit, open the delivered file, or unsubscribe without deleting queued tasks or local files.
 - **Account downloads cover public folder files** — a file inside a public folder can now be transferred by the chosen MEGA account, not only standalone public file links.
-- **Verified** — 61 regression cases, **1,400 assertions** and the UI-only suite all pass. [Full changelog](docs/CHANGELOG.md).
+- **Faster downloads and completion** — pooled buffers and AES-NI batch decryption on the download path, plus whole-chunk CBC and parallel MetaMAC verification: a 512 MiB file now verifies in about 0.2 s instead of 3.6 s, and the queue stays responsive with large task lists.
+- **Verified** — 63 regression cases, **1,434 assertions** and the UI-only suite (372 assertions) all pass. [Full changelog](docs/CHANGELOG.md).
 
 ## What was new in 2.6.6
 
