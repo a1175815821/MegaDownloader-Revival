@@ -31,6 +31,8 @@ Partial Public Class Main
     Private queueFileMatches As New Generic.HashSet(Of Fichero)()
     Private queueWholeMatches As New Generic.HashSet(Of Paquete)()
     Private appliedScopeVersion As Long = -1
+    Private appliedSearchVersion As Long = -1
+    Private appliedRowVersion As Long = -1
     Private requestedSearchVersion As Long = -1
     Private ReadOnly queueWaitMenu As New ToolStripMenuItem With {.Visible = False}
     Private detailQueueSummary As Label
@@ -71,6 +73,7 @@ Partial Public Class Main
     Private Structure QueueViewItem
         Friend Model As IDescarga
         Friend Scope As DownloadEstadoFilter.NavScope
+        Friend State As Estado
         Friend Name As String
         Friend RelativePath As String
     End Structure
@@ -80,12 +83,18 @@ Partial Public Class Main
         Friend ReadOnly Totals As Integer() = New Integer(4) {}
         Friend TotalBytes As Decimal
         Friend DoneBytes As Decimal
-        Friend ReadOnly ViewItems As New Generic.List(Of QueueViewItem)()
         Friend ScopeVersion As Long
         Friend SearchVersion As Long
+        Friend RowVersion As Long
     End Class
 
     Private queueOverviewSnapshot As QueueOverview
+
+    ' P0-2:两份预分配缓冲轮换。每 tick 只 Clear + 重填，不再分配 O(文件数) 的新列表；
+    ' 发布的 QueueOverview 只带计数/版本，ViewItems 仅用于本方法的变化比较。
+    Private queueViewItemsCurrent As New Generic.List(Of QueueViewItem)()
+    Private queueViewItemsPrevious As New Generic.List(Of QueueViewItem)()
+    Private hasQueueViewItemsPrevious As Boolean
 
     Private Sub InitWorkbench()
         Me.DoubleBuffered = True
@@ -591,9 +600,16 @@ Partial Public Class Main
         UpdateDetailPanel()
     End Sub
 
+    ' P0-5:选中摘要在 UI 线程调用，复用 HashSet；选中大包时它可能进 LOH。
+    ' 延迟创建而不是字段初始化：FormatterServices 反序列化的测试对象不会执行字段初始化器。
+    Private _selectionFiles As HashSet(Of Fichero)
+
     Private Function ReadQueueSelection(selected As Collections.IList) As QueueSelection
         Dim result As New QueueSelection With {.ShowFileCounts = selected.Count > 1}
-        Dim files As New HashSet(Of Fichero)()
+        If _selectionFiles Is Nothing Then _selectionFiles = New HashSet(Of Fichero)()
+        Dim files As HashSet(Of Fichero) = _selectionFiles
+        files.Clear()
+        ' 锁内只做引用收集与状态字段读取；等待原因的账号/配额查询在锁外。
         SyncLock Mutex.ListaDescargas
             For Each item As Object In selected
                 Dim package As Paquete = TryCast(item, Paquete)
@@ -889,16 +905,22 @@ Partial Public Class Main
         For Each item In snapshot
             capacity += item.Value.Count
         Next
-        value.ViewItems.Capacity = capacity
+        If queueViewItemsCurrent Is Nothing Then queueViewItemsCurrent = New Generic.List(Of QueueViewItem)()
+        If queueViewItemsPrevious Is Nothing Then queueViewItemsPrevious = New Generic.List(Of QueueViewItem)()
+        Dim current As Generic.List(Of QueueViewItem) = queueViewItemsCurrent
+        current.Clear()
+        If current.Capacity < capacity Then current.Capacity = capacity
         For Each item In snapshot
             Dim present(4) As Boolean
-            Dim packageScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.ScopeOf(item.Key.DescargaEstado())
+            Dim packageState As Estado = item.Key.DescargaEstado()
+            Dim packageScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.ScopeOf(packageState)
             present(CInt(packageScope)) = True
-            value.ViewItems.Add(New QueueViewItem With {.Model = item.Key, .Scope = packageScope, .Name = item.Key.Nombre})
+            current.Add(New QueueViewItem With {.Model = item.Key, .Scope = packageScope, .State = packageState, .Name = item.Key.Nombre})
             For Each file As Fichero In item.Value
-                Dim fileScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.ScopeOf(file.DescargaEstado())
+                Dim fileState As Estado = file.DescargaEstado()
+                Dim fileScope As DownloadEstadoFilter.NavScope = DownloadEstadoFilter.ScopeOf(fileState)
                 present(CInt(fileScope)) = True
-                value.ViewItems.Add(New QueueViewItem With {.Model = file, .Scope = fileScope, .Name = file.NombreFichero, .RelativePath = file.RutaRelativa})
+                current.Add(New QueueViewItem With {.Model = file, .Scope = fileScope, .State = fileState, .Name = file.NombreFichero, .RelativePath = file.RutaRelativa})
             Next
             value.Totals(0) += 1
             For i As Integer = 1 To 4
@@ -910,24 +932,35 @@ Partial Public Class Main
                 value.DoneBytes += Math.Ceiling(item.Key.DescargaPorcentaje() * size / 100D)
             End If
         Next
-        Dim previous As QueueOverview = Volatile.Read(queueOverviewSnapshot)
-        Dim scopeChanged As Boolean = previous Is Nothing OrElse previous.ViewItems.Count <> value.ViewItems.Count
+        Dim previousItems As Generic.List(Of QueueViewItem) = queueViewItemsPrevious
+        Dim scopeChanged As Boolean = Not hasQueueViewItemsPrevious OrElse previousItems.Count <> current.Count
         Dim searchChanged As Boolean = scopeChanged
-        If previous IsNot Nothing Then
-            For index As Integer = 0 To Math.Min(previous.ViewItems.Count, value.ViewItems.Count) - 1
-                Dim before As QueueViewItem = previous.ViewItems(index)
-                Dim after As QueueViewItem = value.ViewItems(index)
+        Dim rowChanged As Boolean = scopeChanged
+        If hasQueueViewItemsPrevious Then
+            For index As Integer = 0 To Math.Min(previousItems.Count, current.Count) - 1
+                Dim before As QueueViewItem = previousItems(index)
+                Dim after As QueueViewItem = current(index)
                 Dim different As Boolean = Not Object.ReferenceEquals(before.Model, after.Model)
                 scopeChanged = scopeChanged OrElse different OrElse before.Scope <> after.Scope
                 searchChanged = searchChanged OrElse different OrElse Not String.Equals(before.Name, after.Name, StringComparison.Ordinal) OrElse
                     Not String.Equals(before.RelativePath, after.RelativePath, StringComparison.Ordinal)
-                If scopeChanged AndAlso searchChanged Then Exit For
+                rowChanged = rowChanged OrElse different OrElse before.State <> after.State OrElse
+                    Not String.Equals(before.Name, after.Name, StringComparison.Ordinal)
+                If scopeChanged AndAlso searchChanged AndAlso rowChanged Then Exit For
             Next
+        End If
+        Dim previous As QueueOverview = Volatile.Read(queueOverviewSnapshot)
+        If previous IsNot Nothing Then
             value.ScopeVersion = previous.ScopeVersion
             value.SearchVersion = previous.SearchVersion
+            value.RowVersion = previous.RowVersion
         End If
         If scopeChanged Then value.ScopeVersion += 1
         If searchChanged Then value.SearchVersion += 1
+        If rowChanged Then value.RowVersion += 1
+        queueViewItemsCurrent = previousItems
+        queueViewItemsPrevious = current
+        hasQueueViewItemsPrevious = True
         Volatile.Write(queueOverviewSnapshot, value)
     End Sub
 

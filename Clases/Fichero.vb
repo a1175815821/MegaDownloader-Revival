@@ -1779,10 +1779,20 @@ Public Class Fichero
 	End Sub
 	
 	
+	''' <summary>P0-4:非活跃文件每 tick 只需清掉瞬态速度/ETA，不再进全局锁。</summary>
+	Friend Sub ClearTransientProgress()
+		If VelocidadKBs <> 0D Then VelocidadKBs = 0D
+		If Not String.IsNullOrEmpty(TiempoEstimadoDescarga) Then TiempoEstimadoDescarga = ""
+	End Sub
+
 	Public Sub ActualizarDatosDescarga()
 		' B2-⑥:100% 回补的完整流程(MD5 全文件读+解压入队)不得在 FicheroDownloader/
 		' ListaDescargas 锁内同步执行,否则 GB 级文件撞线时冻结 UI/调度数秒~数分钟。
 		' 这里只在锁内预定(置 ComprobandoMD5 防重复投递),锁外投线程池真正执行。
+		Dim estadoParaEta As Estado
+		Dim velocidadParaEta As Decimal
+		Dim tamanoParaEta As Long
+		Dim porcentajeParaEta As Decimal
 		Dim needDeferredCompletion As Boolean = False
 		SyncLock Mutex.FicheroDownloader
 			If Not UsesMegaAccount AndAlso Me.Downloader IsNot Nothing Then
@@ -1826,28 +1836,33 @@ Public Class Fichero
 					needDeferredCompletion = True
 				End If
 			End If
-			If EstadoDescarga = Estado.Descargando Then
-				If VelocidadKBs = 0 Then
-					TiempoEstimadoDescarga = " --- "
-				Else
-					Dim BytesRestantes As Decimal = TamanoBytes - (Porcentaje * TamanoBytes / 100)
-					Dim SegundosRestantes As Double = BytesRestantes / (1024 * VelocidadKBs)
-					Dim t As TimeSpan = TimeSpan.FromSeconds(SegundosRestantes)
-					If SegundosRestantes > 3600 Then
-						TiempoEstimadoDescarga = String.Format("{0:D2}h:{1:D2}m:{2:D2}s",
-							(t.Days * 24) + t.Hours,
-							t.Minutes,
-							t.Seconds)
-					Else
-						TiempoEstimadoDescarga = String.Format("{0:D2}m:{1:D2}s",
-							t.Minutes,
-							t.Seconds)
-					End If
-				End If
-			Else
-				TiempoEstimadoDescarga = ""
-			End If
+			estadoParaEta = EstadoDescarga
+			velocidadParaEta = VelocidadKBs
+			tamanoParaEta = TamanoBytes
+			porcentajeParaEta = Porcentaje
 		End SyncLock
+		' P0-4:ETA 字符串格式化移到全局锁外，锁内只捕获数值。
+		If estadoParaEta = Estado.Descargando Then
+			If velocidadParaEta = 0 Then
+				TiempoEstimadoDescarga = " --- "
+			Else
+				Dim BytesRestantes As Decimal = tamanoParaEta - (porcentajeParaEta * tamanoParaEta / 100)
+				Dim SegundosRestantes As Double = BytesRestantes / (1024 * velocidadParaEta)
+				Dim t As TimeSpan = TimeSpan.FromSeconds(SegundosRestantes)
+				If SegundosRestantes > 3600 Then
+					TiempoEstimadoDescarga = String.Format("{0:D2}h:{1:D2}m:{2:D2}s",
+						(t.Days * 24) + t.Hours,
+						t.Minutes,
+						t.Seconds)
+				Else
+					TiempoEstimadoDescarga = String.Format("{0:D2}m:{1:D2}s",
+						t.Minutes,
+						t.Seconds)
+				End If
+			End If
+		Else
+			TiempoEstimadoDescarga = ""
+		End If
 		If needDeferredCompletion Then
 			Try
 				System.Threading.ThreadPool.QueueUserWorkItem(AddressOf RunDeferredCompletion)

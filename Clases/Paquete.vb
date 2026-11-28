@@ -35,12 +35,6 @@ Public Class Paquete
 
     Private TiempoEstimadoDescarga As String
 
-    Private Function HayFicheros() As Boolean
-        SyncLock Mutex.ListaDescargas
-            Return ListaFicheros IsNot Nothing AndAlso ListaFicheros.Count > 0
-        End SyncLock
-    End Function
-
     Public Sub AgregarFichero(ByVal Fichero As Fichero)
         SyncLock Mutex.ListaDescargas
             If ListaFicheros Is Nothing Then
@@ -64,8 +58,13 @@ Public Class Paquete
     End Function
 
     Public Sub ActualizarDatosDescarga()
+        ActualizarDatosDescarga(SnapshotFicheros())
+    End Sub
 
-        If Not HayFicheros() Then
+    ''' <summary>P0-3:用调用方已取好的文件快照聚合，遍历快照、不取全局锁。</summary>
+    Public Sub ActualizarDatosDescarga(files As Generic.List(Of Fichero))
+
+        If files Is Nothing OrElse files.Count = 0 Then
             EstadoDescarga = Estado.EnCola
             Porcentaje = 0
             TamanoBytes = 0
@@ -86,35 +85,33 @@ Public Class Paquete
             Dim Total As Long = 0
             Dim TotalDesc As Long = 0
 
-            SyncLock Mutex.ListaDescargas
-                For Each fichero As Fichero In ListaFicheros
-                    Total += fichero.DescargaTamanoBytes
-                    TotalDesc += CLng(fichero.DescargaTamanoBytes * (fichero.DescargaPorcentaje / 100))
-                    Select Case fichero.DescargaEstado
-                        Case Estado.Descargando
-                            TotalVelocidad += fichero.DescargaVelocidadKBs
-                            HayDescargando = True
-                        Case Estado.Completado
-                            HayCompletado = True
-                        Case Estado.EnCola
-                            HayEncola = True
-                        Case Estado.Pausado
-                            HayPausados = True
-                        Case Estado.ComprobandoMD5
-                            HayComprobandoMD5 = True
-                        Case Estado.Descomprimiendo
-                            HayDescomprimiendo = True
-                        Case Estado.EsperandoVolumenes
-                            HayEsperandoVolumenes = True
-                        Case Estado.Verificando
-                            HayVerificando = True
-                        Case Estado.CreandoLocal
-                            HayGenerandoLocal = True
-                        Case Else
-                            HayErroneos = True
-                    End Select
-                Next
-            End SyncLock
+            For Each fichero As Fichero In files
+                Total += fichero.DescargaTamanoBytes
+                TotalDesc += CLng(fichero.DescargaTamanoBytes * (fichero.DescargaPorcentaje / 100))
+                Select Case fichero.DescargaEstado
+                    Case Estado.Descargando
+                        TotalVelocidad += fichero.DescargaVelocidadKBs
+                        HayDescargando = True
+                    Case Estado.Completado
+                        HayCompletado = True
+                    Case Estado.EnCola
+                        HayEncola = True
+                    Case Estado.Pausado
+                        HayPausados = True
+                    Case Estado.ComprobandoMD5
+                        HayComprobandoMD5 = True
+                    Case Estado.Descomprimiendo
+                        HayDescomprimiendo = True
+                    Case Estado.EsperandoVolumenes
+                        HayEsperandoVolumenes = True
+                    Case Estado.Verificando
+                        HayVerificando = True
+                    Case Estado.CreandoLocal
+                        HayGenerandoLocal = True
+                    Case Else
+                        HayErroneos = True
+                End Select
+            Next
             If HayDescargando Then
                 EstadoDescarga = Estado.Descargando
             ElseIf HayPausados Then

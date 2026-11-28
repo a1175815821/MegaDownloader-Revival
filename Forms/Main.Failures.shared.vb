@@ -17,7 +17,8 @@ Partial Public Class Main
     Private dismissedFailures As Dictionary(Of Fichero, Date?)
 
     ''' <summary>A 收口版：由 430ms UI 刷新 tick 认领 end-state 的 Erroneo 计数快照。
-    ''' 与 quota 同款：UI 线程常驻刷新 vs 线程池 worker 调用，故内部 BeginInvoke。 </summary>
+    ''' P0-5:tick 直接把当拍快照交给 ApplyFailureBanner，不再锁内全表扫描；
+    ''' 无参重载供右键重试等 UI 动作使用，自行取一次快照。 </summary>
     Friend Sub RefreshFailureBanner()
         Try
             If IsDisposed OrElse Not IsHandleCreated Then Return
@@ -25,8 +26,15 @@ Partial Public Class Main
                 BeginInvoke(New Action(AddressOf RefreshFailureBanner))
                 Return
             End If
-            If failureBannerPanel Is Nothing Then Return
-            Dim count As Integer = CountBannerFailures()
+            ApplyFailureBanner(BuildQueueSnapshot())
+        Catch
+        End Try
+    End Sub
+
+    Friend Sub ApplyFailureBanner(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
+        Try
+            If IsDisposed OrElse failureBannerPanel Is Nothing Then Return
+            Dim count As Integer = CountBannerFailures(snapshot)
             Dim showBanner As Boolean = count > 0 AndAlso dismissedFailures Is Nothing
             If showBanner Then
                 failureBannerLabel.Text = Language.GetText("Downloads_Failed_Banner").Replace("%N%", count.ToString())
@@ -39,25 +47,23 @@ Partial Public Class Main
         End Try
     End Sub
 
-    Private Function CountBannerFailures(Optional dismiss As Boolean = False) As Integer
-        Dim snapshot = If(dismiss, New Dictionary(Of Fichero, Date?)(), dismissedFailures)
-        Dim matches As Boolean = snapshot IsNot Nothing
+    Private Function CountBannerFailures(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))), Optional dismiss As Boolean = False) As Integer
+        Dim dismissed = If(dismiss, New Dictionary(Of Fichero, Date?)(), dismissedFailures)
+        Dim matches As Boolean = dismissed IsNot Nothing
         Dim count As Integer = 0
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In ListaPaquetes
-                For Each fic As Fichero In paq.ListaFicheros
-                    If fic.DescargaEstado <> Estado.Erroneo Then Continue For
-                    count += 1
-                    If dismiss Then
-                        snapshot(fic) = fic.FechaUltimoError
-                    ElseIf matches Then
-                        Dim previous As Date?
-                        matches = snapshot.TryGetValue(fic, previous) AndAlso Nullable.Equals(previous, fic.FechaUltimoError)
-                    End If
-                Next
+        For Each kv In snapshot
+            For Each fic As Fichero In kv.Value
+                If fic.DescargaEstado <> Estado.Erroneo Then Continue For
+                count += 1
+                If dismiss Then
+                    dismissed(fic) = fic.FechaUltimoError
+                ElseIf matches Then
+                    Dim previous As Date?
+                    matches = dismissed.TryGetValue(fic, previous) AndAlso Nullable.Equals(previous, fic.FechaUltimoError)
+                End If
             Next
-        End SyncLock
-        dismissedFailures = If(matches AndAlso count > 0 AndAlso count = snapshot.Count, snapshot, Nothing)
+        Next
+        dismissedFailures = If(matches AndAlso count > 0 AndAlso count = dismissed.Count, dismissed, Nothing)
         Return count
     End Function
 
@@ -104,7 +110,7 @@ Partial Public Class Main
         failureDismissButton.Top = (bannerH - failureDismissButton.Height) \ 2
         failureDismissButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         AddHandler failureDismissButton.Click, Sub()
-                                                 CountBannerFailures(dismiss:=True)
+                                                 CountBannerFailures(BuildQueueSnapshot(), dismiss:=True)
                                                  failureBannerPanel.Visible = False
                                                  LayoutDownloadArea()
                                              End Sub

@@ -183,12 +183,6 @@ Public Class Main
     Private UltimoGuardadoFichero As Date = Date.MinValue
 
     ''' <summary>
-    ''' Indica cuando se ha de hacer un flush de memoria
-    ''' </summary>
-    ''' <remarks></remarks>
-    Private ProximoFlushMemoria As Date = Date.MinValue
-
-    ''' <summary>
     ''' Indica la próxima comprobación del número máximo de conexiones
     ''' </summary>
     ''' <remarks></remarks>
@@ -230,8 +224,16 @@ Public Class Main
     ''' 只有本轮新进入终态的才弹；包完成只弹一次，重试后再次完成可重弹。
     ''' </summary>
     Private _lastFileEstado As New Generic.Dictionary(Of Fichero, Estado)
+    ' P0-2:与 _lastFileEstado/_notifiedPackages 轮换使用，Clear 保留容量，避免每 tick 新建大字典。
+    Private _lastFileEstadoScratch As New Generic.Dictionary(Of Fichero, Estado)
     Private _notifiedPackages As New Generic.Dictionary(Of Paquete, Boolean)
+    Private _notifiedPackagesScratch As New Generic.Dictionary(Of Paquete, Boolean)
+    Private ReadOnly _newFailuresScratch As New Generic.List(Of Fichero)
     Private _recentBalloonTimes As New Generic.List(Of Date)
+    ' P0-8:本 tick 未验证文件数。磁盘 worker 的验证泵据此跳过空转全表扫描。
+    Private _pendingVerifyCandidates As Integer = 1
+    ' P0-8:状态机不再借 Mutex.ListaDescargas 串行，改用窗体实例锁，
+    ' 避免并发重复开/停同一文件；用 Me 而不是新增字段，FormatterServices 反序列化的测试对象也能工作。
 
     ''' <summary>
     ''' Indica el número máximo de conexiones 
@@ -1895,6 +1897,14 @@ Public Class Main
                 End Try
                 Return
             End If
+            UpdateNavRailOverviewCore()
+        Catch ex As Exception
+            Log.WriteDebug("UpdateNavRailOverview failed: " & Log.SafeException(ex))
+        End Try
+    End Sub
+
+    Private Sub UpdateNavRailOverviewCore()
+        Try
             If Not navRailInitialized Then Return
             If navPanel Is Nothing OrElse navPanel.IsDisposed Then Return
 
@@ -2135,6 +2145,13 @@ Public Class Main
                 Me.BeginInvoke(New Action(AddressOf UpdateQuotaUI))
                 Return
             End If
+            UpdateQuotaUICore()
+        Catch
+        End Try
+    End Sub
+
+    Private Sub UpdateQuotaUICore()
+        Try
             If quotaBannerPanel Is Nothing Then Return
             Dim quotaRem As TimeSpan? = MegaQuotaManager.GetRemaining()
             If quotaRem.HasValue Then
@@ -2994,18 +3011,9 @@ Public Class Main
                     End If
                 End If
 
-                ' Aprovechamos y hacemos un flush de memoria ya que este worker no hace mucho trabajo
-                If Me.ProximoFlushMemoria < Now Then
-                    Dim FrecFlush As Integer = 60
-                    If Not Integer.TryParse( _
-                                            InternalConfiguration.ObtenerValueFromInternalConfig("FLUSH_MEMORY_PERIODO_REFRESCO_SEG"), _
-                                            FrecFlush) Then
-                        FrecFlush = 60
-                    End If
-                    Me.ProximoFlushMemoria = Now.AddSeconds(FrecFlush)
-                    FlushMemory()
-                    Log.WriteDebug("Flush memory, next flush in " & FrecFlush & " seconds")
-                End If
+                ' P0-1:不再周期强制 GC/清工作集。旧实现每 60 秒 GC.Collect +
+                ' WaitForPendingFinalizers + SetProcessWorkingSetSize，会阻塞所有托管线程并
+                ' 在随后访问时制造缺页；如确有泄漏应修泄漏，而不是周期 GC。
 
                 ' Y de paso hacemos un flush de logs
                 Log.Flush(False)
@@ -3140,6 +3148,8 @@ Public Class Main
                     End If
                 Next
             End If
+            ' P0-8:全部文件都已验证过时直接 O(1) 返回，不再每 250ms 走完全表。
+            If System.Threading.Volatile.Read(_pendingVerifyCandidates) = 0 Then Return
             If _verifyInflight.Count >= VerifyMaxParallel Then Return
             Dim picked As VerifyJob = Nothing
             SyncLock Mutex.ListaDescargas
@@ -3272,6 +3282,87 @@ Public Class Main
         End Try
     End Sub
 
+    ''' <summary>P0-3/P0-8:短锁拷贝包与文件引用，后续遍历一律在锁外执行。</summary>
+    Private Function BuildQueueSnapshot() As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero)))
+        Dim snapshot As New Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero)))
+        SyncLock Mutex.ListaDescargas
+            For Each paq As Paquete In Me.ListaPaquetes
+                snapshot.Add(New KeyValuePair(Of Paquete, Generic.List(Of Fichero))(paq, paq.SnapshotFicheros()))
+            Next
+        End SyncLock
+        Return snapshot
+    End Function
+
+    Private NotInheritable Class UiTickFrame
+        Friend StatusRam As String
+        Friend StatusProc As String
+        Friend StatusEstado As String
+        Friend StatusVelocidad As String
+        Friend StatusConexiones As String
+        Friend TrayText As String
+        Friend HasActiveDownloads As Boolean
+        Friend Snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero)))
+    End Class
+
+    Private _pendingUiFrame As UiTickFrame
+    Private ReadOnly _uiFrameLock As New Object()
+    Private _uiFrameScheduled As Integer
+
+    ''' <summary>P0-6:每 tick 只投递一次 UI 编组，承载状态栏/托盘/列表/导航/配额/失败横幅。</summary>
+    Private Sub PostUiTickFrame(frame As UiTickFrame)
+        SyncLock _uiFrameLock
+            _pendingUiFrame = frame
+        End SyncLock
+        If System.Threading.Interlocked.CompareExchange(_uiFrameScheduled, 1, 0) = 0 Then
+            Try
+                BeginInvoke(New Action(AddressOf ApplyUiTickFrame))
+            Catch ex As InvalidOperationException
+                System.Threading.Interlocked.Exchange(_uiFrameScheduled, 0)
+            End Try
+        End If
+    End Sub
+
+    Private Sub ApplyUiTickFrame()
+        Try
+            If Cerrando OrElse IsDisposed OrElse Not IsHandleCreated Then
+                SyncLock _uiFrameLock
+                    _pendingUiFrame = Nothing
+                End SyncLock
+                Return
+            End If
+            Dim frame As UiTickFrame
+            SyncLock _uiFrameLock
+                frame = _pendingUiFrame
+                _pendingUiFrame = Nothing
+            End SyncLock
+            If frame Is Nothing Then Return
+            Dim showWindow As Boolean = Me.Visible AndAlso WindowState <> FormWindowState.Minimized
+            If showWindow Then
+                RefreshListaDescargasCore(False, Not frame.HasActiveDownloads)
+                SetStatusBar(frame.StatusRam, frame.StatusProc, frame.StatusEstado, frame.StatusVelocidad, frame.StatusConexiones)
+                UpdateNavRailOverviewCore()
+                ApplyFailureBanner(frame.Snapshot)
+            End If
+            UpdateQuotaUICore()
+            TextoIconoMinimizado(frame.TrayText)
+        Catch ex As Exception
+            Log.WriteDebug("ApplyUiTickFrame failed: " & Log.SafeException(ex))
+        Finally
+            System.Threading.Interlocked.Exchange(_uiFrameScheduled, 0)
+            Dim reschedule As Boolean
+            SyncLock _uiFrameLock
+                reschedule = _pendingUiFrame IsNot Nothing
+            End SyncLock
+            If reschedule AndAlso System.Threading.Interlocked.CompareExchange(_uiFrameScheduled, 1, 0) = 0 Then
+                Try
+                    BeginInvoke(New Action(AddressOf ApplyUiTickFrame))
+                Catch ex As InvalidOperationException
+                    System.Threading.Interlocked.Exchange(_uiFrameScheduled, 0)
+                End Try
+            End If
+        End Try
+    End Sub
+
     Private Sub bgwActualizadorListaDescargas_DoWork(ByVal sender As Object, ByVal e As DoWorkEventArgs) Handles bgwActualizadorListaDescargas.DoWork
         Dim worker As BackgroundWorker = DirectCast(sender, BackgroundWorker)
         Dim sw As New System.Diagnostics.Stopwatch
@@ -3289,13 +3380,14 @@ Public Class Main
                 sw.Start()
                 Flujo = "Checking status" & vbNewLine
 
-                ' Cambio estado
+                ' Cambio estado + P0-8:状态机在锁外基于同一份快照工作。
+                Dim snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))) = BuildQueueSnapshot()
                 If EstadoAplicacion = TipoEstadoAplicacion.Descargando Then
-                    PonerFicherosADescargar()
+                    PonerFicherosADescargarDesdeSnapshot(snapshot)
                 ElseIf EstadoAplicacion = TipoEstadoAplicacion.Pausa Then
-                    PonerFicherosEnPausa()
+                    PonerFicherosEnPausaDesdeSnapshot(snapshot)
                 ElseIf EstadoAplicacion = TipoEstadoAplicacion.Parado Then
-                    PararDescargaFicheros()
+                    PararDescargaFicherosDesdeSnapshot(snapshot)
                 End If
 
                 Flujo &= "Calculating speed, state, etc" & vbNewLine
@@ -3304,53 +3396,45 @@ Public Class Main
                 Dim VelocidadGlobal As Decimal = 0
 
                 If worker.CancellationPending Then Exit While
-                ' 卡顿治理：先短锁拷贝包与文件引用（指针拷贝，O(包+文件)），逐文件的重活
-                '（Downloader 属性读取、ETA 字符串格式化，各自只短取细锁）在锁外执行；
-                ' 最后短锁聚合计数。全局锁持有时间从"几百个文件的全程"降为两次浅拷贝+纯字段读取，
-                ' 下载 worker 不再被 430ms 节拍挡在锁外。快照与实时列表最多差一个节拍，
-                ' 计数类 UI 本就按节拍刷新，可接受。
-                Dim snapshot As New Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero)))
-                SyncLock Mutex.ListaDescargas
-                    For Each paq As Paquete In Me.ListaPaquetes
-                        snapshot.Add(New KeyValuePair(Of Paquete, Generic.List(Of Fichero))(paq, paq.SnapshotFicheros()))
-                    Next
-                End SyncLock
+                ' P0-2/P0-3/P0-4/P0-8:同一份引用快照跑完本 tick：
+                ' 活跃文件才进全局锁更新进度/ETA；计数在局部变量累加后一次写入；
+                ' 包聚合遍历快照、不取全局锁；非活跃文件只清瞬态速度/ETA。
+                Dim numActivas As Integer = 0
+                Dim numEnCola As Integer = 0
+                Dim numErroneas As Integer = 0
+                Dim numCompletadas As Integer = 0
+                Dim pendingVerify As Integer = 0
                 For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
                     For Each fic As Fichero In kv.Value
-                        fic.ActualizarDatosDescarga()
+                        Dim estado As Estado = fic.EstadoDescarga
+                        If estado = Estado.Descargando OrElse estado = Estado.CreandoLocal OrElse estado = Estado.Verificando Then
+                            fic.ActualizarDatosDescarga()
+                            estado = fic.EstadoDescarga
+                        Else
+                            fic.ClearTransientProgress()
+                        End If
+                        Select Case estado
+                            Case Estado.Descargando, Estado.CreandoLocal, Estado.Verificando
+                                numActivas += 1
+                            Case Estado.EnCola, Estado.Pausado
+                                numEnCola += 1
+                            Case Estado.Erroneo
+                                numErroneas += 1
+                            Case Estado.Completado, Estado.ComprobandoMD5, Estado.Descomprimiendo, Estado.EsperandoVolumenes
+                                numCompletadas += 1
+                        End Select
+                        ' 失败且未处理的文件泵不会选（Erroneo 不满足 canVerify），不计入，
+                        ' 否则计数永久 >0，验证泵的 250ms 全表扫描退不掉。
+                        If Not fic.DescargaProcesada AndAlso estado <> Estado.Erroneo Then pendingVerify += 1
                     Next
-                    ' P-03/P-18: package aggregation only walks its own files and reads
-                    ' plain fields; it does not need Mutex.ListaDescargas. Moving it out
-                    ' removes one full-table pass from inside the global lock.
-                    kv.Key.ActualizarDatosDescarga()
+                    kv.Key.ActualizarDatosDescarga(kv.Value)
                     VelocidadGlobal += kv.Key.DescargaVelocidadKBs()
                 Next
-                SyncLock Mutex.ListaDescargas
-                    Me.NumDescargasActivas = 0
-                    Me.NumDescargasEnCola = 0
-                    Me.NumDescargasErroneas = 0
-                    Me.NumDescargasCompletadas = 0
-                    For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
-                        For Each fic As Fichero In kv.Value
-                            If fic.EstadoDescarga = Estado.Descargando Or _
-                               fic.EstadoDescarga = Estado.CreandoLocal Or _
-                               fic.EstadoDescarga = Estado.Verificando Then
-                                Me.NumDescargasActivas += 1
-                            ElseIf fic.EstadoDescarga = Estado.EnCola Or _
-                                   fic.EstadoDescarga = Estado.Pausado Then
-                                Me.NumDescargasEnCola += 1
-                            ElseIf fic.EstadoDescarga = Estado.Erroneo Then
-                                Me.NumDescargasErroneas += 1
-                            ElseIf fic.EstadoDescarga = Estado.Completado Or _
-                                   fic.EstadoDescarga = Estado.ComprobandoMD5 Or _
-                                   fic.EstadoDescarga = Estado.Descomprimiendo Or _
-                                   fic.EstadoDescarga = Estado.EsperandoVolumenes Then
-                                Me.NumDescargasCompletadas += 1
-
-                            End If
-                        Next
-                    Next
-                End SyncLock
+                Me.NumDescargasActivas = numActivas
+                Me.NumDescargasEnCola = numEnCola
+                Me.NumDescargasErroneas = numErroneas
+                Me.NumDescargasCompletadas = numCompletadas
+                System.Threading.Volatile.Write(_pendingVerifyCandidates, pendingVerify)
 
                 PublishQueueOverview(snapshot)
                 CheckDownloadNotifications(snapshot)
@@ -3359,10 +3443,8 @@ Public Class Main
 
                 Flujo &= "Updating download list" & vbNewLine
 
-                RefreshListaDescargas(False)
-
                 VelocidadGlobalDescarga = VelocidadGlobal
-                TextoIconoMinimizado(Me.NumDescargasActivas & " " & Language.GetText("active downloads") & " - " & PintarVelocidadDescarga(VelocidadGlobal))
+                Dim trayText As String = Me.NumDescargasActivas & " " & Language.GetText("active downloads") & " - " & PintarVelocidadDescarga(VelocidadGlobal)
 
 
                 If worker.CancellationPending Then Exit While
@@ -3411,13 +3493,18 @@ Public Class Main
                 Flujo &= "Displaying data in status bar" & vbNewLine
 
                 If Not Config.DownloadSchedule.AllowsDownload(DateTime.Now) Then EstadoTxt = Language.GetText("Schedule_Waiting")
-                SetStatusBar(RAMStr & "MB", ProcesadorStr & "%", EstadoTxt, VelocidadTxt, Config.ConexionesPorFichero & "/" & Config.DescargasSimultaneas)
-
-                ' 左栏任务总览:与状态栏同频(430ms)刷新,数据源一致,不额外起线程。
-                UpdateNavRailOverview()
-
-                UpdateQuotaUI()
-                RefreshFailureBanner()
+                ' P0-6:本 tick 只投递一次 UI 编组，状态栏/托盘/列表/导航/配额/失败横幅共用一帧。
+                Dim frame As New UiTickFrame With {
+                    .StatusRam = RAMStr & "MB",
+                    .StatusProc = ProcesadorStr & "%",
+                    .StatusEstado = EstadoTxt,
+                    .StatusVelocidad = VelocidadTxt,
+                    .StatusConexiones = Config.ConexionesPorFichero & "/" & Config.DescargasSimultaneas,
+                    .TrayText = trayText,
+                    .HasActiveDownloads = (numActivas > 0),
+                    .Snapshot = snapshot
+                }
+                PostUiTickFrame(frame)
 
                 If worker.CancellationPending Then Exit While
 
@@ -3476,20 +3563,23 @@ Public Class Main
                 _recentBalloonTimes.RemoveAt(0)
             End While
 
-            Dim newStates As New Generic.Dictionary(Of Fichero, Estado)
-            Dim newFailures As New Generic.List(Of Fichero)
+            Dim newStates As Generic.Dictionary(Of Fichero, Estado) = _lastFileEstadoScratch
+            newStates.Clear()
+            Dim newFailures As Generic.List(Of Fichero) = _newFailuresScratch
+            newFailures.Clear()
             For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
                 For Each fic As Fichero In kv.Value
                     Dim st As Estado = fic.EstadoDescarga
                     newStates(fic) = st
-                    If _lastFileEstado.ContainsKey(fic) AndAlso _lastFileEstado(fic) <> Estado.Erroneo AndAlso st = Estado.Erroneo Then
+                    Dim previousState As Estado
+                    If _lastFileEstado.TryGetValue(fic, previousState) AndAlso previousState <> Estado.Erroneo AndAlso st = Estado.Erroneo Then
                         newFailures.Add(fic)
                     End If
                 Next
             Next
-            _lastFileEstado = newStates
 
-            Dim stillComplete As New Generic.Dictionary(Of Paquete, Boolean)
+            Dim stillComplete As Generic.Dictionary(Of Paquete, Boolean) = _notifiedPackagesScratch
+            stillComplete.Clear()
             For Each kv As KeyValuePair(Of Paquete, Generic.List(Of Fichero)) In snapshot
                 If kv.Value.Count = 0 Then Continue For
                 Dim allDone As Boolean = True
@@ -3509,6 +3599,10 @@ Public Class Main
                     End If
                 End If
             Next
+            ' 交换缓冲：本 tick 的填充结果成为下一 tick 的比较基准，旧基准清空后复用。
+            _lastFileEstadoScratch = _lastFileEstado
+            _lastFileEstado = newStates
+            _notifiedPackagesScratch = _notifiedPackages
             _notifiedPackages = stillComplete
 
             If newFailures.Count = 1 AndAlso _recentBalloonTimes.Count < 3 Then
@@ -3624,6 +3718,11 @@ Public Class Main
     End Sub
 
     Private Sub PonerFicherosADescargar()
+        PonerFicherosADescargarDesdeSnapshot(BuildQueueSnapshot())
+    End Sub
+
+    Private Sub PonerFicherosADescargarDesdeSnapshot(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
+        SyncLock Me
         If Not ScheduleAllowsStart() Then Return
         Dim ColaDescarga As New Generic.List(Of Fichero) ' Lista de ficheros en cola
         Dim ColaDescargaPausa As New Generic.List(Of Fichero) ' Lista de ficheros pausados en cola
@@ -3649,8 +3748,8 @@ Public Class Main
 
         Dim breakthrough = MegaQuotaManager.IsBreakthroughMode()
         Dim retryBefore = Now.AddMinutes(-Math.Max(1, ResetearErroresPeriodo))
-        SyncLock Mutex.ListaDescargas
-            For Each Fichero In ListaPaquetes.SelectMany(Function(package) package.ListaFicheros)
+        For Each kv In snapshot
+            For Each Fichero In kv.Value
                 If Fichero.DescargaEstado <> Estado.Erroneo OrElse Fichero.EsErrorPermanente Then Continue For
                 Dim retryDue = Fichero.FechaUltimoError.GetValueOrDefault() < retryBefore
                 If Fichero.UsesMegaAccount Then
@@ -3663,7 +3762,7 @@ Public Class Main
                     End If
                 End If
             Next
-        End SyncLock
+        Next
         For Each Fichero In ColaReseteo
             Fichero.ResetearDescarga(preserveProgress:=True)
             Fichero.SetDescargaEstado = Estado.EnCola
@@ -3671,32 +3770,30 @@ Public Class Main
         Next
 
 
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each Fichero As Fichero In paq.ListaFicheros
+        For Each kv In snapshot
+            For Each Fichero As Fichero In kv.Value
 
-                    Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount,
-                        Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not Fichero.IsWaitingForFixedAccount AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
-                    If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
-                        ColaDescarga.Add(Fichero)
-                    ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
-                        ColaDescargaPausa.Add(Fichero)
-                    ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
-                        ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
-                        NumFicherosDescargando += 1
-                        Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
-                        If NumConAbiertas = 0 Then
-                            NumConAbiertas = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero) ' Todavía no está descargando pero empezará en breve
-                        End If
-                        NumConexionesAbiertas += NumConAbiertas
-                    ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
-                        NumFicherosDescargando += 1
-                        NumConexionesAbiertas += If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
+                Dim backendAllowsStart As Boolean = If(Fichero.UsesMegaAccount,
+                    Fichero.HasRecordedMegaAccountOutput OrElse (Not Fichero.IsMegaAccountConnecting AndAlso Not Fichero.IsWaitingForFixedAccount AndAlso Not CloudQuotaBlocks(Fichero)), Not quotaHold)
+                If Fichero.DescargaEstado = Estado.EnCola And Fichero.DescargaProcesada AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
+                    ColaDescarga.Add(Fichero)
+                ElseIf Fichero.DescargaEstado = Estado.Pausado AndAlso Not Fichero.PausaIndividual AndAlso backendAllowsStart Then
+                    ColaDescargaPausa.Add(Fichero)
+                ElseIf Fichero.DescargaEstado = Estado.Descargando Or (Fichero.DescargaEstado = Estado.Pausado And Fichero.PausaIndividual) Then
+                    ' Las pausas individuales significa que el resto de ficheros está descargando, pero el fichero pausado no, por tanto no abrimos nuevas conexiones
+                    NumFicherosDescargando += 1
+                    Dim NumConAbiertas As Integer = Fichero.NumeroConexionesAbiertas
+                    If NumConAbiertas = 0 Then
+                        NumConAbiertas = If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero) ' Todavía no está descargando pero empezará en breve
                     End If
+                    NumConexionesAbiertas += NumConAbiertas
+                ElseIf Fichero.DescargaEstado = Estado.CreandoLocal Or Fichero.DescargaEstado = Estado.Verificando Then
+                    NumFicherosDescargando += 1
+                    NumConexionesAbiertas += If(Fichero.UsesMegaAccount, 1, configConexionesPorFichero)
+                End If
 
-                Next
             Next
-        End SyncLock
+        Next
 
         Dim ConexionesPorAbrir As Integer
         SyncLock Mutex.NumeroConexionesMaxima
@@ -3732,6 +3829,7 @@ Public Class Main
         Finally
             'Mutex.ListaDescargas.ReleaseMutex()
         End Try
+        End SyncLock
     End Sub
 
     Private Sub ForzarDescarga(Fichero As Fichero)
@@ -3770,9 +3868,13 @@ Public Class Main
     End Sub
 
     Private Sub PonerFicherosEnPausa()
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each Fichero As Fichero In paq.ListaFicheros
+        PonerFicherosEnPausaDesdeSnapshot(BuildQueueSnapshot())
+    End Sub
+
+    Private Sub PonerFicherosEnPausaDesdeSnapshot(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
+        SyncLock Me
+            For Each kv In snapshot
+                For Each Fichero As Fichero In kv.Value
                     If (Fichero.DescargaEstado = Estado.Descargando And Not Fichero.DescargaIndividual) Or Fichero.DescargaEstado = Estado.CreandoLocal Then
                         Log.WriteInfo("Pausing file " & Fichero.NombreFichero)
                         Fichero.Pause()
@@ -3802,9 +3904,13 @@ Public Class Main
     End Sub
 
     Private Sub PararDescargaFicheros()
-        SyncLock Mutex.ListaDescargas
-            For Each paq As Paquete In Me.ListaPaquetes
-                For Each Fichero As Fichero In paq.ListaFicheros
+        PararDescargaFicherosDesdeSnapshot(BuildQueueSnapshot())
+    End Sub
+
+    Private Sub PararDescargaFicherosDesdeSnapshot(snapshot As Generic.List(Of KeyValuePair(Of Paquete, Generic.List(Of Fichero))))
+        SyncLock Me
+            For Each kv In snapshot
+                For Each Fichero As Fichero In kv.Value
                     If (Fichero.DescargaEstado = Estado.Descargando AndAlso
                         (Not Fichero.DescargaIndividual OrElse (Cerrando AndAlso Fichero.MegaDriveNodeHandle.HasValue))) OrElse
                        Fichero.DescargaEstado = Estado.Pausado OrElse Fichero.DescargaEstado = Estado.CreandoLocal Then
@@ -4673,20 +4779,6 @@ Public Class Main
 
 
 
-    ' Hace un "trim" de la memoria, equivalente a minimizar la ventana... muy útil cuando
-    ' en .NET la memoria empieza a crecer y crecer y la máquina virtual no suelta la memoria
-    ' no usada sino que la acapara...
-    Public Shared Sub FlushMemory()
-        GC.Collect()
-        GC.WaitForPendingFinalizers()
-        If (Environment.OSVersion.Platform = PlatformID.Win32NT) Then
-            SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1)
-        End If
-    End Sub
-    Private Declare Function SetProcessWorkingSetSize Lib "kernel32.dll" ( _
-     ByVal process As IntPtr, _
-     ByVal minimumWorkingSetSize As Integer, _
-     ByVal maximumWorkingSetSize As Integer) As Integer
 
 
     ' This delegate enables asynchronous calls for setting
@@ -4704,30 +4796,20 @@ Public Class Main
         End If
     End Sub
 
-    ' This delegate enables asynchronous calls for setting
-    ' the text property on a TextBox control.
-    Delegate Sub SetStatusBarCallback(RAM As String, Proc As String, Estado As String, velocidad As String, configuracionConexiones As String)
+    ' P0-6:只在 UI 帧内调用，不再同步 Invoke 回 UI。
     Private Sub SetStatusBar(RAM As String, Proc As String, Estado As String, velocidad As String, configuracionConexiones As String)
-        ' InvokeRequired required compares the thread ID of the
-        ' calling thread to the thread ID of the creating thread.
-        ' If these threads are different, it returns true.
         Try
             If Cerrando Then Exit Sub
-            If Me.StatusStrip1.InvokeRequired Then
-                Dim d As New SetStatusBarCallback(AddressOf SetStatusBar)
-                Me.Invoke(d, New Object() {RAM, Proc, Estado, velocidad, configuracionConexiones})
-            Else
-                Me.RAMProcToolStripStatusLabel.Text = Language.GetText("RAM") & ": " & RAM & " / " & Language.GetText("Proc") & ": " & Proc
-                Dim quotaSuffix As String = ""
-                Try
-                    Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
-                    If qrem.HasValue Then
-                        quotaSuffix = "    " & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value))
-                    End If
-                Catch
-                End Try
-                Me.StatusToolStripStatusLabel.Text = Language.GetText("Status") & ": " & Estado & velocidad & "    " & Language.GetText("Connection conf") & ": " & configuracionConexiones & quotaSuffix
-            End If
+            Me.RAMProcToolStripStatusLabel.Text = Language.GetText("RAM") & ": " & RAM & " / " & Language.GetText("Proc") & ": " & Proc
+            Dim quotaSuffix As String = ""
+            Try
+                Dim qrem As TimeSpan? = MegaQuotaManager.GetRemaining()
+                If qrem.HasValue Then
+                    quotaSuffix = "    " & Language.GetText("Quota_Status").Replace("%T%", FormatQuotaRemaining(qrem.Value))
+                End If
+            Catch
+            End Try
+            Me.StatusToolStripStatusLabel.Text = Language.GetText("Status") & ": " & Estado & velocidad & "    " & Language.GetText("Connection conf") & ": " & configuracionConexiones & quotaSuffix
         Catch ex As Exception
             ' No hacemos nada
         End Try
@@ -4756,6 +4838,10 @@ Public Class Main
     End Sub
 
     Private Sub RefreshListaDescargas(ByVal SetObjects As Boolean)
+        RefreshListaDescargasCore(SetObjects, False)
+    End Sub
+
+    Private Sub RefreshListaDescargasCore(ByVal SetObjects As Boolean, ByVal lightRefresh As Boolean)
         If Cerrando OrElse IsDisposed OrElse ListaDescargas.IsDisposed Then Return
         ' InvokeRequired required compares the thread ID of the
         ' calling thread to the thread ID of the creating thread.
@@ -4770,19 +4856,32 @@ Public Class Main
         Else
             Dim overview As QueueOverview = System.Threading.Volatile.Read(queueOverviewSnapshot)
             Dim scopeChanged As Boolean = overview IsNot Nothing AndAlso overview.ScopeVersion <> appliedScopeVersion
+            Dim searchVersionChanged As Boolean = overview IsNot Nothing AndAlso overview.SearchVersion <> appliedSearchVersion
+            Dim rowChanged As Boolean = overview IsNot Nothing AndAlso overview.RowVersion <> appliedRowVersion
             Dim rebuildRoots As Boolean = SetObjects OrElse (_navScope <> DownloadEstadoFilter.NavScope.All AndAlso scopeChanged)
+            Dim fullRefresh As Boolean = SetObjects OrElse (Not lightRefresh) OrElse scopeChanged OrElse searchVersionChanged OrElse rowChanged
             If SetObjects Then CaptureQueueTree()
             ListaDescargas.BeginUpdate()
             Try
                 If rebuildRoots Then ApplyNavRoots(replaceObjects:=SetObjects)
-                ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                If fullRefresh Then
+                    ListaDescargas.RefreshObjects(CType(ListaDescargas.Roots, Collections.IList))
+                Else
+                    ' P0-7:无活动下载且状态/结构未变时只重绘可见行，不重置选中项，
+                    ' 避免每 430ms 触发 SelectionChanged。直接调用方默认仍走完整刷新。
+                    ListaDescargas.Invalidate()
+                End If
             Finally
                 ListaDescargas.EndUpdate()
             End Try
             If rebuildRoots Then UpdateWorkbenchHeading()
             UpdateNavCounts()
             UpdateDetailPanel()
-            If overview IsNot Nothing Then appliedScopeVersion = overview.ScopeVersion
+            If overview IsNot Nothing Then
+                appliedScopeVersion = overview.ScopeVersion
+                appliedSearchVersion = overview.SearchVersion
+                appliedRowVersion = overview.RowVersion
+            End If
             If workbenchReady AndAlso workbenchSearch.TextLength > 0 AndAlso
                 (SetObjects OrElse (overview IsNot Nothing AndAlso overview.SearchVersion <> requestedSearchVersion)) Then
                 If overview IsNot Nothing Then requestedSearchVersion = overview.SearchVersion
@@ -4794,19 +4893,9 @@ Public Class Main
         End If
     End Sub
 
-    ' This delegate enables asynchronous calls for setting
-    ' the text property on a TextBox control.
-    Delegate Sub TextoIconoMinimizadoCallback(txt As String)
+    ' P0-6:只在 UI 帧内调用，不再同步 Invoke 回 UI。
     Private Sub TextoIconoMinimizado(txt As String)
-        ' InvokeRequired required compares the thread ID of the
-        ' calling thread to the thread ID of the creating thread.
-        ' If these threads are different, it returns true.
-        If Me.btnPause.InvokeRequired Then
-            Dim d As New TextoIconoMinimizadoCallback(AddressOf TextoIconoMinimizado)
-            Me.Invoke(d, New Object() {txt})
-        Else
-            Me.IconoMinimizado.Text = txt
-        End If
+        Me.IconoMinimizado.Text = txt
     End Sub
 
     ''' <summary>
